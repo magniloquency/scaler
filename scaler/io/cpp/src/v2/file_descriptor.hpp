@@ -14,10 +14,10 @@ class FileDescriptor {
     int fd;
 
     explicit FileDescriptor(int fd): fd(fd) {}
-    ~FileDescriptor() { close(fd); }
-
-    // make std expected a friend
-    friend class std::expected<FileDescriptor, int>;
+    ~FileDescriptor() {
+        close(fd);
+        this->fd = -1;
+    }
 
 public:
     static FileDescriptor socket(int domain, int type, int protocol) {
