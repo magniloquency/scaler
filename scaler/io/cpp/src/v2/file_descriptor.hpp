@@ -1,4 +1,5 @@
 // System
+#include <sys/epoll.h>
 #include <sys/eventfd.h>
 #include <sys/socket.h>
 #include <sys/timerfd.h>
@@ -15,13 +16,14 @@ class FileDescriptor {
     int fd;
 
     FileDescriptor(int fd): fd(fd) {}
+
+public:
+    using Errno = int;
+
     ~FileDescriptor() {
         close(fd);
         this->fd = -1;
     }
-
-public:
-    using Errno = int;
 
     static FileDescriptor socket(int domain, int type, int protocol) {
         int fd = ::socket(domain, type, protocol);
@@ -48,6 +50,23 @@ public:
         }
 
         return {fd};
+    }
+
+    static FileDescriptor epollfd() {
+        int fd = ::epoll_create1(0);
+        if (fd < 0) {
+            throw errno;
+        }
+
+        return {fd};
+    }
+
+    [[nodiscard]] std::optional<Errno> listen(int backlog) {
+        if (::listen(fd, backlog) < 0) {
+            return errno;
+        } else {
+            return std::nullopt;
+        }
     }
 
     [[nodiscard]] std::optional<Errno> accept(struct sockaddr* addr, socklen_t* addrlen) {
@@ -85,7 +104,7 @@ public:
     }
 
     [[nodiscard]] std::optional<Errno> timerfd_set(
-        const struct itimerspec* new_value, struct itimerspec* old_value = nullptr) {
+        const itimerspec* new_value, itimerspec* old_value = nullptr) {
         if (::timerfd_settime(fd, 0, new_value, old_value) < 0) {
             return errno;
         } else {
@@ -96,6 +115,22 @@ public:
     [[nodiscard]] std::optional<Errno> timerfd_wait() {
         uint64_t u;
         if (::read(fd, &u, sizeof(u)) < 0) {
+            return errno;
+        } else {
+            return std::nullopt;
+        }
+    }
+
+    [[nodiscard]] std::optional<Errno> epoll_ctl(int op, FileDescriptor& other, epoll_event* event) {
+        if (::epoll_ctl(fd, op, other.fd, event) < 0) {
+            return errno;
+        } else {
+            return std::nullopt;
+        }
+    }
+
+    [[nodiscard]] std::optional<Errno> epoll_wait(epoll_event* events, int maxevents, int timeout) {
+        if (::epoll_wait(fd, events, maxevents, timeout) < 0) {
             return errno;
         } else {
             return std::nullopt;
