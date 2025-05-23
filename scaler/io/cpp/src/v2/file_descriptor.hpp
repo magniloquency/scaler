@@ -41,8 +41,8 @@ public:
         }
     }
 
-    static std::expected<FileDescriptor, Errno> timerfd(int flags) {
-        if (int fd = ::timerfd_create(CLOCK_MONOTONIC, flags) < 0) {
+    static std::expected<FileDescriptor, Errno> timerfd(clockid_t clock, int flags) {
+        if (int fd = ::timerfd_create(clock, flags) < 0) {
             return std::unexpected {errno};
         } else {
             return FileDescriptor(fd);
@@ -99,7 +99,7 @@ public:
         }
     }
 
-    std::optional<Errno> timerfd_set(const itimerspec& new_value, itimerspec* old_value = nullptr) {
+    std::optional<Errno> timerfd_settime(const itimerspec& new_value, itimerspec* old_value = nullptr) {
         if (::timerfd_settime(fd, 0, &new_value, old_value) < 0) {
             return errno;
         } else {
