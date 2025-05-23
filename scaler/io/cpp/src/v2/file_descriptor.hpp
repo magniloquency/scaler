@@ -9,6 +9,7 @@
 // C++
 #include <cerrno>
 #include <expected>
+#include <optional>
 
 class FileDescriptor {
     int fd;
@@ -20,6 +21,8 @@ class FileDescriptor {
     }
 
 public:
+    using Errno = int;
+
     static FileDescriptor socket(int domain, int type, int protocol) {
         int fd = ::socket(domain, type, protocol);
         if (fd < 0) {
@@ -47,44 +50,55 @@ public:
         return {fd};
     }
 
-    int accept(struct sockaddr* addr, socklen_t* addrlen) {
-        int new_fd = ::accept(fd, addr, addrlen);
-        if (new_fd < 0) {
-            throw errno;
+    [[nodiscard]] std::optional<Errno> accept(struct sockaddr* addr, socklen_t* addrlen) {
+        if (::accept(fd, addr, addrlen) < 0) {
+            return errno;
+        } else {
+            return std::nullopt;
         }
-
-        return new_fd;
     }
 
-    void bind(const struct sockaddr* addr, socklen_t addrlen) {
+    [[nodiscard]] std::optional<Errno> bind(const struct sockaddr* addr, socklen_t addrlen) {
         if (::bind(fd, addr, addrlen) < 0) {
-            throw errno;
+            return errno;
+        } else {
+            return std::nullopt;
         }
     }
 
-    void efd_signal() {
-        if (::eventfd_write(fd, 1) < 0) {
-            throw errno;
+    [[nodiscard]] std::optional<Errno> eventfd_signal() {
+        uint64_t u = 1;
+        if (::eventfd_write(fd, u) < 0) {
+            return errno;
+        } else {
+            return std::nullopt;
         }
     }
 
-    void efd_wait() {
+    [[nodiscard]] std::optional<Errno> eventfd_wait() {
         uint64_t u;
         if (::eventfd_read(fd, &u) < 0) {
-            throw errno;
+            return errno;
+        } else {
+            return std::nullopt;
         }
     }
 
-    void tfd_set(const struct itimerspec* new_value, struct itimerspec* old_value = nullptr) {
+    [[nodiscard]] std::optional<Errno> timerfd_set(
+        const struct itimerspec* new_value, struct itimerspec* old_value = nullptr) {
         if (::timerfd_settime(fd, 0, new_value, old_value) < 0) {
-            throw errno;
+            return errno;
+        } else {
+            return std::nullopt;
         }
     }
 
-    void tfd_wait() {
+    [[nodiscard]] std::optional<Errno> timerfd_wait() {
         uint64_t u;
         if (::read(fd, &u, sizeof(u)) < 0) {
-            throw errno;
+            return errno;
+        } else {
+            return std::nullopt;
         }
     }
 };
