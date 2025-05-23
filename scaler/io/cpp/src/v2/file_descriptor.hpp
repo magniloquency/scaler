@@ -13,7 +13,7 @@
 class FileDescriptor {
     int fd;
 
-    explicit FileDescriptor(int fd): fd(fd) {}
+    FileDescriptor(int fd): fd(fd) {}
     ~FileDescriptor() {
         close(fd);
         this->fd = -1;
@@ -26,7 +26,7 @@ public:
             throw errno;
         }
 
-        return FileDescriptor(fd);
+        return {fd};
     }
 
     static FileDescriptor eventfd(int initval, int flags) {
@@ -35,7 +35,7 @@ public:
             throw errno;
         }
 
-        return FileDescriptor(fd);
+        return {fd};
     }
 
     static FileDescriptor timerfd(int flags) {
@@ -44,7 +44,7 @@ public:
             throw errno;
         }
 
-        return FileDescriptor(fd);
+        return {fd};
     }
 
     int accept(struct sockaddr* addr, socklen_t* addrlen) {
