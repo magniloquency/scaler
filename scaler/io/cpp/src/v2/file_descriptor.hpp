@@ -1,3 +1,5 @@
+#pragma once
+
 // System
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
@@ -12,14 +14,14 @@
 #include <expected>
 #include <optional>
 
+#include "common.hpp"
+
 class FileDescriptor {
     int fd;
 
     FileDescriptor(int fd): fd(fd) {}
 
 public:
-    using Errno = int;
-
     ~FileDescriptor() {
         close(fd);
         this->fd = -1;
@@ -78,6 +80,24 @@ public:
             return errno;
         } else {
             return std::nullopt;
+        }
+    }
+
+    std::expected<ssize_t, Errno> read(void* buf, size_t count) {
+        ssize_t n = ::read(fd, buf, count);
+        if (n < 0) {
+            return std::unexpected {errno};
+        } else {
+            return n;
+        }
+    }
+
+    std::expected<ssize_t, Errno> write(const void* buf, size_t count) {
+        ssize_t n = ::write(fd, buf, count);
+        if (n < 0) {
+            return std::unexpected {errno};
+        } else {
+            return n;
         }
     }
 
