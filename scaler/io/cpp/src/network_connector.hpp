@@ -37,9 +37,9 @@ ENUM ConnectorType: uint8_t;
 ENUM Transport: uint8_t;
 
 [[nodiscard]] IoResult writeall(int fd, uint8_t* data, size_t len);
-[[nodiscard]] IoState write_message(int fd, IoOperation* op);
+[[nodiscard]] IoState write_message(int fd, MessageIoOperation* op);
 [[nodiscard]] IoResult readexact(int fd, uint8_t* buf, size_t len);
-[[nodiscard]] IoState read_message(int fd, IoOperation* op);
+[[nodiscard]] IoState read_message(int fd, MessageIoOperation* op);
 
 void write_enqueue(RawPeer* peer, SendMessage send);
 void reconnect_peer(RawPeer* peer);
@@ -154,8 +154,8 @@ struct RawPeer {
 
     PeerState state;  // the state of the peer
 
-    std::optional<IoOperation> read_op;   // the current read operation
-    std::optional<IoOperation> write_op;  // the current write operation
+    std::optional<MessageIoOperation> read_op;   // the current read operation
+    std::optional<MessageIoOperation> write_op;  // the current write operation
 
     void recv_msg(Bytes payload);
 };

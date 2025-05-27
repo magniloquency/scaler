@@ -5,48 +5,56 @@
 #include <cstdlib>
 #include <expected>
 #include <functional>
-#include <vector>
 
 #include "bytes.hpp"
 #include "common.hpp"
 #include "file_descriptor.hpp"
 
 class Buffer {
-    uint8_t* data;
-    size_t capacity, size;
+    uint8_t* _data;
+    size_t _capacity, _size;
 
-    // a pointer to the end of the buffer where new data can be written or read from
-    uint8_t* end() { return data + size; }
+    // a pointer to the end of the buffer where new _data can be written or read from
+    uint8_t* end() { return _data + _size; }
+
+    Buffer(uint8_t* data, size_t capacity, size_t size): _data(data), _capacity(capacity), _size(size) {
+        if (_data == nullptr || _capacity == 0) {
+            panic("Buffer created with null _data or zero _capacity");
+        }
+    }
 
 public:
-    Buffer(size_t capacity): data(new uint8_t[capacity]), capacity(capacity), size(0) {}
+    Buffer(): _data(nullptr), _capacity(0), _size(0) {
+        // default constructor for empty buffer
+    }
+    Buffer(size_t capacity): _data(new uint8_t[capacity]), _capacity(capacity), _size(0) {}
 
     // move-only type
     Buffer(const Buffer&)            = delete;
     Buffer& operator=(const Buffer&) = delete;
-    Buffer(Buffer&& other) noexcept: data(other.data), capacity(other.capacity), size(other.size) {
-        other.data     = nullptr;
-        other.capacity = 0;
-        other.size     = 0;
+    Buffer(Buffer&& other) noexcept: _data(other._data), _capacity(other._capacity), _size(other._size) {
+        other._data     = nullptr;
+        other._capacity = 0;
+        other._size     = 0;
     }
     Buffer& operator=(Buffer&& other) noexcept {
         if (this != &other) {
-            delete[] data;  // free current data
-            data     = other.data;
-            capacity = other.capacity;
-            size     = other.size;
+            delete[] _data;  // free current _data
+            _data     = other._data;
+            _capacity = other._capacity;
+            _size     = other._size;
 
-            other.data     = nullptr;
-            other.capacity = 0;
-            other.size     = 0;
+            other._data     = nullptr;
+            other._capacity = 0;
+            other._size     = 0;
         }
         return *this;
     }
 
     ~Buffer() {
-        if (data != nullptr)
-            delete[] data;  // free the buffer if it was allocated
-        data = nullptr;     // prevent double free
+        if (_data != nullptr)
+            delete[] _data;  // free the buffer if it was allocated
+        _data = nullptr;     // prevent double free
     }
 
     // consume the buffer
@@ -63,7 +71,7 @@ public:
 
         auto result = consumer(end(), n.value_or(remaining());
         if (result) {
-            size += *result;
+            _size += *result;
             return true;  // consumer success
         } else {
             return std::unexpected {result.error()};  // consumer failed
@@ -78,22 +86,26 @@ public:
         return consume<int>([&fd](uint8_t* buf, size_t n) { return fd.write(buf, n); }, n);
     }
 
-    size_t remaining() const { return capacity - size; }
+    size_t remaining() const { return _capacity - _size; }
 
-    size_t capacity() const { return capacity; }
+    size_t capacity() const { return _capacity; }
 
-    size_t size() const { return size; }
+    size_t size() const { return _size; }
 
-    bool is_empty() const { return size == 0; }
+    bool is_empty() const { return _size == 0; }
 
-    bool is_full() const { return size == capacity; }
+    bool is_full() const { return _size == _capacity; }
 
-    // consume the buffer and return a Bytes object
+    // consume this buffer and return a Bytes object
     Bytes into_bytes() {
-        auto bytes = Bytes(data, size, Bytes::Owned);
-        data       = nullptr;  // prevent deletion in destructor
-        size       = 0;
-        capacity   = 0;
+        auto bytes = Bytes(_data, _size, Bytes::Owned);
+        _data      = nullptr;  // prevent deletion in destructor
+        _size      = 0;
+        _capacity  = 0;
         return bytes;
     }
+
+    static Buffer from_bytes(Bytes& bytes) { return bytes.into_buffer(); }
+
+    friend class Bytes;
 };

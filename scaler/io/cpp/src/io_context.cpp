@@ -158,8 +158,8 @@ void network_connector_connect_peer_inner(RawPeer* peer, int domain, socklen_t l
         panic("failed to connect to peer: " + std::to_string(errno));
 
     peer->state    = PeerState::Connecting;                          // set peer state
-    peer->write_op = IoOperation::write(peer->connector->identity);  // write our identity
-    peer->read_op  = IoOperation::read();                            // read the peer's identity
+    peer->write_op = MessageIoOperation::write(peer->connector->identity);  // write our identity
+    peer->read_op  = MessageIoOperation::read();                            // read the peer's identity
 
     peer->connector->thread->add_peer(peer);
 }
@@ -311,9 +311,9 @@ void network_connector_listener_event(NetworkConnector* connector) {
             .queue     = std::deque<SendPayload>(),
             .state     = PeerState::Connecting,
             // read the peer's identity
-            .read_op = IoOperation::read(),
+            .read_op = MessageIoOperation::read(),
             // write our identity
-            .write_op = IoOperation::write(connector->identity),
+            .write_op = MessageIoOperation::write(connector->identity),
         };
 
         connector->thread->add_peer(peer);

@@ -10,6 +10,8 @@
 #include <cstring>
 #include <cstdlib>
 
+const size_t HEADER_SIZE = 4;  // size of the message header in bytes
+
 using Errno = int;
 
 void print_trace(void) {
@@ -46,4 +48,15 @@ uint8_t* datadup(const uint8_t* data, size_t len) {
     uint8_t* dup = new uint8_t[len];
     std::memcpy(dup, data, len);
     return dup;
+}
+
+void serialize_u32(uint32_t x, uint8_t buffer[4]) {
+    buffer[0] = x & 0xFF;
+    buffer[1] = (x >> 8) & 0xFF;
+    buffer[2] = (x >> 16) & 0xFF;
+    buffer[3] = (x >> 24) & 0xFF;
+}
+
+void deserialize_u32(const uint8_t buffer[4], uint32_t* x) {
+    *x = buffer[0] | buffer[1] << 8 | buffer[2] << 16 | buffer[3] << 24;
 }

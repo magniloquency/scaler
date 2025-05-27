@@ -165,9 +165,9 @@ void RawPeer::recv_msg(Bytes payload) {
 // write a message
 // nonblocking, resumable
 // never returns IoState::Closed
-[[nodiscard]] IoState write_message(int fd, IoOperation* op) {
+[[nodiscard]] IoState write_message(int fd, MessageIoOperation* op) {
     switch (op->progress) {
-        case IoProgress::Header: {
+        case MessageIoProgress::Header: {
             // serialize the header
             // this may happen multiple times if we get blocked
             uint8_t header[4];
@@ -179,11 +179,11 @@ void RawPeer::recv_msg(Bytes payload) {
             if (result.tag != IoState::Done)
                 return result.tag;
 
-            op->progress = IoProgress::Payload;
+            op->progress = MessageIoProgress::Payload;
             op->cursor   = 0;
         }
             [[fallthrough]];
-        case IoProgress::Payload: {
+        case MessageIoProgress::Payload: {
             auto result = writeall(fd, op->payload.data + op->cursor, op->payload.len - op->cursor);
             op->cursor += result.n_bytes;
 
@@ -198,7 +198,7 @@ ControlFlow epollin_peer(RawPeer* peer) {
     for (;;) {
         if (!peer->read_op)
             // note: no completer
-            peer->read_op = IoOperation::read();
+            peer->read_op = MessageIoOperation::read();
 
         auto result = read_message(peer->fd, &*peer->read_op);
 
@@ -222,7 +222,7 @@ ControlFlow epollout_peer(RawPeer* peer) {
                 return ControlFlow::Continue;  // queue exhausted
 
             auto send      = peer->queue.front();
-            peer->write_op = IoOperation::write(send.payload, send.completer);
+            peer->write_op = MessageIoOperation::write(send.payload, send.completer);
             peer->queue.pop_front();
         }
 
@@ -301,9 +301,9 @@ void write_enqueue(RawPeer* peer, SendMessage send) {
 
 // read a message
 // nonblocking, resumable
-[[nodiscard]] IoState read_message(int fd, IoOperation* op) {
+[[nodiscard]] IoState read_message(int fd, MessageIoOperation* op) {
     switch (op->progress) {
-        case IoProgress::Header: {
+        case MessageIoProgress::Header: {
             auto result = readexact(fd, op->buffer + op->cursor, 4 - op->cursor);
             op->cursor += result.n_bytes;
 
@@ -314,12 +314,12 @@ void write_enqueue(RawPeer* peer, SendMessage send) {
             deserialize_u32(op->buffer, &len);
             len = ntohl(len);
 
-            op->progress = IoProgress::Payload;
+            op->progress = MessageIoProgress::Payload;
             op->cursor   = 0;
             op->payload  = Bytes::alloc(len);
         }
             [[fallthrough]];
-        case IoProgress::Payload: {
+        case MessageIoProgress::Payload: {
             auto result = readexact(fd, op->payload.data + op->cursor, op->payload.len - op->cursor);
             op->cursor += result.n_bytes;
 

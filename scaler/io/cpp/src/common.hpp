@@ -473,22 +473,22 @@ struct Completer {
     }
 };
 
-ENUM IoProgress: uint8_t {Header, Payload};
+ENUM MessageIoProgress: uint8_t {Header, Payload};
 
 // an in-progress io operation
-struct IoOperation {
-    IoProgress progress;
+struct MessageIoOperation {
+    MessageIoProgress progress;
     Completer completer;
     size_t cursor;
 
     uint8_t buffer[4];
     Bytes payload;
 
-    bool completed() const { return progress == IoProgress::Payload && cursor == payload.len; }
+    bool completed() const { return progress == MessageIoProgress::Payload && cursor == payload.len; }
 
-    static IoOperation read(Completer completer = Completer::none()) {
+    static MessageIoOperation read(Completer completer = Completer::none()) {
         return {
-            .progress  = IoProgress::Header,
+            .progress  = MessageIoProgress::Header,
             .completer = completer,
             .cursor    = 0,
             .buffer    = {0},
@@ -496,9 +496,9 @@ struct IoOperation {
     }
 
     // the payload must live at least as long as the operation does
-    static IoOperation write(Bytes payload, Completer completer = Completer::none()) {
+    static MessageIoOperation write(Bytes payload, Completer completer = Completer::none()) {
         return {
-            .progress  = IoProgress::Header,
+            .progress  = MessageIoProgress::Header,
             .completer = completer,
             .cursor    = 0,
             .buffer    = {0},
