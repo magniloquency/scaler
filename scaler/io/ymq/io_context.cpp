@@ -18,7 +18,7 @@ std::shared_ptr<IOSocket> IOContext::createIOSocket(Identity identity, IOSocketT
     static size_t threadsRoundRobin = 0;
     auto& thread                    = _threads[threadsRoundRobin];
     ++threadsRoundRobin %= _threads.size();
-    return thread->createIOSocket(identity, socketType);
+    return thread->createIOSocket(std::move(identity), socketType);
 }
 
 bool IOContext::removeIOSocket(std::shared_ptr<IOSocket> socket) {

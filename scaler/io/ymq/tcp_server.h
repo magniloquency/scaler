@@ -32,17 +32,16 @@ class TcpServer {
 
     sockaddr _addr;
     socklen_t _addr_len;
-    std::string _IOSocketIdentity;
+    std::string _localIOSocketIdentity;
 
 public:
     TcpServer(const TcpServer&)            = delete;
     TcpServer& operator=(const TcpServer&) = delete;
 
-    // TODO: Modify the behavior of default ctor
-    TcpServer(std::shared_ptr<EventLoopThread> eventLoop);
+    TcpServer(std::shared_ptr<EventLoopThread> eventLoop, std::string localIOSocketIdentity);
 
     using AcceptReturnCallback = std::function<void(FileDescriptor, sockaddr, int)>;
     AcceptReturnCallback onAcceptReturn;
-    void onCreated(std::string identity);
+    void onCreated();
     ~TcpServer();
 };

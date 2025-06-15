@@ -45,4 +45,6 @@ struct TimedQueue {
     }
 
     void onCreated();
+
+    int timingFd() const { return timer_fd; }
 };

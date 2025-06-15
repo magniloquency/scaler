@@ -40,8 +40,12 @@ static int create_and_bind_socket() {
 }
 
 // TODO: Allow user to specify port/addr
-TcpServer::TcpServer(std::shared_ptr<EventLoopThread> eventLoopThread)
-    : _eventLoopThread(eventLoopThread), _eventManager(std::make_unique<EventManager>(_eventLoopThread)) {
+TcpServer::TcpServer(std::shared_ptr<EventLoopThread> eventLoopThread, std::string localIOSocketIdentity)
+    : _eventLoopThread(eventLoopThread)
+    , _localIOSocketIdentity(std::move(localIOSocketIdentity))
+    , _eventManager(std::make_unique<EventManager>(_eventLoopThread))
+    , _addr()
+    , _addr_len(sizeof(sockaddr)) {
     _serverFd = create_and_bind_socket();
 
     _eventManager->onRead  = [this] { this->onRead(); };
@@ -50,24 +54,22 @@ TcpServer::TcpServer(std::shared_ptr<EventLoopThread> eventLoopThread)
     _eventManager->onError = [this] { this->onError(); };
 }
 
-void TcpServer::onCreated(std::string identity) {
-    printf("%s, %d\n", __PRETTY_FUNCTION__, __LINE__);
+void TcpServer::onCreated() {
     // _eventLoopThread->eventLoop.registerEventManager(*this->_eventManager.get());
-    // TODO: Think about this, maybe move this to ctor?
-    this->_IOSocketIdentity = identity;
-    _eventLoopThread->_eventLoop.addFdToLoop(_serverFd, EPOLLIN, this->_eventManager.get());
+    _eventLoopThread->_eventLoop.addFdToLoop(_serverFd, EPOLLIN | EPOLLET, this->_eventManager.get());
 }
 
 void TcpServer::onRead() {
-    printf("TcpServer::onRead()\n");
-    int fd = accept4(_serverFd, &_addr, &_addr_len, SOCK_NONBLOCK | SOCK_CLOEXEC);
-    close(fd);
-    return;
-    // std::string id = this->_IOSocketIdentity;
-    // auto& sock     = this->_eventLoopThread->_identityToIOSocket.at(id);
-    // // FIXME: the second _addr is not real
-    // sock->_fdToConnection[fd] = std::make_unique<MessageConnectionTCP>(_eventLoopThread, fd, _addr, _addr);
-    // sock->_fdToConnection[fd]->onCreated();
+    printf("%s\n", __PRETTY_FUNCTION__);
+    printf("Got a new connection, local iosocket identity = %s\n", _localIOSocketIdentity.c_str());
+
+    int fd         = accept4(_serverFd, &_addr, &_addr_len, SOCK_NONBLOCK | SOCK_CLOEXEC);
+    std::string id = this->_localIOSocketIdentity;
+    auto& sock     = this->_eventLoopThread->_identityToIOSocket.at(id);
+    // FIXME: the second _addr is not real
+    sock->_fdToConnection[fd] =
+        std::make_unique<MessageConnectionTCP>(_eventLoopThread, fd, _addr, _addr, sock->identity());
+    sock->_fdToConnection[fd]->onCreated();
 }
 
 TcpServer::~TcpServer() {}

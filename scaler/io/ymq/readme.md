@@ -23,15 +23,15 @@ Each person maintains a todo and done list.
  - Start organize files that they can be compiled in one go
  - Write delayed execution utility
  - Write timed execution utility
- -
+ - IOSocket exchange identity on connected
  -
  -
  -
  - LEAVE A FEW BLANKS HERE TO AVOID CONFLICT
 
 ## TODO:
- - Add example usage of this lib to scaler/tests
- - Implement the detail of IOSocket, especially `onAdded` behavior
+ - Guaranteed message delivery
+ - Retry on disconnect 
 
 
 ## magniloquency
