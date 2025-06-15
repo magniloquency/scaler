@@ -31,8 +31,5 @@ public:
 
     EventLoopThread(const EventLoopThread&)            = delete;
     EventLoopThread& operator=(const EventLoopThread&) = delete;
-    // TODO: Revisit the default ctor
-    EventLoopThread() = default;
-    // TODO: Think about the destructor
-    ~EventLoopThread() {}
+    EventLoopThread()                                  = default;
 };

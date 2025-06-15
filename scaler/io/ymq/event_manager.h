@@ -14,30 +14,32 @@
 
 class EventLoopThread;
 
+// TODO: Add the _fd back
 class EventManager {
     std::shared_ptr<EventLoopThread> _eventLoopThread;
-    FileDescriptor _fd;
+    // FileDescriptor _fd;
 
 public:
-    int type;
     int events;
     int revents;
     void updateEvents();
 
     void onEvents(uint64_t events) {
-        // if constexpr (std::same_as<Configuration::PollingContext, EpollContext>) {
-        printf("WTF, I'M EPOLLCONTEXT!\n");
-        int realEvents = (int)events;
-        if ((realEvents & EPOLLIN) == EPOLLIN) {
-            onRead();
-        } else if ((realEvents & EPOLLOUT) == EPOLLOUT) {
-            onWrite();
-        } else if ((realEvents & EPOLLHUP) == EPOLLHUP) {
-            onClose();
-        } else if ((realEvents & EPOLLERR)) {
-            onError();
+        if constexpr (std::same_as<Configuration::PollingContext, EpollContext>) {
+            int realEvents = (int)events;
+            if ((realEvents & EPOLLHUP) && !(realEvents & EPOLLIN)) {
+                onClose();
+            }
+            if (realEvents & EPOLLERR) {
+                onError();
+            }
+            if (realEvents & (EPOLLIN | EPOLLRDHUP)) {
+                onRead();
+            }
+            if (realEvents & EPOLLOUT) {
+                onWrite();
+            }
         }
-        // }
     }
 
     // User that registered them should have everything they need
@@ -49,5 +51,4 @@ public:
     OnEventCallback onError;
     // EventManager(): _fd {} {}
     EventManager(std::shared_ptr<EventLoopThread>);
-    ~EventManager() {}
 };

@@ -26,7 +26,7 @@ class IOSocket {
 
     std::optional<TcpClient> _tcpClient;
     std::optional<TcpServer> _tcpServer;
-    // TODO: Figure out what this should do
+    // TODO: add identity to connection on connection created
     std::map<std::string, MessageConnectionTCP*> _identityToConnection;
 
 public:
@@ -34,12 +34,11 @@ public:
 
     IOSocket(std::shared_ptr<EventLoopThread> eventLoopThread, Identity identity, IOSocketType socketType);
 
-    // TODO: Figure out what these should do
     IOSocket();
-    IOSocket(const IOSocket&) {};
-    IOSocket& operator=(const IOSocket&) { return *this; };
-    // IOSocket(IOSocket&&)                 = delete;
-    // IOSocket& operator=(IOSocket&&)      = delete;
+    IOSocket(const IOSocket&)            = delete;
+    IOSocket& operator=(const IOSocket&) = delete;
+    IOSocket(IOSocket&&)                 = delete;
+    IOSocket& operator=(IOSocket&&)      = delete;
 
     Identity identity() const { return _identity; }
     IOSocketType socketType() const { return _socketType; }
@@ -47,6 +46,8 @@ public:
     // TODO: In the future, this will be Message
     void sendMessage(const std::vector<char>& buf, std::function<void()> callback, std::string remoteIdentity);
     void recvMessage(std::vector<char>& buf);
+
+    void removeConnectedTcpClient();
 
     void sendMessage(
         std::shared_ptr<std::vector<char>> buf, std::function<void()> callback, std::string remoteIdentity);
@@ -70,8 +71,10 @@ public:
     // )
     // }
 
+    void connectTo(sockaddr addr);
+
     void onCreated();
-    // TODO: Think about what the destructor should do
+    // TODO: ~IOSocket should remove all connection it is owning
     ~IOSocket() {}
 
     // void recvMessage(Message* msg);

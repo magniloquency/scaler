@@ -17,11 +17,12 @@ struct EventLoop {
     void loop() { eventLoopBackend.loop(); }
     void stop();
 
-    void executeNow(Function func) { eventLoopBackend.executeNow(func); }
-    // TODO: Move those function call. Perhaps using std::invoke(execX, std::forward<Function>(func));
-    void executeLater(Function func, Identifier identifier) { eventLoopBackend.executeLater(func, identifier); }
+    void executeNow(Function func) { eventLoopBackend.executeNow(std::move(func)); }
+    void executeLater(Function func, Identifier identifier) {
+        eventLoopBackend.executeLater(std::move(func), identifier);
+    }
     // void executeAt(Timestamp, Function, Identifier identifier);
-    void executeAt(Timestamp timestamp, Function func) { eventLoopBackend.executeAt(timestamp, func); }
+    void executeAt(Timestamp timestamp, Function func) { eventLoopBackend.executeAt(timestamp, std::move(func)); }
     bool cancelExecution(Identifier identifier);
     void registerCallbackBeforeLoop(EventManager*);
 
@@ -30,6 +31,8 @@ struct EventLoop {
     void addFdToLoop(int fd, uint64_t events, EventManager* manager) {
         eventLoopBackend.addFdToLoop(fd, events, manager);
     }
+
+    void runAfterEachLoop(Function func) { eventLoopBackend.runAfterEachLoop(std::move(func)); };
 
     EventLoopBackend eventLoopBackend;
 };

@@ -10,17 +10,25 @@
 #include "scaler/io/ymq/event_manager.h"
 #include "scaler/io/ymq/message_connection_tcp.h"
 
+void IOSocket::removeConnectedTcpClient() {
+    printf("%s\n", __PRETTY_FUNCTION__);
+    if (this->_tcpClient && this->_tcpClient->_connected) {
+        printf("ONE TCP CLIENT WAS REMOVED\n");
+        this->_tcpClient.reset();
+    }
+}
+
+// TODO: IOSocket::onCreated should initialize component(s) based on its type.
 void IOSocket::onCreated() {
-    printf("%s, %d\n", __PRETTY_FUNCTION__, __LINE__);
-    // Detect if we need to initialize tcpClient and/or tcpServer
-    // If so, initialize it, and then call their onAdd();
-    // assert(!tcpClient);
-    _tcpClient.emplace(_eventLoopThread);
-    // assert(!tcpServer);
-    _tcpServer.emplace(_eventLoopThread);
-    _tcpClient->onCreated(this->identity());
-    _tcpServer->onCreated(this->identity());
+    printf("%s\n", __PRETTY_FUNCTION__);
     // Different SocketType might have different rules
+    if (_socketType == IOSocketType::Dealer) {
+        printf("server should be created now\n");
+        _tcpServer.emplace(_eventLoopThread, this->identity());
+        _tcpServer->onCreated();
+    }
+
+    _eventLoopThread->_eventLoop.runAfterEachLoop([this] { this->removeConnectedTcpClient(); });
 }
 
 IOSocket::IOSocket(std::shared_ptr<EventLoopThread> eventLoopThread, Identity identity, IOSocketType socketType)
@@ -39,3 +47,12 @@ void IOSocket::sendMessage(
 }
 
 void IOSocket::recvMessage(std::vector<char>& buf) {}
+
+void IOSocket::connectTo(sockaddr addr) {
+    printf("%s\n", __PRETTY_FUNCTION__);
+    printf("this->identity() = %s\n", this->identity().c_str());
+    _eventLoopThread->_eventLoop.executeNow([this, addr] {
+        _tcpClient.emplace(_eventLoopThread, this->identity(), addr);
+        _tcpClient->onCreated();
+    });
+}

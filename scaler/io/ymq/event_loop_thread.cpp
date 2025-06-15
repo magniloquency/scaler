@@ -10,10 +10,7 @@
 std::shared_ptr<IOSocket> EventLoopThread::createIOSocket(std::string identity, IOSocketType socketType) {
     if (thread.get_id() == std::thread::id()) {
         thread = std::jthread([this](std::stop_token token) {
-            // while (!token.stop_requested()) {
-            while (true) {
-                printf("A loop starts\n");
-                sleep(10);
+            while (!token.stop_requested()) {
                 this->_eventLoop.loop();
             }
         });
@@ -28,8 +25,7 @@ std::shared_ptr<IOSocket> EventLoopThread::createIOSocket(std::string identity, 
     return ptr;
 }
 
-// TODO: Think about non null pointer
+// TODO: Something happen with the running thread; Think about non null pointer.
 void EventLoopThread::removeIOSocket(IOSocket* target) {
-    // TODO: Something happen with the running thread
     _identityToIOSocket.erase(target->identity());
 }
