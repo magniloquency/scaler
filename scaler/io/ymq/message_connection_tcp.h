@@ -13,18 +13,17 @@
 class EventLoopThread;
 class EventManager;
 
-// struct TcpWriteOperation {
-//     std::function<void()> _callback;
-//     std::function<void(std::vector<char>&, size_t)> _libCallback;
-//     std::vector<char> _buf;
-//     size_t _writeCursor;
-// };
-//
-// struct TcpReadOperation {
-//     std::function<void()> _callback;
-//     std::function<void(std::vector<char>&, size_t)> _libCallback;
-//     std::vector<char> _buf;
-// };
+struct TcpWriteOperation {
+    std::shared_ptr<std::vector<char>> _buf;
+    size_t _cursor = 0;
+    std::function<void()> _callbackAfterCompleteWrite;
+};
+
+struct TcpReadOperation {
+    std::shared_ptr<std::vector<char>> _buf;
+    size_t _cursor = 0;
+    std::function<void()> _callbackAfterCompleteRead;
+};
 
 class MessageConnectionTCP: public MessageConnection {
     int _connFd;
@@ -33,6 +32,10 @@ class MessageConnectionTCP: public MessageConnection {
     std::string _localIOSocketIdentity;
     std::optional<std::string> _remoteIOSocketIdentity;
     bool _sendLocalIdentity;
+
+    std::queue<TcpWriteOperation> _writeOperations;
+    std::queue<TcpReadOperation> _pendingReadOperations;
+    std::queue<std::vector<char>> _receivedMessages;
 
     std::vector<char> _recvBuf;
     size_t _readCursor = 0;
@@ -66,6 +69,9 @@ public:
         //     // writeOp._callback = [msg] {write() }
         // }
     }
+
+    void sendMessage(std::shared_ptr<std::vector<char>> msg);
+    void recvMessage(std::shared_ptr<std::vector<char>> msg);
 
     void recv(std::vector<char>& buf) {}
 

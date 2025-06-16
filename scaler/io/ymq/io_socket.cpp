@@ -56,3 +56,21 @@ void IOSocket::connectTo(sockaddr addr) {
         _tcpClient->onCreated();
     });
 }
+
+void IOSocket::sendMessageTo(std::string remoteIdentity, std::shared_ptr<std::vector<char>> buf) {
+    _eventLoopThread->_eventLoop.executeNow([this, buf] {
+        // TODO: What should we do when we cannot find the connection? We cannot
+        // check whether the identity presents outside the eventloop.
+        auto* conn = this->_identityToConnection.at(this->identity());
+        conn->sendMessage(buf);
+    });
+}
+
+void IOSocket::recvMessageFrom(std::string remoteIdentity, std::shared_ptr<std::vector<char>> buf) {
+    _eventLoopThread->_eventLoop.executeNow([this, buf] {
+        // TODO: What should we do when we cannot find the connection? We cannot
+        // check whether the identity presents outside the eventloop.
+        auto* conn = this->_identityToConnection.at(this->identity());
+        conn->recvMessage(buf);
+    });
+}

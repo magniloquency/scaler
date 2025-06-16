@@ -13,7 +13,7 @@ int main() {
     IOContext context;
     std::shared_ptr<IOSocket> clientSocket = context.createIOSocket("ClientSocket", IOSocketType::Uninit);
 
-    const char* ip = "127.0.0.1";  // example.com
+    const char* ip = "127.0.0.1";
     const int port = 8080;
 
     // Create a non-blocking socket using SOCK_NONBLOCK
@@ -28,6 +28,11 @@ int main() {
     server_addr.sin_port   = htons(port);
     inet_pton(AF_INET, ip, &server_addr.sin_addr);
     clientSocket->connectTo(*(sockaddr*)&server_addr);
+    sleep(2);
+
+    // char buf[8];
+    // clientSocket.sendMessageTo("ServerSocket", buf);
+
     sleep(10000);
 
     // char buf[8];

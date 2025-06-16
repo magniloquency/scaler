@@ -24,7 +24,7 @@ Each person maintains a todo and done list.
  - Write delayed execution utility
  - Write timed execution utility
  - IOSocket exchange identity on connected
- -
+ - General message passing assuming user passed in Message with header
  -
  -
  - LEAVE A FEW BLANKS HERE TO AVOID CONFLICT
@@ -32,6 +32,13 @@ Each person maintains a todo and done list.
 ## TODO:
  - Guaranteed message delivery
  - Retry on disconnect 
+ - Gracefully disconnect
+ - Remember (or remove) the IOSocketIdentity of closed connection
+ - Destructors, in general
+ -
+ -
+ -
+ - LEAVE A FEW BLANKS HERE TO AVOID CONFLICT
 
 
 ## magniloquency

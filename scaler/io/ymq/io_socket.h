@@ -26,10 +26,12 @@ class IOSocket {
 
     std::optional<TcpClient> _tcpClient;
     std::optional<TcpServer> _tcpServer;
-    // TODO: add identity to connection on connection created
-    std::map<std::string, MessageConnectionTCP*> _identityToConnection;
 
 public:
+    // FIXME: Change this to shared_ptr, or figure out a new way of storing MessageConnectionTCP.
+    // For now, _identityToConnection is getting pointers from _fdToConnection, which can be confusing.
+    // We fix it later.
+    std::map<std::string, MessageConnectionTCP*> _identityToConnection;
     std::map<int /* class FileDescriptor */, std::unique_ptr<MessageConnectionTCP>> _fdToConnection;
 
     IOSocket(std::shared_ptr<EventLoopThread> eventLoopThread, Identity identity, IOSocketType socketType);
@@ -51,6 +53,9 @@ public:
 
     void sendMessage(
         std::shared_ptr<std::vector<char>> buf, std::function<void()> callback, std::string remoteIdentity);
+
+    void sendMessageTo(std::string remoteIdentity, std::shared_ptr<std::vector<char>> buf);
+    void recvMessageFrom(std::string remoteIdentity, std::shared_ptr<std::vector<char>> buf);
 
     // string -> connection mapping
     // and connection->string mapping
