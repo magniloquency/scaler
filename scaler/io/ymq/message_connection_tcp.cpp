@@ -10,6 +10,14 @@
 
 #include "scaler/io/ymq/event_loop_thread.h"
 #include "scaler/io/ymq/event_manager.h"
+#include "scaler/io/ymq/io_socket.h"
+
+static bool isCompleteMessage(const std::vector<char>& vec) {
+    if (vec.size() < 4)
+        return false;
+    uint64_t size = *(uint64_t*)vec.data();
+    return vec.size() == size + vec.size() - 4;
+}
 
 MessageConnectionTCP::MessageConnectionTCP(
     std::shared_ptr<EventLoopThread> eventLoopThread,
@@ -48,9 +56,70 @@ void MessageConnectionTCP::onRead() {
         char* first   = idBuf + sizeof(uint64_t);
         std::string remoteID(first, first + size);
         _remoteIOSocketIdentity.emplace(std::move(remoteID));
+
+        auto& sock = this->_eventLoopThread->_identityToIOSocket[_localIOSocketIdentity];
+        sock->_identityToConnection[*_remoteIOSocketIdentity] = sock->_fdToConnection[_connFd].get();
+        return;
     }
     assert(_remoteIOSocketIdentity);
     printf("Got a remote socket, identity = %s\n", _remoteIOSocketIdentity->c_str());
+
+    while (true) {
+        const size_t headerSize = 4;
+        size_t leftOver         = 0;
+        size_t first            = 0;
+
+        // Good case
+        if (_receivedMessages.empty() || isCompleteMessage(_receivedMessages.back())) {
+            _receivedMessages.push({});
+            _receivedMessages.back().resize(1024);
+            leftOver = 4;
+            first    = 0;
+        } else {
+            // Bad case, we currently have an incomplete message
+            auto& message = _receivedMessages.back();
+            if (message.size() < headerSize) {
+                leftOver = headerSize - message.size();
+                first    = message.size();
+                message.resize(1024);
+            } else {
+                size_t payloadSize = *(uint64_t*)message.data();
+                leftOver           = payloadSize - (message.size() - headerSize);
+                first              = message.size();
+                message.resize(payloadSize + headerSize);
+            }
+        }
+
+        auto& message = _receivedMessages.back();
+
+        while (leftOver) {
+            assert(first + leftOver <= message.size());
+            int res = read(_connFd, message.data() + first, leftOver);
+            if (res == -1 && errno == EAGAIN) {
+                message.resize(first);
+                // Reviewer: To jump out of double loop, reconsider when you say no. - gxu
+                goto ReadExhuasted;
+            }
+            leftOver -= res;
+            first += res;
+            if (first == 4) {
+                // reading the payload
+                leftOver = *(uint64_t*)message.data();
+                message.resize(leftOver + 4);
+            }
+        }
+        assert(isCompleteMessage(_receivedMessages.back()));
+    }
+
+ReadExhuasted:
+    while (_pendingReadOperations.size() && _receivedMessages.size()) {
+        if (isCompleteMessage(_receivedMessages.front())) {
+            *_pendingReadOperations.front()._buf = std::move(_receivedMessages.front());
+            _receivedMessages.pop();
+            // _pendingReadOperations.front()._callbackAfterCompleteRead();
+            _pendingReadOperations.pop();
+        }
+    }
 }
 
 void MessageConnectionTCP::onWrite() {
@@ -69,6 +138,70 @@ void MessageConnectionTCP::onWrite() {
 
     assert(_sendLocalIdentity);
     printf("Have sent out the local Identity\n");
+
+    while (!_writeOperations.empty()) {
+        auto& writeOp       = _writeOperations.front();
+        const size_t bufLen = writeOp._buf->size();
+        while (writeOp._cursor != bufLen) {
+            const int leftOver = writeOp._buf->size() - writeOp._cursor;
+            const char* begin  = writeOp._buf->data() + writeOp._cursor;
+            auto bytes         = write(_connFd, begin, leftOver);
+
+            if (bytes == -1 && errno == EAGAIN) {
+                break;
+            }
+
+            writeOp._cursor += bytes;
+        }
+
+        if (writeOp._cursor == bufLen) {
+            _writeOperations.pop();
+            // writeOp._callbackAfterCompleteWrite
+        } else {
+            break;
+        }
+    }
+}
+
+// TODO: Maybe change this to message_t
+void MessageConnectionTCP::sendMessage(std::shared_ptr<std::vector<char>> msg) {
+    // detect if the write operations queue is empty, if it is, simply write to exhaustion
+    // if it is not, queue write operations to the end of the queue
+    TcpWriteOperation writeOp;
+    writeOp._buf    = msg;
+    writeOp._cursor = 0;
+    // writeOp._callbackAfterCompleteWrite;
+
+    if (_writeOperations.empty()) {
+        const size_t bufLen = writeOp._buf->size();
+        while (writeOp._cursor != bufLen) {
+            const int leftOver = writeOp._buf->size() - writeOp._cursor;
+            const char* begin  = writeOp._buf->data() + writeOp._cursor;
+            auto bytes         = write(_connFd, begin, leftOver);
+
+            if (bytes == -1 && errno == EAGAIN) {
+                _writeOperations.push(std::move(writeOp));
+                break;
+            }
+
+            writeOp._cursor += bytes;
+        }
+    } else {
+        _writeOperations.push(std::move(writeOp));
+    }
+}
+
+void MessageConnectionTCP::recvMessage(std::shared_ptr<std::vector<char>> msg) {
+    if (_receivedMessages.size() && isCompleteMessage(_receivedMessages.back())) {
+        *msg = std::move(_receivedMessages.front());
+        _receivedMessages.pop();
+        // callback
+    } else {
+        TcpReadOperation readOp;
+        readOp._buf = msg;
+        // readOp._callbackAfterCompleteRead;
+        _pendingReadOperations.push(readOp);
+    }
 }
 
 MessageConnectionTCP::~MessageConnectionTCP() {}
