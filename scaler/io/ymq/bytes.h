@@ -12,43 +12,41 @@
 #include "scaler/io/ymq/common.h"
 #include "scaler/io/ymq/typedefs.h"
 
-class Bytes {
-    uint8_t* _data;
-    size_t _len;
-    Ownership _tag;
+struct Bytes {
+    uint8_t* data;
+    size_t len;
+    Ownership tag;
 
     void free() {
-        if (_tag != Owned)
+        if (tag != Owned)
             return;
 
         if (is_empty())
             return;
 
-        delete[] _data;
-        this->_data = NULL;
+        delete[] data;
+        this->data = NULL;
     }
 
-    Bytes(uint8_t* m_data, size_t m_len, Ownership tag): _data(m_data), _len(m_len), _tag(tag) {}
-
-public:
     // move-only
     // TODO: make copyable
+    Bytes(uint8_t* m_data, size_t m_len, Ownership tag): data(m_data), len(m_len), tag(tag) {}
     Bytes(const Bytes&)            = delete;
     Bytes& operator=(const Bytes&) = delete;
-    Bytes(Bytes&& other) noexcept: _data(other._data), _len(other._len), _tag(other._tag) {
-        other._data = NULL;
-        other._len  = 0;
+    Bytes(Bytes&& other) noexcept: data(other.data), len(other.len), tag(other.tag) {
+        other.data = NULL;
+        other.len  = 0;
     }
     Bytes& operator=(Bytes&& other) noexcept {
         if (this != &other) {
             this->free();  // free current data
 
-            _data = other._data;
-            _len  = other._len;
-            _tag    = other._tag;
+            data = other.data;
+            len  = other.len;
+            tag  = other.tag;
 
-            other._data = NULL;
-            other._len  = 0;
+            other.data = NULL;
+            other.len  = 0;
         }
         return *this;
     }
@@ -56,28 +54,28 @@ public:
     ~Bytes() { this->free(); }
 
     bool operator==(const Bytes& other) const {
-        if (_len != other._len)
+        if (len != other.len)
             return false;
 
-        if (_data == other._data)
+        if (data == other.data)
             return true;
 
-        return std::memcmp(_data, other._data, _len) == 0;
+        return std::memcmp(data, other.data, len) == 0;
     }
 
     bool operator!() const { return is_empty(); }
 
-    bool is_empty() const { return this->_data == NULL; }
+    bool is_empty() const { return this->data == NULL; }
 
     // debugging utility
     std::string as_string() const {
         if (is_empty())
             return "[EMPTY]";
 
-        return std::string((char*)_data, _len);
+        return std::string((char*)data, len);
     }
 
-    Bytes ref() { return Bytes {this->_data, this->_len, Borrowed}; }
+    Bytes ref() { return Bytes {this->data, this->len, Borrowed}; }
 
     static Bytes alloc(size_t m_len) {
         if (m_len == 0)
@@ -99,7 +97,7 @@ public:
         if (bytes.is_empty())
             panic("tried to clone empty bytes");
 
-        return Bytes {datadup(bytes._data, bytes._len), bytes._len, Owned};
+        return Bytes {datadup(bytes.data, bytes.len), bytes.len, Owned};
     }
 
     // static Bytes from_buffer(Buffer& buffer) { return buffer.into_bytes(); }
@@ -120,8 +118,8 @@ public:
     //     return buffer;
     // }
 
-    size_t len() const { return _len; }
-    const uint8_t* data() const { return _data; }
+    // size_t len() const { return _len; }
+    // const uint8_t* data() const { return _data; }
 
     friend class Buffer;
 };

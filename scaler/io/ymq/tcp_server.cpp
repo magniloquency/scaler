@@ -1,4 +1,3 @@
-#include "scaler/io/ymq/tcp_server.h"
 
 #include <netinet/in.h>
 #include <sys/epoll.h>
@@ -8,37 +7,14 @@
 #include <memory>
 #include <system_error>
 
+#include "scaler/io/ymq/event_loop_thread.h"
 #include "scaler/io/ymq/event_manager.h"
 #include "scaler/io/ymq/file_descriptor.h"
+#include "scaler/io/ymq/io_socket.h"
+#include "scaler/io/ymq/message_connection_tcp.h"
+#include "scaler/io/ymq/tcp_server.h"
 
-static int create_and_bind_socket() {
-    int server_fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
-    if (server_fd == -1) {
-        perror("socket");
-        return -1;
-    }
-
-    sockaddr_in addr {};
-    addr.sin_family      = AF_INET;
-    addr.sin_port        = htons(8080);
-    addr.sin_addr.s_addr = INADDR_ANY;
-
-    if (bind(server_fd, (struct sockaddr*)&addr, sizeof(addr)) == -1) {
-        perror("bind");
-        close(server_fd);
-        return -1;
-    }
-
-    if (listen(server_fd, SOMAXCONN) == -1) {
-        perror("listen");
-        close(server_fd);
-        return -1;
-    }
-
-    return server_fd;
-}
-
-TcpServer::TcpServer(std::shared_ptr<EventLoopThread> eventLoop): _eventLoopThread(eventLoop) {
+TcpServer::TcpServer(std::shared_ptr<IOSocket> ioSocket): _socket(ioSocket) {
     auto fd = FileDescriptor::socket(AF_INET, SOCK_STREAM, 0);
 
     if (!fd) {
@@ -60,10 +36,32 @@ TcpServer::TcpServer(std::shared_ptr<EventLoopThread> eventLoop): _eventLoopThre
     }
 
     _eventManager = std::make_unique<EventManager>(
-        eventLoop, std::move(*fd), [this](FileDescriptor& fd, Events events) { this->onCreated(); });
+        _socket->eventLoopThread(), *fd, [this](FileDescriptor& fd, Events events) { this->onCreated(); });
 }
 
 void TcpServer::onCreated() {
     printf("TcpServer::onAdded()\n");
-    _eventLoopThread->registerEventManager(*this->_eventManager.get());
+    _socket->eventLoopThread()->registerEventManager(*this->_eventManager.get());
 }
+
+void TcpServer::onEvent(FileDescriptor& fd, Events events) {
+    if (events.readable) {
+        sockaddr_storage addr;
+        socklen_t addr_len;
+
+        auto newFd = fd.accept((sockaddr*)&addr, &addr_len, SOCK_NONBLOCK | SOCK_CLOEXEC);
+
+        if (!newFd) {
+            // todo: error handling
+            panic("accept failed");
+        }
+
+        std::shared_ptr<IOSocket>& ioSocket = _socket;
+        FileDescriptor& fd2                 = *newFd;
+        sockaddr_storage& remoteAddress     = addr;
+
+        _socket->addConnection(std::make_unique<MessageConnectionTCP>(ioSocket, fd2, remoteAddress));
+    }
+}
+
+TcpServer::~TcpServer() {}

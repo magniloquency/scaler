@@ -82,8 +82,8 @@ public:
         }
     }
 
-    std::expected<FileDescriptor, Errno> accept(sockaddr& addr, socklen_t& addrlen) {
-        if (auto fd2 = ::accept(*_fd, &addr, &addrlen) < 0) {
+    std::expected<FileDescriptor, Errno> accept(sockaddr* addr, socklen_t* addrlen, int flags = 0) {
+        if (auto fd2 = ::accept4(*_fd, addr, addrlen, flags) < 0) {
             return std::unexpected {errno};
         } else {
             return FileDescriptor(fd2);

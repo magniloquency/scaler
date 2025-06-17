@@ -1,3 +1,4 @@
+#include "scaler/io/ymq/event_loop_thread.h"
 #include "scaler/io/ymq/event_manager.h"
 
 void EventManager::addToEventLoop() {

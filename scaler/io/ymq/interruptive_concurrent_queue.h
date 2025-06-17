@@ -8,14 +8,12 @@
 #include <optional>
 
 // First-party
-// #include "common.h"
-#include "event_manager.h"
-#include "event_loop_thread.h"
-#include "file_descriptor.h"
+#include "scaler/io/ymq/event_loop_thread.h"
+#include "scaler/io/ymq/event_manager.h"
+#include "scaler/io/ymq/file_descriptor.h"
 
 // Third-party
-#include "scaler/io/ymq/event_manager.h"
-#include "third_party/concurrentqueue.h"
+#include "scaler/io/ymq/third_party/concurrentqueue.h"
 
 using moodycamel::ConcurrentQueue;
 

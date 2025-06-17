@@ -1,35 +1,35 @@
 #pragma once
 
 // C++
-#include <functional>
+#include <sys/socket.h>
+
 #include <memory>
 
 // First-party
+#include "scaler/io/ymq/event_manager.h"
 #include "scaler/io/ymq/file_descriptor.h"
+#include "scaler/io/ymq/io_socket.h"
 // #include "event_loop_thread.hpp"
 // #include "event_manager.hpp"
 
 class EventLoopThread;
 class EventManager;
+class IOSocket;
+
+// struct sockaddr *__restrict addr, socklen_t *__restrict addr_len
 
 class TcpServer {
-    // eventLoop thread will call onRead that is associated w/ the eventManager
-    std::shared_ptr<EventLoopThread> _eventLoopThread;
-    std::unique_ptr<EventManager> _eventManager;  // will copy the `onRead()` to itself
-    // Implementation defined method. accept(3) should happen here.
-    // This function will call user defined onAcceptReturn()
-    // It will handle error it can handle. If it is unreasonable to
-    // handle the error here, pass it to onAcceptReturn()
-    void onRead();
+    std::shared_ptr<IOSocket> _socket;
+    std::unique_ptr<EventManager> _eventManager;
+    
+    void onEvent(FileDescriptor &fd, Events events);
 
 public:
     TcpServer(const TcpServer&)            = delete;
     TcpServer& operator=(const TcpServer&) = delete;
 
-    // TODO: Modify the behavior of default ctor
-    TcpServer(std::shared_ptr<EventLoopThread> eventLoop);
+    TcpServer(std::shared_ptr<IOSocket> ioSocket);
+    ~TcpServer();
 
-    using AcceptReturnCallback = std::function<void(FileDescriptor, sockaddr, int)>;
-    AcceptReturnCallback onAcceptReturn;
     void onCreated();
 };

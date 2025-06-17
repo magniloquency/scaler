@@ -45,6 +45,10 @@ inline void print_trace(void) {
     std::abort();
 }
 
+[[noreturn]] inline void unreachable(const std::source_location& location = std::source_location::current()) {
+    panic("unreachable", location);
+}
+
 [[noreturn]] inline void todo(
     std::optional<std::string> message   = std::nullopt,
     const std::source_location& location = std::source_location::current()) {

@@ -3,7 +3,9 @@
 
 #include <algorithm>  // std::ranges::generate
 #include <cassert>    // assert
+#include <memory>     // std::make_shared
 
+#include "scaler/io/ymq/common.h"
 #include "scaler/io/ymq/event_loop_thread.h"
 #include "scaler/io/ymq/io_socket.h"
 #include "scaler/io/ymq/typedefs.h"
@@ -17,11 +19,8 @@ std::shared_ptr<IOSocket> IOContext::createIOSocket(Identity identity, IOSocketT
     static size_t threadsRoundRobin = 0;
     auto& thread                    = _threads[threadsRoundRobin];
     ++threadsRoundRobin %= _threads.size();
-
-    auto socket = std::make_shared<IOSocket>(thread, identity, socketType);
-    // todo
-    // thread.addIOSocket(socket);
-    return socket;
+    // return thread->createIOSocket(std::move(identity), socketType);
+    todo();
 }
 
 bool IOContext::removeIOSocket(std::shared_ptr<IOSocket> socket) {
