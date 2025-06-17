@@ -152,6 +152,7 @@ void MessageConnectionTCP::onWrite(FileDescriptor& fd) {
 
 void MessageConnectionTCP::onWroteMessage() {
     this->_writeQueue.pop();
+    _writeOp.reset();
 }
 
 // TODO: Maybe change this to message_t
