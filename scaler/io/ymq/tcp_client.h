@@ -27,6 +27,7 @@ class TcpClient {
     void onWrite();
     void onClose() {}
     void onError() {}
+    size_t _retryTimes = 0;
 
 public:
     bool _connected;

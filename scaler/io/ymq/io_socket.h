@@ -28,11 +28,13 @@ class IOSocket {
     std::optional<TcpServer> _tcpServer;
 
 public:
-    // FIXME: Change this to shared_ptr, or figure out a new way of storing MessageConnectionTCP.
-    // For now, _identityToConnection is getting pointers from _fdToConnection, which can be confusing.
-    // We fix it later.
+    // FIXME: Maybe we don't provide this map at all. _identity and connection is not injective.
+    // Or maybe we enforce user to provide unique name.
+    // We can provide canonical name etc.
     std::map<std::string, MessageConnectionTCP*> _identityToConnection;
     std::map<int /* class FileDescriptor */, std::unique_ptr<MessageConnectionTCP>> _fdToConnection;
+
+    std::vector<std::unique_ptr<MessageConnectionTCP>> _deadConnection;
 
     IOSocket(std::shared_ptr<EventLoopThread> eventLoopThread, Identity identity, IOSocketType socketType);
 
@@ -77,6 +79,12 @@ public:
     // }
 
     void connectTo(sockaddr addr);
+
+    // From Connection Class only
+    void onConnectionDisconnected(MessageConnectionTCP* conn);
+
+    // From Connection Class only
+    void onConnectionIdentityReceived(MessageConnectionTCP* conn);
 
     void onCreated();
     // TODO: ~IOSocket should remove all connection it is owning

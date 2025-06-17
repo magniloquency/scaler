@@ -68,7 +68,7 @@ void TcpServer::onRead() {
     auto& sock     = this->_eventLoopThread->_identityToIOSocket.at(id);
     // FIXME: the second _addr is not real
     sock->_fdToConnection[fd] =
-        std::make_unique<MessageConnectionTCP>(_eventLoopThread, fd, _addr, _addr, sock->identity());
+        std::make_unique<MessageConnectionTCP>(_eventLoopThread, fd, _addr, _addr, sock->identity(), false);
     sock->_fdToConnection[fd]->onCreated();
 }
 
