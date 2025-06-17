@@ -30,7 +30,7 @@ static void PyIOSocket_dealloc(PyIOSocket* self) {
     Py_TYPE(self)->tp_free((PyObject*)self);  // Free the PyObject
 }
 
-static PyObject* PyIOSocket_send(PyIOSocket* self, PyObject* args, PyObject* kwargs) {
+static PyObject* PyIOSocket_method_example(PyIOSocket* self, PyObject* args, PyObject* kwargs) {
     return async_wrapper((PyObject*)self, [](PyObject* future) {
         // we absolutely cannot allow c++ exceptions to cross the ffi boundary
         try {
@@ -57,6 +57,11 @@ static PyObject* PyIOSocket_send(PyIOSocket* self, PyObject* args, PyObject* kwa
             thread.detach();
         } catch (...) { printf("EXCEPTION!\n"); }
     });
+}
+
+static PyObject* PyIOSocket_send(PyIOSocket* self, PyObject* args, PyObject* kwargs) {
+    PyErr_SetString(PyExc_NotImplementedError, "Not implemented");
+    Py_RETURN_NONE;
 }
 
 static PyObject* PyIOSocket_recv(PyIOSocket* self, PyObject* args) {
