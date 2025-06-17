@@ -5,6 +5,51 @@
 #include <Python.h>
 #include <structmember.h>
 
+// C++
+#include <functional>
+
+// First-party
+#include "scaler/io/ymq/pymod_ymq/ymq.h"
+
+// Wraps an async callback that accepts a Python asyncio future
+static PyObject* async_wrapper(PyObject* self, std::function<void(PyObject* future)> callback) {
+    // replace with PyType_GetModuleByDef(Py_TYPE(self), &ymq_module) in a newer Python version
+    // https://docs.python.org/3/c-api/type.html#c.PyType_GetModuleByDef
+    PyObject* module = PyType_GetModule(Py_TYPE(self));
+    if (!module) {
+        PyErr_SetString(PyExc_RuntimeError, "Failed to get module for Message type");
+        return nullptr;
+    }
+
+    auto state = (YmqState*)PyModule_GetState(module);
+    if (!state) {
+        PyErr_SetString(PyExc_RuntimeError, "Failed to get module state");
+        return nullptr;
+    }
+
+    PyObject* loop = PyObject_CallMethod(state->asyncioModule, "get_event_loop", nullptr);
+
+    if (!loop) {
+        PyErr_SetString(PyExc_RuntimeError, "Failed to get event loop");
+        return nullptr;
+    }
+
+    PyObject* future = PyObject_CallMethod(loop, "create_future", nullptr);
+
+    if (!future) {
+        PyErr_SetString(PyExc_RuntimeError, "Failed to create future");
+        return nullptr;
+    }
+
+    // borrow the future, we'll decref this after the C++ thread is done
+    Py_INCREF(future);
+
+    // async
+    callback(future);
+
+    return PyObject_CallFunction(state->AwaitableType, "O", future);
+}
+
 struct Awaitable {
     PyObject_HEAD;
     PyObject* future;

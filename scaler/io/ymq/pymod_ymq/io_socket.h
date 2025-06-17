@@ -31,62 +31,47 @@ static void PyIOSocket_dealloc(PyIOSocket* self) {
 }
 
 static PyObject* PyIOSocket_send(PyIOSocket* self, PyObject* args, PyObject* kwargs) {
-    // replace with PyType_GetModuleByDef(Py_TYPE(self), &ymq_module) in a newer Python version
-    // https://docs.python.org/3/c-api/type.html#c.PyType_GetModuleByDef
-    PyObject* module = PyType_GetModule(Py_TYPE(self));
-    if (!module) {
-        PyErr_SetString(PyExc_RuntimeError, "Failed to get module for Message type");
-        return nullptr;
-    }
+    return async_wrapper((PyObject*)self, [](PyObject* future) {
+        // we absolutely cannot allow c++ exceptions to cross the ffi boundary
+        try {
+            using namespace std::chrono_literals;
 
-    auto state = (YmqState*)PyModule_GetState(module);
-    if (!state) {
-        PyErr_SetString(PyExc_RuntimeError, "Failed to get module state");
-        return nullptr;
-    }
+            printf("spawning thread\n");
 
-    PyObject* loop = PyObject_CallMethod(state->asyncioModule, "get_event_loop", nullptr);
+            // simulate an async call to the core for demonstration purposes
+            std::thread thread([future]() {
+                printf("thread waiting\n");
 
-    if (!loop) {
-        PyErr_SetString(PyExc_RuntimeError, "Failed to get event loop");
-        return nullptr;
-    }
+                // do some "work"
+                std::this_thread::sleep_for(std::chrono::duration(3000ms));
 
-    PyObject* future = PyObject_CallMethod(loop, "create_future", nullptr);
+                printf("thread done waiting\n");
 
-    if (!future) {
-        PyErr_SetString(PyExc_RuntimeError, "Failed to create future");
-        return nullptr;
-    }
-
-    // borrow the future, we'll decref this after the C++ thread is done
-    Py_INCREF(future);
-
-    // we absolutely cannot allow c++ exceptions to cross the ffi boundary
-    try {
-        using namespace std::chrono_literals;
-
-        printf("spawning thread\n");
-
-        // simulate an async call to the core for demonstration purposes
-        std::thread thread([future]() {
-            printf("thread waiting\n");
-
-            // do some "work"
-            std::this_thread::sleep_for(std::chrono::duration(3000ms));
-            printf("thread done waiting\n");
-
-            // notify python of completion
-            future_set_result(future, []() {
-                // this is where we would return the result of the compution if we had any
-                Py_RETURN_NONE;
+                // notify python of completion
+                future_set_result(future, []() {
+                    // this is where we would return the result of the compution if we had any
+                    Py_RETURN_NONE;
+                });
             });
-        });
 
-        thread.detach();
-    } catch (...) { printf("EXCEPTION!\n"); }
+            thread.detach();
+        } catch (...) { printf("EXCEPTION!\n"); }
+    });
+}
 
-    return PyObject_CallFunction(state->AwaitableType, "O", future);
+static PyObject* PyIOSocket_recv(PyIOSocket* self, PyObject* args) {
+    PyErr_SetString(PyExc_NotImplementedError, "Not implemented");
+    Py_RETURN_NONE;
+}
+
+static PyObject* PyIOSocket_bind(PyIOSocket* self, PyObject* args, PyObject* kwargs) {
+    PyErr_SetString(PyExc_NotImplementedError, "Not implemented");
+    Py_RETURN_NONE;
+}
+
+static PyObject* PyIOSocket_connect(PyIOSocket* self, PyObject* args, PyObject* kwargs) {
+    PyErr_SetString(PyExc_NotImplementedError, "Not implemented");
+    Py_RETURN_NONE;
 }
 
 static PyObject* PyIOSocket_repr(PyIOSocket* self) {
@@ -131,6 +116,15 @@ static PyGetSetDef PyIOSocket_properties[] = {
 
 static PyMethodDef PyIOSocket_methods[] = {
     {"send", (PyCFunction)PyIOSocket_send, METH_VARARGS | METH_KEYWORDS, PyDoc_STR("Send data through the IOSocket")},
+    {"recv", (PyCFunction)PyIOSocket_recv, METH_NOARGS, PyDoc_STR("Receive data from the IOSocket")},
+    {"bind",
+     (PyCFunction)PyIOSocket_bind,
+     METH_VARARGS | METH_KEYWORDS,
+     PyDoc_STR("Bind to an address and listen for incoming connections")},
+    {"connect",
+     (PyCFunction)PyIOSocket_connect,
+     METH_VARARGS | METH_KEYWORDS,
+     PyDoc_STR("Connect to a remote IOSocket")},
     {nullptr, nullptr, 0, nullptr}};
 
 static PyType_Slot PyIOSocket_slots[] = {
