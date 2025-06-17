@@ -24,7 +24,8 @@ MessageConnectionTCP::MessageConnectionTCP(
     int connFd,
     sockaddr localAddr,
     sockaddr remoteAddr,
-    std::string localIOSocketIdentity)
+    std::string localIOSocketIdentity,
+    bool responsibleForRetry)
     : _eventLoopThread(eventLoopThread)
     , _eventManager(std::make_unique<EventManager>(_eventLoopThread))
     , _connFd(std::move(connFd))
@@ -32,7 +33,8 @@ MessageConnectionTCP::MessageConnectionTCP(
     , _remoteAddr(remoteAddr)
     , _localIOSocketIdentity(std::move(localIOSocketIdentity))
     , _remoteIOSocketIdentity(std::nullopt)
-    , _sendLocalIdentity(false) {
+    , _sendLocalIdentity(false)
+    , _responsibleForRetry(responsibleForRetry) {
     _eventManager->onRead  = [this] { this->onRead(); };
     _eventManager->onWrite = [this] { this->onWrite(); };
     _eventManager->onClose = [this] { this->onClose(); };
@@ -58,9 +60,12 @@ void MessageConnectionTCP::onRead() {
         _remoteIOSocketIdentity.emplace(std::move(remoteID));
 
         auto& sock = this->_eventLoopThread->_identityToIOSocket[_localIOSocketIdentity];
-        sock->_identityToConnection[*_remoteIOSocketIdentity] = sock->_fdToConnection[_connFd].get();
+
+        sock->onConnectionIdentityReceived(this);
+
         return;
     }
+
     assert(_remoteIOSocketIdentity);
     printf("Got a remote socket, identity = %s\n", _remoteIOSocketIdentity->c_str());
 
@@ -95,6 +100,12 @@ void MessageConnectionTCP::onRead() {
         while (leftOver) {
             assert(first + leftOver <= message.size());
             int res = read(_connFd, message.data() + first, leftOver);
+
+            if (res == 0) {
+                onClose();
+                return;
+            }
+
             if (res == -1 && errno == EAGAIN) {
                 message.resize(first);
                 // Reviewer: To jump out of double loop, reconsider when you say no. - gxu
@@ -203,5 +214,11 @@ void MessageConnectionTCP::recvMessage(std::shared_ptr<std::vector<char>> msg) {
         _pendingReadOperations.push(readOp);
     }
 }
+
+void MessageConnectionTCP::onClose() {
+    close(_connFd);
+    auto& sock = _eventLoopThread->_identityToIOSocket.at(*_remoteIOSocketIdentity);
+    sock->onConnectionDisconnected(this);
+};
 
 MessageConnectionTCP::~MessageConnectionTCP() {}

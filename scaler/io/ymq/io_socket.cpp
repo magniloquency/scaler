@@ -1,14 +1,15 @@
 #include "scaler/io/ymq/io_socket.h"
 
+#include <algorithm>
 #include <memory>
+#include <ranges>
 #include <vector>
 
-#include "scaler/io/ymq/tcp_client.h"
-#include "scaler/io/ymq/tcp_server.h"
-// NOTE: We need it after we put impl
 #include "scaler/io/ymq/event_loop_thread.h"
 #include "scaler/io/ymq/event_manager.h"
 #include "scaler/io/ymq/message_connection_tcp.h"
+#include "scaler/io/ymq/tcp_client.h"
+#include "scaler/io/ymq/tcp_server.h"
 
 void IOSocket::removeConnectedTcpClient() {
     printf("%s\n", __PRETTY_FUNCTION__);
@@ -55,6 +56,31 @@ void IOSocket::connectTo(sockaddr addr) {
         _tcpClient.emplace(_eventLoopThread, this->identity(), addr);
         _tcpClient->onCreated();
     });
+}
+
+void IOSocket::onConnectionDisconnected(MessageConnectionTCP* conn) {
+    int fd       = conn->_connFd;
+    auto connPtr = std::move(this->_fdToConnection[fd]);
+    this->_identityToConnection.erase(*connPtr->_remoteIOSocketIdentity);
+    if (connPtr->_responsibleForRetry) {
+        connectTo(conn->_remoteAddr);
+    }
+    _deadConnection.push_back(std::move(connPtr));
+}
+
+void IOSocket::onConnectionIdentityReceived(MessageConnectionTCP* conn) {
+    const auto& s = conn->_remoteIOSocketIdentity;
+    auto c        = std::ranges::find(_deadConnection, s, &MessageConnectionTCP::_remoteIOSocketIdentity);
+
+    if (c == _deadConnection.end())
+        return;
+
+    int fd                                      = conn->_connFd;
+    _fdToConnection[fd]->_writeOperations       = (*c)->_writeOperations;
+    _fdToConnection[fd]->_receivedMessages      = (*c)->_receivedMessages;
+    _fdToConnection[fd]->_pendingReadOperations = (*c)->_pendingReadOperations;
+    _identityToConnection[*s]                   = _fdToConnection[fd].get();
+    _deadConnection.erase(c);
 }
 
 void IOSocket::sendMessageTo(std::string remoteIdentity, std::shared_ptr<std::vector<char>> buf) {

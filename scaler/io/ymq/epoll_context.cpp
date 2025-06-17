@@ -59,7 +59,12 @@ void EpollContext::loop() {
             std::function<void()> f;
             _interruptiveFunctions.dequeue(f);
             f();
-        } else {
+        } else if (event == (void*)_isTimingFd) {
+            // ToDo: Fix this
+            _timingFunctions.onRead();
+        }
+
+        else {
             event->onEvents(current_event.events);
         }
     }
