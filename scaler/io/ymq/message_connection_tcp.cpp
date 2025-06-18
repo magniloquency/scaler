@@ -246,4 +246,7 @@ void MessageConnectionTCP::onClose() {
     sock->onConnectionDisconnected(this);
 };
 
-MessageConnectionTCP::~MessageConnectionTCP() {}
+MessageConnectionTCP::~MessageConnectionTCP() {
+    _eventLoopThread->_eventLoop.removeFdFromLoop(_connFd);
+    close(_connFd);
+}

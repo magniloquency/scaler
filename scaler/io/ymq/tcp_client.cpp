@@ -68,6 +68,7 @@ void TcpClient::onWrite() {
     sock->_fdToConnection[_connFd] = std::make_unique<MessageConnectionTCP>(
         _eventLoopThread, _connFd, addr, addr, id, true, sock->_pendingReadOperations);
     sock->_fdToConnection[_connFd]->onCreated();
+    _connFd    = 0;
     _connected = true;
 }
 
@@ -85,4 +86,9 @@ void TcpClient::retry() {
     _eventLoopThread->_eventLoop.executeAt(at, [this] { this->onWrite(); });
 }
 
-TcpClient::~TcpClient() {}
+TcpClient::~TcpClient() {
+    if (_connFd) {
+        _eventLoopThread->_eventLoop.removeFdFromLoop(_connFd);
+        close(_connFd);
+    }
+}

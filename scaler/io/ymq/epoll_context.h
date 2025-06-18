@@ -98,6 +98,13 @@ public:
         epoll_ctl(_epfd, EPOLL_CTL_ADD, _timingFunctions.timingFd(), &event);
     }
 
+    ~EpollContext() {
+        epoll_ctl(_epfd, EPOLL_CTL_DEL, _interruptiveFunctions.eventFd(), nullptr);
+        epoll_ctl(_epfd, EPOLL_CTL_DEL, _timingFunctions.timingFd(), nullptr);
+
+        close(_epfd);
+    }
+
     void loop();
     void stop();
 
