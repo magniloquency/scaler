@@ -131,7 +131,7 @@ static PyObject* PyIOSocket_bind(PyIOSocket* self, PyObject* args, PyObject* kwa
     if (!address)
         Py_RETURN_NONE;
 
-    async_wrapper((PyObject*)self, [](YmqState* state, PyObject* future) {
+    return async_wrapper((PyObject*)self, [](YmqState* state, PyObject* future) {
         future_set_result(future, []() { Py_RETURN_NONE; });
     });
 }
@@ -157,7 +157,7 @@ static PyObject* PyIOSocket_connect(PyIOSocket* self, PyObject* args, PyObject* 
     if (!address)
         Py_RETURN_NONE;
 
-    async_wrapper((PyObject*)self, [](YmqState* state, PyObject* future) {
+    return async_wrapper((PyObject*)self, [](YmqState* state, PyObject* future) {
         future_set_result(future, []() { Py_RETURN_NONE; });
     });
 }
