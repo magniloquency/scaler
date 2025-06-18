@@ -7,6 +7,7 @@
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <memory>
 
 #include "scaler/io/ymq/event_loop_thread.h"
@@ -14,10 +15,10 @@
 #include "scaler/io/ymq/io_socket.h"
 
 static bool isCompleteMessage(const std::vector<char>& vec) {
-    if (vec.size() < 4)
+    if (vec.size() < 8)
         return false;
     uint64_t size = *(uint64_t*)vec.data();
-    return vec.size() == size + vec.size() - 4;
+    return vec.size() == size + 8;
 }
 
 MessageConnectionTCP::MessageConnectionTCP(
@@ -61,6 +62,7 @@ void MessageConnectionTCP::onRead() {
         char* first   = idBuf + sizeof(uint64_t);
         std::string remoteID(first, first + size);
         _remoteIOSocketIdentity.emplace(std::move(remoteID));
+        printf("Received remote identity, %s\n", _remoteIOSocketIdentity->c_str());
 
         auto& sock = this->_eventLoopThread->_identityToIOSocket[_localIOSocketIdentity];
 
@@ -73,7 +75,7 @@ void MessageConnectionTCP::onRead() {
     printf("Got a remote socket, identity = %s\n", _remoteIOSocketIdentity->c_str());
 
     while (true) {
-        const size_t headerSize = 4;
+        const size_t headerSize = 8;
         size_t leftOver         = 0;
         size_t first            = 0;
 
@@ -81,7 +83,7 @@ void MessageConnectionTCP::onRead() {
         if (_receivedMessages.empty() || isCompleteMessage(_receivedMessages.back())) {
             _receivedMessages.push({});
             _receivedMessages.back().resize(1024);
-            leftOver = 4;
+            leftOver = headerSize;
             first    = 0;
         } else {
             // Bad case, we currently have an incomplete message
@@ -116,16 +118,17 @@ void MessageConnectionTCP::onRead() {
             }
             leftOver -= res;
             first += res;
-            if (first == 4) {
+            if (first == headerSize) {
                 // reading the payload
                 leftOver = *(uint64_t*)message.data();
-                message.resize(leftOver + 4);
+                message.resize(leftOver + headerSize);
             }
         }
         assert(isCompleteMessage(_receivedMessages.back()));
     }
 
 ReadExhuasted:
+    printf("READ EXHAUSTED\n");
     while (_pendingReadOperations->size() && _receivedMessages.size()) {
         if (isCompleteMessage(_receivedMessages.front())) {
             *_pendingReadOperations->front()._buf = std::move(_receivedMessages.front());
@@ -156,18 +159,16 @@ void MessageConnectionTCP::onWrite() {
         auto [_, last]     = std::ranges::copy(_localIOSocketIdentity, identityBegin);
         write(_connFd, idBuf, std::distance(idBuf, last));
         _sendLocalIdentity = true;
+        return;
     }
-
-    assert(_sendLocalIdentity);
-    printf("Have sent out the local Identity\n");
 
     while (!_writeOperations.empty()) {
         auto& writeOp       = _writeOperations.front();
         const size_t bufLen = writeOp._buf->size();
         while (writeOp._cursor != bufLen) {
-            const int leftOver = writeOp._buf->size() - writeOp._cursor;
-            const char* begin  = writeOp._buf->data() + writeOp._cursor;
-            auto bytes         = write(_connFd, begin, leftOver);
+            const size_t leftOver = writeOp._buf->size() - writeOp._cursor;
+            const char* begin     = writeOp._buf->data() + writeOp._cursor;
+            auto bytes            = write(_connFd, begin, leftOver);
 
             if (bytes == -1) {
                 if (errno == EAGAIN)
@@ -200,9 +201,9 @@ void MessageConnectionTCP::sendMessage(std::shared_ptr<std::vector<char>> msg, s
     if (_writeOperations.empty()) {
         const size_t bufLen = writeOp._buf->size();
         while (writeOp._cursor != bufLen) {
-            const int leftOver = writeOp._buf->size() - writeOp._cursor;
-            const char* begin  = writeOp._buf->data() + writeOp._cursor;
-            auto bytes         = write(_connFd, begin, leftOver);
+            const size_t leftOver = writeOp._buf->size() - writeOp._cursor;
+            const char* begin     = writeOp._buf->data() + writeOp._cursor;
+            auto bytes            = write(_connFd, begin, leftOver);
 
             if (bytes == -1) {
                 if (errno == EAGAIN) {

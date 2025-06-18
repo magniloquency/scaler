@@ -43,7 +43,7 @@ public:
 
     IOSocket(std::shared_ptr<EventLoopThread> eventLoopThread, Identity identity, IOSocketType socketType);
 
-    IOSocket();
+    // IOSocket();
     IOSocket(const IOSocket&)            = delete;
     IOSocket& operator=(const IOSocket&) = delete;
     IOSocket(IOSocket&&)                 = delete;
@@ -56,25 +56,6 @@ public:
 
     void sendMessage(Message message, std::function<void(int)> callback);
     void recvMessage(std::function<void(Message)> callback);
-
-    // string -> connection mapping
-    // and connection->string mapping
-
-    // put it into the concurrent q, which is execute_now
-    // void sendMessage(Message* msg, Continuation cont) {
-    // EXAMPLE
-    // execute_now(
-    // switch (socketTypes) {
-    //     case Pub:
-    //         for (auto [fd, conn] &: fd_to_conn) {
-    //             conn.send(msg.len, msg.size);
-    //             conn.setWriteCompleteCallback(cont);
-    //             eventLoopThread.getEventLoop().update_events(turn write on for this fd);
-    //         }
-    //         break;
-    // }
-    // )
-    // }
 
     void connectTo(sockaddr addr);
 
