@@ -72,24 +72,6 @@ void IOSocket::onConnectionIdentityReceived(MessageConnectionTCP* conn) {
     _deadConnection.erase(c);
 }
 
-void IOSocket::sendMessageTo(std::string remoteIdentity, std::shared_ptr<std::vector<char>> buf) {
-    _eventLoopThread->_eventLoop.executeNow([this, buf, remoteIdentity = std::move(remoteIdentity)] {
-        // TODO: What should we do when we cannot find the connection? We cannot
-        // check whether the identity presents outside the eventloop.
-        auto* conn = this->_identityToConnection.at(remoteIdentity);
-        conn->sendMessage(buf, [](int) {});
-    });
-}
-
-void IOSocket::recvMessageFrom(std::string remoteIdentity, std::shared_ptr<std::vector<char>> buf) {
-    _eventLoopThread->_eventLoop.executeNow([this, buf, remoteIdentity = std::move(remoteIdentity)] {
-        // TODO: What should we do when we cannot find the connection? We cannot
-        // check whether the identity presents outside the eventloop.
-        auto* conn = this->_identityToConnection.at(remoteIdentity);
-        conn->recvMessage(buf, [](Message) {});
-    });
-}
-
 void IOSocket::sendMessage(Message message, std::function<void(int)> callback) {
     auto [addressPtr, addressLen] = message.address.release();
     auto [payloadPtr, payloadLen] = message.payload.release();
@@ -103,14 +85,15 @@ void IOSocket::sendMessage(Message message, std::function<void(int)> callback) {
         });
 }
 
-void IOSocket::recvMessage(Message message, std::function<void(Message)> callback) {
-    auto [addressPtr, addressLen] = message.address.release();
-    assert(message.payload.is_empty());
-
-    _eventLoopThread->_eventLoop.executeNow([this, addressPtr, addressLen, callback = std::move(callback)] {
-        // TODO: What should we do when we cannot find the connection? We cannot
-        // check whether the identity presents outside the eventloop.
-        auto* conn = this->_identityToConnection.at(std::string(addressPtr, addressLen));
-        conn->recvMessage(std::make_shared<std::vector<char>>(), std::move(callback));
+void IOSocket::recvMessage(std::function<void(Message)> callback) {
+    _eventLoopThread->_eventLoop.executeNow([this, callback = std::move(callback)] {
+        TcpReadOperation readOp {std::make_shared<std::vector<char>>(), 0, callback};
+        this->_pendingReadOperations->push(std::move(readOp));
+        if (_pendingReadOperations->size() == 1) {
+            for (const auto& [fd, conn]: _fdToConnection) {
+                if (conn->recvMessage())
+                    return;
+            }
+        }
     });
 }

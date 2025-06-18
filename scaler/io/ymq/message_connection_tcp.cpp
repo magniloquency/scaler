@@ -26,7 +26,8 @@ MessageConnectionTCP::MessageConnectionTCP(
     sockaddr localAddr,
     sockaddr remoteAddr,
     std::string localIOSocketIdentity,
-    bool responsibleForRetry)
+    bool responsibleForRetry,
+    std::shared_ptr<std::queue<TcpReadOperation>> pendingReadOperations)
     : _eventLoopThread(eventLoopThread)
     , _eventManager(std::make_unique<EventManager>(_eventLoopThread))
     , _connFd(std::move(connFd))
@@ -35,7 +36,8 @@ MessageConnectionTCP::MessageConnectionTCP(
     , _localIOSocketIdentity(std::move(localIOSocketIdentity))
     , _remoteIOSocketIdentity(std::nullopt)
     , _sendLocalIdentity(false)
-    , _responsibleForRetry(responsibleForRetry) {
+    , _responsibleForRetry(responsibleForRetry)
+    , _pendingReadOperations(pendingReadOperations) {
     _eventManager->onRead  = [this] { this->onRead(); };
     _eventManager->onWrite = [this] { this->onWrite(); };
     _eventManager->onClose = [this] { this->onClose(); };
@@ -124,20 +126,20 @@ void MessageConnectionTCP::onRead() {
     }
 
 ReadExhuasted:
-    while (_pendingReadOperations.size() && _receivedMessages.size()) {
+    while (_pendingReadOperations->size() && _receivedMessages.size()) {
         if (isCompleteMessage(_receivedMessages.front())) {
-            *_pendingReadOperations.front()._buf = std::move(_receivedMessages.front());
+            *_pendingReadOperations->front()._buf = std::move(_receivedMessages.front());
             _receivedMessages.pop();
 
             Bytes address(_remoteIOSocketIdentity->data(), _remoteIOSocketIdentity->size());
-            Bytes payload(_pendingReadOperations.front()._buf->data(), _pendingReadOperations.front()._buf->size());
+            Bytes payload(_pendingReadOperations->front()._buf->data(), _pendingReadOperations->front()._buf->size());
 
-            _pendingReadOperations.front()._callbackAfterCompleteRead(Message(std::move(address), std::move(payload)));
+            _pendingReadOperations->front()._callbackAfterCompleteRead(Message(std::move(address), std::move(payload)));
 
-            _pendingReadOperations.pop();
+            _pendingReadOperations->pop();
         } else {
-            assert(_pendingReadOperations.size());
-            _pendingReadOperations.front()._callbackAfterCompleteRead(Message({}, {}));
+            assert(_pendingReadOperations->size());
+            _pendingReadOperations->front()._callbackAfterCompleteRead(Message({}, {}));
         }
     }
 }
@@ -223,21 +225,18 @@ void MessageConnectionTCP::sendMessage(std::shared_ptr<std::vector<char>> msg, s
     }
 }
 
-void MessageConnectionTCP::recvMessage(std::shared_ptr<std::vector<char>> msg, std::function<void(Message)> callback) {
-    if (_receivedMessages.size() && isCompleteMessage(_receivedMessages.back())) {
-        *msg = std::move(_receivedMessages.front());
-
+bool MessageConnectionTCP::recvMessage() {
+    if (_receivedMessages.size() && _pendingReadOperations->size() && isCompleteMessage(_receivedMessages.back())) {
+        auto readOp = std::move(_pendingReadOperations->front());
+        _pendingReadOperations->pop();
+        auto msg = std::move(_receivedMessages.front());
         Bytes address(_remoteIOSocketIdentity->data(), _remoteIOSocketIdentity->size());
-        Bytes payload(msg->data(), msg->size());
-        callback(Message(std::move(address), std::move(payload)));
-
+        Bytes payload(msg.data(), msg.size());
+        readOp._callbackAfterCompleteRead(Message(std::move(address), std::move(payload)));
         _receivedMessages.pop();
-    } else {
-        TcpReadOperation readOp;
-        readOp._buf                       = msg;
-        readOp._callbackAfterCompleteRead = std::move(callback);
-        _pendingReadOperations.push(readOp);
+        return true;
     }
+    return false;
 }
 
 void MessageConnectionTCP::onClose() {
