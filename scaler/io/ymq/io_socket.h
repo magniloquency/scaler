@@ -23,6 +23,7 @@ class EventLoopThread;
 class MessageConnectionTCP;
 
 class IOSocket {
+public:
     std::shared_ptr<EventLoopThread> _eventLoopThread;
     Identity _identity;
     IOSocketType _socketType;

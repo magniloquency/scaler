@@ -72,4 +72,7 @@ void TcpServer::onRead() {
     sock->_fdToConnection[fd]->onCreated();
 }
 
-TcpServer::~TcpServer() {}
+TcpServer::~TcpServer() {
+    _eventLoopThread->_eventLoop.removeFdFromLoop(_serverFd);
+    close(_serverFd);
+}

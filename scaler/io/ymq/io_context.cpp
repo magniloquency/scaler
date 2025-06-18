@@ -22,5 +22,7 @@ std::shared_ptr<IOSocket> IOContext::createIOSocket(Identity identity, IOSocketT
 }
 
 bool IOContext::removeIOSocket(std::shared_ptr<IOSocket> socket) {
-    return false;  // todo: implement this
+    socket->_eventLoopThread->_eventLoop.executeNow(
+        [socket] { socket->_eventLoopThread->removeIOSocket(socket.get()); });
+    return true;
 }

@@ -58,7 +58,6 @@ public:
     void onError() { printf("onError (for debug don't remove)\n"); };
 
 public:
-    ~MessageConnectionTCP();
     MessageConnectionTCP(
         std::shared_ptr<EventLoopThread> eventLoopThread,
         int connFd,
@@ -68,23 +67,10 @@ public:
         bool responsibleForRetry,
         std::shared_ptr<std::queue<TcpReadOperation>> _pendingReadOperations);
 
-    void send(Bytes data, SendMessageContinuation k) { todo(); }
-    void recv(RecvMessageContinuation k) { todo(); }
-
-    // NODO: Think about writeOps and readOps in general
-    void send(std::shared_ptr<std::vector<char>> msg) {
-        // if (!_writeOps.size()) {
-        //     int n = write(_connFd, msg->data(), msg->size());
-        // } else {
-        //     TcpWriteOperation writeOp;
-        //     // writeOp._callback = [msg] {write() }
-        // }
-    }
-
     void sendMessage(std::shared_ptr<std::vector<char>> msg, SendMessageCallback callback);
     bool recvMessage();
 
-    void recv(std::vector<char>& buf) {}
-
     void onCreated();
+
+    ~MessageConnectionTCP();
 };

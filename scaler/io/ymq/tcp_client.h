@@ -41,6 +41,6 @@ public:
 
     void onCreated();
 
-    void retry(/* Arguments */);
+    void retry();
     ~TcpClient();
 };
