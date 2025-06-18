@@ -4,9 +4,9 @@
 #include <memory>
 #include <optional>
 #include <queue>
-#include <tuple>
 #include <vector>
 
+#include "scaler/io/ymq/configuration.h"
 #include "scaler/io/ymq/event_loop.h"
 #include "scaler/io/ymq/event_loop_thread.h"
 #include "scaler/io/ymq/file_descriptor.h"
@@ -17,15 +17,17 @@ class EventLoopThread;
 class EventManager;
 
 struct TcpWriteOperation {
+    using SendMessageCallback = Configuration::SendMessageCallback;
     std::shared_ptr<std::vector<char>> _buf;
     size_t _cursor = 0;
-    std::function<void()> _callbackAfterCompleteWrite;
+    SendMessageCallback _callbackAfterCompleteWrite;
 };
 
 struct TcpReadOperation {
+    using RecvMessageCallback = Configuration::RecvMessageCallback;
     std::shared_ptr<std::vector<char>> _buf;
     size_t _cursor = 0;
-    std::function<void()> _callbackAfterCompleteRead;
+    RecvMessageCallback _callbackAfterCompleteRead;
 };
 
 class MessageConnectionTCP: public MessageConnection {
@@ -38,6 +40,8 @@ public:
     std::optional<std::string> _remoteIOSocketIdentity;
     bool _sendLocalIdentity;
     bool _responsibleForRetry;
+    using SendMessageCallback = Configuration::SendMessageCallback;
+    using RecvMessageCallback = Configuration::RecvMessageCallback;
 
 public:
     std::queue<TcpWriteOperation> _writeOperations;
@@ -76,8 +80,8 @@ public:
         // }
     }
 
-    void sendMessage(std::shared_ptr<std::vector<char>> msg);
-    void recvMessage(std::shared_ptr<std::vector<char>> msg);
+    void sendMessage(std::shared_ptr<std::vector<char>> msg, SendMessageCallback callback);
+    void recvMessage(std::shared_ptr<std::vector<char>> msg, RecvMessageCallback callback);
 
     void recv(std::vector<char>& buf) {}
 

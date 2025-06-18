@@ -4,6 +4,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -127,8 +128,16 @@ ReadExhuasted:
         if (isCompleteMessage(_receivedMessages.front())) {
             *_pendingReadOperations.front()._buf = std::move(_receivedMessages.front());
             _receivedMessages.pop();
-            // _pendingReadOperations.front()._callbackAfterCompleteRead();
+
+            Bytes address(_remoteIOSocketIdentity->data(), _remoteIOSocketIdentity->size());
+            Bytes payload(_pendingReadOperations.front()._buf->data(), _pendingReadOperations.front()._buf->size());
+
+            _pendingReadOperations.front()._callbackAfterCompleteRead(Message(std::move(address), std::move(payload)));
+
             _pendingReadOperations.pop();
+        } else {
+            assert(_pendingReadOperations.size());
+            _pendingReadOperations.front()._callbackAfterCompleteRead(Message({}, {}));
         }
     }
 }
@@ -158,16 +167,19 @@ void MessageConnectionTCP::onWrite() {
             const char* begin  = writeOp._buf->data() + writeOp._cursor;
             auto bytes         = write(_connFd, begin, leftOver);
 
-            if (bytes == -1 && errno == EAGAIN) {
-                break;
+            if (bytes == -1) {
+                if (errno == EAGAIN)
+                    break;
+                else  // TODO:
+                    writeOp._callbackAfterCompleteWrite(errno);
             }
 
             writeOp._cursor += bytes;
         }
 
         if (writeOp._cursor == bufLen) {
+            writeOp._callbackAfterCompleteWrite(0);
             _writeOperations.pop();
-            // writeOp._callbackAfterCompleteWrite
         } else {
             break;
         }
@@ -175,13 +187,13 @@ void MessageConnectionTCP::onWrite() {
 }
 
 // TODO: Maybe change this to message_t
-void MessageConnectionTCP::sendMessage(std::shared_ptr<std::vector<char>> msg) {
+void MessageConnectionTCP::sendMessage(std::shared_ptr<std::vector<char>> msg, std::function<void(int)> callback) {
     // detect if the write operations queue is empty, if it is, simply write to exhaustion
     // if it is not, queue write operations to the end of the queue
     TcpWriteOperation writeOp;
-    writeOp._buf    = msg;
-    writeOp._cursor = 0;
-    // writeOp._callbackAfterCompleteWrite;
+    writeOp._buf                        = msg;
+    writeOp._cursor                     = 0;
+    writeOp._callbackAfterCompleteWrite = std::move(callback);
 
     if (_writeOperations.empty()) {
         const size_t bufLen = writeOp._buf->size();
@@ -190,27 +202,40 @@ void MessageConnectionTCP::sendMessage(std::shared_ptr<std::vector<char>> msg) {
             const char* begin  = writeOp._buf->data() + writeOp._cursor;
             auto bytes         = write(_connFd, begin, leftOver);
 
-            if (bytes == -1 && errno == EAGAIN) {
-                _writeOperations.push(std::move(writeOp));
+            if (bytes == -1) {
+                if (errno == EAGAIN) {
+                    _writeOperations.push(std::move(writeOp));
+                } else {
+                    writeOp._callbackAfterCompleteWrite(errno);
+                }
                 break;
             }
 
             writeOp._cursor += bytes;
         }
+
+        if (writeOp._cursor == bufLen) {
+            writeOp._callbackAfterCompleteWrite(0);
+        }
+
     } else {
         _writeOperations.push(std::move(writeOp));
     }
 }
 
-void MessageConnectionTCP::recvMessage(std::shared_ptr<std::vector<char>> msg) {
+void MessageConnectionTCP::recvMessage(std::shared_ptr<std::vector<char>> msg, std::function<void(Message)> callback) {
     if (_receivedMessages.size() && isCompleteMessage(_receivedMessages.back())) {
         *msg = std::move(_receivedMessages.front());
+
+        Bytes address(_remoteIOSocketIdentity->data(), _remoteIOSocketIdentity->size());
+        Bytes payload(msg->data(), msg->size());
+        callback(Message(std::move(address), std::move(payload)));
+
         _receivedMessages.pop();
-        // callback
     } else {
         TcpReadOperation readOp;
-        readOp._buf = msg;
-        // readOp._callbackAfterCompleteRead;
+        readOp._buf                       = msg;
+        readOp._callbackAfterCompleteRead = std::move(callback);
         _pendingReadOperations.push(readOp);
     }
 }

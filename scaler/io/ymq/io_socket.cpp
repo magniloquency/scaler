@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <memory>
 #include <ranges>
+#include <utility>
 #include <vector>
 
 #include "scaler/io/ymq/event_loop_thread.h"
@@ -36,18 +37,6 @@ IOSocket::IOSocket(std::shared_ptr<EventLoopThread> eventLoopThread, Identity id
     : _eventLoopThread(eventLoopThread), _identity(identity), _socketType(socketType) {}
 
 IOSocket::IOSocket() {}
-
-void IOSocket::sendMessage(
-    std::shared_ptr<std::vector<char>> buf, std::function<void()> callback, std::string remoteIdentity) {
-    if (_socketType == IOSocketType::Router) {
-        this->_eventLoopThread->_eventLoop.executeNow([this, buf, remoteIdentity] {
-            auto connection = this->_identityToConnection[remoteIdentity];
-            connection->send(buf);
-        });
-    }
-}
-
-void IOSocket::recvMessage(std::vector<char>& buf) {}
 
 void IOSocket::connectTo(sockaddr addr) {
     printf("%s\n", __PRETTY_FUNCTION__);
@@ -84,19 +73,44 @@ void IOSocket::onConnectionIdentityReceived(MessageConnectionTCP* conn) {
 }
 
 void IOSocket::sendMessageTo(std::string remoteIdentity, std::shared_ptr<std::vector<char>> buf) {
-    _eventLoopThread->_eventLoop.executeNow([this, buf] {
+    _eventLoopThread->_eventLoop.executeNow([this, buf, remoteIdentity = std::move(remoteIdentity)] {
         // TODO: What should we do when we cannot find the connection? We cannot
         // check whether the identity presents outside the eventloop.
-        auto* conn = this->_identityToConnection.at(this->identity());
-        conn->sendMessage(buf);
+        auto* conn = this->_identityToConnection.at(remoteIdentity);
+        conn->sendMessage(buf, [](int) {});
     });
 }
 
 void IOSocket::recvMessageFrom(std::string remoteIdentity, std::shared_ptr<std::vector<char>> buf) {
-    _eventLoopThread->_eventLoop.executeNow([this, buf] {
+    _eventLoopThread->_eventLoop.executeNow([this, buf, remoteIdentity = std::move(remoteIdentity)] {
         // TODO: What should we do when we cannot find the connection? We cannot
         // check whether the identity presents outside the eventloop.
-        auto* conn = this->_identityToConnection.at(this->identity());
-        conn->recvMessage(buf);
+        auto* conn = this->_identityToConnection.at(remoteIdentity);
+        conn->recvMessage(buf, [](Message) {});
+    });
+}
+
+void IOSocket::sendMessage(Message message, std::function<void(int)> callback) {
+    auto [addressPtr, addressLen] = message.address.release();
+    auto [payloadPtr, payloadLen] = message.payload.release();
+    _eventLoopThread->_eventLoop.executeNow(
+        [this, addressPtr, addressLen, payloadPtr, payloadLen, callback = std::move(callback)] {
+            // TODO: What should we do when we cannot find the connection? We cannot
+            // check whether the identity presents outside the eventloop.
+            auto* conn = this->_identityToConnection.at(std::string(addressPtr, addressLen));
+            conn->sendMessage(
+                std::make_shared<std::vector<char>>(payloadPtr, payloadPtr + payloadLen), std::move(callback));
+        });
+}
+
+void IOSocket::recvMessage(Message message, std::function<void(Message)> callback) {
+    auto [addressPtr, addressLen] = message.address.release();
+    assert(message.payload.is_empty());
+
+    _eventLoopThread->_eventLoop.executeNow([this, addressPtr, addressLen, callback = std::move(callback)] {
+        // TODO: What should we do when we cannot find the connection? We cannot
+        // check whether the identity presents outside the eventloop.
+        auto* conn = this->_identityToConnection.at(std::string(addressPtr, addressLen));
+        conn->recvMessage(std::make_shared<std::vector<char>>(), std::move(callback));
     });
 }
