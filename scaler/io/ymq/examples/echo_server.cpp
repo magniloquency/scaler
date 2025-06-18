@@ -14,12 +14,22 @@
 int main() {
     IOContext context;
     std::shared_ptr<IOSocket> socket = context.createIOSocket("ServerSocket", IOSocketType::Dealer);
-    sleep(10000);
 
-    // char buf[8];
-    // while (true) {
-    //     socket.read("any_identity", buf, []() { printf("read completed\n"); });
-    //     socket.write("reading_from_identity", buf, []() { printf("write completed\n"); });
-    // }
-    // printf("done");
+    printf("Successfully created socket, sleep for 2 secs to sync.\n");
+    sleep(2);
+
+    auto callback = [socket](Message msg) {
+        printf("user provided callback invoked\n");
+        printf("Prepare sending messages back\n");
+        socket->sendMessage(msg, [](int) {});
+    };
+
+    while (true) {
+        printf("Try to recv a message\n");
+        sleep(10);
+        socket->recvMessage(callback);
+        printf("I am sleeping...\n");
+        // here we should somehow wait until callback is executed
+        sleep(100);
+    }
 }

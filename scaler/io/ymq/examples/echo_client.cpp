@@ -5,9 +5,16 @@
 #include <stdio.h>
 
 // First-party
+#include <string.h>
+
+#include <cstdint>
+
 #include "scaler/io/ymq/io_context.h"
 #include "scaler/io/ymq/io_socket.h"
 #include "scaler/io/ymq/typedefs.h"
+
+const char* address = "ServerSocket";
+const char* payload = "Hello from the other end!";
 
 int main() {
     IOContext context;
@@ -30,15 +37,31 @@ int main() {
     clientSocket->connectTo(*(sockaddr*)&server_addr);
     sleep(2);
 
-    // char buf[8];
-    // clientSocket.sendMessageTo("ServerSocket", buf);
+    auto sendMessageCallback = [](int n) {
+        printf("n = %d\n", n);
+        sleep(100);
+    };
 
-    sleep(10000);
+    while (true) {
+        // get a line from stdin
+        Message message;
 
-    // char buf[8];
-    // while (true) {
-    //     socket.read("any_identity", buf, []() { printf("read completed\n"); });
-    //     socket.write("reading_from_identity", buf, []() { printf("write completed\n"); });
-    // }
-    // printf("done");
+        message.address = Bytes {
+            (char*)address,
+            strlen(address),
+            Ownership::Borrowed,
+        };
+
+        message.payload = Bytes {
+            (char*)payload,
+            strlen(payload),
+            Ownership::Borrowed,
+        };
+
+        clientSocket->sendMessage(std::move(message), std::move(sendMessageCallback));
+
+        printf("I am sleeping...\n");
+        sleep(100);
+        // clientSocket->recvMessage(std::function<void (Message)> callback);
+    }
 }

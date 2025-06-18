@@ -34,18 +34,24 @@ Each person maintains a todo and done list.
  - LEAVE A FEW BLANKS HERE TO AVOID CONFLICT
 
 ## TODO:
- - Provide a vector-like data structure that can release memory to achieve zc
  - test the project
- -
- -
- - cleanup: Change InterruptiveConcurrentQueue behavior (use FileDescriptor class)
+ - Implement bind function with interface address (str)
+ - Provide connect(str) function that parse the string to a sockaddr.
  - cleanup: report error when no connection with desired identity presents
  - cleanup: Error handling
- - cleanup: Do not constraint thee size of identity (current maximum being 128 bytes)
+ - cleanup: Do not constraint thee size of identity (current maximum being 128-8 bytes)
  - cleanup: Provide actual remote sockaddr in the connection class
  - cleanup: Give user more control about port/addr
  - cleanup: Do not use std::string as identity type
  - Per action cancellation
+ - cleanup: Change InterruptiveConcurrentQueue behavior (use FileDescriptor class)
+ - Provide a vector-like data structure that can release memory to achieve zc
+ -
+ -
+ -
+ -
+ -
+ - LEAVE A FEW BLANKS HERE TO AVOID CONFLICT
 
 
 ## magniloquency
