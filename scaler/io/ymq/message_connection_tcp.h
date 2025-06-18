@@ -8,9 +8,11 @@
 #include <queue>
 
 #include "scaler/io/ymq/common.h"
+#include "scaler/io/ymq/configuration.h"
 #include "scaler/io/ymq/event_manager.h"
 #include "scaler/io/ymq/file_descriptor.h"
 #include "scaler/io/ymq/io_socket.h"
+#include "scaler/io/ymq/message.h"
 #include "scaler/io/ymq/message_connection.h"
 
 class EventLoopThread;
@@ -51,7 +53,7 @@ struct IOOperation {
 
 struct WriteRequest {
     Bytes payload;
-    std::function<void()> callback;
+    Configuration::SendMessageCallback callback;
 };
 
 enum class ConnectionStage { IdentityExchange, Stable };
@@ -64,7 +66,7 @@ class MessageConnectionTCP: public MessageConnection {
     std::optional<Bytes> _remoteIdentity;
 
     std::queue<WriteRequest> _writeQueue;
-    std::queue<std::function<void(Bytes)>> _readQueue;
+    std::queue<Configuration::RecvMessageCallback> _readQueue;
     std::queue<Bytes> _receivedMessages;
 
     IOOperation _readOp;
@@ -76,7 +78,7 @@ class MessageConnectionTCP: public MessageConnection {
 
     void onRead(FileDescriptor& fd);
     void onWrite(FileDescriptor& fd);
-    void onClose(FileDescriptor& fd) { printf("onClose\n"); };
+    void onClose(FileDescriptor& fd);
     void onError(FileDescriptor& fd) {};
 
     void onReadMessage();
@@ -86,8 +88,8 @@ public:
     ~MessageConnectionTCP();
     MessageConnectionTCP(std::shared_ptr<IOSocket> ioSocket, FileDescriptor fd, sockaddr_storage remoteAddress);
 
-    void send(Bytes data, std::function<void()> k);
-    void recv(std::function<void(Bytes)> k);
+    void sendMessage(Bytes payload, Configuration::SendMessageCallback k);
+    void recvMessage(Configuration::RecvMessageCallback k);
 
     void onCreated();
 

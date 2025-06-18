@@ -1,6 +1,10 @@
 #pragma once
 
 // C
+#include <string.h>  // memcmp
+
+#include <algorithm>
+#include <compare>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -37,6 +41,11 @@ struct Bytes {
         other.data = NULL;
         other.len  = 0;
     }
+
+    friend std::strong_ordering operator<=>(const Bytes& x, const Bytes& y) {
+        return std::lexicographical_compare_three_way(x.data, x.data + x.len, y.data, y.data + y.len);
+    }
+
     Bytes& operator=(Bytes&& other) noexcept {
         if (this != &other) {
             this->free();  // free current data
@@ -84,7 +93,7 @@ struct Bytes {
         return Bytes {new uint8_t[m_len], m_len, Owned};
     }
 
-    static Bytes empty() { return Bytes {NULL, 0, Owned}; }
+    static Bytes empty() { return Bytes {(uint8_t*)nullptr, 0, Owned}; }
 
     static Bytes copy(const uint8_t* m_data, size_t m_len) {
         if (m_len == 0)
@@ -118,8 +127,13 @@ struct Bytes {
     //     return buffer;
     // }
 
-    // size_t len() const { return _len; }
-    // const uint8_t* data() const { return _data; }
+    // Do not remove this
+    std::pair<char*, size_t> release() {
+        std::pair<char*, size_t> res {(char*)data, len};
+        data = nullptr;
+        len  = 0;
+        return res;
+    }
 
     friend class Buffer;
 };

@@ -39,7 +39,7 @@ class EventManager {
     void removeFromEventLoop();
 
 public:
-    EventManager(std::shared_ptr<EventLoopThread> thread, FileDescriptor&& fd, Callback callback)
+    EventManager(std::shared_ptr<EventLoopThread> thread, FileDescriptor fd, Callback callback)
         : _eventLoopThread(thread), _fd(std::move(fd)), _callback(std::move(callback)) {}
 
     ~EventManager() { removeFromEventLoop(); }
@@ -79,6 +79,6 @@ public:
     // OnEventCallback onClose;
     // OnEventCallback onError;
     // // EventManager(): _fd {} {}
-    EventManager(std::shared_ptr<EventLoopThread> eventLoopThread, FileDescriptor fd, Callback callback)
-        : _eventLoopThread(eventLoopThread), _fd(fd), _callback(callback) {}
+    // EventManager(std::shared_ptr<EventLoopThread> eventLoopThread, FileDescriptor fd, Callback callback)
+    //     : _eventLoopThread(eventLoopThread), _fd(fd), _callback(callback) {}
 };

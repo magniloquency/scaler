@@ -8,6 +8,7 @@
 // First-party
 #include "scaler/io/ymq/bytes.h"
 #include "scaler/io/ymq/configuration.h"
+#include "scaler/io/ymq/message.h"
 #include "scaler/io/ymq/message_connection_tcp.h"
 #include "scaler/io/ymq/tcp_client.h"
 #include "scaler/io/ymq/tcp_server.h"
@@ -29,10 +30,17 @@ class IOSocket: public std::enable_shared_from_this<IOSocket> {
     IOSocketType _socketType;
 
     std::unique_ptr<TcpClient> _tcpClient;
-    std::unique_ptr<TcpServer> _tcpServer;
+    // std::unique_ptr<TcpServer> _tcpServer;
+    TcpServer* _tcpServer;
 
 public:
-    std::map<std::string, std::shared_ptr<MessageConnectionTCP>> _identityToConnection;
+    // FIXME: Maybe we don't provide this map at all. _identity and connection is not injective.
+    // Or maybe we enforce user to provide unique name.
+    // We can provide canonical name etc.
+    std::map<std::string, MessageConnectionTCP*> _identityToConnection;
+    std::map<int /* class FileDescriptor */, std::unique_ptr<MessageConnectionTCP>> _fdToConnection;
+
+    std::vector<MessageConnectionTCP*> _deadConnection;
 
     IOSocket(std::shared_ptr<EventLoopThread> eventLoopThread, Identity identity, IOSocketType socketType);
 
@@ -57,6 +65,9 @@ public:
 
     std::shared_ptr<EventLoopThread> eventLoopThread() const { return this->_eventLoopThread; }
 
+    void sendMessage(Message message, Configuration::SendMessageCallback callback);
+    void recvMessage(Configuration::RecvMessageCallback callback);
+
     // string -> connection mapping
     // and connection->string mapping
 
@@ -77,6 +88,12 @@ public:
     // }
 
     void connectTo(sockaddr addr);
+
+    // From Connection Class only
+    void onConnectionDisconnected(MessageConnectionTCP* conn);
+
+    // From Connection Class only
+    void onConnectionIdentityReceived(MessageConnectionTCP* conn);
 
     void onCreated();
     // TODO: ~IOSocket should remove all connection it is owning

@@ -7,18 +7,18 @@
 #include "scaler/io/ymq/common.h"
 #include "scaler/io/ymq/event_manager.h"
 
-// void EpollContext::registerEventManager(EventManager& em) {
-//     epoll_event ev {
-//         .events = EPOLLOUT | EPOLLIN | EPOLLET,  // Edge-triggered
-//         .data   = {.ptr = &em},
-//     };
-//
-//     epoll_fd.epoll_ctl(EPOLL_CTL_ADD, em._fd, &ev);
-// }
-//
-// void EpollContext::removeEventManager(EventManager& em) {
-//     epoll_fd.epoll_ctl(EPOLL_CTL_DEL, em._fd, nullptr);
-// }
+void EpollContext::registerEventManager(EventManager& em) {
+    epoll_event ev {
+        .events = EPOLLOUT | EPOLLIN | EPOLLET,  // Edge-triggered
+        .data   = {.ptr = &em},
+    };
+
+    epoll_fd.epoll_ctl(EPOLL_CTL_ADD, em._fd, &ev);
+}
+
+void EpollContext::removeEventManager(EventManager& em) {
+    epoll_fd.epoll_ctl(EPOLL_CTL_DEL, em._fd, nullptr);
+}
 
 void EpollContext::execPendingFunctions() {
     // while (_delayedFunctions.size()) {
@@ -59,7 +59,12 @@ void EpollContext::loop() {
     //         std::function<void()> f;
     //         _interruptiveFunctions.dequeue(f);
     //         f();
-    //     } else {
+    //     } else if (event == (void*)_isTimingFd) {
+    //         // ToDo: Fix this
+    //         _timingFunctions.onRead();
+    //     }
+
+    //     else {
     //         event->onEvents(current_event.events);
     //     }
     // }

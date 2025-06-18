@@ -17,7 +17,7 @@ class EventManager;
 
 class TcpClient {
     std::shared_ptr<EventLoopThread> _eventLoopThread; /* shared ownership */
-    std::unique_ptr<EventManager> _eventManager;
+    std::shared_ptr<EventManager> _eventManager;
     int _connFd;
     std::string _localIOSocketIdentity;
     sockaddr _remoteAddr;
@@ -30,6 +30,7 @@ class TcpClient {
     void onWrite();
     void onClose() {}
     void onError() {}
+    size_t _retryTimes = 0;
 
 public:
     bool _connected;

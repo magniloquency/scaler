@@ -12,6 +12,7 @@
 
 #include "scaler/io/ymq/bytes.h"
 #include "scaler/io/ymq/common.h"
+#include "scaler/io/ymq/configuration.h"
 #include "scaler/io/ymq/event_loop_thread.h"
 #include "scaler/io/ymq/event_manager.h"
 #include "scaler/io/ymq/file_descriptor.h"
@@ -95,7 +96,7 @@ void MessageConnectionTCP::onReadMessage() {
                 _receivedMessages.push(std::move(bytes));
             } else {
                 auto callback = _readQueue.front();
-                callback(std::move(bytes));
+                callback({.address = Bytes::clone(*_remoteIdentity), .payload = std::move(bytes)});
                 _readQueue.pop();
             }
     }
@@ -158,16 +159,21 @@ void MessageConnectionTCP::onWroteMessage() {
 }
 
 // TODO: Maybe change this to message_t
-void MessageConnectionTCP::send(Bytes msg, std::function<void()> callback) {
-    _writeQueue.push({.payload = std::move(msg), .callback = callback});
+void MessageConnectionTCP::sendMessage(Bytes payload, Configuration::SendMessageCallback k) {
+    _writeQueue.push({.payload = std::move(payload), .callback = k});
 
     this->_eventManager->onEvent({.writable = true});
 }
 
-void MessageConnectionTCP::recv(std::function<void(Bytes)> callback) {
+void MessageConnectionTCP::recvMessage(Configuration::RecvMessageCallback callback) {
     _readQueue.push(callback);
 
     this->_eventManager->onEvent({.readable = true});
 }
+
+void MessageConnectionTCP::onClose(FileDescriptor& fd) {
+    _socket->onConnectionDisconnected(this);
+    _eventManager = {};
+};
 
 MessageConnectionTCP::~MessageConnectionTCP() {}

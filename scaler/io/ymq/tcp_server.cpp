@@ -1,4 +1,6 @@
 
+#include "scaler/io/ymq/tcp_server.h"
+
 #include <netinet/in.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
@@ -12,7 +14,6 @@
 #include "scaler/io/ymq/file_descriptor.h"
 #include "scaler/io/ymq/io_socket.h"
 #include "scaler/io/ymq/message_connection_tcp.h"
-#include "scaler/io/ymq/tcp_server.h"
 
 TcpServer::TcpServer(std::shared_ptr<IOSocket> ioSocket): _socket(ioSocket) {
     auto fd = FileDescriptor::socket(AF_INET, SOCK_STREAM, 0);
@@ -56,11 +57,7 @@ void TcpServer::onEvent(FileDescriptor& fd, Events events) {
             panic("accept failed");
         }
 
-        std::shared_ptr<IOSocket>& ioSocket = _socket;
-        FileDescriptor& fd2                 = *newFd;
-        sockaddr_storage& remoteAddress     = addr;
-
-        _socket->addConnection(std::make_unique<MessageConnectionTCP>(ioSocket, fd2, remoteAddress));
+        _socket->addConnection(std::make_unique<MessageConnectionTCP>(_socket, *newFd, addr));
     }
 }
 
