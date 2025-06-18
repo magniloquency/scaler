@@ -32,6 +32,8 @@ struct EventLoop {
         eventLoopBackend.addFdToLoop(fd, events, manager);
     }
 
+    void removeFdFromLoop(int fd) { eventLoopBackend.removeFdFromLoop(fd); }
+
     void runAfterEachLoop(Function func) { eventLoopBackend.runAfterEachLoop(std::move(func)); };
 
     EventLoopBackend eventLoopBackend;
