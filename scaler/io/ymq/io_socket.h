@@ -7,6 +7,7 @@
 
 // First-party
 #include "scaler/io/ymq/configuration.h"
+#include "scaler/io/ymq/message.h"
 #include "scaler/io/ymq/message_connection_tcp.h"
 #include "scaler/io/ymq/tcp_client.h"
 #include "scaler/io/ymq/tcp_server.h"
@@ -58,6 +59,9 @@ public:
 
     void sendMessageTo(std::string remoteIdentity, std::shared_ptr<std::vector<char>> buf);
     void recvMessageFrom(std::string remoteIdentity, std::shared_ptr<std::vector<char>> buf);
+
+    void sendMessage(Message message, std::function<void(int)> callback);
+    void recvMessage(Message message, std::function<void(Message)> callback);
 
     // string -> connection mapping
     // and connection->string mapping
