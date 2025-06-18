@@ -1,12 +1,6 @@
 #pragma once
 
 // Python
-#include <algorithm>
-
-#include "scaler/io/ymq/message.h"
-#include "scaler/io/ymq/pymod_ymq/async.h"
-#include "scaler/io/ymq/pymod_ymq/bytes.h"
-#include "scaler/io/ymq/pymod_ymq/message.h"
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <structmember.h>
@@ -18,6 +12,10 @@
 
 // First-party
 #include "scaler/io/ymq/io_socket.h"
+#include "scaler/io/ymq/message.h"
+#include "scaler/io/ymq/pymod_ymq/async.h"
+#include "scaler/io/ymq/pymod_ymq/bytes.h"
+#include "scaler/io/ymq/pymod_ymq/message.h"
 #include "scaler/io/ymq/pymod_ymq/ymq.h"
 
 struct PyIOSocket {
