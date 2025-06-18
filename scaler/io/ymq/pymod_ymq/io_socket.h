@@ -1,6 +1,12 @@
 #pragma once
 
 // Python
+#include <algorithm>
+
+#include "scaler/io/ymq/message.h"
+#include "scaler/io/ymq/pymod_ymq/async.h"
+#include "scaler/io/ymq/pymod_ymq/bytes.h"
+#include "scaler/io/ymq/pymod_ymq/message.h"
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <structmember.h>
@@ -31,7 +37,7 @@ static void PyIOSocket_dealloc(PyIOSocket* self) {
 }
 
 static PyObject* PyIOSocket_method_example(PyIOSocket* self, PyObject* args, PyObject* kwargs) {
-    return async_wrapper((PyObject*)self, [](PyObject* future) {
+    return async_wrapper((PyObject*)self, [](YmqState* state, PyObject* future) {
         // we absolutely cannot allow c++ exceptions to cross the ffi boundary
         try {
             using namespace std::chrono_literals;
@@ -60,13 +66,48 @@ static PyObject* PyIOSocket_method_example(PyIOSocket* self, PyObject* args, PyO
 }
 
 static PyObject* PyIOSocket_send(PyIOSocket* self, PyObject* args, PyObject* kwargs) {
-    PyErr_SetString(PyExc_NotImplementedError, "Not implemented");
-    Py_RETURN_NONE;
+    PyMessage* message;
+    const char* kwlist[] = {"message", nullptr};
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O", (char**)kwlist, &message)) {
+        Py_RETURN_NONE;
+    }
+
+    return async_wrapper((PyObject*)self, [&](YmqState* state, PyObject* future) {
+        self->socket->sendMessage(
+            {.address = std::move(message->address->bytes), .payload = std::move(message->payload->bytes)},
+            [&](int error) { future_set_result(future, []() { Py_RETURN_NONE; }); });
+    });
 }
 
 static PyObject* PyIOSocket_recv(PyIOSocket* self, PyObject* args) {
-    PyErr_SetString(PyExc_NotImplementedError, "Not implemented");
-    Py_RETURN_NONE;
+    return async_wrapper((PyObject*)self, [&](YmqState* state, PyObject* future) {
+        self->socket->recvMessage([&](Message message) {
+            future_set_result(future, [&]() {
+                PyBytesYmq* address = (PyBytesYmq*)PyObject_CallNoArgs(state->PyBytesYmqType);
+                if (!address) {
+                    Py_RETURN_NONE;
+                }
+
+                PyBytesYmq* payload = (PyBytesYmq*)PyObject_CallNoArgs(state->PyBytesYmqType);
+                if (!payload) {
+                    Py_DECREF(address);
+                    Py_RETURN_NONE;
+                }
+
+                address->bytes = std::move(message.address);
+                payload->bytes = std::move(message.payload);
+
+                PyMessage* message = (PyMessage*)PyObject_CallFunction(state->PyMessageType, "OO", address, payload);
+                if (!message) {
+                    Py_DECREF(address);
+                    Py_DECREF(payload);
+                    Py_RETURN_NONE;
+                }
+
+                return (PyObject*)message;
+            });
+        });
+    });
 }
 
 static PyObject* PyIOSocket_bind(PyIOSocket* self, PyObject* args, PyObject* kwargs) {

@@ -12,7 +12,7 @@
 #include "scaler/io/ymq/pymod_ymq/ymq.h"
 
 // Wraps an async callback that accepts a Python asyncio future
-static PyObject* async_wrapper(PyObject* self, std::function<void(PyObject* future)> callback) {
+static PyObject* async_wrapper(PyObject* self, std::function<void(YmqState* state, PyObject* future)> callback) {
     // replace with PyType_GetModuleByDef(Py_TYPE(self), &ymq_module) in a newer Python version
     // https://docs.python.org/3/c-api/type.html#c.PyType_GetModuleByDef
     PyObject* module = PyType_GetModule(Py_TYPE(self));
@@ -45,7 +45,7 @@ static PyObject* async_wrapper(PyObject* self, std::function<void(PyObject* futu
     Py_INCREF(future);
 
     // async
-    callback(future);
+    callback(state, future);
 
     return PyObject_CallFunction(state->AwaitableType, "O", future);
 }
