@@ -116,4 +116,5 @@ public:
     void runAfterEachLoop(Function func);
 
     void addFdToLoop(int fd, uint64_t events, EventManager* manager);
+    void removeFdFromLoop(int fd);
 };

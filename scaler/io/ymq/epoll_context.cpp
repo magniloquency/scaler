@@ -1,5 +1,7 @@
 #include "scaler/io/ymq/epoll_context.h"
 
+#include <sys/epoll.h>
+
 #include <cerrno>
 #include <format>
 #include <functional>
@@ -94,6 +96,10 @@ void EpollContext::addFdToLoop(int fd, uint64_t events, EventManager* manager) {
             exit(1);
         }
     }
+}
+
+void EpollContext::removeFdFromLoop(int fd) {
+    epoll_ctl(_epfd, EPOLL_CTL_DEL, fd, nullptr);
 }
 
 void EpollContext::runAfterEachLoop(std::function<void()> func) {

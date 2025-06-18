@@ -241,6 +241,7 @@ void MessageConnectionTCP::recvMessage(std::shared_ptr<std::vector<char>> msg, s
 }
 
 void MessageConnectionTCP::onClose() {
+    _eventLoopThread->_eventLoop.removeFdFromLoop(_connFd);
     close(_connFd);
     auto& sock = _eventLoopThread->_identityToIOSocket.at(*_remoteIOSocketIdentity);
     sock->onConnectionDisconnected(this);

@@ -27,10 +27,10 @@ Each person maintains a todo and done list.
  - General message passing assuming user passed in Message with header
  - Guaranteed message delivery
  - Retry on disconnect 
+ - Delete fd from eventloop on disconnect
  - LEAVE A FEW BLANKS HERE TO AVOID CONFLICT
 
 ## TODO:
- - Delete fd from eventloop on disconnect
  - Put Recv on iosocket level because user don't know which connection it should recv from
  - Provide a vector-like data structure that can release memory to achieve zc
  - test the project
