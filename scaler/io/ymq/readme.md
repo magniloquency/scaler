@@ -15,7 +15,7 @@ Each person maintains a todo and done list.
 - write up interfaces(not impl) that uses coroutine DEAD
 
 ## DONE:
- - CMake integration, generate C++ stuff in build dir
+ - Remember (or remove) the IOSocketIdentity of closed connection
  - Basic coroutine API
  - develop the so-called coro_context and their utility DEAD
  - write up interfaces(not impl) that uses coroutine DEAD
@@ -25,16 +25,16 @@ Each person maintains a todo and done list.
  - Write timed execution utility
  - IOSocket exchange identity on connected
  - General message passing assuming user passed in Message with header
- -
- -
+ - Guaranteed message delivery
+ - Retry on disconnect 
  - LEAVE A FEW BLANKS HERE TO AVOID CONFLICT
 
 ## TODO:
- - Guaranteed message delivery
- - Retry on disconnect 
- - Gracefully disconnect
- - Remember (or remove) the IOSocketIdentity of closed connection
- - Destructors, in general
+ - Delete fd from eventloop on disconnect
+ - Put Recv on iosocket level because user don't know which connection it should recv from
+ - Provide a vector-like data structure that can release memory to achieve zc
+ - test the project
+ -
  -
  -
  -
