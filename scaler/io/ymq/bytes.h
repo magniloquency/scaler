@@ -30,7 +30,7 @@ struct Bytes {
 
     // move-only
     // TODO: make copyable
-    Bytes(uint8_t* m_data, size_t m_len, Ownership tag): data(m_data), len(m_len), tag(tag) {}
+    Bytes(uint8_t* data, size_t len, Ownership tag): data(data), len(len), tag(tag) {}
     Bytes(const Bytes&)            = delete;
     Bytes& operator=(const Bytes&) = delete;
     Bytes(Bytes&& other) noexcept: data(other.data), len(other.len), tag(other.tag) {

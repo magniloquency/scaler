@@ -46,11 +46,11 @@ public:
     IOSocketType socketType() const { return _socketType; }
 
     // TODO: In the future, this will be Message
-    void sendMessage(const std::vector<char>& buf, std::function<void()> callback, std::string remoteIdentity);
     void recvMessage(std::vector<char>& buf);
 
     void removeConnectedTcpClient();
 
+    void sendMessage(Bytes address, Bytes payload, std::function<void()> callback);
     void sendMessage(Bytes buf, std::function<void()> callback, std::string remoteIdentity);
 
     void addConnection(std::unique_ptr<MessageConnectionTCP> connection) { todo(); }

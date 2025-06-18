@@ -1,5 +1,7 @@
 
 
+#include "scaler/io/ymq/message_connection_tcp.h"
+
 #include <unistd.h>
 
 #include <cerrno>
@@ -14,7 +16,6 @@
 #include "scaler/io/ymq/event_manager.h"
 #include "scaler/io/ymq/file_descriptor.h"
 #include "scaler/io/ymq/io_socket.h"
-#include "scaler/io/ymq/message_connection_tcp.h"
 #include "scaler/io/ymq/typedefs.h"
 
 MessageConnectionTCP::MessageConnectionTCP(
@@ -61,10 +62,11 @@ void MessageConnectionTCP::onRead(FileDescriptor& fd) {
 
         _readOp.payload  = new uint8_t[_readOp.len()];
         _readOp.progress = IOProgress::Payload;
+        _readOp.cursor   = 0;
     }
 
     if (_readOp.progress == IOProgress::Payload) {
-        auto result = fd.read(_readOp.header, 4 - _readOp.cursor);
+        auto result = fd.read(_readOp.payload, 4 - _readOp.cursor);
         if (!result) {
             if (result.error() == EAGAIN)
                 return;
