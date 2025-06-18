@@ -79,6 +79,7 @@ void TcpClient::onRead() {
 void TcpClient::retry() {
     if (_retryTimes > 5) {
         printf("_retryTimes > %lu, has reached maximum, no more retry now\n", _retryTimes);
+        return;
     }
 
     Timestamp now;
