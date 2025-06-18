@@ -111,13 +111,55 @@ static PyObject* PyIOSocket_recv(PyIOSocket* self, PyObject* args) {
 }
 
 static PyObject* PyIOSocket_bind(PyIOSocket* self, PyObject* args, PyObject* kwargs) {
-    PyErr_SetString(PyExc_NotImplementedError, "Not implemented");
-    Py_RETURN_NONE;
+    PyObject* addressObj;
+    const char* kwlist[] = {"address", nullptr};
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O", (char**)kwlist, &addressObj)) {
+        PyErr_SetString(PyExc_TypeError, "expected one argument: address");
+        Py_RETURN_NONE;
+    }
+
+    if (!PyUnicode_Check(addressObj)) {
+        Py_DECREF(addressObj);
+
+        PyErr_SetString(PyExc_TypeError, "argument must be a str");
+        Py_RETURN_NONE;
+    }
+
+    Py_ssize_t addressLen;
+    const char* address = PyUnicode_AsUTF8AndSize(addressObj, &addressLen);
+
+    if (!address)
+        Py_RETURN_NONE;
+
+    async_wrapper((PyObject*)self, [](YmqState* state, PyObject* future) {
+        future_set_result(future, []() { Py_RETURN_NONE; });
+    });
 }
 
 static PyObject* PyIOSocket_connect(PyIOSocket* self, PyObject* args, PyObject* kwargs) {
-    PyErr_SetString(PyExc_NotImplementedError, "Not implemented");
-    Py_RETURN_NONE;
+    PyObject* addressObj;
+    const char* kwlist[] = {"address", nullptr};
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O", (char**)kwlist, &addressObj)) {
+        PyErr_SetString(PyExc_TypeError, "expected one argument: address");
+        Py_RETURN_NONE;
+    }
+
+    if (!PyUnicode_Check(addressObj)) {
+        Py_DECREF(addressObj);
+
+        PyErr_SetString(PyExc_TypeError, "argument must be a str");
+        Py_RETURN_NONE;
+    }
+
+    Py_ssize_t addressLen;
+    const char* address = PyUnicode_AsUTF8AndSize(addressObj, &addressLen);
+
+    if (!address)
+        Py_RETURN_NONE;
+
+    async_wrapper((PyObject*)self, [](YmqState* state, PyObject* future) {
+        future_set_result(future, []() { Py_RETURN_NONE; });
+    });
 }
 
 static PyObject* PyIOSocket_repr(PyIOSocket* self) {
