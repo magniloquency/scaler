@@ -45,7 +45,7 @@ public:
 
 public:
     std::queue<TcpWriteOperation> _writeOperations;
-    std::queue<TcpReadOperation> _pendingReadOperations;
+    std::shared_ptr<std::queue<TcpReadOperation>> _pendingReadOperations;
     std::queue<std::vector<char>> _receivedMessages;
 
     std::shared_ptr<EventLoopThread> _eventLoopThread;
@@ -65,7 +65,8 @@ public:
         sockaddr localAddr,
         sockaddr remoteAddr,
         std::string localIOSocketIdentity,
-        bool responsibleForRetry);
+        bool responsibleForRetry,
+        std::shared_ptr<std::queue<TcpReadOperation>> _pendingReadOperations);
 
     void send(Bytes data, SendMessageContinuation k) { todo(); }
     void recv(RecvMessageContinuation k) { todo(); }
@@ -81,7 +82,7 @@ public:
     }
 
     void sendMessage(std::shared_ptr<std::vector<char>> msg, SendMessageCallback callback);
-    void recvMessage(std::shared_ptr<std::vector<char>> msg, RecvMessageCallback callback);
+    bool recvMessage();
 
     void recv(std::vector<char>& buf) {}
 

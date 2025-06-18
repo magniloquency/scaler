@@ -13,6 +13,8 @@
 #include "scaler/io/ymq/tcp_server.h"
 #include "scaler/io/ymq/typedefs.h"
 
+class TcpReadOperation;
+
 // NOTE: Don't do this. It pollutes the env. I tried to remove it, but it reports err
 // in pymod module. Consider include the corresponding file and define types there. - gxu
 using Identity = Configuration::Identity;
@@ -29,6 +31,7 @@ class IOSocket {
     std::optional<TcpServer> _tcpServer;
 
 public:
+    std::shared_ptr<std::queue<TcpReadOperation>> _pendingReadOperations;
     // FIXME: Maybe we don't provide this map at all. _identity and connection is not injective.
     // Or maybe we enforce user to provide unique name.
     // We can provide canonical name etc.
@@ -48,20 +51,10 @@ public:
     Identity identity() const { return _identity; }
     IOSocketType socketType() const { return _socketType; }
 
-    // TODO: In the future, this will be Message
-    void sendMessage(const std::vector<char>& buf, std::function<void()> callback, std::string remoteIdentity);
-    void recvMessage(std::vector<char>& buf);
-
     void removeConnectedTcpClient();
 
-    void sendMessage(
-        std::shared_ptr<std::vector<char>> buf, std::function<void()> callback, std::string remoteIdentity);
-
-    void sendMessageTo(std::string remoteIdentity, std::shared_ptr<std::vector<char>> buf);
-    void recvMessageFrom(std::string remoteIdentity, std::shared_ptr<std::vector<char>> buf);
-
     void sendMessage(Message message, std::function<void(int)> callback);
-    void recvMessage(Message message, std::function<void(Message)> callback);
+    void recvMessage(std::function<void(Message)> callback);
 
     // string -> connection mapping
     // and connection->string mapping

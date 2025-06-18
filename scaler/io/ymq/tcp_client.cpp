@@ -32,8 +32,8 @@ void TcpClient::onCreated() {
         std::string id = this->_localIOSocketIdentity;
         auto& sock     = this->_eventLoopThread->_identityToIOSocket.at(id);
         // FIXME: the second _addr is not real
-        sock->_fdToConnection[sockfd] =
-            std::make_unique<MessageConnectionTCP>(_eventLoopThread, sockfd, _remoteAddr, _remoteAddr, id, true);
+        sock->_fdToConnection[sockfd] = std::make_unique<MessageConnectionTCP>(
+            _eventLoopThread, sockfd, _remoteAddr, _remoteAddr, id, true, sock->_pendingReadOperations);
         sock->_fdToConnection[sockfd]->onCreated();
         // The idea is, this tcpClient needs to be reset
     }
@@ -62,12 +62,11 @@ void TcpClient::onWrite() {
         return;
     }
 
-    // TODO: -^ what if this connect failed?
     std::string id = this->_localIOSocketIdentity;
     auto& sock     = this->_eventLoopThread->_identityToIOSocket.at(id);
     // FIXME: the second _addr is not real
-    sock->_fdToConnection[_connFd] =
-        std::make_unique<MessageConnectionTCP>(_eventLoopThread, _connFd, addr, addr, id, true);
+    sock->_fdToConnection[_connFd] = std::make_unique<MessageConnectionTCP>(
+        _eventLoopThread, _connFd, addr, addr, id, true, sock->_pendingReadOperations);
     sock->_fdToConnection[_connFd]->onCreated();
     _connected = true;
 }

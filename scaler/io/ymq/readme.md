@@ -28,16 +28,20 @@ Each person maintains a todo and done list.
  - Guaranteed message delivery
  - Retry on disconnect 
  - Delete fd from eventloop on disconnect
+ - Put Recv on iosocket level because user don't know which connection it should recv from
  - LEAVE A FEW BLANKS HERE TO AVOID CONFLICT
 
 ## TODO:
- - Put Recv on iosocket level because user don't know which connection it should recv from
  - Provide a vector-like data structure that can release memory to achieve zc
  - test the project
- -
- -
- -
- -
+ - cleanup: IOSocket destructor should release resources bound to it
+ - cleanup: Change InterruptiveConcurrentQueue behavior (use FileDescriptor class)
+ - cleanup: Clarify Bytes ownership of send/recv messages
+ - cleanup: report error when no connection with desired identity presents
+ - cleanup: Error handling
+ - cleanup: Do not constraint thee size of identity (current maximum being 128 bytes)
+ - cleanup: Provide actual remote sockaddr in the connection class
+ - cleanup: Give user more control about port/addr
  - LEAVE A FEW BLANKS HERE TO AVOID CONFLICT
 
 
