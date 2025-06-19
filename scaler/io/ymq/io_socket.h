@@ -32,6 +32,11 @@ public:
     std::optional<TcpServer> _tcpServer;
 
 public:
+    using ConnectReturnCallback = Configuration::ConnectReturnCallback;
+    using BindReturnCallback    = Configuration::BindReturnCallback;
+    using SendMessageCallback   = Configuration::SendMessageCallback;
+    using RecvMessageCallback   = Configuration::RecvMessageCallback;
+
     std::shared_ptr<std::queue<TcpReadOperation>> _pendingReadOperations;
     // FIXME: Maybe we don't provide this map at all. _identity and connection is not injective.
     // Or maybe we enforce user to provide unique name.
@@ -54,13 +59,13 @@ public:
 
     void removeConnectedTcpClient();
 
-    void sendMessage(Message message, std::function<void(int)> callback);
-    void recvMessage(std::function<void(Message)> callback);
+    void sendMessage(Message message, SendMessageCallback callback);
+    void recvMessage(RecvMessageCallback callback);
 
-    void connectTo(sockaddr addr);
+    void connectTo(sockaddr addr, ConnectReturnCallback callback);
+    void connectTo(std::string address, ConnectReturnCallback callback);
 
-    void connectTo(std::string address);
-    void bindTo(std::string address);
+    void bindTo(std::string address, BindReturnCallback callback);
 
     // From Connection Class only
     void onConnectionDisconnected(MessageConnectionTCP* conn);

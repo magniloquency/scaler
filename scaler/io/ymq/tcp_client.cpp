@@ -4,6 +4,7 @@
 
 #include <cerrno>
 #include <chrono>
+#include <functional>
 #include <memory>
 
 #include "scaler/io/ymq/event_loop_thread.h"
@@ -17,15 +18,18 @@ void TcpClient::onCreated() {
     int sockfd    = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
     this->_connFd = sockfd;
     int ret       = connect(sockfd, (sockaddr*)&_remoteAddr, sizeof(_remoteAddr));
+
+    int passedBackValue = 0;
     if (ret < 0) {
         if (errno != EINPROGRESS) {
             perror("connect");
             close(sockfd);
-            return;
+            passedBackValue = errno;
         } else {
             // TODO: Think about the lifetime of _eventManager.
             printf("Connecting (EINPROGRESS), adding fd to loop\n");
             _eventLoopThread->_eventLoop.addFdToLoop(sockfd, EPOLLOUT, this->_eventManager.get());
+            passedBackValue = 0;
         }
     } else {
         printf("client SUCCESS\n");
@@ -35,17 +39,22 @@ void TcpClient::onCreated() {
         sock->_fdToConnection[sockfd] = std::make_unique<MessageConnectionTCP>(
             _eventLoopThread, sockfd, _remoteAddr, _remoteAddr, id, true, sock->_pendingReadOperations);
         sock->_fdToConnection[sockfd]->onCreated();
-        // The idea is, this tcpClient needs to be reset
+        passedBackValue = 0;
     }
+    this->_onConnectReturn(passedBackValue);
 }
 
 TcpClient::TcpClient(
-    std::shared_ptr<EventLoopThread> eventLoopThread, std::string localIOSocketIdentity, sockaddr remoteAddr)
+    std::shared_ptr<EventLoopThread> eventLoopThread,
+    std::string localIOSocketIdentity,
+    sockaddr remoteAddr,
+    ConnectReturnCallback onConnectReturn)
     : _eventLoopThread(eventLoopThread)
     , _localIOSocketIdentity(std::move(localIOSocketIdentity))
     , _remoteAddr(std::move(remoteAddr))
     , _eventManager(std::make_unique<EventManager>(_eventLoopThread))
-    , _connected(false) {
+    , _connected(false)
+    , _onConnectReturn(std::move(onConnectReturn)) {
     _eventManager->onRead  = [this] { this->onRead(); };
     _eventManager->onWrite = [this] { this->onWrite(); };
     _eventManager->onClose = [this] { this->onClose(); };

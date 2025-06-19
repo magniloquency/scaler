@@ -31,12 +31,22 @@ Each person maintains a todo and done list.
  - Put Recv on iosocket level because user don't know which connection it should recv from
  - cleanup: IOSocket destructor should release resources bound to it
  - cleanup: Clarify Bytes ownership of send/recv messages
+ - Provide connect(str) function that parse the string to a sockaddr.
+ - make connectTo takes a callback
+ -
+ -
+ -
+ -
+ -
+ -
+ -
+ -
  - LEAVE A FEW BLANKS HERE TO AVOID CONFLICT
 
 ## TODO:
  - test the project
  - Implement bind function with interface address (str)
- - Provide connect(str) function that parse the string to a sockaddr.
+ -
  - cleanup: report error when no connection with desired identity presents
  - cleanup: Error handling
  - cleanup: Do not constraint thee size of identity (current maximum being 128-8 bytes)
