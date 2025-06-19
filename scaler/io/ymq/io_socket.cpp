@@ -106,7 +106,8 @@ void IOSocket::sendMessage(Message message, SendMessageCallback callback) {
 
                 conn->sendMessage(std::move(payload), std::move(callback));
             } catch (...) {
-                // TODO: Cannot find the identity, call callback here
+                ;
+                callback(-1);
             }
         });
 }
