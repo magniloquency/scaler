@@ -5,7 +5,6 @@
 
 #include "scaler/io/ymq/pymod_ymq/ymq.h"
 
-// 1. Define the struct for your custom exception
 typedef struct {
     PyObject_HEAD;
     PyObject* error;
@@ -13,7 +12,6 @@ typedef struct {
 
 extern "C" {
 
-// 2. __init__ function for your exception
 static int YmqException_init(YmqException* self, PyObject* args, PyObject* kwds) {
     PyObject* error             = nullptr;
     static const char* kwlist[] = {"code", nullptr};
@@ -44,14 +42,18 @@ static int YmqException_init(YmqException* self, PyObject* args, PyObject* kwds)
 }
 }
 
-// 3. Members definition
+static void YmqException_dealloc(YmqException* self) {
+    Py_XDECREF(self->error);
+    Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
 static PyMemberDef YmqException_members[] = {
     {"code", T_OBJECT_EX, offsetof(YmqException, error), 0, "error code"}, {nullptr}};
 
-// 4. Define the PyType_Spec for heap type
 static PyType_Slot YmqException_slots[] = {
-    {Py_tp_base, (void*)PyExc_Exception},  // Will be set at runtime
+    {Py_tp_base, (void*)PyExc_Exception},
     {Py_tp_init, (void*)YmqException_init},
+    {Py_tp_dealloc, (void*)YmqException_dealloc},
     {Py_tp_members, (void*)YmqException_members},
     {0, 0}};
 

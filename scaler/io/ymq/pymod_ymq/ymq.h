@@ -81,6 +81,7 @@ static void ymq_free(YmqState* state) {
     Py_XDECREF(state->PyMessageType);
     Py_XDECREF(state->PyIOSocketType);
     Py_XDECREF(state->PyIOContextType);
+    Py_XDECREF(state->ExceptionType);
     Py_XDECREF(state->AwaitableType);
 
     state->asyncioModule    = nullptr;
@@ -90,6 +91,7 @@ static void ymq_free(YmqState* state) {
     state->PyMessageType    = nullptr;
     state->PyIOSocketType   = nullptr;
     state->PyIOContextType  = nullptr;
+    state->ExceptionType    = nullptr;
     state->AwaitableType    = nullptr;
 }
 
