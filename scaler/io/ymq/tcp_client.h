@@ -7,6 +7,7 @@
 #include <memory>
 
 // First-party
+#include "scaler/io/ymq/configuration.h"
 #include "scaler/io/ymq/file_descriptor.h"
 
 class EventLoopThread;
@@ -30,14 +31,18 @@ class TcpClient {
     size_t _retryTimes = 0;
 
 public:
+    using ConnectReturnCallback = Configuration::ConnectReturnCallback;
+    ConnectReturnCallback _onConnectReturn;
+
     bool _connected;
 
     TcpClient(const TcpClient&)            = delete;
     TcpClient& operator=(const TcpClient&) = delete;
-    TcpClient(std::shared_ptr<EventLoopThread> eventLoopThread, std::string localIOSocketIdentity, sockaddr remoteAddr);
-
-    using ConnectReturnCallback = std::function<void(FileDescriptor, sockaddr, int)>;
-    ConnectReturnCallback onConnectReturn;
+    TcpClient(
+        std::shared_ptr<EventLoopThread> eventLoopThread,
+        std::string localIOSocketIdentity,
+        sockaddr remoteAddr,
+        ConnectReturnCallback onConnectReturn);
 
     void onCreated();
 

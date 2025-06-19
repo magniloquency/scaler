@@ -23,6 +23,7 @@ void IOSocket::removeConnectedTcpClient() {
 }
 
 // TODO: IOSocket::onCreated should initialize component(s) based on its type.
+// THIS THING DIES
 void IOSocket::onCreated() {
     printf("%s\n", __PRETTY_FUNCTION__);
     // Different SocketType might have different rules
@@ -42,27 +43,29 @@ IOSocket::IOSocket(std::shared_ptr<EventLoopThread> eventLoopThread, Identity id
     , _socketType(socketType)
     , _pendingReadOperations(std::make_shared<std::queue<TcpReadOperation>>()) {}
 
-void IOSocket::connectTo(sockaddr addr) {
+void IOSocket::connectTo(sockaddr addr, ConnectReturnCallback callback) {
     printf("%s\n", __PRETTY_FUNCTION__);
     printf("this->identity() = %s\n", this->identity().c_str());
-    _eventLoopThread->_eventLoop.executeNow([this, addr] {
-        _tcpClient.emplace(_eventLoopThread, this->identity(), addr);
+    _eventLoopThread->_eventLoop.executeNow([this, addr = std::move(addr), callback = std::move(callback)] {
+        _tcpClient.emplace(_eventLoopThread, this->identity(), std::move(addr), std::move(callback));
         _tcpClient->onCreated();
     });
 }
 
-void IOSocket::connectTo(std::string address) {
+void IOSocket::connectTo(std::string address, ConnectReturnCallback callback) {
     auto res = stringToSockaddr(std::move(address));
     assert(res);
-    connectTo(std::move(res.value()));
+    connectTo(std::move(res.value()), std::move(callback));
 }
+
+void IOSocket::bindTo(std::string address, BindReturnCallback callback) {}
 
 void IOSocket::onConnectionDisconnected(MessageConnectionTCP* conn) {
     int fd       = conn->_connFd;
     auto connPtr = std::move(this->_fdToConnection[fd]);
     this->_identityToConnection.erase(*connPtr->_remoteIOSocketIdentity);
     if (connPtr->_responsibleForRetry) {
-        connectTo(conn->_remoteAddr);
+        connectTo(conn->_remoteAddr, [](int) {});  // as the user callback is one-shot
     }
     _deadConnection.push_back(std::move(connPtr));
 }
@@ -82,7 +85,7 @@ void IOSocket::onConnectionIdentityReceived(MessageConnectionTCP* conn) {
     _deadConnection.erase(c);
 }
 
-void IOSocket::sendMessage(Message message, std::function<void(int)> callback) {
+void IOSocket::sendMessage(Message message, SendMessageCallback callback) {
     auto [addressPtr, addressLen] = message.address.release();
     auto [payloadPtr, payloadLen] = message.payload.release();
     _eventLoopThread->_eventLoop.executeNow(
@@ -103,7 +106,7 @@ void IOSocket::sendMessage(Message message, std::function<void(int)> callback) {
         });
 }
 
-void IOSocket::recvMessage(std::function<void(Message)> callback) {
+void IOSocket::recvMessage(RecvMessageCallback callback) {
     _eventLoopThread->_eventLoop.executeNow([this, callback = std::move(callback)] {
         TcpReadOperation readOp {std::make_shared<std::vector<char>>(), 0, std::move(callback)};
         this->_pendingReadOperations->push(std::move(readOp));
