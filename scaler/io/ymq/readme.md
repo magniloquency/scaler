@@ -46,7 +46,7 @@ Each person maintains a todo and done list.
  - Per action cancellation
  - cleanup: Change InterruptiveConcurrentQueue behavior (use FileDescriptor class)
  - Provide a vector-like data structure that can release memory to achieve zc
- -
+ - test the user provided callback logic and think about sync issue
  -
  -
  -

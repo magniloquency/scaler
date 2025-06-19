@@ -7,8 +7,6 @@
 // First-party
 #include <string.h>
 
-#include <cstdint>
-
 #include "scaler/io/ymq/io_context.h"
 #include "scaler/io/ymq/io_socket.h"
 #include "scaler/io/ymq/typedefs.h"
@@ -22,13 +20,6 @@ int main() {
 
     const char* ip = "127.0.0.1";
     const int port = 8080;
-
-    // Create a non-blocking socket using SOCK_NONBLOCK
-    int sockfd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
-    if (sockfd < 0) {
-        perror("socket");
-        return 1;
-    }
 
     sockaddr_in server_addr {};
     server_addr.sin_family = AF_INET;
