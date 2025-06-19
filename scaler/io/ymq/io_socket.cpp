@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <expected>
 #include <memory>
 #include <ranges>
 #include <utility>
@@ -12,6 +13,7 @@
 #include "scaler/io/ymq/message_connection_tcp.h"
 #include "scaler/io/ymq/tcp_client.h"
 #include "scaler/io/ymq/tcp_server.h"
+#include "scaler/io/ymq/utils.h"
 
 void IOSocket::removeConnectedTcpClient() {
     if (this->_tcpClient && this->_tcpClient->_connected) {
@@ -47,6 +49,12 @@ void IOSocket::connectTo(sockaddr addr) {
         _tcpClient.emplace(_eventLoopThread, this->identity(), addr);
         _tcpClient->onCreated();
     });
+}
+
+void IOSocket::connectTo(std::string address) {
+    auto res = stringToSockaddr(std::move(address));
+    assert(res);
+    connectTo(std::move(res.value()));
 }
 
 void IOSocket::onConnectionDisconnected(MessageConnectionTCP* conn) {

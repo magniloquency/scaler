@@ -59,6 +59,9 @@ public:
 
     void connectTo(sockaddr addr);
 
+    void connectTo(std::string address);
+    void bindTo(std::string address);
+
     // From Connection Class only
     void onConnectionDisconnected(MessageConnectionTCP* conn);
 
