@@ -63,9 +63,9 @@ public:
     void recvMessage(RecvMessageCallback callback);
 
     void connectTo(sockaddr addr, ConnectReturnCallback callback);
-    void connectTo(std::string address, ConnectReturnCallback callback);
+    void connectTo(std::string networkAddress, ConnectReturnCallback callback);
 
-    void bindTo(std::string address, BindReturnCallback callback);
+    void bindTo(std::string networkAddress, BindReturnCallback callback);
 
     // From Connection Class only
     void onConnectionDisconnected(MessageConnectionTCP* conn);

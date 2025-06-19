@@ -33,7 +33,7 @@ Each person maintains a todo and done list.
  - cleanup: Clarify Bytes ownership of send/recv messages
  - Provide connect(str) function that parse the string to a sockaddr.
  - make connectTo takes a callback
- -
+ - Implement bind function with interface address (str) and callback
  -
  -
  -
@@ -45,8 +45,6 @@ Each person maintains a todo and done list.
 
 ## TODO:
  - test the project
- - Implement bind function with interface address (str)
- -
  - cleanup: report error when no connection with desired identity presents
  - cleanup: Error handling
  - cleanup: Do not constraint thee size of identity (current maximum being 128-8 bytes)
@@ -57,6 +55,8 @@ Each person maintains a todo and done list.
  - cleanup: Change InterruptiveConcurrentQueue behavior (use FileDescriptor class)
  - Provide a vector-like data structure that can release memory to achieve zc
  - test the user provided callback logic and think about sync issue
+ -
+ -
  -
  -
  -

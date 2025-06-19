@@ -26,12 +26,6 @@ void IOSocket::removeConnectedTcpClient() {
 // THIS THING DIES
 void IOSocket::onCreated() {
     printf("%s\n", __PRETTY_FUNCTION__);
-    // Different SocketType might have different rules
-    if (_socketType == IOSocketType::Dealer) {
-        printf("server should be created now\n");
-        _tcpServer.emplace(_eventLoopThread, this->identity());
-        _tcpServer->onCreated();
-    }
     assert(_pendingReadOperations);
 
     _eventLoopThread->_eventLoop.runAfterEachLoop([this] { this->removeConnectedTcpClient(); });
@@ -52,13 +46,24 @@ void IOSocket::connectTo(sockaddr addr, ConnectReturnCallback callback) {
     });
 }
 
-void IOSocket::connectTo(std::string address, ConnectReturnCallback callback) {
-    auto res = stringToSockaddr(std::move(address));
+void IOSocket::connectTo(std::string networkAddress, ConnectReturnCallback callback) {
+    auto res = stringToSockaddr(std::move(networkAddress));
     assert(res);
     connectTo(std::move(res.value()), std::move(callback));
 }
 
-void IOSocket::bindTo(std::string address, BindReturnCallback callback) {}
+void IOSocket::bindTo(std::string networkAddress, BindReturnCallback callback) {
+    if (_tcpServer) {
+        callback(-1);
+        return;
+    }
+    auto res = stringToSockaddr(std::move(networkAddress));
+    assert(res);
+
+    printf("server should be created now\n");
+    _tcpServer.emplace(_eventLoopThread, this->identity(), std::move(res.value()), std::move(callback));
+    _tcpServer->onCreated();
+}
 
 void IOSocket::onConnectionDisconnected(MessageConnectionTCP* conn) {
     int fd       = conn->_connFd;
