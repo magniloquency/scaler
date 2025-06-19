@@ -7,32 +7,31 @@
 
 #include <memory>
 
+#include "scaler/io/ymq/configuration.h"
 #include "scaler/io/ymq/event_loop_thread.h"
 #include "scaler/io/ymq/event_manager.h"
 #include "scaler/io/ymq/io_socket.h"
 #include "scaler/io/ymq/message_connection_tcp.h"
 
-static int create_and_bind_socket() {
+static int create_and_bind_socket(const sockaddr& addr, Configuration::BindReturnCallback callback) {
     int server_fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
     if (server_fd == -1) {
         perror("socket");
+        callback(-1);
         return -1;
     }
 
-    sockaddr_in addr {};
-    addr.sin_family      = AF_INET;
-    addr.sin_port        = htons(8080);
-    addr.sin_addr.s_addr = INADDR_ANY;
-
-    if (bind(server_fd, (struct sockaddr*)&addr, sizeof(addr)) == -1) {
+    if (bind(server_fd, &addr, sizeof(addr)) == -1) {
         perror("bind");
         close(server_fd);
+        callback(-1);
         return -1;
     }
 
     if (listen(server_fd, SOMAXCONN) == -1) {
         perror("listen");
         close(server_fd);
+        callback(-1);
         return -1;
     }
 
@@ -40,14 +39,18 @@ static int create_and_bind_socket() {
 }
 
 // TODO: Allow user to specify port/addr
-TcpServer::TcpServer(std::shared_ptr<EventLoopThread> eventLoopThread, std::string localIOSocketIdentity)
+TcpServer::TcpServer(
+    std::shared_ptr<EventLoopThread> eventLoopThread,
+    std::string localIOSocketIdentity,
+    sockaddr addr,
+    BindReturnCallback onBindReturn)
     : _eventLoopThread(eventLoopThread)
     , _localIOSocketIdentity(std::move(localIOSocketIdentity))
     , _eventManager(std::make_unique<EventManager>(_eventLoopThread))
-    , _addr()
-    , _addr_len(sizeof(sockaddr)) {
-    _serverFd = create_and_bind_socket();
-
+    , _addr(std::move(addr))
+    , _addrLen(sizeof(sockaddr))
+    , _onBindReturn(onBindReturn)
+    , _serverFd {} {
     _eventManager->onRead  = [this] { this->onRead(); };
     _eventManager->onWrite = [this] { this->onWrite(); };
     _eventManager->onClose = [this] { this->onClose(); };
@@ -55,15 +58,18 @@ TcpServer::TcpServer(std::shared_ptr<EventLoopThread> eventLoopThread, std::stri
 }
 
 void TcpServer::onCreated() {
-    // _eventLoopThread->eventLoop.registerEventManager(*this->_eventManager.get());
-    _eventLoopThread->_eventLoop.addFdToLoop(_serverFd, EPOLLIN | EPOLLET, this->_eventManager.get());
+    _serverFd = create_and_bind_socket(this->_addr, std::move(this->_onBindReturn));
+    if (_serverFd != -1)
+        _eventLoopThread->_eventLoop.addFdToLoop(_serverFd, EPOLLIN | EPOLLET, this->_eventManager.get());
+    else
+        _serverFd = 0;
 }
 
 void TcpServer::onRead() {
     printf("%s\n", __PRETTY_FUNCTION__);
     printf("Got a new connection, local iosocket identity = %s\n", _localIOSocketIdentity.c_str());
 
-    int fd         = accept4(_serverFd, &_addr, &_addr_len, SOCK_NONBLOCK | SOCK_CLOEXEC);
+    int fd         = accept4(_serverFd, &_addr, &_addrLen, SOCK_NONBLOCK | SOCK_CLOEXEC);
     std::string id = this->_localIOSocketIdentity;
     auto& sock     = this->_eventLoopThread->_identityToIOSocket.at(id);
     // FIXME: the second _addr is not real
@@ -73,6 +79,8 @@ void TcpServer::onRead() {
 }
 
 TcpServer::~TcpServer() {
-    _eventLoopThread->_eventLoop.removeFdFromLoop(_serverFd);
-    close(_serverFd);
+    if (_serverFd != 0) {
+        _eventLoopThread->_eventLoop.removeFdFromLoop(_serverFd);
+        close(_serverFd);
+    }
 }

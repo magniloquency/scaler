@@ -7,6 +7,7 @@
 #include <memory>
 
 // First-party
+#include "scaler/io/ymq/configuration.h"
 #include "scaler/io/ymq/file_descriptor.h"
 // #include "event_loop_thread.hpp"
 // #include "event_manager.hpp"
@@ -31,17 +32,22 @@ class TcpServer {
     void onError() {}
 
     sockaddr _addr;
-    socklen_t _addr_len;
+    socklen_t _addrLen;
     std::string _localIOSocketIdentity;
 
 public:
+    using BindReturnCallback = Configuration::BindReturnCallback;
+    BindReturnCallback _onBindReturn;
+
     TcpServer(const TcpServer&)            = delete;
     TcpServer& operator=(const TcpServer&) = delete;
 
-    TcpServer(std::shared_ptr<EventLoopThread> eventLoop, std::string localIOSocketIdentity);
+    TcpServer(
+        std::shared_ptr<EventLoopThread> eventLoop,
+        std::string localIOSocketIdentity,
+        sockaddr addr,
+        BindReturnCallback onBindReturn);
 
-    using AcceptReturnCallback = std::function<void(FileDescriptor, sockaddr, int)>;
-    AcceptReturnCallback onAcceptReturn;
     void onCreated();
     ~TcpServer();
 };
