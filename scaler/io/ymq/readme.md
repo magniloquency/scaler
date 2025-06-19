@@ -34,8 +34,8 @@ Each person maintains a todo and done list.
  - Provide connect(str) function that parse the string to a sockaddr.
  - make connectTo takes a callback
  - Implement bind function with interface address (str) and callback
- -
- -
+ - cleanup: report error when no connection with desired identity presents
+ - cleanup: Give user more control about port/addr
  -
  -
  -
@@ -45,16 +45,16 @@ Each person maintains a todo and done list.
 
 ## TODO:
  - test the project
- - cleanup: report error when no connection with desired identity presents
  - cleanup: Error handling
  - cleanup: Do not constraint thee size of identity (current maximum being 128-8 bytes)
  - cleanup: Provide actual remote sockaddr in the connection class
- - cleanup: Give user more control about port/addr
  - cleanup: Do not use std::string as identity type
  - Per action cancellation
  - cleanup: Change InterruptiveConcurrentQueue behavior (use FileDescriptor class)
  - Provide a vector-like data structure that can release memory to achieve zc
  - test the user provided callback logic and think about sync issue
+ -
+ -
  -
  -
  -
