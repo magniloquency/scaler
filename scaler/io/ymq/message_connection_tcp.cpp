@@ -38,7 +38,8 @@ MessageConnectionTCP::MessageConnectionTCP(
     , _remoteIOSocketIdentity(std::nullopt)
     , _sendLocalIdentity(false)
     , _responsibleForRetry(responsibleForRetry)
-    , _pendingReadOperations(pendingReadOperations) {
+    , _pendingReadOperations(pendingReadOperations)
+    , _connected(false) {
     _eventManager->onRead  = [this] { this->onRead(); };
     _eventManager->onWrite = [this] { this->onWrite(); };
     _eventManager->onClose = [this] { this->onClose(); };
@@ -56,23 +57,16 @@ void MessageConnectionTCP::onRead() {
     if (!_remoteIOSocketIdentity) {
         // Other sizes are possible, but the size needs to be >= 8, in order for idBuf
         // to be aligned with 8 bytes boundary because of strict aliasing
+        uint64_t header {};
+        int n = read(_connFd, &header, 8);
         char idBuf[128] {};
-        int n         = read(_connFd, &idBuf, 128);
-        uint64_t size = *(uint64_t*)idBuf;
-        char* first   = idBuf + sizeof(uint64_t);
-        std::string remoteID(first, first + size);
+        n           = read(_connFd, idBuf, header);
+        char* first = idBuf;
+        std::string remoteID(first, first + header);
         _remoteIOSocketIdentity.emplace(std::move(remoteID));
-        printf("Received remote identity, %s\n", _remoteIOSocketIdentity->c_str());
-
         auto& sock = this->_eventLoopThread->_identityToIOSocket[_localIOSocketIdentity];
-
         sock->onConnectionIdentityReceived(this);
-
-        return;
     }
-
-    assert(_remoteIOSocketIdentity);
-    printf("Got a remote socket, identity = %s\n", _remoteIOSocketIdentity->c_str());
 
     while (true) {
         const size_t headerSize = 8;
@@ -94,15 +88,23 @@ void MessageConnectionTCP::onRead() {
                 message.resize(1024);
             } else {
                 size_t payloadSize = *(uint64_t*)message.data();
-                leftOver           = payloadSize - (message.size() - headerSize);
-                first              = message.size();
+
+                if (message.size() == 1024) {
+                    message.resize(std::min((payloadSize), 8lu));
+                }
+
+                leftOver = payloadSize - (message.size() - headerSize);
+
+                first = message.size();
                 message.resize(payloadSize + headerSize);
             }
         }
 
         auto& message = _receivedMessages.back();
 
-        while (leftOver) {
+        int cnt       = 10;
+        bool haveRead = false;
+        while (leftOver && cnt-- > 0) {
             assert(first + leftOver <= message.size());
             int res = read(_connFd, message.data() + first, leftOver);
 
@@ -112,10 +114,14 @@ void MessageConnectionTCP::onRead() {
             }
 
             if (res == -1 && errno == EAGAIN) {
+                perror("read");
                 message.resize(first);
                 // Reviewer: To jump out of double loop, reconsider when you say no. - gxu
                 goto ReadExhuasted;
             }
+
+            haveRead = true;
+
             leftOver -= res;
             first += res;
             if (first == headerSize) {
@@ -130,11 +136,6 @@ void MessageConnectionTCP::onRead() {
 ReadExhuasted:
     printf("READ EXHAUSTED\n");
     while (_pendingReadOperations->size() && _receivedMessages.size()) {
-        if (_receivedMessages.front().size() == 8) {
-            _receivedMessages.pop();
-            continue;
-        }
-
         if (isCompleteMessage(_receivedMessages.front())) {
             *_pendingReadOperations->front()._buf = std::move(_receivedMessages.front());
             _receivedMessages.pop();
@@ -164,7 +165,7 @@ void MessageConnectionTCP::onWrite() {
         auto [_, last]     = std::ranges::copy(_localIOSocketIdentity, identityBegin);
         write(_connFd, idBuf, std::distance(idBuf, last));
         _sendLocalIdentity = true;
-        return;
+        // return;
     }
 
     while (!_writeOperations.empty()) {
@@ -178,14 +179,20 @@ void MessageConnectionTCP::onWrite() {
             if (bytes == -1) {
                 if (errno == EAGAIN)
                     break;
-                else  // TODO:
+                else {
+                    perror("write");
                     writeOp._callbackAfterCompleteWrite(errno);
+                }
             }
 
             writeOp._cursor += bytes;
         }
 
         if (writeOp._cursor == bufLen) {
+            std::string str(
+                _writeOperations.front()._buf->data() + 8,
+                _writeOperations.front()._buf->data() + _writeOperations.front()._buf->size());
+
             writeOp._callbackAfterCompleteWrite(0);
             _writeOperations.pop();
         } else {
@@ -203,37 +210,44 @@ void MessageConnectionTCP::sendMessage(std::shared_ptr<std::vector<char>> msg, s
     writeOp._cursor                     = 0;
     writeOp._callbackAfterCompleteWrite = std::move(callback);
 
-    if (_writeOperations.empty()) {
-        const size_t bufLen = writeOp._buf->size();
-        while (writeOp._cursor != bufLen) {
-            const size_t leftOver = writeOp._buf->size() - writeOp._cursor;
-            const char* begin     = writeOp._buf->data() + writeOp._cursor;
-            auto bytes            = write(_connFd, begin, leftOver);
-
-            if (bytes == -1) {
-                if (errno == EAGAIN) {
-                    _writeOperations.push(std::move(writeOp));
-                } else {
-                    writeOp._callbackAfterCompleteWrite(errno);
-                }
-                break;
-            }
-
-            writeOp._cursor += bytes;
-        }
-
-        if (writeOp._cursor == bufLen) {
-            writeOp._callbackAfterCompleteWrite(0);
-        }
-
-    } else {
+    if (_connFd == 0) {
         _writeOperations.push(std::move(writeOp));
+        return;
+    }
+
+    if (_writeOperations.size()) {
+        _writeOperations.push(std::move(writeOp));
+        return;
+    }
+
+    const size_t bufLen = writeOp._buf->size();
+    while (writeOp._cursor != bufLen) {
+        const size_t leftOver = writeOp._buf->size() - writeOp._cursor;
+        const char* begin     = writeOp._buf->data() + writeOp._cursor;
+        auto bytes            = write(_connFd, begin, leftOver);
+
+        if (bytes == -1) {
+            if (errno == EAGAIN) {
+                _writeOperations.push(std::move(writeOp));
+            } else {
+                perror("write");
+                writeOp._callbackAfterCompleteWrite(errno);
+            }
+            break;
+        }
+
+        writeOp._cursor += bytes;
+    }
+
+    if (writeOp._cursor == bufLen) {
+        writeOp._callbackAfterCompleteWrite(0);
     }
 }
 
 bool MessageConnectionTCP::recvMessage() {
-    if (_receivedMessages.empty() || _pendingReadOperations->empty() || !isCompleteMessage(_receivedMessages.front()))
+    if (_receivedMessages.empty() || _pendingReadOperations->empty() || !isCompleteMessage(_receivedMessages.front())) {
         return false;
+    }
 
     while (_pendingReadOperations->size() && _receivedMessages.size()) {
         if (isCompleteMessage(_receivedMessages.front())) {

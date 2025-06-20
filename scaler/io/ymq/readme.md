@@ -36,7 +36,7 @@ Each person maintains a todo and done list.
  - Implement bind function with interface address (str) and callback
  - cleanup: report error when no connection with desired identity presents
  - cleanup: Give user more control about port/addr
- -
+ - test the project (now working when user kills the program)
  -
  -
  -
@@ -44,20 +44,20 @@ Each person maintains a todo and done list.
  - LEAVE A FEW BLANKS HERE TO AVOID CONFLICT
 
 ## TODO:
- - test the project
- - cleanup: Error handling
- - cleanup: Do not constraint thee size of identity (current maximum being 128-8 bytes)
+ - refactor: Ownership, Public/Private, CRTP, destructor, and so on
  - cleanup: Provide actual remote sockaddr in the connection class
+ - cleanup: Change InterruptiveConcurrentQueue behavior (use FileDescriptor class)
+ - think about this function call onConnectionIdentityReceived etc. It's way too intrusive.
+ - make IO with send/recv msg
+ - test the abnormal breakup (break up due to network issue instead of killing)
+ - test the user provided callback logic and think about sync issue
+ - connect do not happen twice, monitor for read/write instead
+ - cleanup: Error handling
+ - remove the end of each loop hook, this is stupid
+ - cleanup: Do not constraint thee size of identity (current maximum being 128-8 bytes)
  - cleanup: Do not use std::string as identity type
  - Per action cancellation
- - cleanup: Change InterruptiveConcurrentQueue behavior (use FileDescriptor class)
  - Provide a vector-like data structure that can release memory to achieve zc
- - test the user provided callback logic and think about sync issue
- -
- -
- -
- -
- -
  -
  -
  -

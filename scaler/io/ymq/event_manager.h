@@ -30,7 +30,7 @@ public:
             if ((realEvents & EPOLLHUP) && !(realEvents & EPOLLIN)) {
                 onClose();
             }
-            if (realEvents & EPOLLERR) {
+            if (realEvents & (EPOLLERR | EPOLLHUP)) {
                 onError();
             }
             if (realEvents & (EPOLLIN | EPOLLRDHUP)) {

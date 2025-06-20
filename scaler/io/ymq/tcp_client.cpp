@@ -5,7 +5,6 @@
 
 #include <cerrno>
 #include <chrono>
-#include <cstring>
 #include <functional>
 #include <memory>
 
@@ -38,9 +37,11 @@ void TcpClient::onCreated() {
         std::string id = this->_localIOSocketIdentity;
         auto& sock     = this->_eventLoopThread->_identityToIOSocket.at(id);
         // FIXME: the first _addr is not real
-        sock->_fdToConnection[sockfd] = std::make_unique<MessageConnectionTCP>(
-            _eventLoopThread, sockfd, _remoteAddr, _remoteAddr, id, true, sock->_pendingReadOperations);
-        sock->_fdToConnection[sockfd]->onCreated();
+        sock->_unconnectedConnection.push_back(
+            std::make_unique<MessageConnectionTCP>(
+                _eventLoopThread, sockfd, _remoteAddr, _remoteAddr, id, true, sock->_pendingReadOperations));
+        sock->_unconnectedConnection.back()->onCreated();
+
         passedBackValue = 0;
     }
     this->_onConnectReturn(passedBackValue);
@@ -75,9 +76,11 @@ void TcpClient::onWrite() {
     std::string id = this->_localIOSocketIdentity;
     auto& sock     = this->_eventLoopThread->_identityToIOSocket.at(id);
     // FIXME: the first _addr is not real
-    sock->_fdToConnection[_connFd] = std::make_unique<MessageConnectionTCP>(
-        _eventLoopThread, _connFd, _remoteAddr, _remoteAddr, id, true, sock->_pendingReadOperations);
-    sock->_fdToConnection[_connFd]->onCreated();
+    sock->_unconnectedConnection.push_back(
+        std::make_unique<MessageConnectionTCP>(
+            _eventLoopThread, _connFd, _remoteAddr, _remoteAddr, id, true, sock->_pendingReadOperations));
+    sock->_unconnectedConnection.back()->onCreated();
+
     _connFd    = 0;
     _connected = true;
 }
