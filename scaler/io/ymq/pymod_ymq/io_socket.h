@@ -184,10 +184,18 @@ static PyObject* PyIOSocket_socket_type_getter(PyIOSocket* self, void* closure) 
     }
 
     IOSocketType socketType = self->socket->socketType();
-    PyObject* socketTypeObj = PyLong_FromLong((long)socketType);
+    PyObject* socketTypeIntObj = PyLong_FromLong((long)socketType);
+
+    if (!socketTypeIntObj) {
+        PyErr_SetString(PyExc_RuntimeError, "Failed to convert socket type to a Python integer");
+        return nullptr;
+    }
+
+    PyObject* socketTypeObj = PyObject_CallOneArg(state->ioSocketTypeEnum, socketTypeIntObj);
+    Py_DECREF(socketTypeIntObj);
 
     if (!socketTypeObj) {
-        PyErr_SetString(PyExc_RuntimeError, "Failed to convert socket type to a Python integer");
+        PyErr_SetString(PyExc_RuntimeError, "Failed to create IOSocketType object");
         return nullptr;
     }
 
