@@ -42,6 +42,7 @@ static int YmqException_init(YmqException* self, PyObject* args, PyObject* kwds)
     self->error = error;
     return 0;
 }
+
 static PyObject* YmqException_new(PyTypeObject* type, PyObject* args, PyObject* kwds) {
     YmqException* self = (YmqException*)type->tp_alloc(type, 0);
 
@@ -51,6 +52,7 @@ static PyObject* YmqException_new(PyTypeObject* type, PyObject* args, PyObject* 
 
     return (PyObject*)self;
 }
+
 static void YmqException_dealloc(YmqException* self) {
     Py_XDECREF(self->error);
     Py_TYPE(self)->tp_free((PyObject*)self);
@@ -61,7 +63,6 @@ static PyMemberDef YmqException_members[] = {
     {"error", T_OBJECT_EX, offsetof(YmqException, error), 0, "error code"}, {nullptr}};
 
 static PyType_Slot YmqException_slots[] = {
-    {Py_tp_base, (void*)PyExc_Exception},  // Will be set at runtime
     {Py_tp_init, (void*)YmqException_init},
     {Py_tp_new, (void*)YmqException_new},
     {Py_tp_dealloc, (void*)YmqException_dealloc},

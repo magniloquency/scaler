@@ -238,8 +238,21 @@ static int ymq_exec(PyObject* module) {
     if (ymq_createType(module, &state->PyIOContextType, &PyIOContext_spec, "IOContext") < 0)
         return -1;
 
-    if (ymq_createType(module, &state->ExceptionType, &YmqException_spec, "Exception") < 0)
+    // if (ymq_createType(module, &state->ExceptionType, &YmqException_spec, "Exception") < 0)
+    //     return -1;
+
+    state->ExceptionType = PyType_FromModuleAndSpec(module, &YmqException_spec, PyExc_Exception);
+
+    if (!state->ExceptionType) {
+        PyErr_SetString(PyExc_RuntimeError, "Failed to create type from spec");
         return -1;
+    }
+
+    if (PyModule_AddObjectRef(module, "Exception", state->ExceptionType) < 0) {
+        PyErr_SetString(PyExc_RuntimeError, "Failed to add type to module");
+        Py_DECREF(state->ExceptionType);
+        return -1;
+    }
 
     if (ymq_createType(module, &state->AwaitableType, &Awaitable_spec, "Awaitable", false) < 0)
         return -1;
