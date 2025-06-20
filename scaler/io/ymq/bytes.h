@@ -16,9 +16,9 @@
 #include "scaler/io/ymq/common.h"
 #include "scaler/io/ymq/typedefs.h"
 
-class Bytes {
-    uint8_t* _data;
-    size_t _len;
+struct Bytes {
+    uint8_t* data;
+    size_t len;
     Ownership _tag;
 
     void free() {
@@ -28,21 +28,20 @@ class Bytes {
         if (is_empty())
             return;
 
-        delete[] _data;
-        this->_data = NULL;
+        delete[] data;
+        this->data = NULL;
     }
 
-    Bytes(uint8_t* m_data, size_t m_len, Ownership tag): _data(m_data), _len(m_len), _tag(tag) {}
+    Bytes(uint8_t* data, size_t len, Ownership tag): data(data), len(len), _tag(tag) {}
 
-public:
     // TODO: Figure out what should this tag do
     Bytes(char* data, size_t len, Ownership tag = Ownership::Owned)
-        : _data(datadup((uint8_t*)data, len)), _len(len), _tag(tag) {}
+        : data(datadup((uint8_t*)data, len)), len(len), _tag(tag) {}
 
-    Bytes(): _data {}, _len {}, _tag {} {}
+    Bytes(): data {}, len {}, _tag {} {}
 
     Bytes(const Bytes& other) {
-        Bytes tmp = copy(other._data, other._len);
+        Bytes tmp = copy(other.data, other.len);
         std::swap(tmp, *this);
     }
 
@@ -52,25 +51,25 @@ public:
         return *this;
     }
 
-    Bytes(Bytes&& other) noexcept: _data(other._data), _len(other._len), _tag(other._tag) {
-        other._data = nullptr;
-        other._len  = 0;
+    Bytes(Bytes&& other) noexcept: data(other.data), len(other.len), _tag(other._tag) {
+        other.data = nullptr;
+        other.len  = 0;
     }
 
     friend std::strong_ordering operator<=>(const Bytes& x, const Bytes& y) {
-        return std::lexicographical_compare_three_way(x._data, x._data + x._len, y._data, y._data + y._len);
+        return std::lexicographical_compare_three_way(x.data, x.data + x.len, y.data, y.data + y.len);
     }
 
     Bytes& operator=(Bytes&& other) noexcept {
         if (this != &other) {
             this->free();  // free current data
 
-            _data = other._data;
-            _len  = other._len;
+            data = other.data;
+            len  = other.len;
             _tag  = other._tag;
 
-            other._data = NULL;
-            other._len  = 0;
+            other.data = NULL;
+            other.len  = 0;
         }
         return *this;
     }
@@ -82,25 +81,25 @@ public:
     //     if (_len != other._len)
     //         return false;
 
-    //     if (_data == other._data)
+    //     if (_data == other.data)
     //         return true;
 
-    //     return std::memcmp(_data, other._data, _len) == 0;
+    //     return std::memcmp(_data, other.data, _len) == 0;
     // }
 
     bool operator!() const { return is_empty(); }
 
-    bool is_empty() const { return this->_data == NULL; }
+    bool is_empty() const { return this->data == NULL; }
 
     // debugging utility
     std::string as_string() const {
         if (is_empty())
             return "[EMPTY]";
 
-        return std::string((char*)_data, _len);
+        return std::string((char*)data, len);
     }
 
-    Bytes ref() { return Bytes {this->_data, this->_len, Borrowed}; }
+    Bytes ref() { return Bytes {this->data, this->len, Borrowed}; }
 
     static Bytes alloc(size_t m_len) {
         if (m_len == 0)
@@ -122,7 +121,7 @@ public:
         if (bytes.is_empty())
             panic("tried to clone empty bytes");
 
-        return Bytes {datadup(bytes._data, bytes._len), bytes._len, Owned};
+        return Bytes {datadup(bytes.data, bytes.len), bytes.len, Owned};
     }
 
     // static Bytes from_buffer(Buffer& buffer) { return buffer.into_bytes(); }
@@ -143,15 +142,11 @@ public:
     //     return buffer;
     // }
 
-    size_t len() const { return _len; }
-    const uint8_t* data() const { return _data; }
-    uint8_t* data() { return _data; }
-
     // Do not remove this
     std::pair<char*, size_t> release() {
-        std::pair<char*, size_t> res {(char*)_data, _len};
-        _data = nullptr;
-        _len  = 0;
+        std::pair<char*, size_t> res {(char*)data, len};
+        data = nullptr;
+        len  = 0;
         return res;
     }
 

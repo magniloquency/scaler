@@ -20,7 +20,6 @@ class TcpReadOperation;
 using Identity = Configuration::Identity;
 
 class EventLoopThread;
-class MessageConnectionTCP;
 
 class IOSocket {
 public:
