@@ -23,7 +23,6 @@ void IOSocket::removeConnectedTcpClient() {
 }
 
 // TODO: IOSocket::onCreated should initialize component(s) based on its type.
-// THIS THING DIES
 void IOSocket::onCreated() {
     printf("%s\n", __PRETTY_FUNCTION__);
     assert(_pendingReadOperations);
@@ -38,8 +37,6 @@ IOSocket::IOSocket(std::shared_ptr<EventLoopThread> eventLoopThread, Identity id
     , _pendingReadOperations(std::make_shared<std::queue<TcpReadOperation>>()) {}
 
 void IOSocket::connectTo(sockaddr addr, ConnectReturnCallback callback) {
-    printf("%s\n", __PRETTY_FUNCTION__);
-    printf("this->identity() = %s\n", this->identity().c_str());
     _eventLoopThread->_eventLoop.executeNow([this, addr = std::move(addr), callback = std::move(callback)] {
         _tcpClient.emplace(_eventLoopThread, this->identity(), std::move(addr), std::move(callback));
         _tcpClient->onCreated();
@@ -70,7 +67,7 @@ void IOSocket::onConnectionDisconnected(MessageConnectionTCP* conn) {
     auto connPtr = std::move(this->_fdToConnection[fd]);
     this->_identityToConnection.erase(*connPtr->_remoteIOSocketIdentity);
     if (connPtr->_responsibleForRetry) {
-        connectTo(conn->_remoteAddr, [](int) {});  // as the user callback is one-shot
+        connectTo(connPtr->_remoteAddr, [](int) {});  // as the user callback is one-shot
     }
     _deadConnection.push_back(std::move(connPtr));
 }
@@ -79,14 +76,21 @@ void IOSocket::onConnectionIdentityReceived(MessageConnectionTCP* conn) {
     const auto& s = conn->_remoteIOSocketIdentity;
     auto c        = std::ranges::find(_deadConnection, s, &MessageConnectionTCP::_remoteIOSocketIdentity);
 
-    int fd                    = conn->_connFd;
+    int fd = conn->_connFd;
+
     _identityToConnection[*s] = _fdToConnection[fd].get();
 
     if (c == _deadConnection.end())
         return;
+
     _fdToConnection[fd]->_writeOperations       = (*c)->_writeOperations;
     _fdToConnection[fd]->_receivedMessages      = (*c)->_receivedMessages;
     _fdToConnection[fd]->_pendingReadOperations = (*c)->_pendingReadOperations;
+
+    assert((*c)->_remoteIOSocketIdentity);
+
+    _fdToConnection[fd]->_remoteIOSocketIdentity = (*c)->_remoteIOSocketIdentity;
+
     _deadConnection.erase(c);
 }
 

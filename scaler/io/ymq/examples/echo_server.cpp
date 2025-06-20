@@ -18,18 +18,29 @@ int main() {
     printf("Successfully created socket, sleep for 2 secs to sync.\n");
     sleep(2);
 
+    socket->bindTo("tcp://127.0.0.1:8080", [](int) {});
+
+    printf("Successfully bind socket, sleep for 2 secs to sync.\n");
+    sleep(2);
+
     auto callback = [socket](Message msg) {
-        printf("user provided callback invoked\n");
-        printf("Prepare sending messages back\n");
-        socket->sendMessage(msg, [](int) {});
+        printf(
+            "Receiving message from '%s', message content is: '%s'\n",
+            msg.address.as_string().c_str(),
+            std::string(msg.payload.data(), msg.payload.data() + msg.payload.len()).c_str());
+
+        // socket->sendMessage(msg, [](int) {});
     };
 
     while (true) {
         printf("Try to recv a message\n");
-        sleep(10);
         socket->recvMessage(callback);
         printf("I am sleeping...\n");
         // here we should somehow wait until callback is executed
         sleep(100);
+    }
+
+    while (true) {
+        ;
     }
 }

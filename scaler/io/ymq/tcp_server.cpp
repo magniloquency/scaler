@@ -21,6 +21,14 @@ static int create_and_bind_socket(const sockaddr& addr, Configuration::BindRetur
         return -1;
     }
 
+    int optval = 1;
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) == -1) {
+        perror("setsockopt");
+        close(server_fd);
+        callback(-1);
+        return -1;
+    }
+
     if (bind(server_fd, &addr, sizeof(addr)) == -1) {
         perror("bind");
         close(server_fd);
@@ -69,7 +77,12 @@ void TcpServer::onRead() {
     printf("%s\n", __PRETTY_FUNCTION__);
     printf("Got a new connection, local iosocket identity = %s\n", _localIOSocketIdentity.c_str());
 
-    int fd         = accept4(_serverFd, &_addr, &_addrLen, SOCK_NONBLOCK | SOCK_CLOEXEC);
+    int fd = accept4(_serverFd, &_addr, &_addrLen, SOCK_NONBLOCK | SOCK_CLOEXEC);
+    if (fd < 0) {
+        perror("accept4");
+        exit(-1);
+    }
+
     std::string id = this->_localIOSocketIdentity;
     auto& sock     = this->_eventLoopThread->_identityToIOSocket.at(id);
     // FIXME: the second _addr is not real

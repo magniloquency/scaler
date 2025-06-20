@@ -17,21 +17,14 @@ const char* payload = "Hello from the other end!";
 int main() {
     IOContext context;
     std::shared_ptr<IOSocket> clientSocket = context.createIOSocket("ClientSocket", IOSocketType::Uninit);
-
-    const char* ip = "127.0.0.1";
-    const int port = 8080;
-
-    sockaddr_in server_addr {};
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port   = htons(port);
-    inet_pton(AF_INET, ip, &server_addr.sin_addr);
-    clientSocket->connectTo(*(sockaddr*)&server_addr, [](int) {});
+    printf("Socket created, sleep 2 secs to sync\n");
     sleep(2);
 
-    auto sendMessageCallback = [](int n) {
-        printf("n = %d\n", n);
-        sleep(100);
-    };
+    clientSocket->connectTo("tcp://127.0.0.1:8080", [](int) {});
+    printf("Socket connected, sleep 2 secs to sync\n");
+    sleep(2);
+
+    auto sendMessageCallback = [](int n) { printf("n = %d\n", n); };
 
     while (true) {
         // get a line from stdin

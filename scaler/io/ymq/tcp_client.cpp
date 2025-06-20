@@ -1,9 +1,11 @@
 #include "scaler/io/ymq/tcp_client.h"
 
+#include <netinet/in.h>
 #include <sys/socket.h>
 
 #include <cerrno>
 #include <chrono>
+#include <cstring>
 #include <functional>
 #include <memory>
 
@@ -28,14 +30,14 @@ void TcpClient::onCreated() {
         } else {
             // TODO: Think about the lifetime of _eventManager.
             printf("Connecting (EINPROGRESS), adding fd to loop\n");
-            _eventLoopThread->_eventLoop.addFdToLoop(sockfd, EPOLLOUT, this->_eventManager.get());
+            _eventLoopThread->_eventLoop.addFdToLoop(sockfd, EPOLLOUT | EPOLLET, this->_eventManager.get());
             passedBackValue = 0;
         }
     } else {
         printf("client SUCCESS\n");
         std::string id = this->_localIOSocketIdentity;
         auto& sock     = this->_eventLoopThread->_identityToIOSocket.at(id);
-        // FIXME: the second _addr is not real
+        // FIXME: the first _addr is not real
         sock->_fdToConnection[sockfd] = std::make_unique<MessageConnectionTCP>(
             _eventLoopThread, sockfd, _remoteAddr, _remoteAddr, id, true, sock->_pendingReadOperations);
         sock->_fdToConnection[sockfd]->onCreated();
@@ -63,19 +65,18 @@ TcpClient::TcpClient(
 
 void TcpClient::onWrite() {
     printf("%s\n", __PRETTY_FUNCTION__);
-    // assuming success
-    sockaddr addr;
-    int ret = connect(_connFd, (sockaddr*)&addr, sizeof(addr));
-    if (ret < 0 && errno == EINPROGRESS) {
+    int ret = connect(_connFd, (sockaddr*)&_remoteAddr, sizeof(_remoteAddr));
+    if (ret < 0 && errno == EINPROGRESS || errno == ECONNREFUSED || errno == EAGAIN) {
+        _eventLoopThread->_eventLoop.removeFdFromLoop(_connFd);
         retry();
         return;
     }
 
     std::string id = this->_localIOSocketIdentity;
     auto& sock     = this->_eventLoopThread->_identityToIOSocket.at(id);
-    // FIXME: the second _addr is not real
+    // FIXME: the first _addr is not real
     sock->_fdToConnection[_connFd] = std::make_unique<MessageConnectionTCP>(
-        _eventLoopThread, _connFd, addr, addr, id, true, sock->_pendingReadOperations);
+        _eventLoopThread, _connFd, _remoteAddr, _remoteAddr, id, true, sock->_pendingReadOperations);
     sock->_fdToConnection[_connFd]->onCreated();
     _connFd    = 0;
     _connected = true;
@@ -88,11 +89,13 @@ void TcpClient::onRead() {
 void TcpClient::retry() {
     if (_retryTimes > 5) {
         printf("_retryTimes > %lu, has reached maximum, no more retry now\n", _retryTimes);
+        exit(1);
         return;
     }
 
     Timestamp now;
-    auto at = now.createTimestampByOffsetDuration(std::chrono::seconds(1 << _retryTimes++));
+    auto at = now.createTimestampByOffsetDuration(std::chrono::seconds(2 << _retryTimes++));
+    std::cout << "TIMESTAMP IN RETRY: " << stringifyTimestamp(at) << std::endl;
     _eventLoopThread->_eventLoop.executeAt(at, [this] { this->onWrite(); });
 }
 

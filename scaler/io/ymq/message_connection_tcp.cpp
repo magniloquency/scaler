@@ -135,20 +135,20 @@ ReadExhuasted:
             _receivedMessages.pop();
 
             Bytes address(_remoteIOSocketIdentity->data(), _remoteIOSocketIdentity->size());
-            Bytes payload(_pendingReadOperations->front()._buf->data(), _pendingReadOperations->front()._buf->size());
+            Bytes payload(
+                _pendingReadOperations->front()._buf->data() + 8, _pendingReadOperations->front()._buf->size() - 8);
 
             _pendingReadOperations->front()._callbackAfterCompleteRead(Message(std::move(address), std::move(payload)));
 
             _pendingReadOperations->pop();
         } else {
             assert(_pendingReadOperations->size());
-            _pendingReadOperations->front()._callbackAfterCompleteRead(Message({}, {}));
+            break;
         }
     }
 }
 
 void MessageConnectionTCP::onWrite() {
-    printf("%s\n", __PRETTY_FUNCTION__);
     // TODO: do not assume the identity to be less than 128bytes
     if (!_sendLocalIdentity) {
         // Other sizes are possible, but the size needs to be >= 8, in order for idBuf
@@ -227,7 +227,7 @@ void MessageConnectionTCP::sendMessage(std::shared_ptr<std::vector<char>> msg, s
 }
 
 bool MessageConnectionTCP::recvMessage() {
-    if (_receivedMessages.size() && _pendingReadOperations->size() && isCompleteMessage(_receivedMessages.back())) {
+    if (_receivedMessages.size() && _pendingReadOperations->size() && isCompleteMessage(_receivedMessages.front())) {
         auto readOp = std::move(_pendingReadOperations->front());
         _pendingReadOperations->pop();
         auto msg = std::move(_receivedMessages.front());
@@ -243,11 +243,14 @@ bool MessageConnectionTCP::recvMessage() {
 void MessageConnectionTCP::onClose() {
     _eventLoopThread->_eventLoop.removeFdFromLoop(_connFd);
     close(_connFd);
-    auto& sock = _eventLoopThread->_identityToIOSocket.at(*_remoteIOSocketIdentity);
+    auto& sock = _eventLoopThread->_identityToIOSocket.at(_localIOSocketIdentity);
     sock->onConnectionDisconnected(this);
+    _connFd = 0;
 };
 
 MessageConnectionTCP::~MessageConnectionTCP() {
-    _eventLoopThread->_eventLoop.removeFdFromLoop(_connFd);
-    close(_connFd);
+    if (_connFd != 0) {
+        _eventLoopThread->_eventLoop.removeFdFromLoop(_connFd);
+        close(_connFd);
+    }
 }

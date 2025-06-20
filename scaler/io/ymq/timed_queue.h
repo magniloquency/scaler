@@ -3,7 +3,10 @@
 #include <sys/timerfd.h>
 #include <unistd.h>
 
+#include <cassert>
+#include <cstdio>
 #include <functional>
+#include <iostream>
 #include <queue>
 
 #include "scaler/io/ymq/timestamp.h"
@@ -32,15 +35,30 @@ struct TimedQueue {
     void onRead() {
         uint64_t numItems;
         ssize_t n = read(timer_fd, &numItems, sizeof numItems);
+        if (n != sizeof numItems) {
+            assert(false);
+            // Handle read error or spurious wakeup
+            return;
+        }
 
         Timestamp now;
         while (pq.size()) {
-            auto [ts, cb] = pq.top();
-            if (ts < now) {
-                cb();
+            if (pq.top().first < now) {
+                auto [ts, cb] = std::move(pq.top());
                 pq.pop();
+                cb();
             } else
                 break;
+        }
+
+        if (!pq.empty()) {
+            auto nextTs = pq.top().first;
+            auto ts     = convertToItimerspec(nextTs);
+            int ret     = timerfd_settime(timer_fd, 0, &ts, nullptr);
+            if (ret == -1) {
+                assert(false);
+                // handle error
+            }
         }
     }
 

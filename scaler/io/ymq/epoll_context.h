@@ -113,6 +113,7 @@ public:
 
     void executeNow(Function func) { _interruptiveFunctions.enqueue(std::move(func)); }
     void executeLater(Function func, Identifier) { _delayedFunctions.emplace(std::move(func)); }
+
     void executeAt(Timestamp timestamp, Function callback) { _timingFunctions.push(timestamp, std::move(callback)); }
 
     // TODO: figure out how this work with existing util
