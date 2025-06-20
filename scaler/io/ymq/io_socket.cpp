@@ -25,7 +25,6 @@ void IOSocket::removeConnectedTcpClient() {
 // TODO: IOSocket::onCreated should initialize component(s) based on its type.
 void IOSocket::onCreated() {
     printf("%s\n", __PRETTY_FUNCTION__);
-    assert(_pendingReadOperations);
 
     _eventLoopThread->_eventLoop.runAfterEachLoop([this] { this->removeConnectedTcpClient(); });
 }
@@ -50,16 +49,21 @@ void IOSocket::connectTo(std::string networkAddress, ConnectReturnCallback callb
 }
 
 void IOSocket::bindTo(std::string networkAddress, BindReturnCallback callback) {
-    if (_tcpServer) {
-        callback(-1);
-        return;
-    }
-    auto res = stringToSockaddr(std::move(networkAddress));
-    assert(res);
+    _eventLoopThread->_eventLoop.executeNow(
+        [this, networkAddress = std::move(networkAddress), callback = std::move(callback)] {
+            if (_tcpServer) {
+                callback(-1);
+                return;
+            }
+            auto res = stringToSockaddr(std::move(networkAddress));
+            assert(res);
 
-    printf("server should be created now\n");
-    _tcpServer.emplace(_eventLoopThread, this->identity(), std::move(res.value()), std::move(callback));
-    _tcpServer->onCreated();
+            printf("server should be created now\n");
+            _tcpServer.emplace(_eventLoopThread, this->identity(), std::move(res.value()), std::move(callback));
+            _tcpServer->onCreated();
+
+            callback(0);
+        });
 }
 
 void IOSocket::onConnectionDisconnected(MessageConnectionTCP* conn) {
@@ -83,13 +87,13 @@ void IOSocket::onConnectionIdentityReceived(MessageConnectionTCP* conn) {
     if (c == _deadConnection.end())
         return;
 
-    _fdToConnection[fd]->_writeOperations       = (*c)->_writeOperations;
-    _fdToConnection[fd]->_receivedMessages      = (*c)->_receivedMessages;
-    _fdToConnection[fd]->_pendingReadOperations = (*c)->_pendingReadOperations;
+    _fdToConnection[fd]->_writeOperations       = std::move((*c)->_writeOperations);
+    _fdToConnection[fd]->_receivedMessages      = std::move((*c)->_receivedMessages);
+    _fdToConnection[fd]->_pendingReadOperations = std::move((*c)->_pendingReadOperations);
 
     assert((*c)->_remoteIOSocketIdentity);
 
-    _fdToConnection[fd]->_remoteIOSocketIdentity = (*c)->_remoteIOSocketIdentity;
+    _fdToConnection[fd]->_remoteIOSocketIdentity = std::move((*c)->_remoteIOSocketIdentity);
 
     _deadConnection.erase(c);
 }

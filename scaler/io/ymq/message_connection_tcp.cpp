@@ -130,6 +130,11 @@ void MessageConnectionTCP::onRead() {
 ReadExhuasted:
     printf("READ EXHAUSTED\n");
     while (_pendingReadOperations->size() && _receivedMessages.size()) {
+        if (_receivedMessages.front().size() == 8) {
+            _receivedMessages.pop();
+            continue;
+        }
+
         if (isCompleteMessage(_receivedMessages.front())) {
             *_pendingReadOperations->front()._buf = std::move(_receivedMessages.front());
             _receivedMessages.pop();
@@ -227,17 +232,27 @@ void MessageConnectionTCP::sendMessage(std::shared_ptr<std::vector<char>> msg, s
 }
 
 bool MessageConnectionTCP::recvMessage() {
-    if (_receivedMessages.size() && _pendingReadOperations->size() && isCompleteMessage(_receivedMessages.front())) {
-        auto readOp = std::move(_pendingReadOperations->front());
-        _pendingReadOperations->pop();
-        auto msg = std::move(_receivedMessages.front());
-        Bytes address(_remoteIOSocketIdentity->data(), _remoteIOSocketIdentity->size());
-        Bytes payload(msg.data(), msg.size());
-        readOp._callbackAfterCompleteRead(Message(std::move(address), std::move(payload)));
-        _receivedMessages.pop();
-        return true;
+    if (_receivedMessages.empty() || _pendingReadOperations->empty() || !isCompleteMessage(_receivedMessages.front()))
+        return false;
+
+    while (_pendingReadOperations->size() && _receivedMessages.size()) {
+        if (isCompleteMessage(_receivedMessages.front())) {
+            *_pendingReadOperations->front()._buf = std::move(_receivedMessages.front());
+            _receivedMessages.pop();
+
+            Bytes address(_remoteIOSocketIdentity->data(), _remoteIOSocketIdentity->size());
+            Bytes payload(
+                _pendingReadOperations->front()._buf->data() + 8, _pendingReadOperations->front()._buf->size() - 8);
+
+            _pendingReadOperations->front()._callbackAfterCompleteRead(Message(std::move(address), std::move(payload)));
+
+            _pendingReadOperations->pop();
+        } else {
+            assert(_pendingReadOperations->size());
+            break;
+        }
     }
-    return false;
+    return true;
 }
 
 void MessageConnectionTCP::onClose() {
