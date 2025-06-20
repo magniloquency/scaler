@@ -8,6 +8,7 @@
 #include <utility>
 #include <vector>
 
+#include "scaler/io/ymq/configuration.h"
 #include "scaler/io/ymq/event_loop_thread.h"
 #include "scaler/io/ymq/event_manager.h"
 #include "scaler/io/ymq/message_connection_tcp.h"
@@ -54,7 +55,7 @@ void IOSocket::connectTo(std::string networkAddress, ConnectReturnCallback callb
 
 void IOSocket::bindTo(std::string networkAddress, BindReturnCallback callback) {
     if (_tcpServer) {
-        callback(-1);
+        callback(Error::Placeholder);
         return;
     }
     auto res = stringToSockaddr(std::move(networkAddress));
@@ -70,7 +71,7 @@ void IOSocket::onConnectionDisconnected(MessageConnectionTCP* conn) {
     auto connPtr = std::move(this->_fdToConnection[fd]);
     this->_identityToConnection.erase(*connPtr->_remoteIOSocketIdentity);
     if (connPtr->_responsibleForRetry) {
-        connectTo(conn->_remoteAddr, [](int) {});  // as the user callback is one-shot
+        connectTo(conn->_remoteAddr, [](auto) {});  // as the user callback is one-shot
     }
     _deadConnection.push_back(std::move(connPtr));
 }
@@ -107,7 +108,7 @@ void IOSocket::sendMessage(Message message, SendMessageCallback callback) {
                 conn->sendMessage(std::move(payload), std::move(callback));
             } catch (...) {
                 ;
-                callback(-1);
+                callback(Error::Placeholder);
             }
         });
 }

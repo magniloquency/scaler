@@ -25,11 +25,11 @@ int main() {
     server_addr.sin_family = AF_INET;
     server_addr.sin_port   = htons(port);
     inet_pton(AF_INET, ip, &server_addr.sin_addr);
-    clientSocket->connectTo(*(sockaddr*)&server_addr, [](int) {});
+    clientSocket->connectTo(*(sockaddr*)&server_addr, [](auto) {});
     sleep(2);
 
-    auto sendMessageCallback = [](int n) {
-        printf("n = %d\n", n);
+    auto sendMessageCallback = [](auto n) {
+        printf("n = %d\n", *n);
         sleep(100);
     };
 

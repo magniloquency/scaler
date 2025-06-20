@@ -73,13 +73,13 @@ static PyObject* PyIOSocket_send(PyIOSocket* self, PyObject* args, PyObject* kwa
     return async_wrapper((PyObject*)self, [&](YmqState* state, PyObject* future) {
         self->socket->sendMessage(
             {.address = std::move(message->address->bytes), .payload = std::move(message->payload->bytes)},
-            [&](int error) { future_set_result(future, []() { Py_RETURN_NONE; }); });
+            [&](auto error) { future_set_result(future, []() { Py_RETURN_NONE; }); });
     });
 }
 
 static PyObject* PyIOSocket_recv(PyIOSocket* self, PyObject* args) {
     return async_wrapper((PyObject*)self, [&](YmqState* state, PyObject* future) {
-        self->socket->recvMessage([&](Message message) {
+        self->socket->recvMessage([&](auto message) {
             future_set_result(future, [&]() {
                 PyBytesYmq* address = (PyBytesYmq*)PyObject_CallNoArgs(state->PyBytesYmqType);
                 if (!address) {
@@ -92,8 +92,8 @@ static PyObject* PyIOSocket_recv(PyIOSocket* self, PyObject* args) {
                     Py_RETURN_NONE;
                 }
 
-                address->bytes = std::move(message.address);
-                payload->bytes = std::move(message.payload);
+                address->bytes = std::move(message->address);
+                payload->bytes = std::move(message->payload);
 
                 PyMessage* message = (PyMessage*)PyObject_CallFunction(state->PyMessageType, "OO", address, payload);
                 if (!message) {

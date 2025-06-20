@@ -3,6 +3,11 @@
 // C++
 #include <functional>
 #include <string>
+#include <optional>
+#include <expected>
+
+// First-party
+#include "scaler/io/ymq/errors.h"
 
 class EpollContext;
 class Message;
@@ -10,8 +15,8 @@ class Message;
 struct Configuration {
     using PollingContext        = EpollContext;
     using Identity              = std::string;
-    using SendMessageCallback   = std::function<void(int)>;
-    using RecvMessageCallback   = std::function<void(Message)>;
-    using ConnectReturnCallback = std::function<void(int)>;
-    using BindReturnCallback    = std::function<void(int)>;
+    using SendMessageCallback   = std::function<void(std::optional<Error>)>;
+    using RecvMessageCallback   = std::function<void(std::expected<Message, Error>)>;
+    using ConnectReturnCallback = std::function<void(std::optional<Error>)>;
+    using BindReturnCallback    = std::function<void(std::optional<Error>)>;
 };

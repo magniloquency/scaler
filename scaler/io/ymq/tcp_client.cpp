@@ -7,6 +7,7 @@
 #include <functional>
 #include <memory>
 
+#include "scaler/io/ymq/configuration.h"
 #include "scaler/io/ymq/event_loop_thread.h"
 #include "scaler/io/ymq/event_manager.h"
 #include "scaler/io/ymq/io_socket.h"
@@ -41,7 +42,8 @@ void TcpClient::onCreated() {
         sock->_fdToConnection[sockfd]->onCreated();
         passedBackValue = 0;
     }
-    this->_onConnectReturn(passedBackValue);
+
+    this->_onConnectReturn(Error::Placeholder);
 }
 
 TcpClient::TcpClient(

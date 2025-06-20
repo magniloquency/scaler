@@ -17,21 +17,21 @@ static int create_and_bind_socket(const sockaddr& addr, Configuration::BindRetur
     int server_fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
     if (server_fd == -1) {
         perror("socket");
-        callback(-1);
+        callback(Error::Placeholder);
         return -1;
     }
 
     if (bind(server_fd, &addr, sizeof(addr)) == -1) {
         perror("bind");
         close(server_fd);
-        callback(-1);
+        callback(Error::Placeholder);
         return -1;
     }
 
     if (listen(server_fd, SOMAXCONN) == -1) {
         perror("listen");
         close(server_fd);
-        callback(-1);
+        callback(Error::Placeholder);
         return -1;
     }
 

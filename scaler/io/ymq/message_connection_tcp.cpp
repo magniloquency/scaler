@@ -10,6 +10,7 @@
 #include <cstdio>
 #include <memory>
 
+#include "scaler/io/ymq/configuration.h"
 #include "scaler/io/ymq/event_loop_thread.h"
 #include "scaler/io/ymq/event_manager.h"
 #include "scaler/io/ymq/io_socket.h"
@@ -174,14 +175,14 @@ void MessageConnectionTCP::onWrite() {
                 if (errno == EAGAIN)
                     break;
                 else  // TODO:
-                    writeOp._callbackAfterCompleteWrite(errno);
+                    writeOp._callbackAfterCompleteWrite(Error::Placeholder);
             }
 
             writeOp._cursor += bytes;
         }
 
         if (writeOp._cursor == bufLen) {
-            writeOp._callbackAfterCompleteWrite(0);
+            writeOp._callbackAfterCompleteWrite(Error::Placeholder);
             _writeOperations.pop();
         } else {
             break;
@@ -190,7 +191,7 @@ void MessageConnectionTCP::onWrite() {
 }
 
 // TODO: Maybe change this to message_t
-void MessageConnectionTCP::sendMessage(std::shared_ptr<std::vector<char>> msg, std::function<void(int)> callback) {
+void MessageConnectionTCP::sendMessage(std::shared_ptr<std::vector<char>> msg, Configuration::SendMessageCallback callback) {
     // detect if the write operations queue is empty, if it is, simply write to exhaustion
     // if it is not, queue write operations to the end of the queue
     TcpWriteOperation writeOp;
@@ -209,7 +210,7 @@ void MessageConnectionTCP::sendMessage(std::shared_ptr<std::vector<char>> msg, s
                 if (errno == EAGAIN) {
                     _writeOperations.push(std::move(writeOp));
                 } else {
-                    writeOp._callbackAfterCompleteWrite(errno);
+                    writeOp._callbackAfterCompleteWrite(Error::Placeholder);
                 }
                 break;
             }
@@ -218,7 +219,7 @@ void MessageConnectionTCP::sendMessage(std::shared_ptr<std::vector<char>> msg, s
         }
 
         if (writeOp._cursor == bufLen) {
-            writeOp._callbackAfterCompleteWrite(0);
+            writeOp._callbackAfterCompleteWrite(Error::Placeholder);
         }
 
     } else {

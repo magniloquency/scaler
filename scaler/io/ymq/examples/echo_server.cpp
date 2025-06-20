@@ -18,10 +18,10 @@ int main() {
     printf("Successfully created socket, sleep for 2 secs to sync.\n");
     sleep(2);
 
-    auto callback = [socket](Message msg) {
+    auto callback = [socket](auto msg) {
         printf("user provided callback invoked\n");
         printf("Prepare sending messages back\n");
-        socket->sendMessage(msg, [](int) {});
+        socket->sendMessage(*msg, [](auto) {});
     };
 
     while (true) {
