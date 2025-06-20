@@ -35,7 +35,7 @@ class MessageConnectionTCP: public MessageConnection {
 public:
     int _connFd;  // Maybe just -1
     sockaddr _localAddr;
-    sockaddr _remoteAddr;  // TODO: make it an optional
+    const sockaddr _remoteAddr;  // TODO: make it an optional
     std::string _localIOSocketIdentity;
     std::optional<std::string> _remoteIOSocketIdentity;
     bool _sendLocalIdentity;

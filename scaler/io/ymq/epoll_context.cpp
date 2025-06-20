@@ -64,9 +64,7 @@ void EpollContext::loop() {
         } else if (event == (void*)_isTimingFd) {
             // ToDo: Fix this
             _timingFunctions.onRead();
-        }
-
-        else {
+        } else {
             event->onEvents(current_event.events);
         }
     }
@@ -89,10 +87,13 @@ void EpollContext::addFdToLoop(int fd, uint64_t events, EventManager* manager) {
         if (errno == EEXIST) {
             if (epoll_ctl(_epfd, EPOLL_CTL_MOD, fd, &event) < 0) {
                 printf("epoll ctl goes wrong\n");
+                perror("epoll_ctl");
                 exit(1);
             }
         } else {
             printf("epoll ctl goes wrong\n");
+            perror("epoll_ctl");
+
             exit(1);
         }
     }

@@ -1,58 +1,66 @@
 
-// C
-#include <arpa/inet.h>
-#include <netinet/in.h>
+// C++
 #include <stdio.h>
-
-// First-party
 #include <string.h>
+#include <unistd.h>
+
+#include <future>
+#include <iostream>
+#include <memory>
+#include <string>
 
 #include "scaler/io/ymq/io_context.h"
 #include "scaler/io/ymq/io_socket.h"
 #include "scaler/io/ymq/typedefs.h"
 
-const char* address = "ServerSocket";
-const char* payload = "Hello from the other end!";
-
 int main() {
     IOContext context;
-    std::shared_ptr<IOSocket> clientSocket = context.createIOSocket("ClientSocket", IOSocketType::Uninit);
+    std::shared_ptr<IOSocket> clientSocket = context.createIOSocket("ClientSocket", IOSocketType::Dealer);
 
-    const char* ip = "127.0.0.1";
-    const int port = 8080;
+    printf("Socket created, sleep 1 sec to sync\n");
+    sleep(1);
 
-    sockaddr_in server_addr {};
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port   = htons(port);
-    inet_pton(AF_INET, ip, &server_addr.sin_addr);
-    clientSocket->connectTo(*(sockaddr*)&server_addr, [](int) {});
-    sleep(2);
+    auto connect_promise = std::make_shared<std::promise<void>>();
+    auto connect_future  = connect_promise->get_future();
 
-    auto sendMessageCallback = [](int n) {
-        printf("n = %d\n", n);
-        sleep(100);
-    };
+    clientSocket->connectTo("tcp://127.0.0.1:8080", [connect_promise](int result) { connect_promise->set_value(); });
+
+    printf("Waiting for connection...\n");
+    connect_future.wait();
+    printf("Connected to server.\n");
 
     while (true) {
-        // get a line from stdin
+        std::string line;
+        std::cout << "Enter a message to send: ";
+        if (!std::getline(std::cin, line)) {
+            std::cout << "EOF or input error. Exiting...\n";
+            break;
+        }
+
         Message message;
+        std::string destAddress = "ServerSocket";
 
-        message.address = Bytes {
-            (char*)address,
-            strlen(address),
-            Ownership::Borrowed,
-        };
+        message.address = Bytes {const_cast<char*>(destAddress.c_str()), destAddress.size(), Ownership::Borrowed};
 
-        message.payload = Bytes {
-            (char*)payload,
-            strlen(payload),
-            Ownership::Borrowed,
-        };
+        message.payload = Bytes {const_cast<char*>(line.c_str()), line.size(), Ownership::Borrowed};
 
-        clientSocket->sendMessage(std::move(message), std::move(sendMessageCallback));
+        auto send_promise = std::make_shared<std::promise<void>>();
+        auto send_future  = send_promise->get_future();
 
-        printf("I am sleeping...\n");
-        sleep(100);
-        // clientSocket->recvMessage(std::function<void (Message)> callback);
+        clientSocket->sendMessage(std::move(message), [send_promise](int) { send_promise->set_value(); });
+
+        send_future.wait();
+        printf("Message sent, waiting for response...\n");
+
+        auto recv_promise = std::make_shared<std::promise<Message>>();
+        auto recv_future  = recv_promise->get_future();
+
+        clientSocket->recvMessage([recv_promise](Message msg) { recv_promise->set_value(std::move(msg)); });
+
+        Message reply = recv_future.get();
+        std::string reply_str(reply.payload.data(), reply.payload.data() + reply.payload.len());
+        printf("Received echo: '%s'\n", reply_str.c_str());
     }
+
+    return 0;
 }
