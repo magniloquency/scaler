@@ -8,6 +8,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <thread>
 
 #include "scaler/io/ymq/io_context.h"
 #include "scaler/io/ymq/io_socket.h"
@@ -17,8 +18,8 @@ int main() {
     IOContext context;
     std::shared_ptr<IOSocket> clientSocket = context.createIOSocket("ClientSocket", IOSocketType::Dealer);
 
-    printf("Socket created, sleep 1 sec to sync\n");
-    sleep(1);
+    // using namespace std::chrono_literals;
+    // std::this_thread::sleep_for(100ms);
 
     auto connect_promise = std::make_shared<std::promise<void>>();
     auto connect_future  = connect_promise->get_future();
@@ -36,6 +37,7 @@ int main() {
             std::cout << "EOF or input error. Exiting...\n";
             break;
         }
+        std::cout << "YOU ENTERED THIS MESSAGE: " << line << std::endl;
 
         Message message;
         std::string destAddress = "ServerSocket";

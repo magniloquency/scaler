@@ -13,8 +13,7 @@ int main() {
     IOContext context;
     std::shared_ptr<IOSocket> socket = context.createIOSocket("ServerSocket", IOSocketType::Dealer);
 
-    printf("Successfully created socket, sleep for 1 sec to sync.\n");
-    sleep(1);
+    printf("Successfully created socket.\n");
 
     auto bind_promise = std::make_shared<std::promise<void>>();
     auto bind_future  = bind_promise->get_future();

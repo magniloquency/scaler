@@ -43,6 +43,7 @@ static int create_and_bind_socket(const sockaddr& addr, Configuration::BindRetur
         return -1;
     }
 
+    callback(0);
     return server_fd;
 }
 
@@ -86,9 +87,10 @@ void TcpServer::onRead() {
     std::string id = this->_localIOSocketIdentity;
     auto& sock     = this->_eventLoopThread->_identityToIOSocket.at(id);
     // FIXME: the second _addr is not real
-    sock->_fdToConnection[fd] = std::make_unique<MessageConnectionTCP>(
-        _eventLoopThread, fd, _addr, _addr, sock->identity(), false, sock->_pendingReadOperations);
-    sock->_fdToConnection[fd]->onCreated();
+    sock->_unconnectedConnection.push_back(
+        std::make_unique<MessageConnectionTCP>(
+            _eventLoopThread, fd, _addr, _addr, sock->identity(), false, sock->_pendingReadOperations));
+    sock->_unconnectedConnection.back()->onCreated();
 }
 
 TcpServer::~TcpServer() {

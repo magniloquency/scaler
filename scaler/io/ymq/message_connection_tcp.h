@@ -54,8 +54,12 @@ public:
     void onRead();
     void onWrite();
     void onClose();
+    void onError() {
+        printf("onError (for debug don't remove)\n");
+        exit(1);
+    };
 
-    void onError() { printf("onError (for debug don't remove)\n"); };
+    bool _connected;
 
 public:
     MessageConnectionTCP(

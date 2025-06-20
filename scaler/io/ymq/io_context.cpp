@@ -14,6 +14,7 @@ IOContext::IOContext(size_t threadCount): _threads(threadCount) {
     std::ranges::generate(_threads, std::make_shared<EventLoopThread>);
 }
 
+// NOTE: this is not thread safe, technically race condition can happen. But it's highly unlikely.
 std::shared_ptr<IOSocket> IOContext::createIOSocket(Identity identity, IOSocketType socketType) {
     static size_t threadsRoundRobin = 0;
     auto& thread                    = _threads[threadsRoundRobin];

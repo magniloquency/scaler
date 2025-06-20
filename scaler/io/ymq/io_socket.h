@@ -14,6 +14,7 @@
 #include "scaler/io/ymq/typedefs.h"
 
 class TcpReadOperation;
+class TcpWriteOperation;
 
 // NOTE: Don't do this. It pollutes the env. I tried to remove it, but it reports err
 // in pymod module. Consider include the corresponding file and define types there. - gxu
@@ -37,14 +38,15 @@ public:
     using SendMessageCallback   = Configuration::SendMessageCallback;
     using RecvMessageCallback   = Configuration::RecvMessageCallback;
 
+    // This variable needs to present in the IOSocket level because the user
+    // does not care which connection a message is coming from.
     std::shared_ptr<std::queue<TcpReadOperation>> _pendingReadOperations;
+
     // FIXME: Maybe we don't provide this map at all. _identity and connection is not injective.
     // Or maybe we enforce user to provide unique name.
     // We can provide canonical name etc.
-    std::map<std::string, MessageConnectionTCP*> _identityToConnection;
-    std::map<int /* class FileDescriptor */, std::unique_ptr<MessageConnectionTCP>> _fdToConnection;
-
-    std::vector<std::unique_ptr<MessageConnectionTCP>> _deadConnection;
+    std::map<std::string, std::unique_ptr<MessageConnectionTCP>> _identityToConnection;
+    std::vector<std::unique_ptr<MessageConnectionTCP>> _unconnectedConnection;
 
     IOSocket(std::shared_ptr<EventLoopThread> eventLoopThread, Identity identity, IOSocketType socketType);
 
