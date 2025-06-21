@@ -180,8 +180,14 @@ static int ymq_createErrorEnum(PyObject* module, YmqState* state) {
     return 0;
 }
 
-static int ymq_createType(PyObject* module, PyObject** storage, PyType_Spec* spec, const char* name, bool add = true) {
-    *storage = PyType_FromModuleAndSpec(module, spec, nullptr);
+static int ymq_createType(
+    PyObject* module,
+    PyObject** storage,
+    PyType_Spec* spec,
+    const char* name,
+    bool add        = true,
+    PyObject* bases = nullptr) {
+    *storage = PyType_FromModuleAndSpec(module, spec, bases);
 
     if (!*storage) {
         PyErr_SetString(PyExc_RuntimeError, "Failed to create type from spec");
@@ -238,21 +244,8 @@ static int ymq_exec(PyObject* module) {
     if (ymq_createType(module, &state->PyIOContextType, &PyIOContext_spec, "IOContext") < 0)
         return -1;
 
-    // if (ymq_createType(module, &state->ExceptionType, &YmqException_spec, "Exception") < 0)
-    //     return -1;
-
-    state->ExceptionType = PyType_FromModuleAndSpec(module, &YmqException_spec, PyExc_Exception);
-
-    if (!state->ExceptionType) {
-        PyErr_SetString(PyExc_RuntimeError, "Failed to create type from spec");
+    if (ymq_createType(module, &state->ExceptionType, &YmqException_spec, "Exception", true, PyExc_Exception) < 0)
         return -1;
-    }
-
-    if (PyModule_AddObjectRef(module, "Exception", state->ExceptionType) < 0) {
-        PyErr_SetString(PyExc_RuntimeError, "Failed to add type to module");
-        Py_DECREF(state->ExceptionType);
-        return -1;
-    }
 
     if (ymq_createType(module, &state->AwaitableType, &Awaitable_spec, "Awaitable", false) < 0)
         return -1;
