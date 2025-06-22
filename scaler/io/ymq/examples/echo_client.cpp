@@ -1,14 +1,12 @@
 
 // C++
 #include <stdio.h>
-#include <string.h>
 #include <unistd.h>
 
 #include <future>
 #include <iostream>
 #include <memory>
 #include <string>
-#include <thread>
 
 #include "scaler/io/ymq/io_context.h"
 #include "scaler/io/ymq/io_socket.h"
@@ -16,10 +14,14 @@
 
 int main() {
     IOContext context;
-    std::shared_ptr<IOSocket> clientSocket = context.createIOSocket("ClientSocket", IOSocketType::Dealer);
 
-    // using namespace std::chrono_literals;
-    // std::this_thread::sleep_for(100ms);
+    auto createSocketPromise               = std::make_shared<std::promise<void>>();
+    auto createSocketFuture                = createSocketPromise->get_future();
+    std::shared_ptr<IOSocket> clientSocket = context.createIOSocket(
+        "ServerSocket", IOSocketType::Dealer, [createSocketPromise] { createSocketPromise->set_value(); });
+
+    createSocketFuture.wait();
+    printf("Successfully created socket.\n");
 
     auto connect_promise = std::make_shared<std::promise<void>>();
     auto connect_future  = connect_promise->get_future();
@@ -30,7 +32,8 @@ int main() {
     connect_future.wait();
     printf("Connected to server.\n");
 
-    while (true) {
+    int cnt = 0;
+    while (cnt++ < 10) {
         std::string line;
         std::cout << "Enter a message to send: ";
         if (!std::getline(std::cin, line)) {
@@ -63,6 +66,8 @@ int main() {
         std::string reply_str(reply.payload.data(), reply.payload.data() + reply.payload.len());
         printf("Received echo: '%s'\n", reply_str.c_str());
     }
+
+    context.removeIOSocket(clientSocket);
 
     return 0;
 }

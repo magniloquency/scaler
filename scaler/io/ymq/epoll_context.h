@@ -112,12 +112,14 @@ public:
     void removeEventManager(EventManager& em);
 
     void executeNow(Function func) { _interruptiveFunctions.enqueue(std::move(func)); }
-    void executeLater(Function func, Identifier) { _delayedFunctions.emplace(std::move(func)); }
+    void executeLater(Function func) { _delayedFunctions.emplace(std::move(func)); }
 
-    void executeAt(Timestamp timestamp, Function callback) { _timingFunctions.push(timestamp, std::move(callback)); }
+    Identifier executeAt(Timestamp timestamp, Function callback) {
+        printf("%s\n", __PRETTY_FUNCTION__);
+        return _timingFunctions.push(timestamp, std::move(callback));
+    }
 
-    // TODO: figure out how this work with existing util
-    bool cancelExecution(Identifier identifier);
+    void cancelExecution(Identifier identifier) { _timingFunctions.cancelExecution(identifier); }
 
     void execPendingFunctions();
 

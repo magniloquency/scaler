@@ -26,7 +26,7 @@ void IOSocket::removeConnectedTcpClient() {
 void IOSocket::onCreated() {
     printf("%s\n", __PRETTY_FUNCTION__);
 
-    _eventLoopThread->_eventLoop.runAfterEachLoop([this] { this->removeConnectedTcpClient(); });
+    // _eventLoopThread->_eventLoop.runAfterEachLoop([this] { this->removeConnectedTcpClient(); });
 }
 
 IOSocket::IOSocket(std::shared_ptr<EventLoopThread> eventLoopThread, Identity identity, IOSocketType socketType)
@@ -64,10 +64,15 @@ void IOSocket::bindTo(std::string networkAddress, BindReturnCallback callback) {
 }
 
 void IOSocket::onConnectionDisconnected(MessageConnectionTCP* conn) {
+    printf("%s\n", __PRETTY_FUNCTION__);
     if (!conn->_remoteIOSocketIdentity) {
         return;
     }
-    _unconnectedConnection.push_back(std::move(this->_identityToConnection[*conn->_remoteIOSocketIdentity]));
+
+    auto connIt = this->_identityToConnection.find(*conn->_remoteIOSocketIdentity);
+    _unconnectedConnection.push_back(std::move(connIt->second));
+    this->_identityToConnection.erase(connIt);
+
     auto& connPtr = _unconnectedConnection.back();
     if (connPtr->_responsibleForRetry) {
         connectTo(connPtr->_remoteAddr, [](int) {});  // as the user callback is one-shot
@@ -143,4 +148,12 @@ void IOSocket::recvMessage(RecvMessageCallback callback) {
             }
         }
     });
+}
+
+IOSocket::~IOSocket() {
+    while (_pendingReadOperations->size()) {
+        auto readOp = std::move(_pendingReadOperations->front());
+        _pendingReadOperations->pop();
+        readOp._callbackAfterCompleteRead({});
+    }
 }

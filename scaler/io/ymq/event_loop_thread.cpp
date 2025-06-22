@@ -7,7 +7,8 @@
 #include "scaler/io/ymq/event_manager.h"
 #include "scaler/io/ymq/io_socket.h"
 
-std::shared_ptr<IOSocket> EventLoopThread::createIOSocket(std::string identity, IOSocketType socketType) {
+std::shared_ptr<IOSocket> EventLoopThread::createIOSocket(
+    std::string identity, IOSocketType socketType, std::function<void()> callback) {
     if (thread.get_id() == std::thread::id()) {
         thread = std::jthread([this](std::stop_token token) {
             while (!token.stop_requested()) {
@@ -21,10 +22,15 @@ std::shared_ptr<IOSocket> EventLoopThread::createIOSocket(std::string identity, 
     assert(inserted);
     auto ptr = iterator->second;
 
-    _eventLoop.executeNow([ptr] { ptr->onCreated(); });
+    _eventLoop.executeNow([ptr, callback = std::move(callback)] {
+        ptr->onCreated();
+        callback();
+    });
+
     return ptr;
 }
 
 void EventLoopThread::removeIOSocket(IOSocket* target) {
+    assert(_identityToIOSocket[target->identity()].use_count() == 1);
     _identityToIOSocket.erase(target->identity());
 }
