@@ -18,12 +18,13 @@ struct EventLoop {
     void stop();
 
     void executeNow(Function func) { eventLoopBackend.executeNow(std::move(func)); }
-    void executeLater(Function func, Identifier identifier) {
-        eventLoopBackend.executeLater(std::move(func), identifier);
+    void executeLater(Function func) { eventLoopBackend.executeLater(std::move(func)); }
+
+    Identifier executeAt(Timestamp timestamp, Function func) {
+        return eventLoopBackend.executeAt(timestamp, std::move(func));
     }
-    // void executeAt(Timestamp, Function, Identifier identifier);
-    void executeAt(Timestamp timestamp, Function func) { eventLoopBackend.executeAt(timestamp, std::move(func)); }
-    bool cancelExecution(Identifier identifier);
+    void cancelExecution(Identifier identifier) { eventLoopBackend.cancelExecution(identifier); }
+
     void registerCallbackBeforeLoop(EventManager*);
 
     void registerEventManager(EventManager& em) { eventLoopBackend.registerEventManager(em); }

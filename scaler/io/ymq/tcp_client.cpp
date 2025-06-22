@@ -44,7 +44,16 @@ void TcpClient::onCreated() {
 
         passedBackValue = 0;
     }
-    this->_onConnectReturn(passedBackValue);
+
+    if (_retryTimes == 0) {
+        _onConnectReturn(passedBackValue);
+        return;
+    }
+
+    if (passedBackValue < 0) {
+        printf("SOMETHING REALLY BAD\n");
+        exit(-1);
+    }
 }
 
 TcpClient::TcpClient(
@@ -57,32 +66,62 @@ TcpClient::TcpClient(
     , _remoteAddr(std::move(remoteAddr))
     , _eventManager(std::make_unique<EventManager>(_eventLoopThread))
     , _connected(false)
-    , _onConnectReturn(std::move(onConnectReturn)) {
+    , _onConnectReturn(std::move(onConnectReturn))
+    , _retryTimes {}
+    , _retryIdentifier {} {
     _eventManager->onRead  = [this] { this->onRead(); };
     _eventManager->onWrite = [this] { this->onWrite(); };
     _eventManager->onClose = [this] { this->onClose(); };
     _eventManager->onError = [this] { this->onError(); };
+    printf("%s\n", __PRETTY_FUNCTION__);
 }
 
 void TcpClient::onWrite() {
     printf("%s\n", __PRETTY_FUNCTION__);
-    int ret = connect(_connFd, (sockaddr*)&_remoteAddr, sizeof(_remoteAddr));
-    if (ret < 0 && errno == EINPROGRESS || errno == ECONNREFUSED || errno == EAGAIN) {
-        _eventLoopThread->_eventLoop.removeFdFromLoop(_connFd);
+
+    _eventLoopThread->_eventLoop.removeFdFromLoop(_connFd);
+
+    int err {};
+    socklen_t errLen {sizeof(err)};
+    if (getsockopt(_connFd, SOL_SOCKET, SO_ERROR, &err, &errLen) < 0) {
+        perror("getsockopt");
+        exit(-1);
+    }
+
+    if (err != 0) {
+        fprintf(stderr, "Connect failed: %s\n", strerror(err));
+        fflush(stderr);
         retry();
         return;
     }
 
+    sockaddr localAddr;
+    socklen_t localAddrLen = sizeof(localAddr);
+    if (getsockname(_connFd, &localAddr, &localAddrLen) < 0) {
+        perror("getsockname");
+        exit(-1);
+        return;
+    }
+
     std::string id = this->_localIOSocketIdentity;
-    auto& sock     = this->_eventLoopThread->_identityToIOSocket.at(id);
-    // FIXME: the first _addr is not real
+    auto sock      = this->_eventLoopThread->_identityToIOSocket.at(id);
+
     sock->_unconnectedConnection.push_back(
         std::make_unique<MessageConnectionTCP>(
-            _eventLoopThread, _connFd, _remoteAddr, _remoteAddr, id, true, sock->_pendingReadOperations));
+            _eventLoopThread,
+            _connFd,
+            localAddr,    // local bound address
+            _remoteAddr,  // remote address (peer)
+            id,
+            true,
+            sock->_pendingReadOperations));
+
     sock->_unconnectedConnection.back()->onCreated();
 
     _connFd    = 0;
     _connected = true;
+
+    _eventLoopThread->_eventLoop.executeLater([sock] { sock->removeConnectedTcpClient(); });
 }
 
 void TcpClient::onRead() {
@@ -96,10 +135,13 @@ void TcpClient::retry() {
         return;
     }
 
+    close(_connFd);
+    _connFd = 0;
+
     Timestamp now;
     auto at = now.createTimestampByOffsetDuration(std::chrono::seconds(2 << _retryTimes++));
     std::cout << "TIMESTAMP IN RETRY: " << stringifyTimestamp(at) << std::endl;
-    _eventLoopThread->_eventLoop.executeAt(at, [this] { this->onWrite(); });
+    _retryIdentifier = _eventLoopThread->_eventLoop.executeAt(at, [this] { this->onCreated(); });
 }
 
 TcpClient::~TcpClient() {
@@ -107,4 +149,7 @@ TcpClient::~TcpClient() {
         _eventLoopThread->_eventLoop.removeFdFromLoop(_connFd);
         close(_connFd);
     }
+    if (_retryTimes > 0)
+        _eventLoopThread->_eventLoop.cancelExecution(_retryIdentifier);
+    printf("%s\n", __PRETTY_FUNCTION__);
 }

@@ -10,10 +10,17 @@
 #include "scaler/io/ymq/io_socket.h"
 
 int main() {
-    IOContext context;
-    std::shared_ptr<IOSocket> socket = context.createIOSocket("ServerSocket", IOSocketType::Dealer);
+    auto createSocketPromise = std::make_shared<std::promise<void>>();
+    auto createSocketFuture  = createSocketPromise->get_future();
 
+    IOContext context;
+    std::shared_ptr<IOSocket> socket = context.createIOSocket(
+        "ServerSocket", IOSocketType::Dealer, [createSocketPromise] { createSocketPromise->set_value(); });
+
+    createSocketFuture.wait();
     printf("Successfully created socket.\n");
+    // using namespace std::chrono_literals;
+    // std::this_thread::sleep_for(100ms);
 
     auto bind_promise = std::make_shared<std::promise<void>>();
     auto bind_future  = bind_promise->get_future();

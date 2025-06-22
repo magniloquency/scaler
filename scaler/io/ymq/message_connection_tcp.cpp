@@ -38,8 +38,7 @@ MessageConnectionTCP::MessageConnectionTCP(
     , _remoteIOSocketIdentity(std::nullopt)
     , _sendLocalIdentity(false)
     , _responsibleForRetry(responsibleForRetry)
-    , _pendingReadOperations(pendingReadOperations)
-    , _connected(false) {
+    , _pendingReadOperations(pendingReadOperations) {
     _eventManager->onRead  = [this] { this->onRead(); };
     _eventManager->onWrite = [this] { this->onWrite(); };
     _eventManager->onClose = [this] { this->onClose(); };
@@ -102,9 +101,7 @@ void MessageConnectionTCP::onRead() {
 
         auto& message = _receivedMessages.back();
 
-        int cnt       = 10;
-        bool haveRead = false;
-        while (leftOver && cnt-- > 0) {
+        while (leftOver) {
             assert(first + leftOver <= message.size());
             int res = read(_connFd, message.data() + first, leftOver);
 
@@ -119,8 +116,6 @@ void MessageConnectionTCP::onRead() {
                 // Reviewer: To jump out of double loop, reconsider when you say no. - gxu
                 goto ReadExhuasted;
             }
-
-            haveRead = true;
 
             leftOver -= res;
             first += res;
@@ -155,17 +150,18 @@ ReadExhuasted:
 }
 
 void MessageConnectionTCP::onWrite() {
+    if (_connFd == 0) {
+        return;
+    }
+
     // TODO: do not assume the identity to be less than 128bytes
     if (!_sendLocalIdentity) {
-        // Other sizes are possible, but the size needs to be >= 8, in order for idBuf
-        // to be aligned with 8 bytes boundary because of strict aliasing
         char idBuf[128] {};
         *(uint64_t*)idBuf  = _localIOSocketIdentity.size();
         auto identityBegin = idBuf + sizeof(uint64_t);
         auto [_, last]     = std::ranges::copy(_localIOSocketIdentity, identityBegin);
         write(_connFd, idBuf, std::distance(idBuf, last));
         _sendLocalIdentity = true;
-        // return;
     }
 
     while (!_writeOperations.empty()) {
@@ -200,6 +196,15 @@ void MessageConnectionTCP::onWrite() {
         }
     }
 }
+
+void MessageConnectionTCP::onClose() {
+    printf("%s\n", __PRETTY_FUNCTION__);
+    _eventLoopThread->_eventLoop.removeFdFromLoop(_connFd);
+    close(_connFd);
+    auto& sock = _eventLoopThread->_identityToIOSocket.at(_localIOSocketIdentity);
+    sock->onConnectionDisconnected(this);
+    _connFd = 0;
+};
 
 // TODO: Maybe change this to message_t
 void MessageConnectionTCP::sendMessage(std::shared_ptr<std::vector<char>> msg, std::function<void(int)> callback) {
@@ -269,17 +274,20 @@ bool MessageConnectionTCP::recvMessage() {
     return true;
 }
 
-void MessageConnectionTCP::onClose() {
-    _eventLoopThread->_eventLoop.removeFdFromLoop(_connFd);
-    close(_connFd);
-    auto& sock = _eventLoopThread->_identityToIOSocket.at(_localIOSocketIdentity);
-    sock->onConnectionDisconnected(this);
-    _connFd = 0;
-};
-
 MessageConnectionTCP::~MessageConnectionTCP() {
     if (_connFd != 0) {
         _eventLoopThread->_eventLoop.removeFdFromLoop(_connFd);
+        shutdown(_connFd, SHUT_RDWR);
         close(_connFd);
+        _connFd = 0;
     }
+
+    while (_writeOperations.size()) {
+        auto writeOp = std::move(_writeOperations.front());
+        _writeOperations.pop();
+        writeOp._callbackAfterCompleteWrite(-1);
+    }
+
+    // TODO: What to do with this?
+    // std::queue<std::vector<char>> _receivedMessages;
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 // C++
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -28,9 +29,10 @@ public:
     IOContext& operator=(IOContext&&)      = delete;
 
     // These methods need to be thread-safe.
-    std::shared_ptr<IOSocket> createIOSocket(Identity identity, IOSocketType socketType);
+    std::shared_ptr<IOSocket> createIOSocket(
+        Identity identity, IOSocketType socketType, std::function<void()> callback);
 
-    bool removeIOSocket(std::shared_ptr<IOSocket>);
+    bool removeIOSocket(std::shared_ptr<IOSocket>&);
 
     size_t numThreads() const { return _threads.size(); }
 };
