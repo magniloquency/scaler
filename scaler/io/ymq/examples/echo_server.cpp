@@ -1,35 +1,61 @@
-// C
-#include <stdio.h>
 
-// First-party
+
+#include <stdio.h>
+#include <unistd.h>
+
+#include <future>
+#include <memory>
+
 #include "scaler/io/ymq/io_context.h"
 #include "scaler/io/ymq/io_socket.h"
-#include "scaler/io/ymq/typedefs.h"
-
-// Goal:
-// Make sure we can write an echo server with ymq in C++, pretend there is a language barrier, to mimic
-// the behavior as if we are running with Python
-// We should of course provide an echo client.
 
 int main() {
+    auto createSocketPromise = std::make_shared<std::promise<void>>();
+    auto createSocketFuture  = createSocketPromise->get_future();
+
     IOContext context;
-    std::shared_ptr<IOSocket> socket = context.createIOSocket("ServerSocket", IOSocketType::Dealer);
+    std::shared_ptr<IOSocket> socket = context.createIOSocket(
+        "ServerSocket", IOSocketType::Dealer, [createSocketPromise] { createSocketPromise->set_value(); });
 
-    printf("Successfully created socket, sleep for 2 secs to sync.\n");
-    sleep(2);
+    createSocketFuture.wait();
+    printf("Successfully created socket.\n");
+    // using namespace std::chrono_literals;
+    // std::this_thread::sleep_for(100ms);
 
-    auto callback = [socket](auto msg) {
-        printf("user provided callback invoked\n");
-        printf("Prepare sending messages back\n");
-        socket->sendMessage(*msg, [](auto) {});
-    };
+    auto bind_promise = std::make_shared<std::promise<void>>();
+    auto bind_future  = bind_promise->get_future();
+
+    socket->bindTo("tcp://127.0.0.1:8080", [bind_promise](auto) {
+        // Optionally handle result
+        bind_promise->set_value();
+    });
+
+    printf("Waiting for bind to complete...\n");
+    bind_future.wait();
+    printf("Successfully bound socket\n");
 
     while (true) {
         printf("Try to recv a message\n");
-        sleep(10);
-        socket->recvMessage(callback);
-        printf("I am sleeping...\n");
-        // here we should somehow wait until callback is executed
-        sleep(100);
+
+        auto recv_promise = std::make_shared<std::promise<Message>>();
+        auto recv_future  = recv_promise->get_future();
+
+        socket->recvMessage([socket, recv_promise](auto msg) { recv_promise->set_value(std::move(*msg)); });
+
+        Message received_msg = recv_future.get();
+        printf(
+            "Receiving message from '%s', message content is: '%s'\n",
+            received_msg.address.as_string().c_str(),
+            std::string(received_msg.payload.data, received_msg.payload.data + received_msg.payload.len).c_str());
+
+        auto send_promise = std::make_shared<std::promise<void>>();
+        auto send_future  = send_promise->get_future();
+
+        socket->sendMessage(received_msg, [send_promise](auto) { send_promise->set_value(); });
+
+        send_future.wait();
+        printf("Message echoed back. Looping...\n");
     }
+
+    return 0;
 }

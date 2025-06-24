@@ -6,7 +6,6 @@
 #include <vector>
 
 #include "scaler/io/ymq/configuration.h"
-#include "scaler/io/ymq/event_loop.h"
 #include "scaler/io/ymq/event_loop_thread.h"
 #include "scaler/io/ymq/message_connection.h"
 
@@ -28,33 +27,34 @@ struct TcpReadOperation {
 };
 
 class MessageConnectionTCP: public MessageConnection {
-    // TODO: Make the connfd private again
-public:
-    int _connFd;  // Maybe just -1
+    int _connFd;
     sockaddr _localAddr;
-    sockaddr _remoteAddr;  // TODO: make it an optional
     std::string _localIOSocketIdentity;
-    std::optional<std::string> _remoteIOSocketIdentity;
     bool _sendLocalIdentity;
-    bool _responsibleForRetry;
-    using SendMessageCallback = Configuration::SendMessageCallback;
-    using RecvMessageCallback = Configuration::RecvMessageCallback;
-
-public:
-    std::queue<TcpWriteOperation> _writeOperations;
-    std::shared_ptr<std::queue<TcpReadOperation>> _pendingReadOperations;
-    std::queue<std::vector<char>> _receivedMessages;
-
-    std::shared_ptr<EventLoopThread> _eventLoopThread;
     std::unique_ptr<EventManager> _eventManager;
 
     void onRead();
     void onWrite();
     void onClose();
+    void onError() {
+        printf("onError (for debug don't remove)\n");
+        exit(1);
+    };
 
-    void onError() { printf("onError (for debug don't remove)\n"); };
+    std::shared_ptr<EventLoopThread> _eventLoopThread;
 
 public:
+    using SendMessageCallback = Configuration::SendMessageCallback;
+    using RecvMessageCallback = Configuration::RecvMessageCallback;
+
+    sockaddr _remoteAddr;
+    std::optional<std::string> _remoteIOSocketIdentity;
+    bool _responsibleForRetry;
+
+    std::queue<TcpWriteOperation> _writeOperations;
+    std::shared_ptr<std::queue<TcpReadOperation>> _pendingReadOperations;
+    std::queue<std::vector<char>> _receivedMessages;
+
     MessageConnectionTCP(
         std::shared_ptr<EventLoopThread> eventLoopThread,
         int connFd,

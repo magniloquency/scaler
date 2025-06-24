@@ -20,6 +20,8 @@ class TcpClient {
     std::string _localIOSocketIdentity;
     sockaddr _remoteAddr;
 
+    int _retryIdentifier;
+
     // Implementation defined method. connect(3) should happen here.
     // This function will call user defined onConnectReturn()
     // It will handle error it can handle. If it is unreasonable to
@@ -28,7 +30,7 @@ class TcpClient {
     void onWrite();
     void onClose() {}
     void onError() {}
-    size_t _retryTimes = 0;
+    size_t _retryTimes;
 
 public:
     using ConnectReturnCallback = Configuration::ConnectReturnCallback;

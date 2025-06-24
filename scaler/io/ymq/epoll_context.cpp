@@ -30,26 +30,6 @@ void EpollContext::execPendingFunctions() {
     }
 }
 
-// void EpollContext::loop() {
-//     std::array<epoll_event, 1024> events;
-//     auto result = epoll_fd.epoll_wait(events.data(), 1024, -1);
-//
-//     if (!result) {
-//         panic(std::format("Failed to epoll_wait(): {}", result.error()));
-//     };
-//
-//     for (auto it = events.begin(); it != events.begin() + *result; ++it) {
-//         epoll_event current_event = *it;
-//         if (current_event.events & EPOLLERR) {
-//             // ...
-//         }
-//
-//         auto* event = (EventManager*)current_event.data.ptr;
-//         // event->onEvents(current_event.events);
-//     }
-//     execPendingFunctions();
-// }
-
 void EpollContext::loop() {
     std::array<epoll_event, 1024> events;
     int n = epoll_wait(_epfd, events.data(), 1024, -1);
@@ -62,11 +42,8 @@ void EpollContext::loop() {
             _interruptiveFunctions.dequeue(f);
             f();
         } else if (event == (void*)_isTimingFd) {
-            // ToDo: Fix this
             _timingFunctions.onRead();
-        }
-
-        else {
+        } else {
             event->onEvents(current_event.events);
         }
     }
@@ -84,15 +61,16 @@ void EpollContext::addFdToLoop(int fd, uint64_t events, EventManager* manager) {
     event.data.ptr = (void*)manager;
     int res        = epoll_ctl(_epfd, EPOLL_CTL_ADD, fd, &event);
 
-    // TODO: This epoll_ctl_mod ideally should not happen here.
     if (res < 0) {
         if (errno == EEXIST) {
             if (epoll_ctl(_epfd, EPOLL_CTL_MOD, fd, &event) < 0) {
                 printf("epoll ctl goes wrong\n");
+                perror("epoll_ctl");
                 exit(1);
             }
         } else {
             printf("epoll ctl goes wrong\n");
+            perror("epoll_ctl");
             exit(1);
         }
     }

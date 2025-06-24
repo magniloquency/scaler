@@ -14,15 +14,22 @@ IOContext::IOContext(size_t threadCount): _threads(threadCount) {
     std::ranges::generate(_threads, std::make_shared<EventLoopThread>);
 }
 
-std::shared_ptr<IOSocket> IOContext::createIOSocket(Identity identity, IOSocketType socketType) {
+// NOTE: this is not thread safe, technically race condition can happen. But it's highly unlikely.
+std::shared_ptr<IOSocket> IOContext::createIOSocket(
+    Identity identity, IOSocketType socketType, std::function<void()> callback) {
     static size_t threadsRoundRobin = 0;
     auto& thread                    = _threads[threadsRoundRobin];
     ++threadsRoundRobin %= _threads.size();
-    return thread->createIOSocket(std::move(identity), socketType);
+    return thread->createIOSocket(std::move(identity), socketType, std::move(callback));
 }
 
-bool IOContext::removeIOSocket(std::shared_ptr<IOSocket> socket) {
-    socket->_eventLoopThread->_eventLoop.executeNow(
-        [socket] { socket->_eventLoopThread->removeIOSocket(socket.get()); });
+bool IOContext::removeIOSocket(std::shared_ptr<IOSocket>& socket) {
+    auto* rawSocket = socket.get();
+    socket.reset();
+
+    rawSocket->_eventLoopThread->_eventLoop.executeNow([rawSocket] {
+        rawSocket->_eventLoopThread->_eventLoop.executeLater(
+            [rawSocket] { rawSocket->_eventLoopThread->removeIOSocket(rawSocket); });
+    });
     return true;
 }

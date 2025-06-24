@@ -28,15 +28,19 @@ public:
         if constexpr (std::same_as<Configuration::PollingContext, EpollContext>) {
             int realEvents = (int)events;
             if ((realEvents & EPOLLHUP) && !(realEvents & EPOLLIN)) {
+                printf("onEvents onClose()\n");
                 onClose();
             }
-            if (realEvents & EPOLLERR) {
+            if (realEvents & (EPOLLERR | EPOLLHUP)) {
+                printf("onEvents onError()\n");
                 onError();
             }
             if (realEvents & (EPOLLIN | EPOLLRDHUP)) {
+                printf("onEvents onRead()\n");
                 onRead();
             }
             if (realEvents & EPOLLOUT) {
+                printf("onEvents onWrite()\n");
                 onWrite();
             }
         }

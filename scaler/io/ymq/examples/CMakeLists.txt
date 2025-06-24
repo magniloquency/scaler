@@ -10,3 +10,6 @@ target_link_libraries(echo_client cc_ymq)
 
 target_link_libraries(timestamp cc_ymq)
 target_link_libraries(timed_queue cc_ymq)
+
+add_executable(remove_iosocket remove_iosocket.cpp)
+target_link_libraries(remove_iosocket cc_ymq)

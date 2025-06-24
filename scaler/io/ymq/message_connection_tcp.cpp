@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <memory>
+#include <optional>
 
 #include "scaler/io/ymq/configuration.h"
 #include "scaler/io/ymq/event_loop_thread.h"
@@ -57,23 +58,16 @@ void MessageConnectionTCP::onRead() {
     if (!_remoteIOSocketIdentity) {
         // Other sizes are possible, but the size needs to be >= 8, in order for idBuf
         // to be aligned with 8 bytes boundary because of strict aliasing
+        uint64_t header {};
+        int n = read(_connFd, &header, 8);
         char idBuf[128] {};
-        int n         = read(_connFd, &idBuf, 128);
-        uint64_t size = *(uint64_t*)idBuf;
-        char* first   = idBuf + sizeof(uint64_t);
-        std::string remoteID(first, first + size);
+        n           = read(_connFd, idBuf, header);
+        char* first = idBuf;
+        std::string remoteID(first, first + header);
         _remoteIOSocketIdentity.emplace(std::move(remoteID));
-        printf("Received remote identity, %s\n", _remoteIOSocketIdentity->c_str());
-
         auto& sock = this->_eventLoopThread->_identityToIOSocket[_localIOSocketIdentity];
-
         sock->onConnectionIdentityReceived(this);
-
-        return;
     }
-
-    assert(_remoteIOSocketIdentity);
-    printf("Got a remote socket, identity = %s\n", _remoteIOSocketIdentity->c_str());
 
     while (true) {
         const size_t headerSize = 8;
@@ -95,8 +89,14 @@ void MessageConnectionTCP::onRead() {
                 message.resize(1024);
             } else {
                 size_t payloadSize = *(uint64_t*)message.data();
-                leftOver           = payloadSize - (message.size() - headerSize);
-                first              = message.size();
+
+                if (message.size() == 1024) {
+                    message.resize(std::min((payloadSize), 8lu));
+                }
+
+                leftOver = payloadSize - (message.size() - headerSize);
+
+                first = message.size();
                 message.resize(payloadSize + headerSize);
             }
         }
@@ -113,10 +113,12 @@ void MessageConnectionTCP::onRead() {
             }
 
             if (res == -1 && errno == EAGAIN) {
+                perror("read");
                 message.resize(first);
                 // Reviewer: To jump out of double loop, reconsider when you say no. - gxu
                 goto ReadExhuasted;
             }
+
             leftOver -= res;
             first += res;
             if (first == headerSize) {
@@ -136,31 +138,32 @@ ReadExhuasted:
             _receivedMessages.pop();
 
             Bytes address(_remoteIOSocketIdentity->data(), _remoteIOSocketIdentity->size());
-            Bytes payload(_pendingReadOperations->front()._buf->data(), _pendingReadOperations->front()._buf->size());
+            Bytes payload(
+                _pendingReadOperations->front()._buf->data() + 8, _pendingReadOperations->front()._buf->size() - 8);
 
             _pendingReadOperations->front()._callbackAfterCompleteRead(Message(std::move(address), std::move(payload)));
 
             _pendingReadOperations->pop();
         } else {
             assert(_pendingReadOperations->size());
-            _pendingReadOperations->front()._callbackAfterCompleteRead(Message({}, {}));
+            break;
         }
     }
 }
 
 void MessageConnectionTCP::onWrite() {
-    printf("%s\n", __PRETTY_FUNCTION__);
+    if (_connFd == 0) {
+        return;
+    }
+
     // TODO: do not assume the identity to be less than 128bytes
     if (!_sendLocalIdentity) {
-        // Other sizes are possible, but the size needs to be >= 8, in order for idBuf
-        // to be aligned with 8 bytes boundary because of strict aliasing
         char idBuf[128] {};
         *(uint64_t*)idBuf  = _localIOSocketIdentity.size();
         auto identityBegin = idBuf + sizeof(uint64_t);
         auto [_, last]     = std::ranges::copy(_localIOSocketIdentity, identityBegin);
         write(_connFd, idBuf, std::distance(idBuf, last));
         _sendLocalIdentity = true;
-        return;
     }
 
     while (!_writeOperations.empty()) {
@@ -174,14 +177,20 @@ void MessageConnectionTCP::onWrite() {
             if (bytes == -1) {
                 if (errno == EAGAIN)
                     break;
-                else  // TODO:
+                else {
+                    perror("write");
                     writeOp._callbackAfterCompleteWrite(Error::Placeholder);
+                }
             }
 
             writeOp._cursor += bytes;
         }
 
         if (writeOp._cursor == bufLen) {
+            std::string str(
+                _writeOperations.front()._buf->data() + 8,
+                _writeOperations.front()._buf->data() + _writeOperations.front()._buf->size());
+
             writeOp._callbackAfterCompleteWrite(Error::Placeholder);
             _writeOperations.pop();
         } else {
@@ -189,6 +198,15 @@ void MessageConnectionTCP::onWrite() {
         }
     }
 }
+
+void MessageConnectionTCP::onClose() {
+    printf("%s\n", __PRETTY_FUNCTION__);
+    _eventLoopThread->_eventLoop.removeFdFromLoop(_connFd);
+    close(_connFd);
+    auto& sock = _eventLoopThread->_identityToIOSocket.at(_localIOSocketIdentity);
+    sock->onConnectionDisconnected(this);
+    _connFd = 0;
+};
 
 // TODO: Maybe change this to message_t
 void MessageConnectionTCP::sendMessage(std::shared_ptr<std::vector<char>> msg, Configuration::SendMessageCallback callback) {
@@ -199,56 +217,79 @@ void MessageConnectionTCP::sendMessage(std::shared_ptr<std::vector<char>> msg, C
     writeOp._cursor                     = 0;
     writeOp._callbackAfterCompleteWrite = std::move(callback);
 
-    if (_writeOperations.empty()) {
-        const size_t bufLen = writeOp._buf->size();
-        while (writeOp._cursor != bufLen) {
-            const size_t leftOver = writeOp._buf->size() - writeOp._cursor;
-            const char* begin     = writeOp._buf->data() + writeOp._cursor;
-            auto bytes            = write(_connFd, begin, leftOver);
-
-            if (bytes == -1) {
-                if (errno == EAGAIN) {
-                    _writeOperations.push(std::move(writeOp));
-                } else {
-                    writeOp._callbackAfterCompleteWrite(Error::Placeholder);
-                }
-                break;
-            }
-
-            writeOp._cursor += bytes;
-        }
-
-        if (writeOp._cursor == bufLen) {
-            writeOp._callbackAfterCompleteWrite(Error::Placeholder);
-        }
-
-    } else {
+    if (_connFd == 0) {
         _writeOperations.push(std::move(writeOp));
+        return;
+    }
+
+    if (_writeOperations.size()) {
+        _writeOperations.push(std::move(writeOp));
+        return;
+    }
+
+    const size_t bufLen = writeOp._buf->size();
+    while (writeOp._cursor != bufLen) {
+        const size_t leftOver = writeOp._buf->size() - writeOp._cursor;
+        const char* begin     = writeOp._buf->data() + writeOp._cursor;
+        auto bytes            = write(_connFd, begin, leftOver);
+
+        if (bytes == -1) {
+            if (errno == EAGAIN) {
+                _writeOperations.push(std::move(writeOp));
+            } else {
+                perror("write");
+                writeOp._callbackAfterCompleteWrite(Error::Placeholder);
+            }
+            break;
+        }
+
+        writeOp._cursor += bytes;
+    }
+
+    if (writeOp._cursor == bufLen) {
+        writeOp._callbackAfterCompleteWrite(std::nullopt);
     }
 }
 
 bool MessageConnectionTCP::recvMessage() {
-    if (_receivedMessages.size() && _pendingReadOperations->size() && isCompleteMessage(_receivedMessages.back())) {
-        auto readOp = std::move(_pendingReadOperations->front());
-        _pendingReadOperations->pop();
-        auto msg = std::move(_receivedMessages.front());
-        Bytes address(_remoteIOSocketIdentity->data(), _remoteIOSocketIdentity->size());
-        Bytes payload(msg.data(), msg.size());
-        readOp._callbackAfterCompleteRead(Message(std::move(address), std::move(payload)));
-        _receivedMessages.pop();
-        return true;
+    if (_receivedMessages.empty() || _pendingReadOperations->empty() || !isCompleteMessage(_receivedMessages.front())) {
+        return false;
     }
-    return false;
+
+    while (_pendingReadOperations->size() && _receivedMessages.size()) {
+        if (isCompleteMessage(_receivedMessages.front())) {
+            *_pendingReadOperations->front()._buf = std::move(_receivedMessages.front());
+            _receivedMessages.pop();
+
+            Bytes address(_remoteIOSocketIdentity->data(), _remoteIOSocketIdentity->size());
+            Bytes payload(
+                _pendingReadOperations->front()._buf->data() + 8, _pendingReadOperations->front()._buf->size() - 8);
+
+            _pendingReadOperations->front()._callbackAfterCompleteRead(Message(std::move(address), std::move(payload)));
+
+            _pendingReadOperations->pop();
+        } else {
+            assert(_pendingReadOperations->size());
+            break;
+        }
+    }
+    return true;
 }
 
-void MessageConnectionTCP::onClose() {
-    _eventLoopThread->_eventLoop.removeFdFromLoop(_connFd);
-    close(_connFd);
-    auto& sock = _eventLoopThread->_identityToIOSocket.at(*_remoteIOSocketIdentity);
-    sock->onConnectionDisconnected(this);
-};
-
 MessageConnectionTCP::~MessageConnectionTCP() {
-    _eventLoopThread->_eventLoop.removeFdFromLoop(_connFd);
-    close(_connFd);
+    if (_connFd != 0) {
+        _eventLoopThread->_eventLoop.removeFdFromLoop(_connFd);
+        shutdown(_connFd, SHUT_RDWR);
+        close(_connFd);
+        _connFd = 0;
+    }
+
+    while (_writeOperations.size()) {
+        auto writeOp = std::move(_writeOperations.front());
+        _writeOperations.pop();
+        writeOp._callbackAfterCompleteWrite(Error::Placeholder);
+    }
+
+    // TODO: What to do with this?
+    // std::queue<std::vector<char>> _receivedMessages;
 }
