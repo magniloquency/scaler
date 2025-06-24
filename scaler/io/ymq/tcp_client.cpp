@@ -16,7 +16,14 @@
 #include "scaler/io/ymq/utils.h"
 
 void TcpClient::onCreated() {
-    int sockfd    = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+    int sockfd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+    if (sockfd == -1) {
+        if (_retryTimes == 0) {
+            _onConnectReturn(errno);
+            return;
+        }
+    }
+
     this->_connFd = sockfd;
     int ret       = connect(sockfd, (sockaddr*)&_remoteAddr, sizeof(_remoteAddr));
 
