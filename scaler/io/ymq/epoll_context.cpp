@@ -55,31 +55,25 @@ void EpollContext::loop() {
     }
 }
 
-void EpollContext::addFdToLoop(int fd, uint64_t events, EventManager* manager) {
+int EpollContext::addFdToLoop(int fd, uint64_t events, EventManager* manager) {
     epoll_event event {};
     event.events   = (int)events & (EPOLLIN | EPOLLOUT | EPOLLET);
     event.data.ptr = (void*)manager;
     int res        = epoll_ctl(_epfd, EPOLL_CTL_ADD, fd, &event);
+    if (res == 0)
+        return 0;
 
-    if (res < 0) {
-        if (errno == EEXIST) {
-            if (epoll_ctl(_epfd, EPOLL_CTL_MOD, fd, &event) < 0) {
-                printf("epoll ctl goes wrong\n");
-                perror("epoll_ctl");
-                exit(1);
-            }
+    if (errno == EEXIST) {
+        if (epoll_ctl(_epfd, EPOLL_CTL_MOD, fd, &event) == 0) {
+            return 0;
         } else {
-            printf("epoll ctl goes wrong\n");
-            perror("epoll_ctl");
-            exit(1);
+            return errno;
         }
+    } else {
+        return errno;
     }
 }
 
 void EpollContext::removeFdFromLoop(int fd) {
     epoll_ctl(_epfd, EPOLL_CTL_DEL, fd, nullptr);
-}
-
-void EpollContext::runAfterEachLoop(std::function<void()> func) {
-    _afterLoopFunctions.emplace_back(func);
 }

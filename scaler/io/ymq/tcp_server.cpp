@@ -13,6 +13,7 @@
 #include "scaler/io/ymq/event_manager.h"
 #include "scaler/io/ymq/io_socket.h"
 #include "scaler/io/ymq/message_connection_tcp.h"
+#include "scaler/io/ymq/utils.h"
 
 static int create_and_bind_socket(const sockaddr& addr, Configuration::BindReturnCallback callback) {
     int server_fd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
@@ -44,7 +45,6 @@ static int create_and_bind_socket(const sockaddr& addr, Configuration::BindRetur
         return -1;
     }
 
-    callback(0);
     return server_fd;
 }
 
@@ -55,7 +55,7 @@ TcpServer::TcpServer(
     BindReturnCallback onBindReturn)
     : _eventLoopThread(eventLoopThread)
     , _localIOSocketIdentity(std::move(localIOSocketIdentity))
-    , _eventManager(std::make_unique<EventManager>(_eventLoopThread))
+    , _eventManager(std::make_unique<EventManager>())
     , _addr(std::move(addr))
     , _onBindReturn(std::move(onBindReturn))
     , _serverFd {} {
@@ -66,17 +66,22 @@ TcpServer::TcpServer(
 }
 
 void TcpServer::onCreated() {
-    _serverFd = create_and_bind_socket(this->_addr, std::move(this->_onBindReturn));
-    if (_serverFd != -1)
-        _eventLoopThread->_eventLoop.addFdToLoop(_serverFd, EPOLLIN | EPOLLET, this->_eventManager.get());
-    else
+    _serverFd = create_and_bind_socket(this->_addr, this->_onBindReturn);
+    if (_serverFd == -1) {
         _serverFd = 0;
+        return;
+    }
+    auto res = _eventLoopThread->_eventLoop.addFdToLoop(_serverFd, EPOLLIN | EPOLLET, this->_eventManager.get());
+    if (res == 0) {
+        _onBindReturn(0);
+    } else {
+        close(_serverFd);
+        _serverFd = 0;
+        _onBindReturn(res);
+    }
 }
 
 void TcpServer::onRead() {
-    std::string id = this->_localIOSocketIdentity;
-    auto& sock     = this->_eventLoopThread->_identityToIOSocket.at(id);
-
     while (true) {
         sockaddr remoteAddr {};
         socklen_t remoteAddrLen = sizeof(remoteAddr);
@@ -105,27 +110,12 @@ void TcpServer::onRead() {
 
         if (remoteAddrLen > sizeof(remoteAddr)) {
             fprintf(stderr, "Are you using IPv6? This is probably not supported as of now.\n");
-        }
-
-        int optval = 1;
-        if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &optval, sizeof(optval)) == -1) {
-            perror("setsockopt");
-            fprintf(stderr, "TCP_NODELAY cannot be set\n");
-            close(fd);
             exit(-1);
         }
 
-        sock->_unconnectedConnection.push_back(
-            std::make_unique<MessageConnectionTCP>(
-                _eventLoopThread,
-                fd,
-                _addr,       // local (listening) address
-                remoteAddr,  // remote (peer) address
-                sock->identity(),
-                false,
-                sock->_pendingReadOperations));
-
-        sock->_unconnectedConnection.back()->onCreated();
+        std::string id = this->_localIOSocketIdentity;
+        auto sock      = this->_eventLoopThread->_identityToIOSocket.at(id);
+        sock->onConnectionCreated(setNoDelay(fd), getLocalAddr(fd), remoteAddr, false);
     }
 }
 

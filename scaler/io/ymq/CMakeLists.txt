@@ -16,7 +16,6 @@ target_sources(cc_ymq PRIVATE
   event_loop_thread.cpp
 
   event_manager.h
-  event_manager.cpp
   # file_descriptor.h 
 
   message_connection.h
@@ -43,7 +42,6 @@ target_sources(cc_ymq PRIVATE
   timestamp.h
 
   timed_queue.h
-  timed_queue.cpp
 
   utils.h
 )

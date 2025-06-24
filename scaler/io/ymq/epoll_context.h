@@ -4,9 +4,9 @@
 #include <sys/epoll.h>
 
 // C++
+#include <expected>
 #include <functional>
 #include <queue>
-#include <system_error>
 
 #include "scaler/io/ymq/timed_queue.h"
 
@@ -67,12 +67,11 @@ class EventManager;
 //     // EpollData* epoll_by_fd(int fd);
 // };
 
-using DelayedFunctionQueue = std::queue<std::function<void()>>;
-using Function             = std::function<void()>;
-
 // In the constructor, the epoll context should register eventfd/timerfd from
 // This way, the queues need not know about the event manager. We don't use callbacks.
 class EpollContext {
+    using Function             = std::function<void()>;
+    using DelayedFunctionQueue = std::queue<std::function<void()>>;
     int _epfd;
     TimedQueue _timingFunctions;
     DelayedFunctionQueue _delayedFunctions;
@@ -115,7 +114,6 @@ public:
     void executeLater(Function func) { _delayedFunctions.emplace(std::move(func)); }
 
     Identifier executeAt(Timestamp timestamp, Function callback) {
-        printf("%s\n", __PRETTY_FUNCTION__);
         return _timingFunctions.push(timestamp, std::move(callback));
     }
 
@@ -123,8 +121,6 @@ public:
 
     void execPendingFunctions();
 
-    void runAfterEachLoop(Function func);
-
-    void addFdToLoop(int fd, uint64_t events, EventManager* manager);
+    int addFdToLoop(int fd, uint64_t events, EventManager* manager);
     void removeFdFromLoop(int fd);
 };

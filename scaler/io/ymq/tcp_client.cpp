@@ -13,9 +13,9 @@
 #include "scaler/io/ymq/io_socket.h"
 #include "scaler/io/ymq/message_connection_tcp.h"
 #include "scaler/io/ymq/timestamp.h"
+#include "scaler/io/ymq/utils.h"
 
 void TcpClient::onCreated() {
-    printf("%s\n", __PRETTY_FUNCTION__);
     int sockfd    = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
     this->_connFd = sockfd;
     int ret       = connect(sockfd, (sockaddr*)&_remoteAddr, sizeof(_remoteAddr));
@@ -27,20 +27,13 @@ void TcpClient::onCreated() {
             close(sockfd);
             passedBackValue = errno;
         } else {
-            // TODO: Think about the lifetime of _eventManager.
-            printf("Connecting (EINPROGRESS), adding fd to loop\n");
             _eventLoopThread->_eventLoop.addFdToLoop(sockfd, EPOLLOUT | EPOLLET, this->_eventManager.get());
             passedBackValue = 0;
         }
     } else {
-        printf("client SUCCESS\n");
         std::string id = this->_localIOSocketIdentity;
-        auto& sock     = this->_eventLoopThread->_identityToIOSocket.at(id);
-        // FIXME: the first _addr is not real
-        sock->_unconnectedConnection.push_back(
-            std::make_unique<MessageConnectionTCP>(
-                _eventLoopThread, sockfd, _remoteAddr, _remoteAddr, id, true, sock->_pendingReadOperations));
-        sock->_unconnectedConnection.back()->onCreated();
+        auto sock      = this->_eventLoopThread->_identityToIOSocket.at(id);
+        sock->onConnectionCreated(setNoDelay(sockfd), getLocalAddr(sockfd), getRemoteAddr(sockfd), true);
 
         passedBackValue = 0;
     }
@@ -64,7 +57,7 @@ TcpClient::TcpClient(
     : _eventLoopThread(eventLoopThread)
     , _localIOSocketIdentity(std::move(localIOSocketIdentity))
     , _remoteAddr(std::move(remoteAddr))
-    , _eventManager(std::make_unique<EventManager>(_eventLoopThread))
+    , _eventManager(std::make_unique<EventManager>())
     , _connected(false)
     , _onConnectReturn(std::move(onConnectReturn))
     , _retryTimes {}
@@ -73,12 +66,9 @@ TcpClient::TcpClient(
     _eventManager->onWrite = [this] { this->onWrite(); };
     _eventManager->onClose = [this] { this->onClose(); };
     _eventManager->onError = [this] { this->onError(); };
-    printf("%s\n", __PRETTY_FUNCTION__);
 }
 
 void TcpClient::onWrite() {
-    printf("%s\n", __PRETTY_FUNCTION__);
-
     _eventLoopThread->_eventLoop.removeFdFromLoop(_connFd);
 
     int err {};
@@ -90,33 +80,14 @@ void TcpClient::onWrite() {
 
     if (err != 0) {
         fprintf(stderr, "Connect failed: %s\n", strerror(err));
-        fflush(stderr);
         retry();
-        return;
-    }
-
-    sockaddr localAddr;
-    socklen_t localAddrLen = sizeof(localAddr);
-    if (getsockname(_connFd, &localAddr, &localAddrLen) < 0) {
-        perror("getsockname");
-        exit(-1);
         return;
     }
 
     std::string id = this->_localIOSocketIdentity;
     auto sock      = this->_eventLoopThread->_identityToIOSocket.at(id);
 
-    sock->_unconnectedConnection.push_back(
-        std::make_unique<MessageConnectionTCP>(
-            _eventLoopThread,
-            _connFd,
-            localAddr,    // local bound address
-            _remoteAddr,  // remote address (peer)
-            id,
-            true,
-            sock->_pendingReadOperations));
-
-    sock->_unconnectedConnection.back()->onCreated();
+    sock->onConnectionCreated(setNoDelay(_connFd), getLocalAddr(_connFd), getRemoteAddr(_connFd), true);
 
     _connFd    = 0;
     _connected = true;
@@ -124,9 +95,7 @@ void TcpClient::onWrite() {
     _eventLoopThread->_eventLoop.executeLater([sock] { sock->removeConnectedTcpClient(); });
 }
 
-void TcpClient::onRead() {
-    printf("TcpClient::onRead()\n");
-}
+void TcpClient::onRead() {}
 
 void TcpClient::retry() {
     if (_retryTimes > 5) {
@@ -140,7 +109,7 @@ void TcpClient::retry() {
 
     Timestamp now;
     auto at = now.createTimestampByOffsetDuration(std::chrono::seconds(2 << _retryTimes++));
-    std::cout << "TIMESTAMP IN RETRY: " << stringifyTimestamp(at) << std::endl;
+
     _retryIdentifier = _eventLoopThread->_eventLoop.executeAt(at, [this] { this->onCreated(); });
 }
 
@@ -151,5 +120,4 @@ TcpClient::~TcpClient() {
     }
     if (_retryTimes > 0)
         _eventLoopThread->_eventLoop.cancelExecution(_retryIdentifier);
-    printf("%s\n", __PRETTY_FUNCTION__);
 }

@@ -2,6 +2,7 @@
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <string.h>
 
 #include <cassert>
@@ -43,4 +44,33 @@ inline std::expected<sockaddr, int> stringToSockaddr(const std::string& address)
     }
 
     return *(sockaddr*)&out_addr;
+}
+
+inline int setNoDelay(int fd) {
+    int optval = 1;
+    if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &optval, sizeof(optval)) == -1) {
+        perror("setsockopt");
+        fprintf(stderr, "TCP_NODELAY cannot be set\n");
+    }
+    return fd;
+}
+
+inline sockaddr getLocalAddr(int fd) {
+    sockaddr localAddr     = {};
+    socklen_t localAddrLen = sizeof(localAddr);
+    if (getsockname(fd, &localAddr, &localAddrLen) == -1) {
+        perror("getsockname");
+        fprintf(stderr, "Cannot get local address\n");
+    }
+    return localAddr;
+}
+
+inline sockaddr getRemoteAddr(int fd) {
+    sockaddr remoteAddr     = {};
+    socklen_t remoteAddrLen = sizeof(remoteAddr);
+    if (getpeername(fd, &remoteAddr, &remoteAddrLen) == -1) {
+        perror("getpeername");
+        fprintf(stderr, "Cannot get remote address\n");
+    }
+    return remoteAddr;
 }
