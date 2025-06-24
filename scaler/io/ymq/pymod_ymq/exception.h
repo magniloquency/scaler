@@ -3,16 +3,19 @@
 #include <Python.h>
 #include <structmember.h>
 
+#include "descrobject.h"
+#include "pyerrors.h"
 #include "scaler/io/ymq/pymod_ymq/ymq.h"
+#include "tupleobject.h"
 
 typedef struct {
-    PyObject_HEAD;
-    PyObject* error;
+    PyException_HEAD;
 } YmqException;
 
 extern "C" {
 
 static int YmqException_init(YmqException* self, PyObject* args, PyObject* kwds) {
+    // check the args
     PyObject* error             = nullptr;
     static const char* kwlist[] = {"error", nullptr};
     if (!PyArg_ParseTupleAndKeywords(args, kwds, "O", (char**)kwlist, &error))
@@ -38,36 +41,29 @@ static int YmqException_init(YmqException* self, PyObject* args, PyObject* kwds)
     }
 
     Py_XINCREF(error);
-    Py_XDECREF(self->error);
-    self->error = error;
-    return 0;
-}
 
-static PyObject* YmqException_new(PyTypeObject* type, PyObject* args, PyObject* kwds) {
-    YmqException* self = (YmqException*)type->tp_alloc(type, 0);
-
-    if (self) {
-        self->error = nullptr;
-    }
-
-    return (PyObject*)self;
+    // delegate to the base class init
+    return self->ob_base.ob_type->tp_base->tp_init((PyObject*)self, args, kwds);
 }
 
 static void YmqException_dealloc(YmqException* self) {
-    Py_XDECREF(self->error);
     Py_TYPE(self)->tp_free((PyObject*)self);
+}
+
+static PyObject* YmqException_error_getter(YmqException* self, void* /*closure*/) {
+    return PyTuple_GetItem(self->args, 0);  // error is the first item in args
 }
 }
 
-static PyMemberDef YmqException_members[] = {
-    {"error", T_OBJECT_EX, offsetof(YmqException, error), 0, "error code"}, {nullptr}};
+static PyGetSetDef YmqException_getset[] = {
+    {"error", (getter)YmqException_error_getter, nullptr, PyDoc_STR("error code"), nullptr}, {nullptr}  // Sentinel
+};
 
 static PyType_Slot YmqException_slots[] = {
     {Py_tp_init, (void*)YmqException_init},
-    {Py_tp_new, (void*)YmqException_new},
     {Py_tp_dealloc, (void*)YmqException_dealloc},
-    {Py_tp_members, (void*)YmqException_members},
+    {Py_tp_getset, (void*)YmqException_getset},
     {0, 0}};
 
 static PyType_Spec YmqException_spec = {
-    "ymq.Exception", sizeof(YmqException), 0, Py_TPFLAGS_DEFAULT, YmqException_slots};
+    "ymq.YmqException", sizeof(YmqException), 0, Py_TPFLAGS_DEFAULT, YmqException_slots};

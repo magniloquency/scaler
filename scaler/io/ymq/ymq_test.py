@@ -7,6 +7,8 @@ print(context, ";", socket)
 
 print(socket.socket_type)
 
+c = ymq.YmqException(ymq.Error.TODO)
+
 # assert context.num_threads == 2
 # assert socket.identity == "my-socket"
 # assert socket.socket_type == ymq.IOSocketType.Dealer

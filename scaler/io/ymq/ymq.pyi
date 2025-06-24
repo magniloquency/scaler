@@ -58,3 +58,13 @@ class IOSocket:
         """Bind the socket to an address and listen for incoming connections"""
     async def connect(self, address: str) -> None:
         """Connect to a remote socket"""
+
+class Error(IntEnum):
+    TODO = 0
+
+class YmqException(Exception):
+    error: Error
+
+    def __init__(self, error: Error) -> None: ...
+    def __repr__(self) -> str: ...
+    def __str__(self) -> str: ...

@@ -12,7 +12,6 @@
 
 // First-party
 #include "scaler/io/ymq/io_socket.h"
-#include "scaler/io/ymq/message.h"
 #include "scaler/io/ymq/pymod_ymq/async.h"
 #include "scaler/io/ymq/pymod_ymq/bytes.h"
 #include "scaler/io/ymq/pymod_ymq/message.h"

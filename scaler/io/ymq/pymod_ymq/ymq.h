@@ -244,7 +244,7 @@ static int ymq_exec(PyObject* module) {
     if (ymq_createType(module, &state->PyIOContextType, &PyIOContext_spec, "IOContext") < 0)
         return -1;
 
-    if (ymq_createType(module, &state->ExceptionType, &YmqException_spec, "Exception", true, PyExc_Exception) < 0)
+    if (ymq_createType(module, &state->ExceptionType, &YmqException_spec, "YmqException", true, PyExc_Exception) < 0)
         return -1;
 
     if (ymq_createType(module, &state->AwaitableType, &Awaitable_spec, "Awaitable", false) < 0)
