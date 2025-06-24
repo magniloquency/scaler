@@ -15,7 +15,6 @@ struct EventLoop {
     using Function   = std::function<void()>;  // TBD
     using Identifier = int;                    // TBD
     void loop() { eventLoopBackend.loop(); }
-    void stop();
 
     void executeNow(Function func) { eventLoopBackend.executeNow(std::move(func)); }
     void executeLater(Function func) { eventLoopBackend.executeLater(std::move(func)); }
@@ -25,17 +24,15 @@ struct EventLoop {
     }
     void cancelExecution(Identifier identifier) { eventLoopBackend.cancelExecution(identifier); }
 
+    // NOTE: These two functions are not used. - gxu
     void registerCallbackBeforeLoop(EventManager*);
-
     void registerEventManager(EventManager& em) { eventLoopBackend.registerEventManager(em); }
 
-    void addFdToLoop(int fd, uint64_t events, EventManager* manager) {
-        eventLoopBackend.addFdToLoop(fd, events, manager);
+    auto addFdToLoop(int fd, uint64_t events, EventManager* manager) {
+        return eventLoopBackend.addFdToLoop(fd, events, manager);
     }
 
     void removeFdFromLoop(int fd) { eventLoopBackend.removeFdFromLoop(fd); }
-
-    void runAfterEachLoop(Function func) { eventLoopBackend.runAfterEachLoop(std::move(func)); };
 
     EventLoopBackend eventLoopBackend;
 };

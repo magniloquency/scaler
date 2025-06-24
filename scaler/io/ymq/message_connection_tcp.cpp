@@ -30,14 +30,15 @@ MessageConnectionTCP::MessageConnectionTCP(
     sockaddr remoteAddr,
     std::string localIOSocketIdentity,
     bool responsibleForRetry,
-    std::shared_ptr<std::queue<TcpReadOperation>> pendingReadOperations)
+    std::shared_ptr<std::queue<TcpReadOperation>> pendingReadOperations,
+    std::optional<std::string> remoteIOSocketIdentity)
     : _eventLoopThread(eventLoopThread)
-    , _eventManager(std::make_unique<EventManager>(_eventLoopThread))
+    , _eventManager(std::make_unique<EventManager>())
     , _connFd(std::move(connFd))
-    , _localAddr(localAddr)
-    , _remoteAddr(remoteAddr)
+    , _localAddr(std::move(localAddr))
+    , _remoteAddr(std::move(remoteAddr))
     , _localIOSocketIdentity(std::move(localIOSocketIdentity))
-    , _remoteIOSocketIdentity(std::nullopt)
+    , _remoteIOSocketIdentity(std::move(remoteIOSocketIdentity))
     , _sendLocalIdentity(false)
     , _responsibleForRetry(responsibleForRetry)
     , _pendingReadOperations(pendingReadOperations) {
@@ -48,13 +49,16 @@ MessageConnectionTCP::MessageConnectionTCP(
 }
 
 void MessageConnectionTCP::onCreated() {
-    printf("%s\n", __PRETTY_FUNCTION__);
-    this->_eventLoopThread->_eventLoop.addFdToLoop(_connFd, EPOLLIN | EPOLLOUT | EPOLLET, this->_eventManager.get());
+    if (_connFd != 0) {
+        this->_eventLoopThread->_eventLoop.addFdToLoop(
+            _connFd, EPOLLIN | EPOLLOUT | EPOLLET, this->_eventManager.get());
+    }
 }
 
 void MessageConnectionTCP::onRead() {
-    printf("%s\n", __PRETTY_FUNCTION__);
-    // TODO: do not assume the identity to be less than 128bytes
+    // TODO:
+    // - do not assume the identity to be less than 128bytes
+    // - do not make remoteIOSocketIdentity a failing point
     if (!_remoteIOSocketIdentity) {
         // Other sizes are possible, but the size needs to be >= 8, in order for idBuf
         // to be aligned with 8 bytes boundary because of strict aliasing
@@ -191,7 +195,7 @@ void MessageConnectionTCP::onWrite() {
                 _writeOperations.front()._buf->data() + 8,
                 _writeOperations.front()._buf->data() + _writeOperations.front()._buf->size());
 
-            writeOp._callbackAfterCompleteWrite(Error::Placeholder);
+            writeOp._callbackAfterCompleteWrite(std::nullopt);
             _writeOperations.pop();
         } else {
             break;
@@ -200,7 +204,6 @@ void MessageConnectionTCP::onWrite() {
 }
 
 void MessageConnectionTCP::onClose() {
-    printf("%s\n", __PRETTY_FUNCTION__);
     _eventLoopThread->_eventLoop.removeFdFromLoop(_connFd);
     close(_connFd);
     auto& sock = _eventLoopThread->_identityToIOSocket.at(_localIOSocketIdentity);
@@ -209,7 +212,7 @@ void MessageConnectionTCP::onClose() {
 };
 
 // TODO: Maybe change this to message_t
-void MessageConnectionTCP::sendMessage(std::shared_ptr<std::vector<char>> msg, Configuration::SendMessageCallback callback) {
+void MessageConnectionTCP::sendMessage(std::shared_ptr<std::vector<char>> msg, SendMessageCallback callback) {
     // detect if the write operations queue is empty, if it is, simply write to exhaustion
     // if it is not, queue write operations to the end of the queue
     TcpWriteOperation writeOp;

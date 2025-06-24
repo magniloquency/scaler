@@ -22,10 +22,7 @@ std::shared_ptr<IOSocket> EventLoopThread::createIOSocket(
     assert(inserted);
     auto ptr = iterator->second;
 
-    _eventLoop.executeNow([ptr, callback = std::move(callback)] {
-        ptr->onCreated();
-        callback();
-    });
+    _eventLoop.executeNow([ptr, callback = std::move(callback)] { callback(); });
 
     return ptr;
 }

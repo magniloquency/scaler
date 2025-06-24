@@ -5,11 +5,11 @@
 
 #include <algorithm>
 #include <cassert>
-#include <cstdio>
 #include <functional>
 #include <iostream>
 #include <queue>
 
+#include "scaler/io/ymq/configuration.h"
 #include "scaler/io/ymq/timestamp.h"
 
 inline int createTimerfd() {
@@ -21,21 +21,30 @@ inline int createTimerfd() {
 }
 
 // TODO: HANDLE ERRS
-struct TimedQueue {
+class TimedQueue {
+    using Callback   = Configuration::TimedQueueCallback;
+    using Identifier = Configuration::ExecutionCancellationIdentifier;
+
+    using TimedFunc = std::tuple<Timestamp, Callback, Identifier>;
+    using cmp       = decltype([](const auto& x, const auto& y) { return std::get<0>(x) < std::get<0>(y); });
+
     int timer_fd;
-    using callback_t = std::function<void()>;
-    using Identifier = int;
     Identifier _currentId;
-    using timed_fn = std::tuple<Timestamp, callback_t, Identifier>;
-    using cmp      = decltype([](const auto& x, const auto& y) { return std::get<0>(x) < std::get<0>(y); });
-
-    std::priority_queue<timed_fn, std::vector<timed_fn>, cmp> pq;
-
+    std::priority_queue<TimedFunc, std::vector<TimedFunc>, cmp> pq;
     std::vector<Identifier> _cancelledFunctions;
 
-    TimedQueue();
+public:
+    TimedQueue(): timer_fd(createTimerfd()), _currentId {} { assert(timer_fd); }
 
-    Identifier push(Timestamp timestamp, callback_t cb);
+    Identifier push(Timestamp timestamp, Callback cb) {
+        auto ts = convertToItimerspec(timestamp);
+        if (pq.empty() || timestamp < std::get<0>(pq.top())) {
+            int ret = timerfd_settime(timer_fd, 0, &ts, nullptr);
+            assert(ret == 0);
+        }
+        pq.push({timestamp, cb, _currentId});
+        return _currentId++;
+    }
 
     void cancelExecution(Identifier id) { _cancelledFunctions.push_back(id); }
 
@@ -73,8 +82,6 @@ struct TimedQueue {
             }
         }
     }
-
-    void onCreated();
 
     int timingFd() const { return timer_fd; }
 };

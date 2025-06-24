@@ -16,31 +16,22 @@ class EventLoopThread;
 
 // TODO: Add the _fd back
 class EventManager {
-    std::shared_ptr<EventLoopThread> _eventLoopThread;
     // FileDescriptor _fd;
 
 public:
-    int events;
-    int revents;
-    void updateEvents();
-
     void onEvents(uint64_t events) {
         if constexpr (std::same_as<Configuration::PollingContext, EpollContext>) {
             int realEvents = (int)events;
             if ((realEvents & EPOLLHUP) && !(realEvents & EPOLLIN)) {
-                printf("onEvents onClose()\n");
                 onClose();
             }
             if (realEvents & (EPOLLERR | EPOLLHUP)) {
-                printf("onEvents onError()\n");
                 onError();
             }
             if (realEvents & (EPOLLIN | EPOLLRDHUP)) {
-                printf("onEvents onRead()\n");
                 onRead();
             }
             if (realEvents & EPOLLOUT) {
-                printf("onEvents onWrite()\n");
                 onWrite();
             }
         }
@@ -54,5 +45,5 @@ public:
     OnEventCallback onClose;
     OnEventCallback onError;
     // EventManager(): _fd {} {}
-    EventManager(std::shared_ptr<EventLoopThread>);
+    EventManager() {};
 };

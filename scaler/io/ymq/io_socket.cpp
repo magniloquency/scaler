@@ -8,7 +8,6 @@
 #include <utility>
 #include <vector>
 
-#include "scaler/io/ymq/configuration.h"
 #include "scaler/io/ymq/event_loop_thread.h"
 #include "scaler/io/ymq/event_manager.h"
 #include "scaler/io/ymq/message_connection_tcp.h"
@@ -18,22 +17,14 @@
 
 void IOSocket::removeConnectedTcpClient() {
     if (this->_tcpClient && this->_tcpClient->_connected) {
-        printf("ONE TCP CLIENT WAS REMOVED\n");
         this->_tcpClient.reset();
     }
 }
 
-// TODO: IOSocket::onCreated should initialize component(s) based on its type.
-void IOSocket::onCreated() {
-    printf("%s\n", __PRETTY_FUNCTION__);
-
-    // _eventLoopThread->_eventLoop.runAfterEachLoop([this] { this->removeConnectedTcpClient(); });
-}
-
 IOSocket::IOSocket(std::shared_ptr<EventLoopThread> eventLoopThread, Identity identity, IOSocketType socketType)
     : _eventLoopThread(eventLoopThread)
-    , _identity(identity)
-    , _socketType(socketType)
+    , _identity(std::move(identity))
+    , _socketType(std::move(socketType))
     , _pendingReadOperations(std::make_shared<std::queue<TcpReadOperation>>()) {}
 
 void IOSocket::connectTo(sockaddr addr, ConnectReturnCallback callback) {
@@ -65,16 +56,15 @@ void IOSocket::bindTo(std::string networkAddress, BindReturnCallback callback) {
 }
 
 void IOSocket::onConnectionDisconnected(MessageConnectionTCP* conn) {
-    printf("%s\n", __PRETTY_FUNCTION__);
     if (!conn->_remoteIOSocketIdentity) {
         return;
     }
 
     auto connIt = this->_identityToConnection.find(*conn->_remoteIOSocketIdentity);
-    _unconnectedConnection.push_back(std::move(connIt->second));
+    _unestablishedConnection.push_back(std::move(connIt->second));
     this->_identityToConnection.erase(connIt);
 
-    auto& connPtr = _unconnectedConnection.back();
+    auto& connPtr = _unestablishedConnection.back();
     if (connPtr->_responsibleForRetry) {
         connectTo(connPtr->_remoteAddr, [](auto) {});  // as the user callback is one-shot
     }
@@ -82,22 +72,23 @@ void IOSocket::onConnectionDisconnected(MessageConnectionTCP* conn) {
 
 void IOSocket::onConnectionIdentityReceived(MessageConnectionTCP* conn) {
     const auto& s = conn->_remoteIOSocketIdentity;
-    auto thisConn = std::find_if(
-        _unconnectedConnection.begin(), _unconnectedConnection.end(), [&](const auto& x) { return x.get() == conn; });
+    auto thisConn = std::find_if(_unestablishedConnection.begin(), _unestablishedConnection.end(), [&](const auto& x) {
+        return x.get() == conn;
+    });
     _identityToConnection[*s] = std::move(*thisConn);
-    _unconnectedConnection.erase(thisConn);
+    _unestablishedConnection.erase(thisConn);
 
-    auto c = std::find_if(_unconnectedConnection.begin(), _unconnectedConnection.end(), [&](const auto& x) {
+    auto c = std::find_if(_unestablishedConnection.begin(), _unestablishedConnection.end(), [&](const auto& x) {
         return *s == *x->_remoteIOSocketIdentity;
     });
 
-    if (c == _unconnectedConnection.end())
+    if (c == _unestablishedConnection.end())
         return;
 
     (_identityToConnection[*s])->_writeOperations       = std::move((*c)->_writeOperations);
     (_identityToConnection[*s])->_pendingReadOperations = std::move((*c)->_pendingReadOperations);
     (_identityToConnection[*s])->_receivedMessages      = std::move((*c)->_receivedMessages);
-    _unconnectedConnection.erase(c);
+    _unestablishedConnection.erase(c);
 }
 
 void IOSocket::sendMessage(Message message, SendMessageCallback callback) {
@@ -115,22 +106,13 @@ void IOSocket::sendMessage(Message message, SendMessageCallback callback) {
             if (this->_identityToConnection.contains(address)) {
                 conn = this->_identityToConnection[address].get();
             } else {
-                auto it =
-                    std::ranges::find(_unconnectedConnection, address, &MessageConnectionTCP::_remoteIOSocketIdentity);
-                if (it != _unconnectedConnection.end()) {
+                auto it = std::ranges::find(
+                    _unestablishedConnection, address, &MessageConnectionTCP::_remoteIOSocketIdentity);
+                if (it != _unestablishedConnection.end()) {
                     conn = it->get();
                 } else {
-                    _unconnectedConnection.push_back(std::make_unique<MessageConnectionTCP>(
-                        this->_eventLoopThread,
-                        0,
-                        sockaddr(),
-                        sockaddr(),
-                        this->identity(),
-                        false,
-                        _pendingReadOperations));
-                    _unconnectedConnection.back()->_remoteIOSocketIdentity = address;
-
-                    conn = _unconnectedConnection.back().get();
+                    onConnectionCreated(0, {}, {}, false, address);
+                    conn = _unestablishedConnection.back().get();
                 }
             }
             conn->sendMessage(std::move(payload), std::move(callback));
@@ -148,6 +130,25 @@ void IOSocket::recvMessage(RecvMessageCallback callback) {
             }
         }
     });
+}
+
+void IOSocket::onConnectionCreated(
+    int fd,
+    sockaddr localAddr,
+    sockaddr remoteAddr,
+    bool responsibleForRetry,
+    std::optional<std::string> remoteIOSocketIdentity) {
+    _unestablishedConnection.push_back(
+        std::make_unique<MessageConnectionTCP>(
+            _eventLoopThread,
+            fd,
+            std::move(localAddr),
+            std::move(remoteAddr),
+            this->identity(),
+            responsibleForRetry,
+            _pendingReadOperations,
+            std::move(remoteIOSocketIdentity)));
+    _unestablishedConnection.back()->onCreated();
 }
 
 IOSocket::~IOSocket() {

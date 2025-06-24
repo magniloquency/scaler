@@ -4,9 +4,9 @@
 #include <sys/epoll.h>
 
 // C++
+#include <expected>
 #include <functional>
 #include <queue>
-#include <system_error>
 
 #include "scaler/io/ymq/timed_queue.h"
 
@@ -67,19 +67,18 @@ class EventManager;
 //     // EpollData* epoll_by_fd(int fd);
 // };
 
-using DelayedFunctionQueue = std::queue<std::function<void()>>;
-using Function             = std::function<void()>;
-
 // In the constructor, the epoll context should register eventfd/timerfd from
 // This way, the queues need not know about the event manager. We don't use callbacks.
 class EpollContext {
+    using Function             = std::function<void()>;
+    using DelayedFunctionQueue = std::queue<Function>;
     int _epfd;
     TimedQueue _timingFunctions;
     DelayedFunctionQueue _delayedFunctions;
-    InterruptiveConcurrentQueue<std::function<void()>> _interruptiveFunctions;
+    InterruptiveConcurrentQueue<Function> _interruptiveFunctions;
     static const size_t _isInterruptiveFd = 0;
     static const size_t _isTimingFd       = 1;
-    std::vector<std::function<void()>> _afterLoopFunctions;
+    std::vector<Function> _afterLoopFunctions;
 
 public:
     using Identifier = int;  // TBD
@@ -115,7 +114,6 @@ public:
     void executeLater(Function func) { _delayedFunctions.emplace(std::move(func)); }
 
     Identifier executeAt(Timestamp timestamp, Function callback) {
-        printf("%s\n", __PRETTY_FUNCTION__);
         return _timingFunctions.push(timestamp, std::move(callback));
     }
 
@@ -123,8 +121,6 @@ public:
 
     void execPendingFunctions();
 
-    void runAfterEachLoop(Function func);
-
-    void addFdToLoop(int fd, uint64_t events, EventManager* manager);
+    int addFdToLoop(int fd, uint64_t events, EventManager* manager);
     void removeFdFromLoop(int fd);
 };

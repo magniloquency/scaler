@@ -9,20 +9,16 @@
 #include "scaler/io/ymq/configuration.h"
 #include "scaler/io/ymq/typedefs.h"
 
-// NOTE: Don't do this in a header file, it will pollute the env. - gxu
-// using Identity = Configuration::Identity;
-
 class IOSocket;
 class EventLoopThread;
 
 class IOContext {
     std::vector<std::shared_ptr<EventLoopThread>> _threads;
 
-    using Identity = Configuration::Identity;
+    using Identity = Configuration::IOSocketIdentity;
 
 public:
     IOContext(size_t threadCount = 1);
-
     IOContext(const IOContext&)            = delete;
     IOContext& operator=(const IOContext&) = delete;
     IOContext(IOContext&&)                 = delete;
@@ -32,7 +28,8 @@ public:
     std::shared_ptr<IOSocket> createIOSocket(
         Identity identity, IOSocketType socketType, std::function<void()> callback);
 
-    bool removeIOSocket(std::shared_ptr<IOSocket>&);
+    // After user called this method, no other call on the passed in IOSocket should be made.
+    void removeIOSocket(std::shared_ptr<IOSocket>& socket);
 
     size_t numThreads() const { return _threads.size(); }
 };
