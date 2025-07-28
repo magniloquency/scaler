@@ -56,6 +56,8 @@ class VanillaTaskManager(TaskManager, Looper, Reporter):
     async def routine(self):
         task_id = await self._unassigned.get()
 
+        print(f"ASSIGN: [{task_id}]")
+
         # FIXME: As the assign_task_to_worker() call can be blocking (especially if there is no worker connected to the
         # scheduler), we might end up with the task object being in neither _running nor _unassigned.
         # In this case, the scheduler will answer any task cancellation request with a "task not found" error, which is
@@ -84,22 +86,30 @@ class VanillaTaskManager(TaskManager, Looper, Reporter):
         )
 
     async def on_task_new(self, client_id: ClientID, task: Task):
+        print("on_task_new(): start")
+
         if (
             0 <= self._max_number_of_tasks_waiting <= self._unassigned.qsize()
             and not self._worker_manager.has_available_worker()
         ):
+            print("on_task_new(): A")
             await self._binder.send(client_id, TaskResult.new_msg(task.task_id, TaskStatus.NoWorker))
             return
+        
+        print(f"on_task_new(): B; {self._max_number_of_tasks_waiting}, {self._unassigned.qsize()}, {self._worker_manager.has_available_worker()}")
 
         self._client_manager.on_task_begin(client_id, task.task_id)
+        print("on_task_new(): C")
         self._task_id_to_task[task.task_id] = task
 
         await self._unassigned.put(task.task_id)
+        print("on_task_new(): D")
         await self.__send_monitor(
             task.task_id,
             self._object_manager.get_object_name(self._task_id_to_task[task.task_id].func_object_id),
             TaskStatus.Inactive,
         )
+        print("on_task_new(): E")
 
     async def on_task_cancel(self, client_id: ClientID, task_cancel: TaskCancel):
         if task_cancel.task_id not in self._task_id_to_task:

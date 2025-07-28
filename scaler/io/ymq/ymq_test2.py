@@ -5,11 +5,16 @@ import ymq
 
 async def main():
     ctx = ymq.IOContext()
+    print("created ioctx")
     s1 = await ctx.createIOSocket("s1", ymq.IOSocketType.Binder)
+    print("created binder")
     s2 = await ctx.createIOSocket("s2", ymq.IOSocketType.Connector)
+    print("created connector")
 
     await s1.bind("tcp://127.0.0.1:8080")
+    print("bound")
     await s2.connect("tcp://127.0.0.1:8080")
+    print("connected")
 
     data = b"hello from s1"
     print(f"sending: {hashlib.sha1(data).hexdigest()[:8]}")

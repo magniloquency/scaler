@@ -121,7 +121,8 @@ static PyObject* PyIOSocket_send_sync(PyIOSocket* self, PyObject* args, PyObject
     Py_RETURN_NONE;
 }
 
-static PyObject* PyIOSocket_recv(PyIOSocket* self, PyObject* args) {
+static PyObject* PyIOSocket_recv(PyIOSocket* self, PyObject* args)
+{
     return async_wrapper((PyObject*)self, [=](YMQState* state, PyObject* future) {
         self->socket->recvMessage([=](auto result) {
             if (result.second._errorCode == Error::ErrorCode::Uninit) {

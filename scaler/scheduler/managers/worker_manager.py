@@ -48,10 +48,13 @@ class VanillaWorkerManager(WorkerManager, Looper, Reporter):
     async def assign_task_to_worker(self, task: Task) -> bool:
         worker = await self._allocator_policy.assign_task(task.task_id)
         if worker is None:
+            print("FAILED TO ASSIGN TASK")
             return False
 
         # send to worker
+        print(f"ASSIGN TASK TO: [{worker}]")
         await self._binder.send(worker, task)
+        print("TASK ASSIGNED.")
         return True
 
     async def on_task_cancel(self, task_cancel: TaskCancel):

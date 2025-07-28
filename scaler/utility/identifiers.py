@@ -96,3 +96,7 @@ class ObjectID(bytes):
 
     def __repr__(self) -> str:
         return f"ObjectID(owner_hash={self.owner_hash().hex()}, object_tag={self.object_tag().hex()})"
+    
+    def __str__(self) -> str:
+        stride = len(self) // 4
+        return f"{[int.from_bytes(self[i*stride:(i+1)*stride], 'big') for i in range(4)]}"

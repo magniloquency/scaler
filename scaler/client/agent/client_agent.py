@@ -121,6 +121,8 @@ class ClientAgent(threading.Thread):
         return self._storage_address.result()
 
     async def __on_receive_from_client(self, message: Message):
+        print(f"client: {message.__class__.__name__}")
+
         if isinstance(message, ClientDisconnect):
             await self._disconnect_manager.on_client_disconnect(message)
             return
@@ -148,6 +150,9 @@ class ClientAgent(threading.Thread):
         raise TypeError(f"Unknown {message=}")
 
     async def __on_receive_from_scheduler(self, message: Message):
+        if not isinstance(message, ClientHeartbeatEcho):
+            print(f"scheduler: {message.__class__.__name__}")
+
         if isinstance(message, ClientShutdownResponse):
             await self._disconnect_manager.on_client_shutdown_response(message)
             return

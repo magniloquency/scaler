@@ -56,6 +56,8 @@ class Scheduler:
         self._context = IOContext(num_threads=config.io_threads)
         self._binder = AsyncBinder(context=self._context, name="scheduler", address=config.address)
         self._binder.init_sync()
+        logging.info(f"{self.__class__.__name__}: listen to scheduler address {config.address.to_address()}")
+
         self._binder_monitor = AsyncConnector(
             context=self._context,
             name="scheduler_monitor",
@@ -64,14 +66,13 @@ class Scheduler:
             identity=None,
         )
         self._binder_monitor.init_sync(bind_or_connect="bind", socket_type=IOSocketType.Multicast)
-        self._connector_storage = AsyncObjectStorageConnector()
-
-        logging.info(f"{self.__class__.__name__}: listen to scheduler address {config.address.to_address()}")
-        logging.info(
-            f"{self.__class__.__name__}: connect to object storage server {self._storage_address!r}"
-        )
         logging.info(
             f"{self.__class__.__name__}: listen to scheduler monitor address {self._address_monitor.to_address()}"
+        )
+
+        self._connector_storage = AsyncObjectStorageConnector()
+        logging.info(
+            f"{self.__class__.__name__}: connect to object storage server {self._storage_address!r}"
         )
 
         match config.allocate_policy:
@@ -134,6 +135,9 @@ class Scheduler:
         await self._connector_storage.connect(self._storage_address.host, self._storage_address.port)
 
     async def on_receive_message(self, source: bytes, message: Message):
+        if not isinstance(message, WorkerHeartbeat) and not isinstance(message, ClientHeartbeat):
+            print(f"!!! {message.__class__.__name__}")
+
         # =====================================================================================
         # client manager
         if isinstance(message, ClientHeartbeat):

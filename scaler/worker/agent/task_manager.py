@@ -41,9 +41,13 @@ class VanillaTaskManager(Looper, TaskManager):
         self._processor_manager = processor_manager
 
     async def on_task_new(self, task: Task):
+        print("on_task_new(): start")
         self.__enqueue_task(task, is_suspended=False)
 
+        print("on_task_new(): mid")
+
         await self.__suspend_if_priority_is_higher(task)
+        print("on_task_new(): end")
 
     async def on_cancel_task(self, task_cancel: TaskCancel):
         task_id = task_cancel.task_id
@@ -89,10 +93,15 @@ class VanillaTaskManager(Looper, TaskManager):
         return self._queued_task_ids.qsize()
 
     async def __processing_task(self):
+        print("routine...")
         await self._processor_manager.wait_until_can_accept_task()
+
+        print("accepting task...")
 
         _, task_id = await self._queued_task_ids.get()
         task = self._queued_task_id_to_task.pop(task_id)
+
+        print(f"processing task: [{task_id}]")
 
         if task_id not in self._processing_task_ids:
             self._processing_task_ids.add(task_id)

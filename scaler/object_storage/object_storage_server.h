@@ -104,6 +104,9 @@ private:
             std::cerr << "exception thrown, message not a capnp e.what() = " << e.what() << '\n';
             throw e;
         }
+
+        std::println(
+            "CLOSING: {}:{}", socket->remote_endpoint().address().to_string(), socket->remote_endpoint().port());
     }
 
     template <ObjectStorageMessage T>

@@ -135,6 +135,8 @@ class Processor(multiprocessing.get_context("spawn").Process):  # type: ignore
             self._object_cache.join()
 
     def __on_connector_receive(self, message: Message):
+        print(f"PROCESSOR[{self.pid}]: Recv {message.__class__.__name__}")
+
         if isinstance(message, ObjectInstruction):
             self.__on_receive_object_instruction(message)
             return
@@ -154,21 +156,37 @@ class Processor(multiprocessing.get_context("spawn").Process):  # type: ignore
         logging.error(f"worker received unknown object instruction type {instruction=}")
 
     def __on_received_task(self, task: Task):
+        print(f"PROCESSOR[{self.pid}]: on recv task")
         self._current_task = task
 
+        print("A")
+
         self.__cache_required_object_ids(task)
+
+        print("B")
 
         self.__process_task(task)
 
     def __cache_required_object_ids(self, task: Task) -> None:
+        print("#A")
         required_object_ids = self.__get_required_object_ids_for_task(task)
 
-        for object_id in required_object_ids:
+        print("#B")
+
+        for i, object_id in enumerate(required_object_ids):
+            print(f"#C; {i}/{len(required_object_ids)}")
             if self._object_cache.has_object(object_id):
+                print("#G")
                 continue
 
+            print("#F")
+
             object_content = self._connector_storage.get_object(object_id)
+            print("#H")
             self._object_cache.add_object(task.source, object_id, object_content)
+            print("#D")
+
+        print("#E")
 
     @staticmethod
     def __get_required_object_ids_for_task(task: Task) -> List[ObjectID]:
@@ -181,6 +199,7 @@ class Processor(multiprocessing.get_context("spawn").Process):  # type: ignore
         return object_ids
 
     def __process_task(self, task: Task):
+        print(f"PROCESSOR[{self.pid}]: process task")
         try:
             function = self._object_cache.get_object(task.func_object_id)
             function_with_logger = self.__get_object_with_client_logger(DUMMY_CLIENT, function)
@@ -196,6 +215,8 @@ class Processor(multiprocessing.get_context("spawn").Process):  # type: ignore
             logging.exception(f"exception when processing task_id={task.task_id.hex()}:")
             status = TaskStatus.Failed
             result_bytes = serialize_failure(e)
+
+        print(f"PROCESSOR[{self.pid}]: COMPLETE TASK")
 
         self.__send_result(task.source, task.task_id, status, result_bytes)
 
@@ -226,6 +247,7 @@ class Processor(multiprocessing.get_context("spawn").Process):  # type: ignore
         # return wrap(fn)
 
     def __send_result(self, source: ClientID, task_id: TaskID, status: TaskStatus, result_bytes: bytes):
+        print(f"PROCESSOR[{self.pid}]: Send result")
         self._current_task = None
 
         result_object_id = ObjectID.generate_object_id(source)

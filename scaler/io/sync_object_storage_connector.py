@@ -58,11 +58,18 @@ class SyncObjectStorageConnector:
         Will block until the object is available.
         """
 
+        print("&A")
+
         with self._socket_lock:
+            print(f"&B: {object_id}")
             self.__send_request(object_id, max_payload_length, ObjectRequestHeader.ObjectRequestType.GetObject)
+            print("&C")
             response_header, response_payload = self.__receive_response()
+            print("&D")
 
         self.__ensure_response_type(response_header, [ObjectResponseHeader.ObjectResponseType.GetOK])
+
+        print("&E")
 
         return response_payload
 

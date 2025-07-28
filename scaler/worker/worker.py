@@ -162,6 +162,9 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
         self._task = self._loop.create_task(self.__get_loops())
 
     async def __on_receive_external(self, message: Message):
+        if not isinstance(message, WorkerHeartbeatEcho):
+            print(f"external: {message.__class__.__name__}")
+
         if isinstance(message, WorkerHeartbeatEcho):
             await self._heartbeat_manager.on_heartbeat_echo(message)
             return
@@ -187,6 +190,8 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
         raise TypeError(f"Unknown {message=}")
 
     async def __on_receive_internal(self, processor_id_bytes: bytes, message: Message):
+        print(f"internal: {message.__class__.__name__}")
+
         processor_id = ProcessorID(processor_id_bytes)
 
         if isinstance(message, ProcessorInitialized):

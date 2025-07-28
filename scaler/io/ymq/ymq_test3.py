@@ -1,40 +1,38 @@
-import asyncio
-import hashlib
 import ymq
+from multiprocessing import Process
+import itertools as itools
+import time
 
-
-async def main():
+def peerA():
     ctx = ymq.IOContext()
-    s1 = await ctx.createIOSocket("s1", ymq.IOSocketType.Binder)
-    s2 = await ctx.createIOSocket("s2", ymq.IOSocketType.Connector)
+    sock = ctx.createIOSocket_sync("A", ymq.IOSocketType.Connector)
+    sock.connect_sync("tcp://127.0.0.1:8181")
 
-    await s1.bind("tcp://127.0.0.1:8080")
-    await s2.connect("tcp://127.0.0.1:8080")
+    for i in itools.count():
+        sock.send_sync(ymq.Message(None, f"A: {i}".encode()))
+        msg = sock.recv_sync()
+        print(f"{msg.address.data.decode()}; {msg.payload.data.decode()}")
+        time.sleep(3)
 
-    data = b"hello from s1"
-    print(f"sending: {hashlib.sha1(data).hexdigest()[:8]}")
+def peerB():
+    ctx = ymq.IOContext()
+    sock = ctx.createIOSocket_sync("B", ymq.IOSocketType.Binder)
+    sock.bind_sync("tcp://127.0.0.1:8181")
 
-    x = s1.send(ymq.Message(b"s2", data))
-    y = s2.recv()
+    for i in itools.count():
+        msg = sock.recv_sync()
+        print(f"{msg.address.data.decode()}; {msg.payload.data.decode()}")
+        time.sleep(3)
+        sock.send_sync(ymq.Message(b"A", f"B: {i}".encode()))
+        
 
-    await x
-    message = await y
-    print(f"Received message: {message.payload.data.decode()} {hashlib.sha1(message.payload.data).hexdigest()[:8]} from {message.address.data}")
+s = Process(name="A", target=peerA)
+r = Process(name="B", target=peerB)
 
-    x = s1.send(ymq.Message(b"s2", data))
-    y = s2.recv()
+s.start()
+r.start()
 
-    await x
-    message = await y
-    print(f"Received message: {message.payload.data.decode()} {hashlib.sha1(message.payload.data).hexdigest()[:8]} from {message.address.data}")
+input()
 
-    x = s1.send(ymq.Message(b"s2", data))
-    y = s2.recv()
-
-    await x
-    message = await y
-    print(f"Received message: {message.payload.data.decode()} {hashlib.sha1(message.payload.data).hexdigest()[:8]} from {message.address.data}")
-
-
-
-asyncio.run(main())
+s.kill()
+r.kill()

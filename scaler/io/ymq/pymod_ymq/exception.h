@@ -13,8 +13,8 @@
 #include "ymq.h"
 
 // the order of the members in the exception args tuple
-const Py_ssize_t YMQException_errorCodeIndex = 0;
-const Py_ssize_t YMQException_messageIndex   = 1;
+const Py_ssize_t errorCodeIndex = 0;
+const Py_ssize_t messageIndex   = 1;
 
 struct YMQException {
     PyException_HEAD;
