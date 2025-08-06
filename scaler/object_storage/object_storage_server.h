@@ -105,8 +105,8 @@ private:
             throw e;
         }
 
-        std::println(
-            "CLOSING: {}:{}", socket->remote_endpoint().address().to_string(), socket->remote_endpoint().port());
+        // std::println(
+        //     "CLOSING: {}:{}", socket->remote_endpoint().address().to_string(), socket->remote_endpoint().port());
     }
 
     template <ObjectStorageMessage T>
