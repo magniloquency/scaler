@@ -55,6 +55,7 @@ static void YMQException_dealloc(YMQException* self)
 
     // we still need to release the reference to the heap type
     auto* tp = Py_TYPE(self);
+    tp->tp_free(self);
     Py_DECREF(tp);
 }
 
