@@ -10,6 +10,7 @@
 #include <cstring>
 
 // C++
+#include <optional>
 #include <string>
 
 // First-party
@@ -21,7 +22,7 @@ class Bytes {
 
     void free()
     {
-        if (is_empty())
+        if (is_null())
             return;
         delete[] _data;
         _data = nullptr;
@@ -31,6 +32,8 @@ class Bytes {
 
 public:
     Bytes(char* data, size_t len): _data(datadup((uint8_t*)data, len)), _len(len) {}
+
+    Bytes(std::string s): _data(datadup((uint8_t*)s.data(), s.length())), _len(s.length()) {}
 
     Bytes(): _data {}, _len {} {}
 
@@ -81,15 +84,14 @@ public:
 
     ~Bytes() { this->free(); }
 
-    [[nodiscard]] constexpr bool operator!() const noexcept { return is_empty(); }
+    [[nodiscard]] constexpr bool operator!() const noexcept { return is_null(); }
 
-    [[nodiscard]] constexpr bool is_empty() const noexcept { return !this->_data; }
+    [[nodiscard]] constexpr bool is_null() const noexcept { return !this->_data; }
 
-    // debugging utility
-    std::string as_string() const
+    std::optional<std::string> as_string() const
     {
-        if (is_empty())
-            return "[EMPTY]";
+        if (is_null())
+            return std::nullopt;
 
         return std::string((char*)_data, _len);
     }
