@@ -1,11 +1,11 @@
 #pragma once
 
 // Python
-#include <stdexcept>
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
 // C++
+#include <stdexcept>
 #include <memory>
 
 // C
