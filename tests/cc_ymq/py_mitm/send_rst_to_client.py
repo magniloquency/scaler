@@ -17,7 +17,7 @@ class MITM(MITMProtocol):
         sender: TCPConnection,
         client_conn: TCPConnection | None,
         server_conn: TCPConnection,
-    ) -> None:
+    ) -> bool:
         if sender == client_conn or client_conn is None:
             if pkt[TCP].flags == "PA":
                 self.client_pshack_counter += 1
@@ -29,11 +29,12 @@ class MITM(MITMProtocol):
                     )
                     print(f"<- [{rst_pkt[TCP].flags}] (simulated)")
                     tuntap.send(rst_pkt)
-                    return
+                    return True
 
             tuntap.send(server_conn.rewrite(pkt))
         elif sender == server_conn:
             tuntap.send(client_conn.rewrite(pkt))
+        return True
 
 
 # client -> mitm -> server

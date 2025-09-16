@@ -17,12 +17,13 @@ class MITM(MITMProtocol):
         sender: TCPConnection,
         client_conn: TCPConnection | None,
         server_conn: TCPConnection,
-    ) -> None:
+    ) -> bool:
         if random.random() < self.drop_pcent:
             print("[!] Dropping packet")
-            return
+            return False
 
         if sender == client_conn:
             tuntap.send(server_conn.rewrite(pkt))
         elif sender == server_conn:
             tuntap.send(client_conn.rewrite(pkt))
+        return True
