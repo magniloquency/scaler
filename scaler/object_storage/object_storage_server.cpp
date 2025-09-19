@@ -130,14 +130,15 @@ void ObjectStorageServer::processRequests()
 
             std::ranges::for_each(_pendingSendMessageFuts, [](auto& fut) {
                 if (fut.wait_for(0s) == std::future_status::ready) {
-                    auto res = fut.get();
-                    assert(res);
+                    auto error = fut.get();
+                    assert(!error);
                 }
             });
 
-            auto [message, error] = ymq::syncRecvMessage(_ioSocket);
+            auto maybeMessage = ymq::syncRecvMessage(_ioSocket);
 
-            if (error._errorCode != ymq::Error::ErrorCode::Uninit) {
+            if (!maybeMessage) {
+                auto error = maybeMessage.error();
                 if (error._errorCode == ymq::Error::ErrorCode::IOSocketStopRequested) {
                     _logger.log(
                         scaler::ymq::Logger::LoggingLevel::info,
@@ -151,8 +152,8 @@ void ObjectStorageServer::processRequests()
                 }
             }
 
-            const auto identity = lastMessageIdentity = message.address.as_string();
-            const auto headerOrPayload                = std::move(message.payload);
+            const auto identity        = *maybeMessage->address.as_string();
+            const auto headerOrPayload = std::move(maybeMessage->payload);
 
             auto it = identityToFullRequest.find(identity);
             if (it == identityToFullRequest.end()) {
