@@ -30,10 +30,11 @@
 #include <format>
 #include <functional>
 #include <iostream>
-#include <numeric>
+#include <functional>
+#include <initializer_list>
+#include <iostream>
 #include <optional>
 #include <print>
-#include <stdexcept>
 #include <string>
 #include <system_error>
 #include <thread>

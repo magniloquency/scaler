@@ -267,7 +267,7 @@ void MessageConnectionTCP::updateReadOperation()
             _receivedReadOperations.pop();
             auto recvMessageCallback = std::move(_pendingRecvMessageCallbacks->front());
             _pendingRecvMessageCallbacks->pop();
-
+            
             recvMessageCallback({Message(std::move(address), std::move(payload)), {}});
         } else {
             assert(_pendingRecvMessageCallbacks->size());
