@@ -530,7 +530,7 @@ TEST_F(ObjectStorageServerTest, TestClientDisconnect)
 // TODO: why does this not pass?
 // the message connection tcp is removed from the remote socket's list
 // but the object is never destructued, and so the connection is never closed
-TEST_F(ObjectStorageServerTest, DISABLED_TestMalformedHeader)
+TEST_F(ObjectStorageServerTest, TestMalformedHeader)
 {
     ObjectResponseHeader responseHeader;
     std::optional<ObjectPayload> responsePayload;
