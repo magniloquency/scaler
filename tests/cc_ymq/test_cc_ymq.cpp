@@ -416,7 +416,7 @@ TEST(CcYmqTestSuite, TestMitmPassthrough)
 // not exits before the Man in the Middle sends RST.
 // this test uses the mitm to test the reconnect logic of YMQ by sending RST packets
 // this test is disabled until fixes arrive in the core
-TEST(CcYmqTestSuite, DISABLED_TestMitmReconnect)
+TEST(CcYmqTestSuite, TestMitmReconnect)
 {
     auto mitm_ip     = "192.0.2.4";
     auto mitm_port   = 2525;
