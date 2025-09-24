@@ -136,6 +136,9 @@ TestResult reconnect_server_main(std::string host, uint16_t port)
     RETURN_FAILURE_IF_FALSE(result.has_value());
     RETURN_FAILURE_IF_FALSE(result->payload.as_string() == "hello!!");
 
+    auto result2 = syncSendMessage(socket, {.address = Bytes("client"), .payload = Bytes("goodbye!!")});
+    assert(result2);
+
     context.removeIOSocket(socket);
 
     return TestResult::Success;
@@ -148,6 +151,11 @@ TestResult reconnect_client_main(std::string host, uint16_t port)
     auto socket = syncCreateSocket(context, IOSocketType::Connector, "client");
     syncConnectSocket(socket, format_address(host, port));
     auto result = syncSendMessage(socket, {.address = Bytes("server"), .payload = Bytes("hello!!")});
+
+    printf("BEFORE CLI\n");
+    auto result2 = syncRecvMessage(socket);
+    printf("AFTER CLI\n");
+    assert(result2);
 
     context.removeIOSocket(socket);
 
@@ -219,8 +227,7 @@ TestResult server_receives_huge_header(const char* host, uint16_t port)
     syncBindSocket(socket, format_address(host, port));
     auto result = syncRecvMessage(socket);
 
-    RETURN_FAILURE_IF_FALSE(result.has_value());
-    RETURN_FAILURE_IF_FALSE(result->payload.as_string() == "yi er san si wu liu");
+    // RETURN_FAILURE_IF_FALSE(result.error()._errorCode == scaler::ymq::Error::ErrorCode::MessageTooLarge);
 
     context.removeIOSocket(socket);
 
@@ -239,9 +246,6 @@ TestResult client_sends_huge_header(const char* host, uint16_t port)
     // write the huge header
     uint64_t header = std::numeric_limits<uint64_t>::max();
     socket.write_all((char*)&header, 8);
-
-    // TODO: this sleep shouldn't be necessary
-    std::this_thread::sleep_for(3s);
 
     return TestResult::Success;
 }
@@ -340,7 +344,7 @@ TEST(CcYmqTestSuite, TestBasicRawClientRawServer)
 // TODO: this should pass
 // this is the same as above, except that it has no delay before calling close() on the socket
 // this test hangs
-TEST(CcYmqTestSuite, DISABLED_TestBasicRawClientRawServerNoDelay)
+TEST(CcYmqTestSuite, TestBasicRawClientRawServerNoDelay)
 {
     auto host = "localhost";
     auto port = 2892;
@@ -407,6 +411,9 @@ TEST(CcYmqTestSuite, TestMitmPassthrough)
     EXPECT_EQ(result, TestResult::Success);
 }
 
+// TODO: This test should be redesigned so that the ACK is send from the remote end
+// before the Man in the Middle sends RST. Please also make sure that the client does
+// not exits before the Man in the Middle sends RST.
 // this test uses the mitm to test the reconnect logic of YMQ by sending RST packets
 // this test is disabled until fixes arrive in the core
 TEST(CcYmqTestSuite, DISABLED_TestMitmReconnect)
@@ -460,7 +467,7 @@ TEST(CcYmqTestSuite, TestSlowNetwork)
 // in this test, a client connects to the YMQ server but only partially sends its identity and then disconnects
 // then a new client connection is established, and this one sends a complete identity and message
 // YMQ should be able to recover from a poorly-behaved client like this
-TEST(CcYmqTestSuite, DISABLED_TestClientSendIncompleteIdentity)
+TEST(CcYmqTestSuite, TestClientSendIncompleteIdentity)
 {
     auto host = "localhost";
     auto port = 2896;
@@ -478,6 +485,9 @@ TEST(CcYmqTestSuite, DISABLED_TestClientSendIncompleteIdentity)
 //
 // at the moment YMQ does not perform this check and throws std::bad_alloc
 // this test can be re-enabled after this is fixed
+// TODO: maglinoquency should redesign the test so it does not halt. When the core
+// receives a big header, it closes the connection on user's behalf.
+// This however, makes the server waiting forever on a recvMessage call.
 TEST(CcYmqTestSuite, DISABLED_TestClientSendHugeHeader)
 {
     auto host = "localhost";
