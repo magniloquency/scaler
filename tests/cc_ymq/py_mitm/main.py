@@ -100,6 +100,9 @@ def main(pid: int, mitm_ip: str, mitm_port: int, remote_ip: str, server_port: in
         # and the source ip and port will be the remote ip and port
         sender = TCPConnection(pkt.dst, pkt.dport, pkt.src, pkt.sport)
 
+        if not mitm.proxy(tuntap, pkt, sender, client_conn, server_conn):
+            continue  # the segment was not proxied, so we can't update our internal state
+
         if sender == client_conn:
             print(f"-> [{tcp.flags}]{(': ' + str(bytes(tcp.payload))) if tcp.payload else ''}")
         elif sender == server_conn:
@@ -125,8 +128,6 @@ def main(pid: int, mitm_ip: str, mitm_port: int, remote_ip: str, server_port: in
                 server_closed = True
             if sender == server_conn and client_sent_fin_ack:
                 client_closed = True
-
-        mitm.proxy(tuntap, pkt, sender, client_conn, server_conn)
 
         if client_closed and server_closed:
             print("[*] Both connections closed")

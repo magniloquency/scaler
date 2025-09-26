@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cerrno>
+#include <format>
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include <arpa/inet.h>
@@ -30,10 +32,11 @@
 #include <format>
 #include <functional>
 #include <iostream>
-#include <numeric>
+#include <functional>
+#include <initializer_list>
+#include <iostream>
 #include <optional>
 #include <print>
-#include <stdexcept>
 #include <string>
 #include <system_error>
 #include <thread>
@@ -420,6 +423,7 @@ end:
     return TestResult::Success;
 }
 
+// path is relative to the directory of this source file
 inline TestResult run_python(const char* path, std::vector<const wchar_t*> argv = {})
 {
     // insert the pid at the start of the argv, this is important for signalling readiness
@@ -448,7 +452,7 @@ inline TestResult run_python(const char* path, std::vector<const wchar_t*> argv 
         if (!file)
             throw std::system_error(errno, std::generic_category(), "failed to open python file");
 
-        PyRun_SimpleFile(file, path);
+        PyRun_SimpleFile(file, full_path.c_str());
         fclose(file);
     }
 
