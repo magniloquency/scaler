@@ -1,5 +1,6 @@
 import logging
 import threading
+import random
 from typing import Callable, Optional
 
 from scaler.io.ymq import ymq
@@ -57,16 +58,19 @@ class YMQSyncSubscriber(SyncSubscriber, threading.Thread):
 
     def __initialize(self):
         self._context = ymq.IOContext()
-        self._socket = self._context.createIOSocket_sync(f"{self._topic.decode()}_subscriber", ymq.IOSocketType.Unicast)
+        self._socket = self._context.createIOSocket_sync(f"{self._topic.decode()}_subscriber_{random.randint(10_000, 20_000)}", ymq.IOSocketType.Unicast)
 
         if self._address.type != ZMQType.tcp:
             raise ValueError(f"YMQ only supports tcp transport, got {self._address.type}")
 
-        self._socket.connect(self._address.to_address())
+        self._socket.connect_sync(self._address.to_address())
 
     def __routine_polling(self):
-        # TODO: zero-copy
-        self.__routine_receive(self._socket.recv_sync().payload.data)
+        try:
+            # TODO: zero-copy
+            self.__routine_receive(self._socket.recv_sync(timeout_secs=1).payload.data)
+        except ymq.YMQTimeoutException:
+            pass
 
     def __routine_receive(self, payload: bytes):
         result: Optional[Message] = deserialize(payload)

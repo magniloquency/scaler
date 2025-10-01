@@ -47,11 +47,12 @@ class YMQSyncConnector(SyncConnector):
 
     def send(self, message: Message):
         with self._lock:
-            self._socket.send_sync(ymq.Message(None, serialize(message)))
+            self._socket.send_sync(ymq.Message(None, serialize(message)), timeout_secs=3)
 
     def receive(self) -> Optional[Message]:
+        print("NONONONONO")
         with self._lock:
-            msg = self._socket.recv_sync()
+            msg = self._socket.recv_sync(timeout_secs=3)
 
         # TODO: zero-copy
         return self.__compose_message(msg.payload.data)

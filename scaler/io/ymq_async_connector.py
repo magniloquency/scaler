@@ -79,7 +79,7 @@ class YMQAsyncConnector(AsyncConnector):
         msg = await self._socket.recv()
 
         # TODO: zero-copy
-        result: Optional[Message] = deserialize(msg.payload.bytes)
+        result: Optional[Message] = deserialize(msg.payload.data)
         if result is None:
             logging.error(f"received unknown message: {msg.payload!r}")
             return None
