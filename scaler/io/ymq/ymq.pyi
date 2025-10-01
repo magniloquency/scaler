@@ -67,16 +67,16 @@ class IOSocket:
     async def connect(self, address: str) -> None:
         """Connect to a remote socket"""
 
-    def send_sync(self, message: Message) -> None:
+    def send_sync(self, message: Message, timeout_secs: int = -1) -> None:
         """Send a message to one of the socket's peers synchronously"""
 
-    def recv_sync(self) -> Message:
+    def recv_sync(self, timeout_secs: int = -1) -> Message:
         """Receive a message from one of the socket's peers synchronously"""
 
-    def bind_sync(self, address: str) -> None:
+    def bind_sync(self, address: str, timeout_secs: int = -1) -> None:
         """Bind the socket to an address and listen for incoming connections synchronously"""
 
-    def connect_sync(self, address: str) -> None:
+    def connect_sync(self, address: str, timeout_secs: int = -1) -> None:
         """Connect to a remote socket synchronously"""
 
 class ErrorCode(IntEnum):
@@ -108,4 +108,7 @@ class YMQException(Exception):
     def __str__(self) -> str: ...
 
 class YMQInterruptedException(YMQException):
+    def __init__(self) -> None: ...
+
+class YMQTimeoutException(YMQException):
     def __init__(self) -> None: ...
