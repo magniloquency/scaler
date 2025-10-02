@@ -19,7 +19,7 @@
 #include "scaler/io/ymq/bytes.h"
 #include "scaler/io/ymq/io_context.h"
 #include "scaler/io/ymq/simple_interface.h"
-#include "tests/cc_ymq/common.h"
+#include "tests/cpp/ymq/common.h"
 
 using namespace scaler::ymq;
 using namespace std::chrono_literals;

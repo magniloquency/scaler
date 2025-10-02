@@ -37,5 +37,5 @@ if(LINUX OR APPLE)
 
   # Add the new directory for io tests.
   add_subdirectory(io/ymq)
-  add_subdirectory(cc_ymq)
+  add_subdirectory(cpp)
 endif()
