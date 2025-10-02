@@ -6,7 +6,7 @@ from tests.cpp.ymq.py_mitm.types import IP, TCP, AbstractMITM, TCPConnection, Tu
 from typing import Optional
 
 
-class MITM(MITMProtocol):
+class MITM(AbstractMITM):
     def __init__(self):
         # count the number of psh-acks sent by the client
         self.client_pshack_counter = 0
