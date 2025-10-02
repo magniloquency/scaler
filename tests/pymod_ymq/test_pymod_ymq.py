@@ -1,8 +1,11 @@
+import asyncio
+import multiprocessing
 import multiprocessing.connection
 import unittest
 from scaler.io.ymq import ymq
-import asyncio
-import multiprocessing
+from scaler.io.utility import serialize, deserialize
+from scaler.protocol.python.message import TaskCancel
+from scaler.utility.identifiers import TaskID
 
 
 class TestPymodYMQ(unittest.IsolatedAsyncioTestCase):
@@ -148,3 +151,18 @@ class TestPymodYMQ(unittest.IsolatedAsyncioTestCase):
             assert msg.address is not None
             self.assertEqual(msg.address.data, b"connector")
             self.assertEqual(msg.payload.data, b"." * 500_000_000)
+
+    async def test_buffer_interface(self):
+        msg = TaskCancel.new_msg(TaskID.generate_task_id())
+        data = serialize(msg)
+
+        # verify that capnp can deserialize this data
+        _ = deserialize(data)
+
+        # this creates a copy of the data
+        copy = ymq.Bytes(data)
+
+        # this should deserialize without creating a copy
+        # because ymq.Bytes uses the buffer protocol
+        deserialized: TaskCancel = deserialize(copy)
+        self.assertEqual(deserialized.task_id, msg.task_id)
