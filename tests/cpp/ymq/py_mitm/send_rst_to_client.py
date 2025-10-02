@@ -36,15 +36,3 @@ class MITM(AbstractMITM):
         elif sender == server_conn:
             tuntap.send(client_conn.rewrite(pkt))
         return True
-
-
-# client -> mitm -> server
-# server -> mitm -> client
-
-# client: 127.0.0.1:8080
-# mitm: 127.0.0.1:8081
-# server: 127.0.0.1:8081
-
-
-# client -> mitm == src = client.ip, sport = client.port ;; dst = mitm.ip, dport = mitm.port
-# mitm -> server == src = mitm.ip, sport = mitm.port ;; dst = server.ip, dport = server.port
