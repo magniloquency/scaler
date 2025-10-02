@@ -50,7 +50,7 @@ def create_tuntap_interface(iface_name: str, mitm_ip: str, remote_ip: str) -> Tu
     return iface
 
 
-def main(pid: int, mitm_ip: str, mitm_port: int, remote_ip: str, server_port: int, mitm: MITMProtocol):
+def main(pid: int, mitm_ip: str, mitm_port: int, remote_ip: str, server_port: int, mitm: AbstractMITM):
     """
     This function serves as a framework for man in the middle implementations
     A client connects to the MITM, then the MITM connects to a remote server
