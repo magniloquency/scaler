@@ -7,7 +7,6 @@ This script provides a framework for running MITM test cases
 import argparse
 import os
 import sys
-import importlib
 import signal
 import subprocess
 from tests.cpp.ymq.py_mitm.types import AbstractMITM, TCPConnection
@@ -167,9 +166,14 @@ if __name__ == "__main__":
 
     args, unknown = parser.parse_known_args()
 
-    # add the script's directory to path
-    sys.path.append(os.path.dirname(os.path.realpath(__file__)))
+    # TODO: use `match` in Python 3.10+
+    if args.testcase == "passthrough":
+        module = passthrough
+    elif args.testcase == "randomly_drop_packets":
+        module = randomly_drop_packets
+    elif args.testcase == "send_rst_to_client":
+        module = send_rst_to_client
+    else:
+        raise ValueError(f"Unknown testcase: {args.testcase}")
 
-    # load the module dynamically
-    module = importlib.import_module(args.testcase)
     main(args.pid, args.mitm_ip, args.mitm_port, args.remote_ip, args.server_port, module.MITM(*unknown))
