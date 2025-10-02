@@ -2,8 +2,9 @@
 This is the common code for implementing man in the middle in Python
 """
 
+from abc import ABC, abstractmethod
 import dataclasses
-from typing import Protocol, Optional
+from typing import Optional
 from scapy.all import TunTapInterface, IP, TCP  # type: ignore
 
 
@@ -43,7 +44,8 @@ class TCPConnection:
         )
 
 
-class MITMProtocol(Protocol):
+class AbstractMITM(ABC):
+    @abstractmethod
     def proxy(
         self,
         tuntap: TunTapInterface,

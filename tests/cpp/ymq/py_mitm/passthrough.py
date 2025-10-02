@@ -9,7 +9,7 @@ from tests.cpp.ymq.py_mitm.types import AbstractMITM, TunTapInterface, IP, TCPCo
 from typing import Optional
 
 
-class MITM(MITMProtocol):
+class MITM(AbstractMITM):
     def proxy(
         self,
         tuntap: TunTapInterface,
