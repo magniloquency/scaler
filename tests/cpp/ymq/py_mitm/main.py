@@ -6,13 +6,13 @@ This script provides a framework for running MITM test cases
 
 import argparse
 import os
-import sys
 import signal
 import subprocess
-from tests.cpp.ymq.py_mitm.types import AbstractMITM, TCPConnection
-from scapy.all import IP, TCP, TunTapInterface  # type: ignore
+import types
 from typing import List
+from scapy.all import IP, TCP, TunTapInterface  # type: ignore
 
+from tests.cpp.ymq.py_mitm.types import AbstractMITM, TCPConnection
 from tests.cpp.ymq.py_mitm import passthrough, randomly_drop_packets, send_rst_to_client
 
 
@@ -167,6 +167,7 @@ if __name__ == "__main__":
     args, unknown = parser.parse_known_args()
 
     # TODO: use `match` in Python 3.10+
+    module: types.ModuleType
     if args.testcase == "passthrough":
         module = passthrough
     elif args.testcase == "randomly_drop_packets":
