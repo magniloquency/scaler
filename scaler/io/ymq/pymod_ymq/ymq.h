@@ -4,14 +4,11 @@
 #include "scaler/io/ymq/pymod_ymq/python.h"
 
 // C
-#include <abstract.h>
 #include <fcntl.h>
 #include <unistd.h>
 
 // C++
 #include <expected>
-#include <format>
-#include <functional>
 #include <string>
 #include <string_view>
 #include <utility>

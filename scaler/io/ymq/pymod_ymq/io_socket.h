@@ -5,7 +5,6 @@
 
 // C++
 #include <memory>
-#include <print>
 #include <utility>
 
 // C
@@ -175,7 +174,6 @@ static PyObject* PyIOSocket_bind(PyIOSocket* self, PyObject* args, PyObject* kwa
             }
 
             Py_DECREF(callback);
-            std::println("bind done...");
         });
     } catch (...) {
         PyErr_SetString(PyExc_RuntimeError, "Failed to bind to address");
