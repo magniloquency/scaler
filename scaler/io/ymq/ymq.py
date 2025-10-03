@@ -5,40 +5,9 @@ __all__ = ["IOSocket", "IOContext", "Message", "IOSocketType", "YMQException", "
 
 import asyncio
 import concurrent.futures
-from typing import Optional
+from typing import Optional, Callable, ParamSpec, TypeVar, Union
 
 from scaler.io.ymq._ymq import BaseIOSocket, Message, IOSocketType, BaseIOContext, YMQException, Bytes, ErrorCode
-
-async def call_async(func, *args, **kwargs):
-    future = asyncio.get_event_loop().create_future()
-    def callback(result):
-        if future.done():
-            return
-
-        if isinstance(result, Exception):
-            method = future.set_exception
-        else:
-            method = future.set_result
-
-        loop = future.get_loop()
-        loop.call_soon_threadsafe(method, result)
-
-    func(*args, **kwargs, callback=callback)
-    return await future
-
-def call_sync(func, *args, timeout: Optional[float] = None, **kwargs):
-    future = concurrent.futures.Future()
-    def callback(result):
-        if future.done():
-            return
-
-        if isinstance(result, Exception):
-            future.set_exception(result)
-        else:
-            future.set_result(result)
-
-    func(*args, **kwargs, callback=callback)
-    return future.result(timeout)
 
 class IOSocket:
     _base: BaseIOSocket
@@ -99,3 +68,37 @@ class IOContext:
     def createIOSocket_sync(self, identity: str, socket_type: IOSocketType) -> IOSocket:
         """Create an io socket with an identity and socket type"""
         return IOSocket(call_sync(self._base.createIOSocket, identity, socket_type))
+
+P = ParamSpec("P")
+T = TypeVar("T")
+
+async def call_async(func: Callable[P, None], *args: P.args, **kwargs: P.kwargs) -> T:
+    future = asyncio.get_event_loop().create_future()
+    def callback(result: Union[T, Exception]):
+        if future.done():
+            return
+
+        if isinstance(result, Exception):
+            method = future.set_exception
+        else:
+            method = future.set_result
+
+        loop = future.get_loop()
+        loop.call_soon_threadsafe(method, result)
+
+    func(*args, **kwargs, callback=callback)
+    return await future
+
+def call_sync(func: Callable[P, None], *args: P.args, timeout: Optional[float] = None, **kwargs: P.kwargs) -> T:
+    future = concurrent.futures.Future()
+    def callback(result: Union[T, Exception]):
+        if future.done():
+            return
+
+        if isinstance(result, Exception):
+            future.set_exception(result)
+        else:
+            future.set_result(result)
+
+    func(*args, **kwargs, callback=callback)
+    return future.result(timeout)

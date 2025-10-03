@@ -51,16 +51,17 @@ class BaseIOSocket:
     socket_type: IOSocketType
 
     def __repr__(self) -> str: ...
-    async def send(self, message: Message, callback: Callable[[Optional[Exception]], None]) -> None:
+
+    def send(self, message: Message, callback: Callable[[Optional[Exception]], None]) -> None:
         """Send a message to one of the socket's peers"""
 
-    async def recv(self, callback: Callable[[Union[Message, Exception]], None]) -> Message:
+    def recv(self, callback: Callable[[Union[Message, Exception]], None]) -> Message:
         """Receive a message from one of the socket's peers"""
 
-    async def bind(self, address: str, callback: Callable[[Optional[Exception]], None]) -> None:
+    def bind(self, address: str, callback: Callable[[Optional[Exception]], None]) -> None:
         """Bind the socket to an address and listen for incoming connections"""
 
-    async def connect(self, address: str, callback: Callable[[Optional[Exception]], None]) -> None:
+    def connect(self, address: str, callback: Callable[[Optional[Exception]], None]) -> None:
         """Connect to a remote socket"""
 
 class ErrorCode(IntEnum):
