@@ -43,7 +43,9 @@ class BaseIOContext:
 
     def __init__(self, num_threads: int = 1) -> None: ...
     def __repr__(self) -> str: ...
-    def createIOSocket(self, /, identity: str, socket_type: IOSocketType, callback: Callable[[Union[BaseIOSocket, Exception]], None]) -> None:
+    def createIOSocket(
+        self, callback: Callable[[Union[BaseIOSocket, Exception]], None], identity: str, socket_type: IOSocketType
+    ) -> None:
         """Create an io socket with an identity and socket type"""
 
 class BaseIOSocket:
@@ -51,17 +53,16 @@ class BaseIOSocket:
     socket_type: IOSocketType
 
     def __repr__(self) -> str: ...
-
-    def send(self, message: Message, callback: Callable[[Optional[Exception]], None]) -> None:
+    def send(self, callback: Callable[[Optional[Exception]], None], message: Message) -> None:
         """Send a message to one of the socket's peers"""
 
-    def recv(self, callback: Callable[[Union[Message, Exception]], None]) -> Message:
+    def recv(self, callback: Callable[[Union[Message, Exception]], None]) -> None:
         """Receive a message from one of the socket's peers"""
 
-    def bind(self, address: str, callback: Callable[[Optional[Exception]], None]) -> None:
+    def bind(self, callback: Callable[[Optional[Exception]], None], address: str) -> None:
         """Bind the socket to an address and listen for incoming connections"""
 
-    def connect(self, address: str, callback: Callable[[Optional[Exception]], None]) -> None:
+    def connect(self, callback: Callable[[Optional[Exception]], None], address: str) -> None:
         """Connect to a remote socket"""
 
 class ErrorCode(IntEnum):

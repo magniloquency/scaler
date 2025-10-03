@@ -73,13 +73,13 @@ static PyObject* PyIOContext_createIOSocket(PyIOContext* self, PyObject* args, P
     if (!state)
         return nullptr;
 
+    PyObject* callback     = nullptr;
     const char* identity   = nullptr;
     Py_ssize_t identityLen = 0;
     PyObject* pySocketType = nullptr;
-    PyObject* callback     = nullptr;
-    const char* kwlist[]   = {"identity", "socket_type", "callback", nullptr};
+    const char* kwlist[]   = {"", "identity", "socket_type", nullptr};
     if (!PyArg_ParseTupleAndKeywords(
-            args, kwargs, "s#OO", (char**)kwlist, &identity, &identityLen, &pySocketType, &callback))
+            args, kwargs, "Os#O", (char**)kwlist, &callback, &identity, &identityLen, &pySocketType))
         return nullptr;
 
     if (!PyObject_IsInstance(pySocketType, *state->PyIOSocketEnumType)) {
