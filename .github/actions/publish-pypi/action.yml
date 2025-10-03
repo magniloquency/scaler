@@ -5,12 +5,6 @@ inputs:
   os:
     description: "operating system"
     required: true
-  username:
-    description: "username"
-    required: true
-  password:
-    description: "password"
-    required: true
 
 
 runs:
@@ -43,14 +37,12 @@ runs:
         CIBW_SKIP: "pp* cp39-*"
         CIBW_MANYLINUX_X86_64_IMAGE: "manylinux_2_28"
 
-    - name: Publish to PyPI
-      shell: bash
-      run: |
-        twine upload -r pypi -u "${{ inputs.username }}" -p "${{ inputs.password }}" dist/*
-
     #- name: Publish to PyPI
-    #  uses: pypa/gh-action-pypi-publish@release/v1
-    #  with:
-    #    user: ${{ inputs.username }}
-    #    password: ${{ inputs.password }}
-    #    packages-dir: ./dist/
+    #  shell: bash
+    #  run: |
+    #    twine upload -r pypi dist/*
+
+    - name: Publish to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        packages-dir: ./dist/
