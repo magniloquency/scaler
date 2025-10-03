@@ -145,7 +145,7 @@ class PySyncObjectStorageConnector(SyncObjectStorageConnector):
         else:
             self._io_socket.send_sync(Message(address=b"", payload=header_bytes))
 
-    def __receive_response(self) -> Tuple[ObjectResponseHeader, bytearray]:
+    def __receive_response(self):
         assert self._io_socket is not None
 
         try:
@@ -176,7 +176,7 @@ class PySyncObjectStorageConnector(SyncObjectStorageConnector):
             if res is None:
                 self.__raise_connection_failure()
             assert len(res) == header.payload_length
-            return res
+            return bytearray(res)
         else:
             return bytearray()
 
