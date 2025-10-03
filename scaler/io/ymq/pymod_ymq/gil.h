@@ -1,13 +1,15 @@
 #include "scaler/io/ymq/pymod_ymq/python.h"
 
-class Gil {
+class AcquireGIL {
 public:
-    static Gil acquire() { return Gil(PyGILState_Ensure()); }
+    AcquireGIL() : _state(PyGILState_Ensure()) {}
+    ~AcquireGIL() { PyGILState_Release(_state); }
 
-    ~Gil() { PyGILState_Release(_state); }
+    AcquireGIL(const AcquireGIL&) = delete;
+    AcquireGIL& operator=(const AcquireGIL&) = delete;
+    AcquireGIL(AcquireGIL&&) = delete;
+    AcquireGIL& operator=(AcquireGIL&&) = delete;
 
 private:
-    Gil(PyGILState_STATE state): _state(state) {}
-
     PyGILState_STATE _state;
 };
