@@ -150,6 +150,9 @@ TestResult reconnect_client_main(std::string host, uint16_t port)
     auto socket = syncCreateSocket(context, IOSocketType::Connector, "client");
     syncConnectSocket(socket, format_address(host, port));
 
+    // create the recv future in advance, this remains active between reconnects
+    auto future = futureRecvMessage(socket);
+
     // send "sync" and wait for "acknowledge" in a loop
     // the mitm will send a RST after the first "sync"
     // the "sync" message will be lost, but YMQ should automatically reconnect
@@ -158,15 +161,10 @@ TestResult reconnect_client_main(std::string host, uint16_t port)
         auto error = syncSendMessage(socket, {.address = Bytes("server"), .payload = Bytes("sync")});
         RETURN_FAILURE_IF_FALSE(!error);
 
-        auto future = futureRecvMessage(socket);
         auto result = future.wait_for(1s);
         if (result == std::future_status::ready) {
             auto msg = future.get();
-            if (!msg.has_value()) {
-                std::println("message error: {}", msg.error().what());
-            }
             RETURN_FAILURE_IF_FALSE(msg.has_value());
-            std::println("received message: {}", *msg->payload.as_string());
             RETURN_FAILURE_IF_FALSE(msg->payload.as_string() == "acknowledge");
             context.removeIOSocket(socket);
 
@@ -524,7 +522,7 @@ TEST(CcYmqTestSuite, TestMitmPassthrough)
 }
 
 // this test uses the mitm to test the reconnect logic of YMQ by sending RST packets
-TEST(CcYmqTestSuite, DISABLED_TestMitmReconnect)
+TEST(CcYmqTestSuite, TestMitmReconnect)
 {
     auto mitm_ip     = "192.0.2.4";
     auto mitm_port   = 2525;
