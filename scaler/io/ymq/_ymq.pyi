@@ -1,9 +1,8 @@
 # NOTE: NOT IMPLEMENTATION, TYPE INFORMATION ONLY
 # This file contains type stubs for the Ymq Python C Extension module
 import sys
-from collections.abc import Awaitable
 from enum import IntEnum
-from typing import SupportsBytes
+from typing import SupportsBytes, Callable, Union, Optional
 
 if sys.version_info >= (3, 12):
     from collections.abc import Buffer
@@ -39,45 +38,30 @@ class IOSocketType(IntEnum):
     Unicast = 3
     Multicast = 4
 
-class IOContext:
+class BaseIOContext:
     num_threads: int
 
     def __init__(self, num_threads: int = 1) -> None: ...
     def __repr__(self) -> str: ...
-    def createIOSocket(self, /, identity: str, socket_type: IOSocketType) -> Awaitable[IOSocket]:
+    def createIOSocket(self, /, identity: str, socket_type: IOSocketType, callback: Callable[[Union[BaseIOSocket, Exception]], None]) -> None:
         """Create an io socket with an identity and socket type"""
 
-    def createIOSocket_sync(self, /, identity: str, socket_type: IOSocketType) -> IOSocket:
-        """Create an io socket with an identity and socket type synchronously"""
-
-class IOSocket:
+class BaseIOSocket:
     identity: str
     socket_type: IOSocketType
 
     def __repr__(self) -> str: ...
-    async def send(self, message: Message) -> None:
+    async def send(self, message: Message, callback: Callable[[Optional[Exception]], None]) -> None:
         """Send a message to one of the socket's peers"""
 
-    async def recv(self) -> Message:
+    async def recv(self, callback: Callable[[Union[Message, Exception]], None]) -> Message:
         """Receive a message from one of the socket's peers"""
 
-    async def bind(self, address: str) -> None:
+    async def bind(self, address: str, callback: Callable[[Optional[Exception]], None]) -> None:
         """Bind the socket to an address and listen for incoming connections"""
 
-    async def connect(self, address: str) -> None:
+    async def connect(self, address: str, callback: Callable[[Optional[Exception]], None]) -> None:
         """Connect to a remote socket"""
-
-    def send_sync(self, message: Message) -> None:
-        """Send a message to one of the socket's peers synchronously"""
-
-    def recv_sync(self) -> Message:
-        """Receive a message from one of the socket's peers synchronously"""
-
-    def bind_sync(self, address: str) -> None:
-        """Bind the socket to an address and listen for incoming connections synchronously"""
-
-    def connect_sync(self, address: str) -> None:
-        """Connect to a remote socket synchronously"""
 
 class ErrorCode(IntEnum):
     Uninit = 0
@@ -108,6 +92,3 @@ class YMQException(Exception):
     def __init__(self, /, code: ErrorCode, message: str) -> None: ...
     def __repr__(self) -> str: ...
     def __str__(self) -> str: ...
-
-class YMQInterruptedException(YMQException):
-    def __init__(self) -> None: ...
