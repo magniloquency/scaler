@@ -2,7 +2,7 @@ import os
 import socket
 import uuid
 from threading import Lock
-from typing import Iterable, Optional, Tuple
+from typing import Iterable, Optional
 
 from scaler.io.mixins import SyncObjectStorageConnector
 from scaler.io.ymq.ymq import IOContext, IOSocket, IOSocketType, Message, YMQException
