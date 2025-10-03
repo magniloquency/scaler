@@ -155,10 +155,16 @@ def main(pid: int, mitm_ip: str, mitm_port: int, remote_ip: str, server_port: in
             return
 
 
+TESTCASES = {
+    "passthrough": passthrough,
+    "randomly_drop_packets": randomly_drop_packets,
+    "send_rst_to_client": send_rst_to_client,
+}
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Man in the middle test framework")
     parser.add_argument("pid", type=int, help="The pid of the test process, used for signaling")
-    parser.add_argument("testcase", type=str, help="The MITM test case module name")
+    parser.add_argument("testcase", type=str, choices=TESTCASES.keys(), help="The MITM test case module name")
     parser.add_argument("mitm_ip", type=str, help="The desired ip address of the mitm server")
     parser.add_argument("mitm_port", type=int, help="The desired port of the mitm server")
     parser.add_argument("remote_ip", type=str, help="The desired remote ip for the TUNTAP interface")
@@ -166,15 +172,6 @@ if __name__ == "__main__":
 
     args, unknown = parser.parse_known_args()
 
-    # TODO: use `match` in Python 3.10+
-    module: types.ModuleType
-    if args.testcase == "passthrough":
-        module = passthrough
-    elif args.testcase == "randomly_drop_packets":
-        module = randomly_drop_packets
-    elif args.testcase == "send_rst_to_client":
-        module = send_rst_to_client
-    else:
-        raise ValueError(f"Unknown testcase: {args.testcase}")
+    module = TESTCASES[args.testcase]
 
     main(args.pid, args.mitm_ip, args.mitm_port, args.remote_ip, args.server_port, module.MITM(*unknown))
