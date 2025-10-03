@@ -5,9 +5,9 @@ __all__ = ["IOSocket", "IOContext", "Message", "IOSocketType", "YMQException", "
 
 import asyncio
 import concurrent.futures
-from typing import Optional, Callable, ParamSpec, TypeVar, Union, Concatenate
+from typing import Callable, Concatenate, Optional, ParamSpec, TypeVar, Union
 
-from scaler.io.ymq._ymq import BaseIOSocket, Message, IOSocketType, BaseIOContext, YMQException, Bytes, ErrorCode
+from scaler.io.ymq._ymq import BaseIOContext, BaseIOSocket, Bytes, ErrorCode, IOSocketType, Message, YMQException
 
 
 class IOSocket:
@@ -84,14 +84,13 @@ async def call_async(
     def callback(result: Union[T, Exception]):
         if future.done():
             return
-        
+
         loop = future.get_loop()
 
         if isinstance(result, Exception):
             loop.call_soon_threadsafe(future.set_exception, result)
         else:
             loop.call_soon_threadsafe(future.set_result, result)
-
 
     func(callback, *args, **kwargs)
     return await future
