@@ -78,7 +78,7 @@ static PyObject* PyIOSocket_send(PyIOSocket* self, PyObject* args, PyObject* kwa
     try {
         self->socket->sendMessage(
             {.address = std::move(address), .payload = std::move(payload)}, [callback, state](auto result) {
-                auto gil = Gil::acquire();
+                AcquireGIL _;
 
                 if (result) {
                     OwnedPyObject result = PyObject_CallFunctionObjArgs(callback, Py_None, nullptr);
@@ -112,7 +112,7 @@ static PyObject* PyIOSocket_recv(PyIOSocket* self, PyObject* args, PyObject* kwa
 
     try {
         self->socket->recvMessage([callback, state](std::pair<Message, Error> result) {
-            auto gil = Gil::acquire();
+            AcquireGIL _;
 
             if (result.second._errorCode != Error::ErrorCode::Uninit) {
                 OwnedPyObject obj = YMQException_createFromCoreError(state, &result.second);
@@ -166,7 +166,7 @@ static PyObject* PyIOSocket_bind(PyIOSocket* self, PyObject* args, PyObject* kwa
 
     try {
         self->socket->bindTo(std::string(address, addressLen), [callback, state](auto result) {
-            auto gil = Gil::acquire();
+            AcquireGIL _;
 
             if (!result) {
                 OwnedPyObject exc = YMQException_createFromCoreError(state, &result.error());
@@ -202,7 +202,7 @@ static PyObject* PyIOSocket_connect(PyIOSocket* self, PyObject* args, PyObject* 
 
     try {
         self->socket->connectTo(std::string(address, addressLen), [callback, state](auto result) {
-            auto gil = Gil::acquire();
+            AcquireGIL _;
 
             if (result || result.error()._errorCode == Error::ErrorCode::InitialConnectFailedWithInProgress) {
                 OwnedPyObject _ = PyObject_CallFunctionObjArgs(callback, Py_None, nullptr);

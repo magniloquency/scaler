@@ -115,7 +115,7 @@ static PyObject* PyIOContext_createIOSocket(PyIOContext* self, PyObject* args, P
 
         self->ioContext->createIOSocket(
             std::string(identity, identityLen), socketType, [callback, ioSocket](auto socket) {
-                auto gil = Gil::acquire();
+                AcquireGIL _;
 
                 ioSocket->socket = socket;
                 OwnedPyObject _  = PyObject_CallFunctionObjArgs(callback, *ioSocket, nullptr);
