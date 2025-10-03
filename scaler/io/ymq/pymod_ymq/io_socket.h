@@ -57,10 +57,12 @@ static PyObject* PyIOSocket_send(PyIOSocket* self, PyObject* args, PyObject* kwa
     if (!state)
         return nullptr;
 
-    PyMessage* message   = nullptr;
     PyObject* callback   = nullptr;
-    const char* kwlist[] = {"message", "callback", nullptr};
-    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OO", (char**)kwlist, &message, &callback))
+    PyMessage* message   = nullptr;
+
+    // empty str -> positional only
+    const char* kwlist[] = {"", "message", nullptr};
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "OO", (char**)kwlist, &callback, &message))
         return nullptr;
 
     if (!PyObject_TypeCheck(message, (PyTypeObject*)*state->PyMessageType)) {
@@ -102,7 +104,7 @@ static PyObject* PyIOSocket_recv(PyIOSocket* self, PyObject* args, PyObject* kwa
         return nullptr;
 
     PyObject* callback   = nullptr;
-    const char* kwlist[] = {"callback", nullptr};
+    const char* kwlist[] = {"", nullptr};
     if (!PyArg_ParseTupleAndKeywords(args, kwargs, "O", (char**)kwlist, &callback))
         return nullptr;
 
@@ -153,11 +155,11 @@ static PyObject* PyIOSocket_bind(PyIOSocket* self, PyObject* args, PyObject* kwa
     if (!state)
         return nullptr;
 
+    PyObject* callback    = nullptr;
     const char* address   = nullptr;
     Py_ssize_t addressLen = 0;
-    PyObject* callback    = nullptr;
-    const char* kwlist[]  = {"address", "callback", nullptr};
-    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "s#O", (char**)kwlist, &address, &addressLen, &callback))
+    const char* kwlist[]  = {"", "address", nullptr};
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "Os#", (char**)kwlist, &callback, &address, &addressLen))
         return nullptr;
 
     Py_INCREF(callback);
@@ -189,11 +191,11 @@ static PyObject* PyIOSocket_connect(PyIOSocket* self, PyObject* args, PyObject* 
     if (!state)
         return nullptr;
 
+    PyObject* callback    = nullptr;
     const char* address   = nullptr;
     Py_ssize_t addressLen = 0;
-    PyObject* callback    = nullptr;
-    const char* kwlist[]  = {"address", "callback", nullptr};
-    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "s#O", (char**)kwlist, &address, &addressLen, &callback))
+    const char* kwlist[]  = {"", "address", nullptr};
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs, "Os#", (char**)kwlist, &callback, &address, &addressLen))
         return nullptr;
 
     Py_INCREF(callback);
