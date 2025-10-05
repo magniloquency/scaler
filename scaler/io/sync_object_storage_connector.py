@@ -140,10 +140,10 @@ class PySyncObjectStorageConnector(SyncObjectStorageConnector):
         header_bytes = header.get_message().to_bytes()
 
         if payload is not None:
-            self._io_socket.send_sync(Message(address=b"", payload=header_bytes))
-            self._io_socket.send_sync(Message(address=b"", payload=payload))
+            self._io_socket.send_sync(Message(address=None, payload=header_bytes))
+            self._io_socket.send_sync(Message(address=None, payload=payload))
         else:
-            self._io_socket.send_sync(Message(address=b"", payload=header_bytes))
+            self._io_socket.send_sync(Message(address=None, payload=header_bytes))
 
     def __receive_response(self):
         assert self._io_socket is not None
@@ -182,5 +182,4 @@ class PySyncObjectStorageConnector(SyncObjectStorageConnector):
 
     @staticmethod
     def __raise_connection_failure():
-        print("FUCKED!!")
         raise ObjectStorageException("connection failure to object storage server.")
