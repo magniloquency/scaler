@@ -43,7 +43,6 @@ class PyAsyncObjectStorageConnector(AsyncObjectStorageConnector):
         if self.is_connected():
             raise ObjectStorageException("connector is already connected.")
         await self._io_socket.connect(self.address)
-
         self._connected_event.set()
 
     async def wait_until_connected(self):
@@ -142,11 +141,11 @@ class PyAsyncObjectStorageConnector(AsyncObjectStorageConnector):
 
     async def __write_request_header(self, header: ObjectRequestHeader):
         assert self._io_socket is not None
-        await self._io_socket.send(Message(address=b"", payload=header.get_message().to_bytes()))
+        await self._io_socket.send(Message(address=None, payload=header.get_message().to_bytes()))
 
     async def __write_request_payload(self, payload: bytes):
         assert self._io_socket is not None
-        await self._io_socket.send(Message(address=b"", payload=payload))
+        await self._io_socket.send(Message(address=None, payload=payload))
 
     async def __receive_response(self) -> Optional[Tuple[ObjectResponseHeader, bytes]]:
         if self._io_socket is None:
@@ -177,7 +176,7 @@ class PyAsyncObjectStorageConnector(AsyncObjectStorageConnector):
 
         if header.payload_length > 0:
             res = await self._io_socket.recv()
-            assert len(res.payload.data) == header.payload_length
+            assert len(res.payload) == header.payload_length
             return res.payload.data
         else:
             return b""
