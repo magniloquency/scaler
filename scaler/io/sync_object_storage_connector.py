@@ -1,15 +1,11 @@
-import collections
-import socket
-
-import uuid
-import struct
 import os
-
+import socket
+import uuid
 from threading import Lock
-from typing import Iterable, List, Optional, Tuple
+from typing import Iterable, Optional, Tuple
 
 from scaler.io.mixins import SyncObjectStorageConnector
-from scaler.io.ymq.ymq import *
+from scaler.io.ymq.ymq import IOContext, IOSocket, IOSocketType, Message, YMQException
 from scaler.protocol.capnp._python import _object_storage  # noqa
 from scaler.protocol.python.object_storage import ObjectRequestHeader, ObjectResponseHeader, to_capnp_object_id
 from scaler.utility.exceptions import ObjectStorageException
@@ -26,14 +22,13 @@ class PySyncObjectStorageConnector(SyncObjectStorageConnector):
         self._host = host
         self._port = port
 
-
         self._next_request_id = 0
 
         self._socket_lock = Lock()
 
         self._identity: str = f"{os.getpid()}|{socket.gethostname().split('.')[0]}|{uuid.uuid4()}"
         self._io_context = IOContext()
-        self._io_socket = self._io_context.createIOSocket_sync(self._identity, IOSocketType.Connector)
+        self._io_socket: IOSocket = self._io_context.createIOSocket_sync(self._identity, IOSocketType.Connector)
         self._io_socket.connect_sync(self.address)
 
     def __del__(self):
@@ -159,7 +154,6 @@ class PySyncObjectStorageConnector(SyncObjectStorageConnector):
             return header, payload
         except YMQException:
             self.__raise_connection_failure()
-
 
     def __read_response_header(self) -> ObjectResponseHeader:
         assert self._io_socket is not None
