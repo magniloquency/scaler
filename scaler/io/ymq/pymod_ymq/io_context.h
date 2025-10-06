@@ -118,7 +118,7 @@ static PyObject* PyIOContext_createIOSocket(PyIOContext* self, PyObject* args, P
                 AcquireGIL _;
 
                 ioSocket->socket = socket;
-                OwnedPyObject _  = PyObject_CallFunctionObjArgs(callback, *ioSocket, nullptr);
+                OwnedPyObject _result  = PyObject_CallFunctionObjArgs(callback, *ioSocket, nullptr);
                 Py_DECREF(callback);
             });
     } catch (...) {

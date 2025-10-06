@@ -138,7 +138,7 @@ static PyObject* PyIOSocket_recv(PyIOSocket* self, PyObject* args, PyObject* kwa
             if (!pyMessage)
                 return completeCallbackWithRaisedException(callback);
 
-            OwnedPyObject _ = PyObject_CallFunctionObjArgs(callback, *pyMessage, nullptr);
+            OwnedPyObject _result = PyObject_CallFunctionObjArgs(callback, *pyMessage, nullptr);
             Py_DECREF(callback);
         });
     } catch (...) {
