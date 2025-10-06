@@ -68,6 +68,10 @@ class IOContext:
     def __init__(self, num_threads: int = 1) -> None:
         self._base = BaseIOContext(num_threads)
 
+    @property
+    def num_threads(self) -> int:
+        return self._base.num_threads
+
     async def createIOSocket(self, identity: str, socket_type: IOSocketType) -> IOSocket:
         """Create an io socket with an identity and socket type"""
         return IOSocket(await call_async(self._base.createIOSocket, identity, socket_type))
