@@ -75,7 +75,7 @@ public:
     // steals a reference
     OwnedPyObject(T* ptr): _ptr(ptr) {}
 
-    OwnedPyObject(const OwnedPyObject& other) { this->_ptr = (T*)Py_XNewRef(other._ptr); }
+    OwnedPyObject(const OwnedPyObject& other) { this->_ptr = (T*)Py_XNewRef((PyObject*)other._ptr); }
     OwnedPyObject(OwnedPyObject&& other) noexcept: _ptr(other._ptr) { other._ptr = nullptr; }
     OwnedPyObject& operator=(const OwnedPyObject& other)
     {
@@ -83,7 +83,7 @@ public:
             return *this;
 
         this->free();
-        this->_ptr = (T*)Py_XNewRef(other._ptr);
+        this->_ptr = (T*)Py_XNewRef((PyObject*)other._ptr);
         return *this;
     }
     OwnedPyObject& operator=(OwnedPyObject&& other) noexcept
