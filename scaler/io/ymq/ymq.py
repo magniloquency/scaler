@@ -10,7 +10,7 @@ from typing import Optional, Callable, TypeVar, Union
 try:
     from typing import ParamSpec, Concatenate  # type: ignore[attr-defined]
 except ImportError:
-    from typing_extensions import ParamSpec, Concatenate
+    from typing_extensions import ParamSpec, Concatenate  # type: ignore[assignment]
 
 from scaler.io.ymq._ymq import BaseIOSocket, Message, IOSocketType, BaseIOContext, YMQException, Bytes, ErrorCode
 
@@ -86,21 +86,20 @@ T = TypeVar("T")
 
 
 async def call_async(
-    func: Callable[Concatenate[Callable[[Union[T, Exception]], None], P], None], *args: P.args, **kwargs: P.kwargs # type: ignore
+    func: Callable[Concatenate[Callable[[Union[T, Exception]], None], P], None], *args: P.args, **kwargs: P.kwargs  # type: ignore
 ) -> T:
     future = asyncio.get_event_loop().create_future()
 
     def callback(result: Union[T, Exception]):
         if future.done():
             return
-        
+
         loop = future.get_loop()
 
         if isinstance(result, Exception):
             loop.call_soon_threadsafe(future.set_exception, result)
         else:
             loop.call_soon_threadsafe(future.set_result, result)
-
 
     func(callback, *args, **kwargs)
     return await future
@@ -109,10 +108,10 @@ async def call_async(
 # about the ignore directives: mypy cannot properly handle typing extension's ParamSpec and Concatenate in python <=3.9
 # these type hints are correctly understood in Python 3.10+
 def call_sync(  # type: ignore[valid-type]
-    func: Callable[Concatenate[Callable[[Union[T, Exception]], None], P], None], # type: ignore
-    *args: P.args, # type: ignore
+    func: Callable[Concatenate[Callable[[Union[T, Exception]], None], P], None],  # type: ignore
+    *args: P.args,  # type: ignore
     timeout: Optional[float] = None,
-    **kwargs: P.kwargs, # type: ignore
+    **kwargs: P.kwargs,  # type: ignore
 ) -> T:  # type: ignore
     future: concurrent.futures.Future = concurrent.futures.Future()
 
