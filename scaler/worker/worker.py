@@ -233,6 +233,8 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
             )
         except asyncio.CancelledError:
             pass
+
+        # TODO: Should the object storage connector catch this error?
         except ymq.YMQException as e:
             if e.code == ymq.ErrorCode.ConnectorSocketClosedByRemoteEnd:
                 pass
