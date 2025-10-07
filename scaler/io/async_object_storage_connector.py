@@ -2,12 +2,11 @@ import asyncio
 import logging
 import os
 import socket
-import struct
 import uuid
 from typing import Dict, Optional, Tuple
 
 from scaler.io.mixins import AsyncObjectStorageConnector
-from scaler.io.ymq.ymq import *
+from scaler.io.ymq.ymq import IOSocketType, IOContext, Message, YMQException
 from scaler.protocol.capnp._python import _object_storage  # noqa
 from scaler.protocol.python.object_storage import ObjectRequestHeader, ObjectResponseHeader, to_capnp_object_id
 from scaler.utility.exceptions import ObjectStorageException
