@@ -3,7 +3,7 @@ import curses
 import functools
 from typing import Dict, List, Literal, Union
 
-from scaler.io.sync_subscriber import ZMQSyncSubscriber
+from scaler.io.zmq_sync_subscriber import ZMQSyncSubscriber
 from scaler.protocol.python.message import StateScheduler
 from scaler.protocol.python.mixins import Message
 from scaler.utility.formatter import (

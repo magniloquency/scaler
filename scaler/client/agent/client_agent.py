@@ -13,7 +13,7 @@ from scaler.client.agent.heartbeat_manager import ClientHeartbeatManager
 from scaler.client.agent.object_manager import ClientObjectManager
 from scaler.client.agent.task_manager import ClientTaskManager
 from scaler.client.serializer.mixins import Serializer
-from scaler.io.async_connector import ZMQAsyncConnector
+from scaler.io.zmq_async_connector import ZMQAsyncConnector
 from scaler.io.mixins import AsyncConnector
 from scaler.protocol.python.common import ObjectStorageAddress
 from scaler.protocol.python.message import (

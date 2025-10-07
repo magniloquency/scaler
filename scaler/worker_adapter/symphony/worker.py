@@ -7,7 +7,7 @@ from typing import Dict, Optional
 
 import zmq
 
-from scaler.io.async_connector import ZMQAsyncConnector
+from scaler.io.zmq_async_connector import ZMQAsyncConnector
 from scaler.io.async_object_storage_connector import PyAsyncObjectStorageConnector
 from scaler.io.mixins import AsyncConnector, AsyncObjectStorageConnector
 from scaler.protocol.python.message import (
