@@ -76,3 +76,6 @@ DEFAULT_WORKER_DEATH_TIMEOUT = 5 * 60
 # if true, suspended worker's processors will be actively suspended with a SIGTSTP signal, otherwise a synchronization
 # event will be used.
 DEFAULT_HARD_PROCESSOR_SUSPEND = False
+
+# the transport type to use
+DEFAULT_TRANSPORT_TYPE = "zmq"

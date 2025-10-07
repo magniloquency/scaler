@@ -9,6 +9,7 @@ from scaler.io.config import (
     DEFAULT_IO_THREADS,
     DEFAULT_PER_WORKER_QUEUE_SIZE,
     DEFAULT_TASK_TIMEOUT_SECONDS,
+    DEFAULT_TRANSPORT_TYPE,
     DEFAULT_TRIM_MEMORY_THRESHOLD_BYTES,
 )
 from scaler.utility.logging.utility import setup_logger
@@ -45,6 +46,7 @@ class TestDeathTimeout(unittest.TestCase):
             logging_paths=("/dev/stdout",),
             logging_level="INFO",
             logging_config_file=None,
+            transport_type=DEFAULT_TRANSPORT_TYPE,
         )
         cluster.start()
         time.sleep(15)

@@ -349,6 +349,7 @@ class TestClient(unittest.TestCase):
                 logging_paths=base_cluster._logging_paths,
                 logging_level=base_cluster._logging_level,
                 logging_config_file=base_cluster._logging_config_file,
+                transport_type=base_cluster._transport_type,
             )
             gpu_cluster.start()
 
@@ -388,6 +389,7 @@ class TestClientPreload(unittest.TestCase):
             logging_paths=logging_paths,
             logging_level=base_cluster._logging_level,
             logging_config_file=base_cluster._logging_config_file,
+            transport_type=base_cluster._transport_type,
         )
         return preload_cluster
 

@@ -17,11 +17,13 @@ from scaler.io.config import (
     DEFAULT_OBJECT_RETENTION_SECONDS,
     DEFAULT_PER_WORKER_QUEUE_SIZE,
     DEFAULT_TASK_TIMEOUT_SECONDS,
+    DEFAULT_TRANSPORT_TYPE,
     DEFAULT_TRIM_MEMORY_THRESHOLD_BYTES,
     DEFAULT_WORKER_DEATH_TIMEOUT,
     DEFAULT_WORKER_TIMEOUT_SECONDS,
 )
 from scaler.scheduler.allocate_policy.allocate_policy import AllocatePolicy
+from scaler.scheduler.config import TransportType
 from scaler.utility.network_util import get_available_tcp_port
 from scaler.utility.object_storage_config import ObjectStorageConfig
 from scaler.utility.zmq_config import ZMQConfig
@@ -56,6 +58,7 @@ class SchedulerClusterCombo:
         logging_paths: Tuple[str, ...] = ("/dev/stdout",),
         logging_level: str = "INFO",
         logging_config_file: Optional[str] = None,
+        transport_type: TransportType = DEFAULT_TRANSPORT_TYPE,
     ):
         if address is None:
             self._address = ZMQConfig.from_string(f"tcp://127.0.0.1:{get_available_tcp_port()}")
@@ -99,6 +102,7 @@ class SchedulerClusterCombo:
             logging_paths=logging_paths,
             logging_config_file=logging_config_file,
             logging_level=logging_level,
+            transport_type=transport_type,
         )
 
         self._scheduler = SchedulerProcess(
@@ -119,6 +123,7 @@ class SchedulerClusterCombo:
             logging_paths=logging_paths,
             logging_config_file=logging_config_file,
             logging_level=logging_level,
+            transport_type=transport_type,
         )
 
         self._cluster.start()

@@ -11,9 +11,11 @@ from scaler.io.config import (
     DEFAULT_NUMBER_OF_WORKER,
     DEFAULT_PER_WORKER_QUEUE_SIZE,
     DEFAULT_TASK_TIMEOUT_SECONDS,
+    DEFAULT_TRANSPORT_TYPE,
     DEFAULT_TRIM_MEMORY_THRESHOLD_BYTES,
     DEFAULT_WORKER_DEATH_TIMEOUT,
 )
+from scaler.scheduler.config import TransportType
 from scaler.utility.event_loop import EventLoopType, register_event_loop
 from scaler.utility.object_storage_config import ObjectStorageConfig
 from scaler.utility.zmq_config import ZMQConfig
@@ -137,6 +139,12 @@ def get_args():
         "provided by the scheduler",
     )
     parser.add_argument("address", type=ZMQConfig.from_string, help="scheduler address to connect to")
+    parser.add_argument(
+        "--transport-type",
+        type=TransportType.from_string,
+        default=DEFAULT_TRANSPORT_TYPE,
+        help="the transport type to use, for example 'ymq' or 'zmq'"
+    )
     return parser.parse_args()
 
 
@@ -183,5 +191,6 @@ def main():
         logging_paths=args.logging_paths,
         logging_level=args.logging_level,
         logging_config_file=args.logging_config_file,
+        transport_type=args.transport_type,
     )
     cluster.run()

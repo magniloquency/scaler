@@ -10,7 +10,9 @@ from scaler.io.config import (
     DEFAULT_MAX_NUMBER_OF_TASKS_WAITING,
     DEFAULT_OBJECT_RETENTION_SECONDS,
     DEFAULT_WORKER_TIMEOUT_SECONDS,
+    DEFAULT_TRANSPORT_TYPE,
 )
+from scaler.scheduler.config import TransportType
 from scaler.scheduler.allocate_policy.allocate_policy import AllocatePolicy
 from scaler.utility.event_loop import EventLoopType
 from scaler.utility.network_util import get_available_tcp_port
@@ -128,6 +130,12 @@ def get_args():
     parser.add_argument(
         "address", type=ZMQConfig.from_string, help="scheduler address to connect to, e.g.: `tcp://localhost:6378`"
     )
+    parser.add_argument(
+        "--transport-type",
+        type=TransportType.from_string,
+        default=DEFAULT_TRANSPORT_TYPE,
+        help="the transport type to use, for example 'ymq' or 'zmq'"
+    )
     return parser.parse_args()
 
 
@@ -166,6 +174,7 @@ def main():
         logging_paths=args.logging_paths,
         logging_config_file=args.logging_config_file,
         logging_level=args.logging_level,
+        transport_type=args.transport_type
     )
     scheduler.start()
 

@@ -4,8 +4,6 @@ import logging
 
 import zmq.asyncio
 
-from scaler.io.zmq_async_binder import ZMQAsyncBinder
-from scaler.io.zmq_async_connector import ZMQAsyncConnector
 from scaler.io.async_object_storage_connector import PyAsyncObjectStorageConnector
 from scaler.io.config import CLEANUP_INTERVAL_SECONDS, STATUS_REPORT_INTERVAL_SECONDS
 from scaler.io.mixins import AsyncBinder, AsyncConnector, AsyncObjectStorageConnector

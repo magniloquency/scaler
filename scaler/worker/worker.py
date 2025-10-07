@@ -26,6 +26,7 @@ from scaler.protocol.python.message import (
     WorkerHeartbeatEcho,
 )
 from scaler.protocol.python.mixins import Message
+from scaler.scheduler.config import TransportType
 from scaler.utility.event_loop import create_async_loop_routine, register_event_loop
 from scaler.utility.exceptions import ClientShutdownException
 from scaler.utility.identifiers import ProcessorID, WorkerID
@@ -58,6 +59,7 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
         hard_processor_suspend: bool,
         logging_paths: Tuple[str, ...],
         logging_level: str,
+        transport_type: TransportType,
     ):
         multiprocessing.Process.__init__(self, name="Agent")
 
@@ -85,6 +87,8 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
 
         self._logging_paths = logging_paths
         self._logging_level = logging_level
+
+        self._transport_type = transport_type
 
         self._context: Optional[zmq.asyncio.Context] = None
         self._connector_external: Optional[AsyncConnector] = None

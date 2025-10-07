@@ -5,7 +5,7 @@ from asyncio import AbstractEventLoop, Task
 from typing import Any, Optional, Tuple
 
 from scaler.scheduler.allocate_policy.allocate_policy import AllocatePolicy
-from scaler.scheduler.config import SchedulerConfig
+from scaler.scheduler.config import SchedulerConfig, TransportType
 from scaler.scheduler.scheduler import Scheduler, scheduler_main
 from scaler.utility.event_loop import register_event_loop
 from scaler.utility.logging.utility import setup_logger
@@ -33,6 +33,7 @@ class SchedulerProcess(multiprocessing.get_context("spawn").Process):  # type: i
         logging_paths: Tuple[str, ...],
         logging_config_file: Optional[str],
         logging_level: str,
+        transport_type: TransportType
     ):
         multiprocessing.Process.__init__(self, name="Scheduler")
         self._scheduler_config = SchedulerConfig(
@@ -50,6 +51,7 @@ class SchedulerProcess(multiprocessing.get_context("spawn").Process):  # type: i
             load_balance_trigger_times=load_balance_trigger_times,
             protected=protected,
             allocate_policy=allocate_policy,
+            transport_type=transport_type
         )
 
         self._logging_paths = logging_paths
