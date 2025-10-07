@@ -12,7 +12,7 @@ try:
 except ImportError:
     from typing_extensions import ParamSpec, Concatenate  # type: ignore[assignment]
 
-from scaler.io.ymq._ymq import BaseIOSocket, Message, IOSocketType, BaseIOContext, YMQException, Bytes, ErrorCode
+from scaler.io.ymq._ymq import BaseIOContext, BaseIOSocket, Bytes, ErrorCode, IOSocketType, Message, YMQException
 
 
 class IOSocket:
