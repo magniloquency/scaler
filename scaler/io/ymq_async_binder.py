@@ -13,7 +13,7 @@ from scaler.protocol.python.status import BinderStatus
 from scaler.utility.zmq_config import ZMQConfig
 
 
-class ZMQAsyncBinder(AsyncBinder):
+class YMQAsyncBinder(AsyncBinder):
     def __init__(self, context: ymq.IOContext, name: str, address: ZMQConfig, identity: Optional[bytes] = None):
         self._address = address
 

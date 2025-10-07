@@ -15,7 +15,7 @@ else:
     Buffer = object
 
 
-class ZMQSyncSubscriber(SyncSubscriber, threading.Thread):
+class YMQSyncSubscriber(SyncSubscriber, threading.Thread):
     def __init__(
         self,
         address: ZMQConfig,

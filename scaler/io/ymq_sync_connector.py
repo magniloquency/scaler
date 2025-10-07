@@ -18,7 +18,7 @@ else:
     Buffer = object
 
 
-class ZMQSyncConnector(SyncConnector):
+class YMQSyncConnector(SyncConnector):
     def __init__(
         self, context: ymq.IOContext, socket_type: ymq.IOSocketType, address: ZMQConfig, identity: Optional[bytes]
     ):

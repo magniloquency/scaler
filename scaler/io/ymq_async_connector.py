@@ -10,7 +10,7 @@ from scaler.protocol.python.mixins import Message
 from scaler.utility.zmq_config import ZMQConfig
 
 
-class ZMQAsyncConnector(AsyncConnector):
+class YMQAsyncConnector(AsyncConnector):
     def __init__(
         self,
         context: ymq.IOContext,
