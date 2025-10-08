@@ -4,9 +4,13 @@ import logging
 
 import zmq.asyncio
 
+from scaler.io.ymq_async_binder import YMQAsyncBinder
+from scaler.io.zmq_async_binder import ZMQAsyncBinder
+from scaler.io.zmq_async_connector import ZMQAsyncConnector
 from scaler.io.async_object_storage_connector import PyAsyncObjectStorageConnector
 from scaler.io.config import CLEANUP_INTERVAL_SECONDS, STATUS_REPORT_INTERVAL_SECONDS
 from scaler.io.mixins import AsyncBinder, AsyncConnector, AsyncObjectStorageConnector
+from scaler.io.ymq import ymq
 from scaler.protocol.python.common import ObjectStorageAddress
 from scaler.protocol.python.message import (
     ClientDisconnect,
@@ -23,7 +27,7 @@ from scaler.protocol.python.message import (
     WorkerHeartbeat,
 )
 from scaler.protocol.python.mixins import Message
-from scaler.scheduler.config import SchedulerConfig
+from scaler.scheduler.config import SchedulerConfig, TransportType
 from scaler.scheduler.controllers.balance_controller import VanillaBalanceController
 from scaler.scheduler.controllers.client_controller import VanillaClientController
 from scaler.scheduler.controllers.config_controller import VanillaConfigController
@@ -66,7 +70,14 @@ class Scheduler:
 
         self._context = zmq.asyncio.Context(io_threads=config.io_threads)
 
-        self._binder: AsyncBinder = ZMQAsyncBinder(context=self._context, name="scheduler", address=config.address)
+        if config.transport_type == TransportType.ZMQ:
+            self._binder: AsyncBinder = ZMQAsyncBinder(context=self._context, name="scheduler", address=config.address)
+        elif config.transport_type == TransportType.YMQ:
+            self._ymq_context = ymq.IOContext(config.io_threads)
+            self._binder: AsyncBinder = YMQAsyncBinder(  # type: ignore[no-redef]
+                self._ymq_context, "scheduler", config.address
+            )
+
         logging.info(f"{self.__class__.__name__}: listen to scheduler address {config.address}")
 
         self._connector_storage: AsyncObjectStorageConnector = PyAsyncObjectStorageConnector()

@@ -86,7 +86,9 @@ T = TypeVar("T")
 
 
 async def call_async(
-    func: Callable[Concatenate[Callable[[Union[T, Exception]], None], P], None], *args: P.args, **kwargs: P.kwargs  # type: ignore
+    func: Callable[Concatenate[Callable[[Union[T, Exception]], None], P], None],  # type: ignore
+    *args: P.args,  # type: ignore
+    **kwargs: P.kwargs,  # type: ignore
 ) -> T:
     future = asyncio.get_event_loop().create_future()
 

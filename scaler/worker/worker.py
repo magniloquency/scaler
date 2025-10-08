@@ -9,6 +9,8 @@ from typing import Dict, Optional, Tuple
 
 import zmq.asyncio
 
+from scaler.io.ymq import ymq
+from scaler.io.ymq_async_connector import YMQAsyncConnector
 from scaler.io.zmq_async_binder import ZMQAsyncBinder
 from scaler.io.zmq_async_connector import ZMQAsyncConnector
 from scaler.io.async_object_storage_connector import PyAsyncObjectStorageConnector
@@ -112,15 +114,28 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
         register_event_loop(self._event_loop)
 
         self._context = zmq.asyncio.Context()
-        self._connector_external = ZMQAsyncConnector(
-            context=self._context,
-            name=self.name,
-            socket_type=zmq.DEALER,
-            address=self._address,
-            bind_or_connect="connect",
-            callback=self.__on_receive_external,
-            identity=self._ident,
-        )
+
+        if self._transport_type == TransportType.ZMQ:
+            self._connector_external = ZMQAsyncConnector(
+                context=self._context,
+                name=self.name,
+                socket_type=zmq.DEALER,
+                address=self._address,
+                bind_or_connect="connect",
+                callback=self.__on_receive_external,
+                identity=self._ident,
+            )
+        elif self._transport_type == TransportType.YMQ:
+            self._ymq_context = ymq.IOContext()
+            self._connector_external = YMQAsyncConnector(
+                context=self._ymq_context,
+                name=self.name,
+                socket_type=ymq.IOSocketType.Connector,
+                address=self._address,
+                bind_or_connect="connect",
+                callback=self.__on_receive_external,
+                identity=self._ident,
+            )
 
         self._binder_internal = ZMQAsyncBinder(
             context=self._context, name=self.name, address=self._address_internal, identity=self._ident

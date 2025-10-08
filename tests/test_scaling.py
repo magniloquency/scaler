@@ -53,6 +53,7 @@ def _run_native_worker_adapter(address: str, webhook_port: int) -> None:
         logging_paths=("/dev/stdout",),
         logging_config_file=None,
         logging_level="INFO",
+        transport_type=DEFAULT_TRANSPORT_TYPE,
     )
 
     app = adapter.create_app()

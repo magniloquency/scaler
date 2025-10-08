@@ -11,7 +11,7 @@ class Identifier(bytes, metaclass=abc.ABCMeta):
         raise NotImplementedError()
 
     def extend(self, extra: str):
-        return self.__class__(self + extra.encode())
+        return self.__class__(self + extra.encode())  # type: ignore[abstract]
 
 
 class ClientID(Identifier):

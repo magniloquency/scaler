@@ -10,9 +10,11 @@ from scaler.io.config import (
     DEFAULT_IO_THREADS,
     DEFAULT_NUMBER_OF_WORKER,
     DEFAULT_TASK_TIMEOUT_SECONDS,
+    DEFAULT_TRANSPORT_TYPE,
     DEFAULT_TRIM_MEMORY_THRESHOLD_BYTES,
     DEFAULT_WORKER_DEATH_TIMEOUT,
 )
+from scaler.scheduler.config import TransportType
 from scaler.utility.event_loop import EventLoopType, register_event_loop
 from scaler.utility.logging.utility import setup_logger
 from scaler.utility.object_storage_config import ObjectStorageConfig
@@ -128,6 +130,12 @@ def get_args():
         type=ZMQConfig.from_string,
         help="scheduler address to connect workers to, e.g.: `tcp://localhost:6378`",
     )
+    parser.add_argument(
+        "--transport-type",
+        type=TransportType.from_string,
+        default=DEFAULT_TRANSPORT_TYPE,
+        help="the transport type to use, for example 'ymq' or 'zmq'",
+    )
 
     return parser.parse_args()
 
@@ -155,6 +163,7 @@ def main():
         logging_paths=args.logging_paths,
         logging_level=args.logging_level,
         logging_config_file=args.logging_config_file,
+        transport_type=args.transport_type,
     )
 
     app = native_worker_adapter.create_app()

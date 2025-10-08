@@ -6,16 +6,19 @@ from scaler.scheduler.allocate_policy.allocate_policy import AllocatePolicy
 from scaler.utility.object_storage_config import ObjectStorageConfig
 from scaler.utility.zmq_config import ZMQConfig
 
+
 class TransportType(enum.Enum):
     YMQ = "YMQ"
     ZMQ = "ZMQ"
 
+    @staticmethod
     def from_string(s: str) -> "TransportType":
         if s.lower() == "ymq":
             return TransportType.YMQ
         if s.lower() == "zmq":
             return TransportType.ZMQ
         raise ValueError(f"[{s}] is not a supported transport type")
+
 
 @dataclasses.dataclass
 class SchedulerConfig:

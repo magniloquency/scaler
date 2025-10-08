@@ -134,7 +134,7 @@ def get_args():
         "--transport-type",
         type=TransportType.from_string,
         default=DEFAULT_TRANSPORT_TYPE,
-        help="the transport type to use, for example 'ymq' or 'zmq'"
+        help="the transport type to use, for example 'ymq' or 'zmq'",
     )
     return parser.parse_args()
 
@@ -174,7 +174,7 @@ def main():
         logging_paths=args.logging_paths,
         logging_config_file=args.logging_config_file,
         logging_level=args.logging_level,
-        transport_type=args.transport_type
+        transport_type=args.transport_type,
     )
     scheduler.start()
 

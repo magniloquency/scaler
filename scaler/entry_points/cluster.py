@@ -143,7 +143,7 @@ def get_args():
         "--transport-type",
         type=TransportType.from_string,
         default=DEFAULT_TRANSPORT_TYPE,
-        help="the transport type to use, for example 'ymq' or 'zmq'"
+        help="the transport type to use, for example 'ymq' or 'zmq'",
     )
     return parser.parse_args()
 

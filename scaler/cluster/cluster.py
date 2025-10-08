@@ -100,6 +100,7 @@ class Cluster(multiprocessing.get_context("spawn").Process):  # type: ignore[mis
                 hard_processor_suspend=self._hard_processor_suspend,
                 logging_paths=self._logging_paths,
                 logging_level=self._logging_level,
+                transport_type=self._transport_type,
             )
             for name in self._worker_names
         ]
