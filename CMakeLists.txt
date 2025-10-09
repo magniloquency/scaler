@@ -103,6 +103,13 @@ find_package(CapnProto CONFIG REQUIRED)
 get_target_property(CAPNP_INCLUDE_DIRS CapnProto::capnp INTERFACE_INCLUDE_DIRECTORIES)
 message(STATUS "Found Capnp includes in ${CAPNP_INCLUDE_DIRS}")
 
+execute_process(
+  COMMAND python3-config --prefix
+  OUTPUT_VARIABLE PYTHON_PREFIX
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+set(Python3_ROOT_DIR "${PYTHON_PREFIX}")
+
 find_package(Python3 REQUIRED COMPONENTS Development.Module)
 message(STATUS "Python version: ${Python3_VERSION}")
 message(STATUS "Python include dirs: ${Python3_INCLUDE_DIRS}")

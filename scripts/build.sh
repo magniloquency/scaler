@@ -18,7 +18,7 @@ echo "Build directory: $BUILD_DIR"
 echo "Build preset: $BUILD_PRESET"
 
 # Configure
-cmake -DPython3_ROOT_DIR=$(python-config --prefix) --preset $BUILD_PRESET "${CMAKE_ARGS[@]}"
+cmake --preset $BUILD_PRESET "${CMAKE_ARGS[@]}"
 
 # Build
 cmake --build --preset $BUILD_PRESET
