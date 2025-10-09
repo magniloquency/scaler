@@ -102,11 +102,10 @@ async def call_async(
     *args: P.args,  # type: ignore
     **kwargs: P.kwargs,  # type: ignore
 ) -> T:
-    future = asyncio.get_event_loop().create_future()
+    loop = asyncio.get_event_loop()
+    future = loop.create_future()
 
     def callback(result: Union[T, BaseException]):
-        loop = future.get_loop()
-
         if isinstance(result, BaseException):
             loop.call_soon_threadsafe(safe_set_exception, future, result)
         else:
