@@ -58,21 +58,6 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/scaler/io/ymq)
 
 if(LINUX)
     # ymq python =======================================================================================================
-    find_package(Python3 REQUIRED COMPONENTS Development.Module)
-
-    message(STATUS "Python3_FOUND: ${Python3_FOUND}")
-    message(STATUS "Python3_Interpreter_FOUND: ${Python3_Interpreter_FOUND}")
-    message(STATUS "Python3_EXECUTABLE: ${Python3_EXECUTABLE}")
-    message(STATUS "Python3_INTERPRETER_ID: ${Python3_INTERPRETER_ID}")
-    message(STATUS "Python3_STDLIB: ${Python3_STDLIB}")
-    message(STATUS "Python3_STDARCH: ${Python3_STDARCH}")
-    message(STATUS "Python3_SITELIB: ${Python3_SITELIB}")
-    message(STATUS "Python3_SITEARCH: ${Python3_SITEARCH}")
-    message(STATUS "Python3_SOABI: ${Python3_SOABI}")
-    message(STATUS "Python3_INCLUDE_DIRS: ${Python3_INCLUDE_DIRS}")
-    message(STATUS "Python3_Development.Module_FOUND: ${Python3_Development.Module_FOUND}")
-    message(STATUS "Python3_LINK_OPTIONS: ${Python3_LINK_OPTIONS}")
-    message(STATUS "Python3_VERSION: ${Python3_VERSION}")
 
     add_library(py_ymq SHARED
         pymod_ymq/bytes.h

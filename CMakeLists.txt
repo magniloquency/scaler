@@ -103,6 +103,11 @@ find_package(CapnProto CONFIG REQUIRED)
 get_target_property(CAPNP_INCLUDE_DIRS CapnProto::capnp INTERFACE_INCLUDE_DIRECTORIES)
 message(STATUS "Found Capnp includes in ${CAPNP_INCLUDE_DIRS}")
 
+find_package(Python3 REQUIRED COMPONENTS Development.Module)
+message(STATUS "Python version: ${Python3_VERSION}")
+message(STATUS "Python include dirs: ${Python3_INCLUDE_DIRS}")
+message(STATUS "Python ABI: ${Python3_SOABI}")
+
 # Make LSP happy
 include_directories(${CAPNP_INCLUDE_DIRS})
 include_directories(${PROJECT_SOURCE_DIR})
