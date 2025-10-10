@@ -72,7 +72,7 @@ class YMQSyncSubscriber(SyncSubscriber, threading.Thread):
             timeout = self._timeout_seconds
 
         try:
-            self.__routine_receive(self._socket.recv_sync(timeout=timeout).payload)
+            self.__routine_receive(self._socket.recv_sync(timeout=timeout).payload.data)
         except TimeoutError:
             raise TimeoutError(f"Cannot connect to {self._address.to_address()} in {self._timeout_seconds} seconds")
 

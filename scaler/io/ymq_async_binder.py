@@ -44,7 +44,7 @@ class YMQAsyncBinder(AsyncBinder):
     async def routine(self):
         ymqmsg = await self._socket.recv()
 
-        message: Optional[Message] = deserialize(ymqmsg.payload)
+        message: Optional[Message] = deserialize(ymqmsg.payload.data)
         if message is None:
             logging.error(f"received unknown message from {ymqmsg.address.data!r}: {ymqmsg.address.data!r}")
             return

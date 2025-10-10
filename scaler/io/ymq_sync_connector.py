@@ -59,7 +59,7 @@ class YMQSyncConnector(SyncConnector):
         with self._lock:
             msg = self._socket.recv_sync()
 
-        return self.__compose_message(msg.payload)
+        return self.__compose_message(msg.payload.data)
 
     def __compose_message(self, payload: Buffer) -> Optional[Message]:
         result: Optional[Message] = deserialize(payload)
