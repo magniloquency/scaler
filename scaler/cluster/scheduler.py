@@ -5,7 +5,8 @@ from asyncio import AbstractEventLoop, Task
 from typing import Any, Optional, Tuple
 
 from scaler.scheduler.allocate_policy.allocate_policy import AllocatePolicy
-from scaler.scheduler.config import SchedulerConfig, TransportType
+from scaler.config.section.scheduler import SchedulerConfig
+from scaler.config.types.transport_type import TransportType
 from scaler.config.types.object_storage_server import ObjectStorageConfig
 from scaler.config.types.zmq import ZMQConfig
 from scaler.scheduler.scheduler import Scheduler, scheduler_main

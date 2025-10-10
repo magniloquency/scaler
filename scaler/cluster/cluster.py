@@ -4,7 +4,7 @@ import os
 import signal
 from typing import Dict, List, Optional, Tuple
 
-from scaler.scheduler.config import TransportType
+from scaler.config.types.transport_type import TransportType
 from scaler.utility.logging.utility import setup_logger
 from scaler.config.types.object_storage_server import ObjectStorageConfig
 from scaler.config.types.zmq import ZMQConfig

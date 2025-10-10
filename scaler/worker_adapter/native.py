@@ -10,7 +10,7 @@ from scaler.utility.identifiers import WorkerID
 from scaler.config.types.object_storage_server import ObjectStorageConfig
 from scaler.config.types.zmq import ZMQConfig
 from scaler.worker.worker import Worker
-from scaler.scheduler.config import TransportType
+from scaler.config.types.transport_type import TransportType
 
 WorkerGroupID = bytes
 

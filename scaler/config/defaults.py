@@ -1,6 +1,6 @@
 import os
 
-from scaler.scheduler.config import TransportType
+from scaler.config.types.transport_type import TransportType
 
 # ==============
 # SYSTEM OPTIONS

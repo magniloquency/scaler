@@ -82,7 +82,7 @@ class Scheduler:
                 self._ymq_context, "scheduler", config.scheduler_address
             )
 
-        logging.info(f"{self.__class__.__name__}: listen to scheduler address {config.address}")
+        logging.info(f"{self.__class__.__name__}: listen to scheduler address {config.scheduler_address}")
 
         self._connector_storage: AsyncObjectStorageConnector = PyAsyncObjectStorageConnector()
         logging.info(f"{self.__class__.__name__}: connect to object storage server {object_storage_address!r}")

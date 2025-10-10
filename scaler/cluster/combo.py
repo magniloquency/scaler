@@ -25,7 +25,7 @@ from scaler.config.defaults import (
     DEFAULT_LOGGING_PATHS,
 )
 from scaler.scheduler.allocate_policy.allocate_policy import AllocatePolicy
-from scaler.scheduler.config import TransportType
+from scaler.config.types.transport_type import TransportType
 from scaler.utility.network_util import get_available_tcp_port
 from scaler.config.types.object_storage_server import ObjectStorageConfig
 from scaler.config.types.zmq import ZMQConfig
