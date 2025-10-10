@@ -83,7 +83,7 @@ public:
             return *this;
 
         this->free();
-        this->_ptr = (T*)Py_XNewRef(other._ptr);
+        this->_ptr = (T*)Py_XNewRef((PyObject*)other._ptr);
         return *this;
     }
     OwnedPyObject& operator=(OwnedPyObject&& other) noexcept

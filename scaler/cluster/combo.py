@@ -5,7 +5,7 @@ from typing import Dict, Optional, Tuple
 from scaler.cluster.cluster import Cluster
 from scaler.cluster.object_storage_server import ObjectStorageServerProcess
 from scaler.cluster.scheduler import SchedulerProcess
-from scaler.io.config import (
+from scaler.config.defaults import (
     DEFAULT_CLIENT_TIMEOUT_SECONDS,
     DEFAULT_GARBAGE_COLLECT_INTERVAL_SECONDS,
     DEFAULT_HARD_PROCESSOR_SUSPEND,
@@ -21,12 +21,14 @@ from scaler.io.config import (
     DEFAULT_TRIM_MEMORY_THRESHOLD_BYTES,
     DEFAULT_WORKER_DEATH_TIMEOUT,
     DEFAULT_WORKER_TIMEOUT_SECONDS,
+    DEFAULT_LOGGING_LEVEL,
+    DEFAULT_LOGGING_PATHS,
 )
 from scaler.scheduler.allocate_policy.allocate_policy import AllocatePolicy
 from scaler.scheduler.config import TransportType
 from scaler.utility.network_util import get_available_tcp_port
-from scaler.utility.object_storage_config import ObjectStorageConfig
-from scaler.utility.zmq_config import ZMQConfig
+from scaler.config.types.object_storage_server import ObjectStorageConfig
+from scaler.config.types.zmq import ZMQConfig
 
 
 class SchedulerClusterCombo:
@@ -55,8 +57,8 @@ class SchedulerClusterCombo:
         protected: bool = True,
         allocate_policy: AllocatePolicy = AllocatePolicy.even,
         event_loop: str = "builtin",
-        logging_paths: Tuple[str, ...] = ("/dev/stdout",),
-        logging_level: str = "INFO",
+        logging_paths: Tuple[str, ...] = DEFAULT_LOGGING_PATHS,
+        logging_level: str = DEFAULT_LOGGING_LEVEL,
         logging_config_file: Optional[str] = None,
         transport_type: TransportType = DEFAULT_TRANSPORT_TYPE,
     ):

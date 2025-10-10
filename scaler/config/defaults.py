@@ -81,3 +81,12 @@ DEFAULT_HARD_PROCESSOR_SUSPEND = False
 
 # the transport type to use
 DEFAULT_TRANSPORT_TYPE = TransportType.ZMQ
+
+# =======================
+# LOGGING SPECIFIC OPTIONS
+
+# default logging level
+DEFAULT_LOGGING_LEVEL = "INFO"
+
+# default logging paths
+DEFAULT_LOGGING_PATHS = ("/dev/stdout",)

@@ -13,9 +13,12 @@ from scaler.io.ymq import ymq
 from scaler.io.ymq_async_connector import YMQAsyncConnector
 from scaler.io.zmq_async_binder import ZMQAsyncBinder
 from scaler.io.zmq_async_connector import ZMQAsyncConnector
+from scaler.config.types.object_storage_server import ObjectStorageConfig
+from scaler.config.types.zmq import ZMQConfig, ZMQType
 from scaler.io.async_object_storage_connector import PyAsyncObjectStorageConnector
-from scaler.io.config import PROFILING_INTERVAL_SECONDS
+from scaler.config.defaults import PROFILING_INTERVAL_SECONDS
 from scaler.io.mixins import AsyncBinder, AsyncConnector, AsyncObjectStorageConnector
+from scaler.io.ymq import ymq
 from scaler.protocol.python.message import (
     ClientDisconnect,
     DisconnectRequest,
@@ -28,13 +31,11 @@ from scaler.protocol.python.message import (
     WorkerHeartbeatEcho,
 )
 from scaler.protocol.python.mixins import Message
-from scaler.scheduler.config import TransportType
+from scaler.config.types.transport_type import TransportType
 from scaler.utility.event_loop import create_async_loop_routine, register_event_loop
 from scaler.utility.exceptions import ClientShutdownException
 from scaler.utility.identifiers import ProcessorID, WorkerID
 from scaler.utility.logging.utility import setup_logger
-from scaler.utility.object_storage_config import ObjectStorageConfig
-from scaler.utility.zmq_config import ZMQConfig, ZMQType
 from scaler.worker.agent.heartbeat_manager import VanillaHeartbeatManager
 from scaler.worker.agent.processor_manager import VanillaProcessorManager
 from scaler.worker.agent.profiling_manager import VanillaProfilingManager
@@ -251,6 +252,13 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
             )
         except asyncio.CancelledError:
             pass
+
+        # TODO: Should the object storage connector catch this error?
+        except ymq.YMQException as e:
+            if e.code == ymq.ErrorCode.ConnectorSocketClosedByRemoteEnd:
+                pass
+            else:
+                logging.exception(f"{self.identity!r}: failed with unhandled exception:\n{e}")
         except (ClientShutdownException, TimeoutError) as e:
             logging.info(f"{self.identity!r}: {str(e)}")
         except Exception as e:
