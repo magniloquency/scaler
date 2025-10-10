@@ -80,7 +80,7 @@ DEFAULT_WORKER_DEATH_TIMEOUT = 5 * 60
 DEFAULT_HARD_PROCESSOR_SUSPEND = False
 
 # the transport type to use
-DEFAULT_TRANSPORT_TYPE = TransportType.ZMQ
+DEFAULT_TRANSPORT_TYPE = TransportType.YMQ
 
 # =======================
 # LOGGING SPECIFIC OPTIONS
