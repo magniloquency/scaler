@@ -9,6 +9,7 @@ from scaler.config.types.worker import WorkerCapabilities, WorkerNames
 from scaler.config.types.zmq import ZMQConfig
 from scaler.config.types.transport_type import TransportType
 
+
 @dataclasses.dataclass
 class ClusterConfig:
     scheduler_address: ZMQConfig

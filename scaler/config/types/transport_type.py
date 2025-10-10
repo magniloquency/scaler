@@ -1,5 +1,6 @@
 import enum
 
+
 class TransportType(enum.Enum):
     YMQ = "YMQ"
     ZMQ = "ZMQ"

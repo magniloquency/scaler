@@ -52,7 +52,7 @@ class ClientAgent(threading.Thread):
         heartbeat_interval_seconds: int,
         serializer: Serializer,
         transport_type: TransportType,
-        ymq_context: Optional[ymq.IOContext] 
+        ymq_context: Optional[ymq.IOContext],
     ):
         threading.Thread.__init__(self, daemon=True)
 
@@ -79,8 +79,10 @@ class ClientAgent(threading.Thread):
             callback=self.__on_receive_from_client,
             identity=None,
         )
+
+        self._connector_external: AsyncConnector
         if transport_type == TransportType.ZMQ:
-            self._connector_external: AsyncConnector = ZMQAsyncConnector(
+            self._connector_external = ZMQAsyncConnector(
                 context=zmq.asyncio.Context.shadow(self._context),
                 name="client_agent_external",
                 socket_type=zmq.DEALER,
@@ -92,7 +94,7 @@ class ClientAgent(threading.Thread):
         elif transport_type == TransportType.YMQ:
             if self._ymq_context is None:
                 raise ValueError("transport type is ymq but not ymq io context was passed to client agent")
-            self._connector_external: AsyncConnector = YMQAsyncConnector(
+            self._connector_external = YMQAsyncConnector(
                 context=self._ymq_context,
                 name="client_agent_external",
                 socket_type=ymq.IOSocketType.Connector,
@@ -101,8 +103,6 @@ class ClientAgent(threading.Thread):
                 callback=self.__on_receive_from_scheduler,
                 identity=self._identity,
             )
-        else:
-            raise ValueError(transport_type)
 
         self._disconnect_manager: Optional[ClientDisconnectManager] = None
         self._heartbeat_manager: Optional[ClientHeartbeatManager] = None

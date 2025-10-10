@@ -16,7 +16,11 @@ from scaler.client.object_buffer import ObjectBuffer
 from scaler.client.object_reference import ObjectReference
 from scaler.client.serializer.default import DefaultSerializer
 from scaler.client.serializer.mixins import Serializer
-from scaler.config.defaults import DEFAULT_CLIENT_TIMEOUT_SECONDS, DEFAULT_HEARTBEAT_INTERVAL_SECONDS, DEFAULT_TRANSPORT_TYPE
+from scaler.config.defaults import (
+    DEFAULT_CLIENT_TIMEOUT_SECONDS,
+    DEFAULT_HEARTBEAT_INTERVAL_SECONDS,
+    DEFAULT_TRANSPORT_TYPE,
+)
 from scaler.io.mixins import SyncConnector, SyncObjectStorageConnector
 from scaler.io.zmq_sync_connector import ZMQSyncConnector
 from scaler.io.sync_object_storage_connector import PySyncObjectStorageConnector
@@ -32,6 +36,7 @@ from scaler.config.types.transport_type import TransportType
 from scaler.worker.agent.processor.processor import Processor
 
 from scaler.io.ymq import ymq
+
 
 @dataclasses.dataclass
 class _CallNode:
@@ -75,7 +80,9 @@ class Client:
         :param stream_output: If True, stdout/stderr will be streamed to client during task execution
         :type stream_output: bool
         """
-        self.__initialize__(address, profiling, timeout_seconds, heartbeat_interval_seconds, transport_type, serializer, stream_output)
+        self.__initialize__(
+            address, profiling, timeout_seconds, heartbeat_interval_seconds, transport_type, serializer, stream_output
+        )
 
     def __initialize__(
         self,
@@ -202,6 +209,7 @@ class Client:
             stream_output=state["stream_output"],
             timeout_seconds=state["timeout_seconds"],
             heartbeat_interval_seconds=state["heartbeat_interval_seconds"],
+            transport_type=state["transport_type"],
         )
 
     def submit(self, fn: Callable, *args, **kwargs) -> ScalerFuture:

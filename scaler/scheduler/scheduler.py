@@ -75,7 +75,9 @@ class Scheduler:
         self._context = zmq.asyncio.Context(io_threads=config.io_threads)
 
         if config.transport_type == TransportType.ZMQ:
-            self._binder: AsyncBinder = ZMQAsyncBinder(context=self._context, name="scheduler", address=config.scheduler_address)
+            self._binder: AsyncBinder = ZMQAsyncBinder(
+                context=self._context, name="scheduler", address=config.scheduler_address
+            )
         elif config.transport_type == TransportType.YMQ:
             self._ymq_context = ymq.IOContext(config.io_threads)
             self._binder: AsyncBinder = YMQAsyncBinder(  # type: ignore[no-redef]

@@ -18,7 +18,6 @@ from scaler.config.types.zmq import ZMQConfig, ZMQType
 from scaler.io.async_object_storage_connector import PyAsyncObjectStorageConnector
 from scaler.config.defaults import PROFILING_INTERVAL_SECONDS
 from scaler.io.mixins import AsyncBinder, AsyncConnector, AsyncObjectStorageConnector
-from scaler.io.ymq import ymq
 from scaler.protocol.python.message import (
     ClientDisconnect,
     DisconnectRequest,

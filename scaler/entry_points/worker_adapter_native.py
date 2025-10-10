@@ -92,11 +92,7 @@ def get_args():
         type=str,
         help="scheduler address to connect workers to, e.g.: `tcp://localhost:6378",
     )
-    parser.add_argument(
-        "--transport-type",
-        type=str,
-        help="the transport type to use, for example 'ymq' or 'zmq'",
-    )
+    parser.add_argument("--transport-type", type=str, help="the transport type to use, for example 'ymq' or 'zmq'")
 
     return parser.parse_args()
 

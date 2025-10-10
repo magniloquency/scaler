@@ -90,11 +90,7 @@ def get_args():
         "provided by the scheduler",
     )
     parser.add_argument("scheduler_address", nargs="?", type=str, help="scheduler address to connect to")
-    parser.add_argument(
-        "--transport-type",
-        type=str,
-        help="the transport type to use, for example 'ymq' or 'zmq'",
-    )
+    parser.add_argument("--transport-type", type=str, help="the transport type to use, for example 'ymq' or 'zmq'")
 
     return parser.parse_args()
 
