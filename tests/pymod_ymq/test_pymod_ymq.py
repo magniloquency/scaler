@@ -19,8 +19,8 @@ class TestPymodYMQ(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(connector.identity, "connector")
         self.assertEqual(connector.socket_type, ymq.IOSocketType.Connector)
 
-        await binder.bind("tcp://127.0.0.1:35791")
-        await connector.connect("tcp://127.0.0.1:35791")
+        await binder.bind("tcp://127.0.0.1:35793")
+        await connector.connect("tcp://127.0.0.1:35793")
 
         await connector.send(ymq.Message(address=None, payload=b"payload"))
         msg = await binder.recv()
@@ -29,41 +29,17 @@ class TestPymodYMQ(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(msg.address.data, b"connector")
         self.assertEqual(msg.payload.data, b"payload")
 
-    @unittest.skip("this test currently hangs, see comment in the code")
     async def test_no_address(self):
-        # this test requires special care because it hangs and doesn't shut down the worker threads properly
-        # we use a subprocess to shield us from any effects
-        pipe_parent, pipe_child = multiprocessing.Pipe(duplex=False)
+        ctx = ymq.IOContext()
+        binder = await ctx.createIOSocket("binder", ymq.IOSocketType.Binder)
+        connector = await ctx.createIOSocket("connector", ymq.IOSocketType.Connector)
 
-        def test(pipe: multiprocessing.connection.Connection) -> None:
-            async def main():
-                ctx = ymq.IOContext()
-                binder = await ctx.createIOSocket("binder", ymq.IOSocketType.Binder)
-                connector = await ctx.createIOSocket("connector", ymq.IOSocketType.Connector)
+        await binder.bind("tcp://127.0.0.1:35794")
+        await connector.connect("tcp://127.0.0.1:35794")
 
-                await binder.bind("tcp://127.0.0.1:35791")
-                await connector.connect("tcp://127.0.0.1:35791")
-
-                try:
-                    # TODO: change to `asyncio.timeout()` in python >3.10
-                    await asyncio.wait_for(binder.send(ymq.Message(address=None, payload=b"payload")), 30)
-
-                    # TODO: solve the hang and write the rest of the test
-                    pipe.send(True)
-                except asyncio.TimeoutError:
-                    pipe.send(False)
-
-            asyncio.run(main())
-
-        p = multiprocessing.Process(target=test, args=(pipe_child,))
-        p.start()
-        result = pipe_parent.recv()
-        p.join(5)
-        if p.exitcode is None:
-            p.kill()
-
-        if not result:
-            self.fail()
+        with self.assertRaises(ymq.YMQException) as exc:
+            await binder.send(ymq.Message(address=None, payload=b"payload"))
+        self.assertEqual(exc.exception.code, ymq.ErrorCode.BinderSendMessageWithNoAddress)
 
     async def test_routing(self):
         ctx = ymq.IOContext()
@@ -71,9 +47,9 @@ class TestPymodYMQ(unittest.IsolatedAsyncioTestCase):
         connector1 = await ctx.createIOSocket("connector1", ymq.IOSocketType.Connector)
         connector2 = await ctx.createIOSocket("connector2", ymq.IOSocketType.Connector)
 
-        await binder.bind("tcp://127.0.0.1:35791")
-        await connector1.connect("tcp://127.0.0.1:35791")
-        await connector2.connect("tcp://127.0.0.1:35791")
+        await binder.bind("tcp://127.0.0.1:35795")
+        await connector1.connect("tcp://127.0.0.1:35795")
+        await connector2.connect("tcp://127.0.0.1:35795")
 
         await binder.send(ymq.Message(b"connector2", b"2"))
         await binder.send(ymq.Message(b"connector1", b"1"))
@@ -141,8 +117,8 @@ class TestPymodYMQ(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(connector.identity, "connector")
         self.assertEqual(connector.socket_type, ymq.IOSocketType.Connector)
 
-        await binder.bind("tcp://127.0.0.1:35791")
-        await connector.connect("tcp://127.0.0.1:35791")
+        await binder.bind("tcp://127.0.0.1:35792")
+        await connector.connect("tcp://127.0.0.1:35792")
 
         for _ in range(10):
             await connector.send(ymq.Message(address=None, payload=b"." * 500_000_000))
