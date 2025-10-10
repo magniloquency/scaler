@@ -1,6 +1,4 @@
 import asyncio
-import multiprocessing
-import multiprocessing.connection
 import unittest
 from scaler.io.ymq import ymq
 from scaler.io.utility import serialize, deserialize
@@ -140,5 +138,5 @@ class TestPymodYMQ(unittest.IsolatedAsyncioTestCase):
 
         # this should deserialize without creating a copy
         # because ymq.Bytes uses the buffer protocol
-        deserialized: TaskCancel = deserialize(copy)
+        deserialized: TaskCancel = deserialize(copy)  # type: ignore
         self.assertEqual(deserialized.task_id, msg.task_id)
