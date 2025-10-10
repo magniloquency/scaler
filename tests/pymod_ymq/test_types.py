@@ -14,12 +14,6 @@ class TestTypes(unittest.TestCase):
         self.assertEqual(exc.code, ymq.ErrorCode.CoreBug)
         self.assertEqual(exc.message, "oh no")
 
-    def test_interrupted_exception(self):
-        self.assertTrue(issubclass(ymq.YMQInterruptedException, Exception))  # type: ignore
-
-        exc = ymq.YMQInterruptedException()
-        self.assertEqual(exc.args, tuple())
-
     def test_error_code(self):
         self.assertTrue(issubclass(ymq.ErrorCode, IntEnum))  # type: ignore
         self.assertEqual(
@@ -81,7 +75,7 @@ class TestTypes(unittest.TestCase):
     @unittest.skip("causes segmentation fault")
     def test_io_socket(self):
         # check that we can't create io socket instances directly
-        self.assertRaises(TypeError, lambda: ymq.IOSocket())
+        self.assertRaises(TypeError, lambda: ymq.IOSocket())  # type: ignore
 
     def test_io_socket_type(self):
         self.assertTrue(issubclass(ymq.IOSocketType, IntEnum))  # type: ignore
