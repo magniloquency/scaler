@@ -3,8 +3,8 @@ requires = ["scikit-build-core>=0.5.0", "setuptools-scm", "mypy", "black", "flak
 build-backend = "scikit_build_core.build"
 
 [project]
-name = "scaler"
-description = "Scaler Distribution Framework"
+name = "opengris-scaler"
+description = "OpenGRIS Scaler Distribution Framework"
 requires-python = ">=3.8"
 readme = { file = "README.md", content-type = "text/markdown" }
 license = { text = "Apache 2.0" }
@@ -36,7 +36,7 @@ uvloop = [
 ]
 gui = [
     "nicegui[plotly]==2.24.2; python_version == '3.8'",
-    "nicegui[plotly]==3.0.3; python_version >= '3.9'",
+    "nicegui[plotly]==3.0.4; python_version >= '3.9'",
 ]
 graphblas = [
     "python-graphblas",
@@ -46,7 +46,7 @@ graphblas = [
 ]
 all = [
     "nicegui[plotly]==2.24.2; python_version == '3.8'",
-    "nicegui[plotly]==3.0.3; python_version >= '3.9'",
+    "nicegui[plotly]==3.0.4; python_version >= '3.9'",
     "python-graphblas",
     "numpy==1.24.4; python_version == '3.8'",
     "numpy==2.0.2; python_version == '3.9'",
