@@ -82,7 +82,9 @@ class Client:
         :type stream_output: bool
         """
         address = self._resolve_scheduler_address(address)
-        self.__initialize__(address, profiling, timeout_seconds, heartbeat_interval_seconds, transport_type, serializer, stream_output)
+        self.__initialize__(
+            address, profiling, timeout_seconds, heartbeat_interval_seconds, transport_type, serializer, stream_output
+        )
 
     def __initialize__(
         self,
