@@ -208,7 +208,13 @@ class ClientAgent(threading.Thread):
         finally:
             self._stop_event.set()  # always set the stop event before setting futures' exceptions
 
-            await self._object_manager.clear_all_objects(clear_serializer=True)
+            try:
+                await self._object_manager.clear_all_objects(clear_serializer=True)
+            except ymq.YMQException as e:
+                if e.code == ymq.ErrorCode.ConnectorSocketClosedByRemoteEnd:
+                    pass
+                else:
+                    raise
 
             self._connector_external.destroy()
             self._connector_internal.destroy()
