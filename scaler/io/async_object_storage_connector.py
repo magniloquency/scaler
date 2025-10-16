@@ -65,7 +65,7 @@ class PyAsyncObjectStorageConnector(AsyncObjectStorageConnector):
     def is_connected(self) -> bool:
         return self._connected_event.is_set()
 
-    def destroy(self):
+    async def destroy(self):
         if not self.is_connected():
             return
 
