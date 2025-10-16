@@ -16,6 +16,7 @@ try:
 except ImportError:
     from typing_extensions import Buffer
 
+
 def get_scaler_network_backend_from_env():
     backend_str = os.environ.get("SCALER_NETWORK_BACKEND", "tcp_zmq")  # Default to tcp_zmq
     try:
