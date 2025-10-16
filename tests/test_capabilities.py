@@ -35,7 +35,7 @@ class TestCapabilities(unittest.TestCase):
             # Connects a worker that can handle the task
             gpu_cluster = Cluster(
                 address=base_cluster._address,
-                storage_address=None,
+                object_storage_address=None,
                 preload=None,
                 worker_io_threads=1,
                 worker_names=["gpu_worker"],
@@ -75,7 +75,7 @@ class TestCapabilities(unittest.TestCase):
             gpu_cluster = Cluster(
                 address=base_cluster._address,
                 preload=None,
-                storage_address=None,
+                object_storage_address=None,
                 worker_io_threads=1,
                 worker_names=["gpu_worker"],
                 per_worker_capabilities={"gpu": -1},
