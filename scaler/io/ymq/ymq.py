@@ -8,7 +8,7 @@ import concurrent.futures
 from typing import Any, Optional, Callable, TypeVar, Union
 
 try:
-    from typing import ParamSpec, Concatenate  # type: ignore[attr-defined]
+    from typing import Concatenate, ParamSpec  # type: ignore[attr-defined]
 except ImportError:
     from typing_extensions import ParamSpec, Concatenate  # type: ignore[assignment]
 
