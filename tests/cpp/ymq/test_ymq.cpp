@@ -25,7 +25,9 @@
 
 #include "common.h"
 #include "scaler/io/ymq/bytes.h"
+#include "scaler/io/ymq/error.h"
 #include "scaler/io/ymq/io_context.h"
+#include "scaler/io/ymq/io_socket.h"
 #include "scaler/io/ymq/simple_interface.h"
 #include "tests/cpp/ymq/common.h"
 
@@ -400,6 +402,130 @@ TestResult pubsub_publisher(std::string host, uint16_t port, std::string topic, 
     return TestResult::Success;
 }
 
+TestResult client_close_established_connection_client(std::string host, uint16_t port)
+{
+    IOContext context(1);
+
+    auto socket = syncCreateSocket(context, IOSocketType::Connector, "client");
+    syncConnectSocket(socket, format_address(host, port));
+
+    auto error = syncSendMessage(socket, Message {.address = Bytes("server"), .payload = Bytes("0")});
+    RETURN_FAILURE_IF_FALSE(!error);
+    auto result = syncRecvMessage(socket);
+    RETURN_FAILURE_IF_FALSE(result.has_value());
+    RETURN_FAILURE_IF_FALSE(result->payload.as_string() == "1");
+
+    socket->closeConnection("server");
+    socket->requestStop();
+
+    context.removeIOSocket(socket);
+    return TestResult::Success;
+}
+
+TestResult client_close_established_connection_server(std::string host, uint16_t port)
+{
+    IOContext context(1);
+
+    auto socket = syncCreateSocket(context, IOSocketType::Connector, "server");
+    syncBindSocket(socket, format_address(host, port));
+
+    auto error = syncSendMessage(socket, Message {.address = Bytes("client"), .payload = Bytes("1")});
+    RETURN_FAILURE_IF_FALSE(!error);
+    auto result = syncRecvMessage(socket);
+    RETURN_FAILURE_IF_FALSE(result.has_value());
+    RETURN_FAILURE_IF_FALSE(result->payload.as_string() == "0");
+
+    result = syncRecvMessage(socket);
+    RETURN_FAILURE_IF_FALSE(!result.has_value(), "expected recv message to fail");
+    RETURN_FAILURE_IF_FALSE(
+        result.error()._errorCode == scaler::ymq::Error::ErrorCode::ConnectorSocketClosedByRemoteEnd)
+
+    context.removeIOSocket(socket);
+    return TestResult::Success;
+}
+
+TestResult close_nonexistent_connection()
+{
+    IOContext context(1);
+
+    auto socket = syncCreateSocket(context, IOSocketType::Connector, "client");
+
+    // note: we're not connected to anything; this connection does not exist
+    // this should be a no-op..
+    socket->closeConnection("server");
+
+    context.removeIOSocket(socket);
+    return TestResult::Success;
+}
+
+TestResult test_request_stop()
+{
+    IOContext context(1);
+
+    auto socket = syncCreateSocket(context, IOSocketType::Connector, "client");
+
+    auto future = futureRecvMessage(socket);
+    socket->requestStop();
+
+    auto result = future.wait_for(100ms);
+    RETURN_FAILURE_IF_FALSE(result == std::future_status::ready, "future should have completed");
+
+    // the future created beore requestion stop should have been cancelled with an error
+    auto result2 = future.get();
+    RETURN_FAILURE_IF_FALSE(!result2.has_value());
+    RETURN_FAILURE_IF_FALSE(result2.error()._errorCode == scaler::ymq::Error::ErrorCode::IOSocketStopRequested);
+
+    // and the same for any attempts to use the socket after it's been closed
+    auto result3 = syncRecvMessage(socket);
+    RETURN_FAILURE_IF_FALSE(!result3.has_value());
+    RETURN_FAILURE_IF_FALSE(result3.error()._errorCode == scaler::ymq::Error::ErrorCode::IOSocketStopRequested);
+
+    context.removeIOSocket(socket);
+    return TestResult::Success;
+}
+
+TestResult client_socket_stop_before_close_connection(std::string host, uint16_t port)
+{
+    IOContext context(1);
+
+    auto socket = syncCreateSocket(context, IOSocketType::Connector, "client");
+    syncConnectSocket(socket, format_address(host, port));
+
+    auto error = syncSendMessage(socket, Message {.address = Bytes("server"), .payload = Bytes("0")});
+    RETURN_FAILURE_IF_FALSE(!error);
+    auto result = syncRecvMessage(socket);
+    RETURN_FAILURE_IF_FALSE(result.has_value());
+    RETURN_FAILURE_IF_FALSE(result->payload.as_string() == "1");
+
+    socket->requestStop();
+    socket->closeConnection("server");
+
+    context.removeIOSocket(socket);
+    return TestResult::Success;
+}
+
+TestResult server_socket_stop_before_close_connection(std::string host, uint16_t port)
+{
+    IOContext context(1);
+
+    auto socket = syncCreateSocket(context, IOSocketType::Connector, "server");
+    syncBindSocket(socket, format_address(host, port));
+
+    auto error = syncSendMessage(socket, Message {.address = Bytes("client"), .payload = Bytes("1")});
+    RETURN_FAILURE_IF_FALSE(!error);
+    auto result = syncRecvMessage(socket);
+    RETURN_FAILURE_IF_FALSE(result.has_value());
+    RETURN_FAILURE_IF_FALSE(result->payload.as_string() == "0");
+
+    result = syncRecvMessage(socket);
+    RETURN_FAILURE_IF_FALSE(!result.has_value(), "expected recv message to fail");
+    RETURN_FAILURE_IF_FALSE(
+        result.error()._errorCode == scaler::ymq::Error::ErrorCode::ConnectorSocketClosedByRemoteEnd)
+
+    context.removeIOSocket(socket);
+    return TestResult::Success;
+}
+
 // ━━━━━━━━━━━━━
 //   test cases
 // ━━━━━━━━━━━━━
@@ -650,5 +776,46 @@ TEST(CcYmqTestSuite, TestPubSub)
     sem_destroy(sem);
     munmap(sem, sizeof(sem_t));
 
+    EXPECT_EQ(result, TestResult::Success);
+}
+
+// in this test case, the client establishes a connection with the server and then explicitly closes it
+TEST(CcYmqTestSuite, TestClientCloseEstablishedConnection)
+{
+    auto host = "localhost";
+    auto port = 2902;
+
+    auto result = test(
+        20,
+        {[=] { return client_close_established_connection_client(host, port); },
+         [=] { return client_close_established_connection_server(host, port); }});
+    EXPECT_EQ(result, TestResult::Success);
+}
+
+// this test case is similar to the one above, except that it requests the socket stop before closing the connection
+TEST(CcYmqTestSuite, TestClientSocketStopBeforeCloseConnection)
+{
+    auto host = "localhost";
+    auto port = 2904;
+
+    auto result = test(
+        20,
+        {[=] { return client_socket_stop_before_close_connection(host, port); },
+         [=] { return server_socket_stop_before_close_connection(host, port); }});
+    EXPECT_EQ(result, TestResult::Success);
+}
+
+
+// in this test case, the we try to close a connection that does not exist
+TEST(CcYmqTestSuite, TestClientCloseNonexistentConnection)
+{
+    auto result = close_nonexistent_connection();
+    EXPECT_EQ(result, TestResult::Success);
+}
+
+// this test case verifies that requesting a socket stop causes pending and subsequent operations to be cancelled
+TEST(CcYmqTestSuite, TestRequestSocketStop)
+{
+    auto result = test_request_stop();
     EXPECT_EQ(result, TestResult::Success);
 }
