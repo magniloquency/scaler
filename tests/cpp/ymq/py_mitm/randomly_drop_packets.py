@@ -18,7 +18,7 @@ class MITM(AbstractMITM):
     @property
     def can_drop_client(self) -> bool:
         return self.client_consecutive_drops < self.consecutive_drop_limit
-    
+
     @property
     def can_drop_server(self) -> bool:
         return self.server_consecutive_drops < self.consecutive_drop_limit
