@@ -19,15 +19,15 @@
 namespace scaler {
 namespace ymq {
 
-template <typename T>
-struct TimestamplessCompare {
-    bool operator()(const T& x, const T& y) const { return std::get<0>(x) < std::get<0>(y); }
+using Callback   = Configuration::TimedQueueCallback;
+using Identifier = Configuration::ExecutionCancellationIdentifier;
+using TimedFunc  = std::tuple<Timestamp, Callback, Identifier>;
+
+struct TimestampCompare {
+    constexpr bool operator()(const TimedFunc& x, const TimedFunc& y) const { return std::get<0>(x) < std::get<0>(y); }
 };
 
-using Callback            = Configuration::TimedQueueCallback;
-using Identifier          = Configuration::ExecutionCancellationIdentifier;
-using TimedFunc           = std::tuple<Timestamp, Callback, Identifier>;
-using PriorityQueue       = std::priority_queue<TimedFunc, std::vector<TimedFunc>, TimestamplessCompare<TimedFunc>>;
+using PriorityQueue = std::priority_queue<TimedFunc, std::vector<TimedFunc>, TimestampCompare>;
 
 #ifdef __linux__
 inline int createTimerfd()
