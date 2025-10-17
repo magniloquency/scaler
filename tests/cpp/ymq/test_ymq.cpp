@@ -781,9 +781,10 @@ TEST(CcYmqTestSuite, TestPubSub)
 
 // this sets the publisher with an empty topic and the subscribers with two other topics
 // both subscribers should get all messages
-TEST(CcYmqTestSuite, TestPubSubEmptyTopic) {
-        auto host  = "localhost";
-    auto port  = 2906;
+TEST(CcYmqTestSuite, TestPubSubEmptyTopic)
+{
+    auto host = "localhost";
+    auto port = 2906;
 
     // allocate a semaphore to synchronize the publisher and subscriber processes
     sem_t* sem =
@@ -832,7 +833,6 @@ TEST(CcYmqTestSuite, TestClientSocketStopBeforeCloseConnection)
          [=] { return server_socket_stop_before_close_connection(host, port); }});
     EXPECT_EQ(result, TestResult::Success);
 }
-
 
 // in this test case, the we try to close a connection that does not exist
 TEST(CcYmqTestSuite, TestClientCloseNonexistentConnection)
