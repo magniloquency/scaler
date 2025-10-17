@@ -61,7 +61,7 @@ def plot_delta_with_errors(delta, errors, n_objects, object_size, out_path):
     ax.set_yticklabels(n_objects)
     ax.set_xlabel("Object Size")
     ax.set_ylabel("Number of Objects")
-    ax.set_title("Object Storage Server Performance, zmq vs ymq backends")
+    ax.set_title("Object Storage Server Performance, ZMQ+TCP vs YMQ backends")
 
     # --- Write cell values ---
     for i in range(h):
