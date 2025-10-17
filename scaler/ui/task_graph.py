@@ -1,7 +1,7 @@
 import datetime
+import hashlib
 from collections import deque
 from enum import Enum
-import hashlib
 from queue import SimpleQueue
 from threading import Lock
 from typing import Deque, Dict, List, Optional, Set, Tuple

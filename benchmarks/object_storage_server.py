@@ -1,15 +1,14 @@
 import os
 import time
-
 from typing import Callable
+
+import matplotlib.patches as mpatches
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.colors import Normalize
 
 from scaler.client.client import Client
 from scaler.cluster.combo import SchedulerClusterCombo
-
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.colors import Normalize
-import matplotlib.patches as mpatches
 
 
 def plot_delta_with_errors(delta, errors, n_objects, object_size, out_path):
