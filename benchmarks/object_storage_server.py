@@ -153,7 +153,7 @@ def main():
                 zmq_times[i, j] = np.nan
                 errors[i, j] = True
 
-    delta = ymq_times - zmq_times
+    delta = ymq_times / zmq_times
 
     print(delta)
 
