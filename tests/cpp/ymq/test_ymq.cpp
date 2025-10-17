@@ -538,8 +538,8 @@ TestResult server_socket_stop_before_close_connection(std::string host, uint16_t
 // at the moment, if this delay is missing, YMQ will not shut down correctly
 TEST(CcYmqTestSuite, TestBasicYMQClientYMQServer)
 {
-    auto host = "localhost";
-    auto port = 2889;
+    const auto host = "localhost";
+    const auto port = 2889;
 
     // this is the test harness, it accepts a timeout, a list of functions to run,
     // and an optional third argument used to coordinate the execution of python (for mitm)
@@ -553,8 +553,8 @@ TEST(CcYmqTestSuite, TestBasicYMQClientYMQServer)
 // same as above, except YMQs protocol is directly implemented on top of a TCP socket
 TEST(CcYmqTestSuite, TestBasicRawClientYMQServer)
 {
-    auto host = "localhost";
-    auto port = 2890;
+    const auto host = "localhost";
+    const auto port = 2890;
 
     // this is the test harness, it accepts a timeout, a list of functions to run,
     // and an optional third argument used to coordinate the execution of python (for mitm)
@@ -567,8 +567,8 @@ TEST(CcYmqTestSuite, TestBasicRawClientYMQServer)
 
 TEST(CcYmqTestSuite, TestBasicRawClientRawServer)
 {
-    auto host = "localhost";
-    auto port = 2891;
+    const auto host = "localhost";
+    const auto port = 2891;
 
     // this is the test harness, it accepts a timeout, a list of functions to run,
     // and an optional third argument used to coordinate the execution of python (for mitm)
@@ -582,8 +582,8 @@ TEST(CcYmqTestSuite, TestBasicRawClientRawServer)
 // this is the same as above, except that it has no delay before calling close() on the socket
 TEST(CcYmqTestSuite, TestBasicRawClientRawServerNoDelay)
 {
-    auto host = "localhost";
-    auto port = 2892;
+    const auto host = "localhost";
+    const auto port = 2892;
 
     auto result =
         test(10, {[=] { return basic_client_raw(host, port); }, [=] { return basic_server_ymq(host, port); }});
@@ -592,8 +592,8 @@ TEST(CcYmqTestSuite, TestBasicRawClientRawServerNoDelay)
 
 TEST(CcYmqTestSuite, TestBasicDelayYMQClientRawServer)
 {
-    auto host = "localhost";
-    auto port = 2893;
+    const auto host = "localhost";
+    const auto port = 2893;
 
     // this is the test harness, it accepts a timeout, a list of functions to run,
     // and an optional third argument used to coordinate the execution of python (for mitm)
@@ -608,8 +608,8 @@ TEST(CcYmqTestSuite, TestBasicDelayYMQClientRawServer)
 // YMQ should be able to handle this without issue
 TEST(CcYmqTestSuite, TestClientSendBigMessageToServer)
 {
-    auto host = "localhost";
-    auto port = 2894;
+    const auto host = "localhost";
+    const auto port = 2894;
 
     auto result = test(
         10,
@@ -686,8 +686,8 @@ TEST(CcYmqTestSuite, TestMitmRandomlyDropPackets)
 // but we simulate a slow network connection by sending the message in segmented chunks
 TEST(CcYmqTestSuite, TestSlowNetwork)
 {
-    auto host = "localhost";
-    auto port = 2895;
+    const auto host = "localhost";
+    const auto port = 2895;
 
     auto result = test(
         20, {[=] { return client_simulated_slow_network(host, port); }, [=] { return basic_server_ymq(host, port); }});
@@ -701,8 +701,8 @@ TEST(CcYmqTestSuite, TestSlowNetwork)
 // YMQ should be able to recover from a poorly-behaved client like this
 TEST(CcYmqTestSuite, TestClientSendIncompleteIdentity)
 {
-    auto host = "localhost";
-    auto port = 2896;
+    const auto host = "localhost";
+    const auto port = 2896;
 
     auto result = test(
         20,
@@ -718,8 +718,8 @@ TEST(CcYmqTestSuite, TestClientSendIncompleteIdentity)
 // both for resilence against attacks and to guard against errors
 TEST(CcYmqTestSuite, TestClientSendHugeHeader)
 {
-    auto host = "localhost";
-    auto port = 2897;
+    const auto host = "localhost";
+    const auto port = 2897;
 
     auto result = test(
         20,
@@ -735,8 +735,8 @@ TEST(CcYmqTestSuite, TestClientSendHugeHeader)
 // it's important that the behaviour of YMQ is known for both of these cases
 TEST(CcYmqTestSuite, TestClientSendEmptyMessage)
 {
-    auto host = "localhost";
-    auto port = 2898;
+    const auto host = "localhost";
+    const auto port = 2898;
 
     auto result = test(
         20,
@@ -753,8 +753,8 @@ TEST(CcYmqTestSuite, TestClientSendEmptyMessage)
 // both subscribers should receive this message
 TEST(CcYmqTestSuite, TestPubSub)
 {
-    auto host  = "localhost";
-    auto port  = 2900;
+    const auto host  = "localhost";
+    const auto port  = 2900;
     auto topic = "mytopic";
 
     // allocate a semaphore to synchronize the publisher and subscriber processes
@@ -783,8 +783,8 @@ TEST(CcYmqTestSuite, TestPubSub)
 // both subscribers should get all messages
 TEST(CcYmqTestSuite, TestPubSubEmptyTopic)
 {
-    auto host = "localhost";
-    auto port = 2906;
+    const auto host = "localhost";
+    const auto port = 2906;
 
     // allocate a semaphore to synchronize the publisher and subscriber processes
     sem_t* sem =
@@ -811,8 +811,8 @@ TEST(CcYmqTestSuite, TestPubSubEmptyTopic)
 // in this test case, the client establishes a connection with the server and then explicitly closes it
 TEST(CcYmqTestSuite, TestClientCloseEstablishedConnection)
 {
-    auto host = "localhost";
-    auto port = 2902;
+    const auto host = "localhost";
+    const auto port = 2902;
 
     auto result = test(
         20,
@@ -824,8 +824,8 @@ TEST(CcYmqTestSuite, TestClientCloseEstablishedConnection)
 // this test case is similar to the one above, except that it requests the socket stop before closing the connection
 TEST(CcYmqTestSuite, TestClientSocketStopBeforeCloseConnection)
 {
-    auto host = "localhost";
-    auto port = 2904;
+    const auto host = "localhost";
+    const auto port = 2904;
 
     auto result = test(
         20,
