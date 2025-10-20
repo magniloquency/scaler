@@ -45,12 +45,15 @@ enum class TestResult : char { Success = 1, Failure = 2 };
 inline TestResult return_failure_if_false(
     bool cond, const char* msg = nullptr, const char* cond_str = nullptr, const char* file = nullptr, int line = 0)
 {
+    // Failure: ... (assertion failed) at file:line
     if (!cond) {
         std::cerr << "Failure";
         if (cond_str)
             std::cerr << ": " << cond_str;
         if (msg)
             std::cerr << " (" << msg << ")";
+        else
+            std::cerr << " (assertion failed)";
         if (file)
             std::cerr << " at " << file << ":" << line;
         std::cerr << '\n';
