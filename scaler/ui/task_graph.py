@@ -19,8 +19,8 @@ from scaler.ui.utility import (
     format_timediff,
     format_worker_name,
     get_bounds,
-    make_tick_text,
     make_taskstream_ticks,
+    make_tick_text,
 )
 
 TASK_STREAM_BACKGROUND_COLOR = "white"

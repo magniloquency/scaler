@@ -753,9 +753,9 @@ TEST(CcYmqTestSuite, TestClientSendEmptyMessage)
 // both subscribers should receive this message
 TEST(CcYmqTestSuite, TestPubSub)
 {
-    const auto host  = "localhost";
-    const auto port  = 2900;
-    auto topic = "mytopic";
+    const auto host = "localhost";
+    const auto port = 2900;
+    auto topic      = "mytopic";
 
     // allocate a semaphore to synchronize the publisher and subscriber processes
     sem_t* sem =
