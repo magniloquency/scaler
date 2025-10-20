@@ -17,8 +17,9 @@ class TestPymodYMQ(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(connector.identity, "connector")
         self.assertEqual(connector.socket_type, ymq.IOSocketType.Connector)
 
-        await binder.bind("tcp://127.0.0.1:35793")
-        await connector.connect("tcp://127.0.0.1:35793")
+        address = "tcp://127.0.0.1:35793"
+        await binder.bind(address)
+        await connector.connect(address)
 
         await connector.send(ymq.Message(address=None, payload=b"payload"))
         msg = await binder.recv()
@@ -32,8 +33,9 @@ class TestPymodYMQ(unittest.IsolatedAsyncioTestCase):
         binder = await ctx.createIOSocket("binder", ymq.IOSocketType.Binder)
         connector = await ctx.createIOSocket("connector", ymq.IOSocketType.Connector)
 
-        await binder.bind("tcp://127.0.0.1:35794")
-        await connector.connect("tcp://127.0.0.1:35794")
+        address = "tcp://127.0.0.1:35794"
+        await binder.bind(address)
+        await connector.connect(address)
 
         with self.assertRaises(ymq.YMQException) as exc:
             await binder.send(ymq.Message(address=None, payload=b"payload"))
@@ -45,9 +47,10 @@ class TestPymodYMQ(unittest.IsolatedAsyncioTestCase):
         connector1 = await ctx.createIOSocket("connector1", ymq.IOSocketType.Connector)
         connector2 = await ctx.createIOSocket("connector2", ymq.IOSocketType.Connector)
 
-        await binder.bind("tcp://127.0.0.1:35795")
-        await connector1.connect("tcp://127.0.0.1:35795")
-        await connector2.connect("tcp://127.0.0.1:35795")
+        address = "tcp://127.0.0.1:35795"
+        await binder.bind(address)
+        await connector1.connect(address)
+        await connector2.connect(address)
 
         await binder.send(ymq.Message(b"connector2", b"2"))
         await binder.send(ymq.Message(b"connector1", b"1"))
@@ -63,8 +66,9 @@ class TestPymodYMQ(unittest.IsolatedAsyncioTestCase):
         binder = await ctx.createIOSocket("binder", ymq.IOSocketType.Binder)
         connector = await ctx.createIOSocket("connector", ymq.IOSocketType.Connector)
 
-        await binder.bind("tcp://127.0.0.1:35791")
-        await connector.connect("tcp://127.0.0.1:35791")
+        address = "tcp://127.0.0.1:35791"
+        await binder.bind(address)
+        await connector.connect(address)
 
         async def binder_routine(binder: ymq.IOSocket, limit: int) -> bool:
             i = 0
@@ -115,8 +119,9 @@ class TestPymodYMQ(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(connector.identity, "connector")
         self.assertEqual(connector.socket_type, ymq.IOSocketType.Connector)
 
-        await binder.bind("tcp://127.0.0.1:35792")
-        await connector.connect("tcp://127.0.0.1:35792")
+        address = "tcp://127.0.0.1:35792"
+        await binder.bind(address)
+        await connector.connect(address)
 
         for _ in range(10):
             await connector.send(ymq.Message(address=None, payload=b"." * 500_000_000))
