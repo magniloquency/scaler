@@ -5,7 +5,7 @@ __all__ = ["IOSocket", "IOContext", "Message", "IOSocketType", "YMQException", "
 
 import asyncio
 import concurrent.futures
-from typing import Any, Optional, Callable, TypeVar, Union
+from typing import Any, Callable, Optional, TypeVar, Union
 
 try:
     from typing import Concatenate, ParamSpec  # type: ignore[attr-defined]
@@ -81,18 +81,6 @@ class IOContext:
         return IOSocket(call_sync(self._base.createIOSocket, identity, socket_type))
 
 
-def safe_set_result(future: asyncio.Future, result: Any) -> None:
-    if future.done():
-        return
-    future.set_result(result)
-
-
-def safe_set_exception(future: asyncio.Future, exc: BaseException) -> None:
-    if future.done():
-        return
-    future.set_exception(exc)
-
-
 P = ParamSpec("P")
 T = TypeVar("T")
 
@@ -107,9 +95,9 @@ async def call_async(
 
     def callback(result: Union[T, BaseException]):
         if isinstance(result, BaseException):
-            loop.call_soon_threadsafe(safe_set_exception, future, result)
+            loop.call_soon_threadsafe(_safe_set_exception, future, result)
         else:
-            loop.call_soon_threadsafe(safe_set_result, future, result)
+            loop.call_soon_threadsafe(_safe_set_result, future, result)
 
     func(callback, *args, **kwargs)
     return await future
@@ -136,3 +124,15 @@ def call_sync(  # type: ignore[valid-type]
 
     func(callback, *args, **kwargs)
     return future.result(timeout)
+
+
+def _safe_set_result(future: asyncio.Future, result: Any) -> None:
+    if future.done():
+        return
+    future.set_result(result)
+
+
+def _safe_set_exception(future: asyncio.Future, exc: BaseException) -> None:
+    if future.done():
+        return
+    future.set_exception(exc)
