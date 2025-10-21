@@ -6,7 +6,6 @@
 // C++
 #include <cassert>
 #include <memory>
-#include <print>
 #include <utility>
 
 // C
