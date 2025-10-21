@@ -40,8 +40,6 @@ extern "C" {
 static void PyIOSocket_dealloc(PyIOSocket* self)
 {
     try {
-        assert(self->socket.use_count() == 2);
-
         std::shared_ptr<IOSocket> ioSocket   = std::move(self->socket);
         std::shared_ptr<IOContext> ioContext = std::move(self->ioContext);
 
