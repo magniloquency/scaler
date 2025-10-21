@@ -72,7 +72,9 @@ elseif ($dependency -eq "capnp")
     }
     elseif ($action -eq "compile")
     {
-        Remove-Item -Path "$CAPNP_FOLDER_NAME" -Recurse -Force
+        ls
+        # Don't stop if the folder doesn't exist (as would be the case on first run)
+        Remove-Item -Path "$CAPNP_FOLDER_NAME" -Recurse -Force -ErrorAction SilentlyContinue
         tar -xzvf "$DOWNLOAD_DIR\$CAPNP_FOLDER_NAME.tar.gz" -C .\
 
         # Configure and build with Visual Studio using CMake
