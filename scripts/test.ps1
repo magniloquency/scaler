@@ -10,4 +10,4 @@ $BUILD_DIR="build_${OS}_${ARCH}"
 $BUILD_PRESET="${OS}-${ARCH}"
 
 # Run tests
-ctest --preset $BUILD_PRESET -VV
+ctest --preset $BUILD_PRESET -VV @args

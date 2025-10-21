@@ -2,21 +2,39 @@
 
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
-#include <arpa/inet.h>
 #include <fcntl.h>
+#include <signal.h>
+#include <sys/types.h>
+
+#ifdef __linux__
 #include <ifaddrs.h>
+#include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
 #include <poll.h>
-#include <signal.h>
 #include <sys/poll.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/timerfd.h>
-#include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
+typedef int pPipe;
+#endif // __linux__
+#ifdef _WIN32
+#include <windows.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+
+#define close _close
+
+// the windows timer apis work in 100-nanosecond units
+const LONGLONG ns_per_second = 1'000'000'000LL;
+const LONGLONG ns_per_unit   = 100LL;  // 1 unit = 100 nanoseconds
+
+typedef HANDLE pPipe;
+#endif  // _WIN32
 
 #include <algorithm>
 #include <cerrno>
@@ -88,6 +106,14 @@ public:
 
     OwnedFd(int fd): fd(fd) {}
 
+#ifdef _WIN32
+    OwnedFd(HANDLE handle) : fd(0) {
+        fd = _open_osfhandle((intptr_t)handle, 0);
+        if (fd < 0)
+                    throw std::system_error(errno, std::generic_category(), "failed to open osfhandle");
+    }
+#endif  // _WIN32
+
     // move-only
     OwnedFd(const OwnedFd&)            = delete;
     OwnedFd& operator=(const OwnedFd&) = delete;
@@ -152,8 +178,9 @@ public:
         sockaddr_in addr {
             .sin_family = AF_INET,
             .sin_port   = htons(port),
-            .sin_addr   = {.s_addr = inet_addr(check_localhost(host))},
+            .sin_addr   = {0},
             .sin_zero   = {0}};
+        addr.sin_addr.s_addr = inet_addr(check_localhost(host));
 
     connect:
         if (::connect(this->fd, (sockaddr*)&addr, sizeof(addr)) < 0) {
@@ -168,11 +195,8 @@ public:
 
     void bind(const char* host, int port)
     {
-        sockaddr_in addr {
-            .sin_family = AF_INET,
-            .sin_port   = htons(port),
-            .sin_addr   = {.s_addr = inet_addr(check_localhost(host))},
-            .sin_zero   = {0}};
+        sockaddr_in addr {.sin_family = AF_INET, .sin_port = htons(port), .sin_addr = {0}, .sin_zero = {0}};
+        addr.sin_addr.s_addr = inet_addr(check_localhost(host));
 
         auto status = ::bind(this->fd, (sockaddr*)&addr, sizeof(addr));
         if (status < 0)
@@ -186,11 +210,11 @@ public:
             throw std::system_error(errno, std::generic_category(), "failed to listen on socket");
     }
 
-    std::pair<Socket, sockaddr_in> accept(int flags = 0)
+    std::pair<Socket, sockaddr_in> accept()
     {
         sockaddr_in peer_addr {};
         socklen_t len = sizeof(peer_addr);
-        auto fd       = ::accept4(this->fd, (sockaddr*)&peer_addr, &len, flags);
+        auto fd       = ::accept(this->fd, (sockaddr*)&peer_addr, &len);
         if (fd < 0)
             throw std::system_error(errno, std::generic_category(), "failed to accept socket");
 
@@ -226,7 +250,7 @@ public:
         if (nodelay && setsockopt(this->fd, IPPROTO_TCP, TCP_NODELAY, (char*)&on, sizeof(on)) < 0)
             throw std::system_error(errno, std::generic_category(), "failed to set nodelay");
 
-        if (setsockopt(this->fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) < 0)
+        if (setsockopt(this->fd, SOL_SOCKET, SO_REUSEADDR, (char*)&on, sizeof(on)) < 0)
             throw std::system_error(errno, std::generic_category(), "failed to set reuseaddr");
     }
 
@@ -268,8 +292,11 @@ inline void fork_wrapper(std::function<TestResult()> fn, int timeout_secs, Owned
 // this function along with `wait_for_python_ready_sigwait()`
 // work together to wait on a signal from the python process
 // indicating that the tuntap interface has been created, and that the mitm is ready
-inline void wait_for_python_ready_sigblock()
+//
+// hEvent is an output parameter for windows but unused on linux
+inline void wait_for_python_ready_sigblock(void** hEvent)
 {
+    #ifdef __linux__
     sigset_t set {};
 
     if (sigemptyset(&set) < 0)
@@ -281,11 +308,27 @@ inline void wait_for_python_ready_sigblock()
     if (sigprocmask(SIG_BLOCK, &set, nullptr) < 0)
         throw std::system_error(errno, std::generic_category(), "failed to mask sigusr1");
 
+    #endif // __linux__
+    #ifdef _WIN32
+    *hEvent = CreateEvent(
+        NULL,    // default security attributes
+        FALSE,   // auto-reset event
+        FALSE,   // initial state is nonsignaled
+        "Global\\PythonSignal"); // name of the event
+    if (*hEvent == NULL)
+        throw std::system_error(GetLastError(), std::generic_category(), "failed to create event");
+    #endif // _WIN32
+
     std::cout << "blocked signal..." << std::endl;
 }
 
-inline void wait_for_python_ready_sigwait(int timeout_secs)
+// as in the above function, hEvent is unused on linux
+inline void wait_for_python_ready_sigwait(void** hEvent, int timeout_secs)
 {
+    std::cout << "waiting for python to be ready..." << std::endl;
+
+    #ifdef __linux__
+    timespec ts {.tv_sec = timeout_secs, .tv_nsec = 0};
     sigset_t set {};
     siginfo_t sig {};
 
@@ -295,12 +338,19 @@ inline void wait_for_python_ready_sigwait(int timeout_secs)
     if (sigaddset(&set, SIGUSR1) < 0)
         throw std::system_error(errno, std::generic_category(), "failed to add sigusr1 to the signal set");
 
-    std::cout << "waiting for python to be ready..." << std::endl;
-    timespec ts {.tv_sec = timeout_secs, .tv_nsec = 0};
     if (sigtimedwait(&set, &sig, &ts) < 0)
         throw std::system_error(errno, std::generic_category(), "failed to wait on sigusr1");
 
     sigprocmask(SIG_UNBLOCK, &set, nullptr);
+
+    #endif // __linux__
+    #ifdef _WIN32
+    DWORD waitResult = WaitForSingleObject(*hEvent, timeout_secs * 1000);
+    if (waitResult != WAIT_OBJECT_0)
+        throw std::system_error(GetLastError(), std::generic_category(), "failed to wait on event");
+    CloseHandle(*hEvent);
+    #endif // _WIN32
+
     std::cout << "signal received; python is ready" << std::endl;
 }
 
@@ -310,6 +360,7 @@ inline void wait_for_python_ready_sigwait(int timeout_secs)
 inline TestResult test(
     int timeout_secs, std::vector<std::function<TestResult()>> closures, bool wait_for_python = false)
 {
+#ifdef __linux__
     std::vector<std::pair<int, int>> pipes {};
     std::vector<int> pids {};
     for (size_t i = 0; i < closures.size(); i++) {
@@ -320,14 +371,15 @@ inline TestResult test(
                 close(pipe.second);
             });
 
-            throw std::system_error(errno, std::generic_category(), "failed to create pipe: ");
+            throw std::system_error(errno, std::generic_category(), "failed to create pipe");
         }
         pipes.push_back(std::make_pair(pipe[0], pipe[1]));
     }
 
+    void* hEvent = nullptr;
     for (size_t i = 0; i < closures.size(); i++) {
         if (wait_for_python && i == 0)
-            wait_for_python_ready_sigblock();
+            wait_for_python_ready_sigblock(&hEvent);
 
         auto pid = fork();
         if (pid < 0) {
@@ -359,7 +411,7 @@ inline TestResult test(
         pids.push_back(pid);
 
         if (wait_for_python && i == 0)
-            wait_for_python_ready_sigwait(3);
+            wait_for_python_ready_sigwait(&hEvent, 3);
     }
 
     // close all write halves of the pipes
@@ -410,7 +462,7 @@ inline TestResult test(
             std::for_each(pipes.begin(), pipes.end(), [](const auto& pipe) { close(pipe.first); });
             std::for_each(pids.begin(), pids.end(), [](const auto& pid) { kill(pid, SIGKILL); });
 
-            throw std::system_error(errno, std::generic_category(), "failed to poll: ");
+            throw std::system_error(errno, std::generic_category(), "failed to poll");
         }
 
         for (auto& pfd: std::vector(pfds)) {
@@ -478,12 +530,165 @@ end:
         return TestResult::Failure;
 
     return TestResult::Success;
+#endif // __linux__
+#ifdef _WIN32
+    std::vector<std::pair<HANDLE, HANDLE>> pipes {};
+    std::vector<std::jthread> threads {};
+
+    for (size_t i = 0; i < closures.size(); i++) {
+        pPipe hRead = nullptr;
+        pPipe hWrite = nullptr;
+
+        if (!CreatePipe(&hRead, &hWrite, NULL, 0)) {
+            std::for_each(pipes.begin(), pipes.end(), [](const auto& pipe) {
+                CloseHandle(pipe.first);
+                CloseHandle(pipe.second);
+            });
+            throw std::system_error(GetLastError(), std::generic_category(), "failed to create pipe");
+        }
+
+        pipes.push_back(
+            std::make_pair(hRead, hWrite));
+    }
+    
+    for (size_t i = 0; i < closures.size(); i++) {
+        HANDLE hEvent = nullptr;
+        if (wait_for_python && i == 0)
+            wait_for_python_ready_sigblock(&hEvent);
+
+        HANDLE pipe_dup = nullptr;
+        if (!DuplicateHandle(
+            GetCurrentProcess(),
+            pipes[i].second,
+            GetCurrentProcess(),
+            &pipe_dup,
+            0,
+            false,
+            DUPLICATE_SAME_ACCESS)) {
+            std::for_each(pipes.begin(), pipes.end(), [](const auto& pipe) {
+                CloseHandle(pipe.first);
+                CloseHandle(pipe.second);
+            });
+            throw std::system_error(GetLastError(), std::generic_category(), "failed to dupe pipe");
+        }
+
+        threads.emplace_back(fork_wrapper, closures[i], timeout_secs, OwnedFd(pipe_dup));
+
+        if (wait_for_python && i == 0)
+            wait_for_python_ready_sigwait(&hEvent, 3);
+    }
+
+    HANDLE timer = CreateWaitableTimer(nullptr, true, nullptr);
+    if (!timer) {
+        std::for_each(pipes.begin(), pipes.end(), [](const auto& pipe) {
+            CloseHandle(pipe.first);
+            CloseHandle(pipe.second);
+        });
+        throw std::system_error(GetLastError(), std::generic_category(), "failed to create waitable timer");
+    }
+
+    LARGE_INTEGER expires_in = {0};
+
+    // negative value indicates relative time
+    expires_in.QuadPart      = -static_cast<LONGLONG>(timeout_secs) * ns_per_second / ns_per_unit;
+    if (!SetWaitableTimer(timer, &expires_in, 0, nullptr, nullptr, false)) {
+        std::for_each(pipes.begin(), pipes.end(), [](const auto& pipe) {
+            CloseHandle(pipe.first);
+            CloseHandle(pipe.second);
+        });
+        CloseHandle(timer);
+        throw std::system_error(GetLastError(), std::generic_category(), "failed to set waitable timer");
+    }
+
+        // these are the handles we're going to poll
+        std::vector<HANDLE> handles {timer};
+
+        // poll all read halves of the pipes
+        for (auto pipe: pipes)
+            handles.push_back(pipe.first);
+
+        std::vector<std::optional<TestResult>> results(threads.size(), std::nullopt);
+
+        for (;;) {
+            DWORD waitResult = WaitForMultipleObjects(
+                handles.size(),
+                handles.data(),
+                false,
+                INFINITE);
+            if (waitResult == WAIT_FAILED) {
+                std::for_each(pipes.begin(), pipes.end(), [](const auto& pipe) {
+                    CloseHandle(pipe.first);
+                    CloseHandle(pipe.second);
+                });
+                CloseHandle(timer);
+                throw std::system_error(GetLastError(), std::generic_category(), "failed to wait on handles");
+            }
+
+            // the idx of the handle in the handles array
+            // note that index 0 is the timer
+            // and we adjust the handles array as tasks complete
+            // so we need an extra step to calculate the index in `closure`-space
+            size_t wait_idx = waitResult - WAIT_OBJECT_0;
+
+            // timed out
+            if (wait_idx == 0) {
+                std::cout << "Timed out!\n";
+                std::for_each(pipes.begin(), pipes.end(), [](const auto& pipe) {
+                    CloseHandle(pipe.first);
+                    CloseHandle(pipe.second);
+                });
+                CloseHandle(timer);
+                return TestResult::Failure;
+            }
+
+            // find the idx 
+            auto pipe = handles[wait_idx];
+            auto elem      = std::find_if(pipes.begin(), pipes.end(), [pipe](auto p) { return p.first == pipe; });
+            auto idx  = elem - pipes.begin();
+            TestResult result = TestResult::Failure;
+            char buffer       = 0;
+            DWORD n           = 0;
+            if (!ReadFile(handles[idx + 1], &buffer, sizeof(TestResult), &n, nullptr)) {
+                std::cout << "failed to read from pipe: " << GetLastError() << std::endl;
+                result = TestResult::Failure;
+            } else
+                result = (TestResult)buffer;
+            std::cout << "subprocess[" << idx << "] completed with "
+                      << (result == TestResult::Success ? "Success" : "Failure") << std::endl;
+            // store the result
+            results[idx] = result;
+            // this subprocess is done, remove its pipe from the handles
+            handles.erase(std::remove_if(handles.begin(), handles.end(),
+                                 [&](auto h) { return h == handles[idx + 1]; }),
+                handles.end());
+            auto done = std::all_of(results.begin(), results.end(), [](auto result) { return result.has_value(); });
+            if (done)
+                goto end;  // justification for goto: breaks out of two levels of loop
+    }
+
+    end:
+    std::for_each(pipes.begin(), pipes.end(), [](const auto& pipe) {
+        CloseHandle(pipe.first);
+        CloseHandle(pipe.second);
+    });
+
+    if (std::ranges::any_of(results, [](auto x) { return x == TestResult::Failure; }))
+        return TestResult::Failure;
+
+    return TestResult::Success;
+#endif // _WIN32
 }
 
 inline TestResult run_python(const char* path, std::vector<const wchar_t*> argv = {})
 {
     // insert the pid at the start of the argv, this is important for signalling readiness
+    #ifdef __linux__
     pid_t pid   = getppid();
+    #endif // __linux__
+    #ifdef _WIN32
+    DWORD pid   = GetCurrentProcessId();
+    #endif  // _WIN32
+
     auto pid_ws = std::to_wstring(pid);
     argv.insert(argv.begin(), pid_ws.c_str());
 
