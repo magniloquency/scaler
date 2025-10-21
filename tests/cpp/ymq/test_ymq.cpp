@@ -11,9 +11,22 @@
 
 #include <fcntl.h>
 #include <gtest/gtest.h>
+
+#ifdef __linux__
 #include <netinet/ip.h>
 #include <semaphore.h>
 #include <sys/mman.h>
+
+typedef sem_t Semaphore;
+typedef sem_t* pSemaphore;
+#endif // __linux__
+#ifdef _WIN32
+#define NOMINMAX
+#include <windows.h>
+
+typedef HANDLE Semaphore;
+typedef HANDLE pSemaphore;
+#endif // _WIN32
 
 #include <cassert>
 #include <cstdint>
@@ -255,8 +268,10 @@ TestResult server_receives_huge_header(const char* host, uint16_t port)
 
 TestResult client_sends_huge_header(const char* host, uint16_t port)
 {
+    #ifdef __linux__
     // ignore SIGPIPE so that write() returns EPIPE instead of crashing the program
     signal(SIGPIPE, SIG_IGN);
+    #endif
 
     {
         TcpSocket socket;
@@ -342,7 +357,7 @@ TestResult client_sends_empty_messages(std::string host, uint16_t port)
     return TestResult::Success;
 }
 
-TestResult pubsub_subscriber(std::string host, uint16_t port, std::string topic, int differentiator, sem_t* sem)
+TestResult pubsub_subscriber(std::string host, uint16_t port, std::string topic, int differentiator, pSemaphore sem)
 {
     IOContext context(1);
 
@@ -355,9 +370,16 @@ TestResult pubsub_subscriber(std::string host, uint16_t port, std::string topic,
 
     std::this_thread::sleep_for(500ms);
 
+    #ifdef __linux__
     if (sem_post(sem) < 0)
         throw std::system_error(errno, std::generic_category(), "failed to signal semaphore");
     sem_close(sem);
+    #endif // __linux__
+    #ifdef _WIN32
+    if (!ReleaseSemaphore(sem, 1, NULL))
+        throw std::system_error(GetLastError(), std::generic_category(), "failed to signal semaphore");
+    CloseHandle(sem);
+    #endif // _WIN32
 
     auto msg = syncRecvMessage(socket);
     RETURN_FAILURE_IF_FALSE(msg.has_value());
@@ -370,7 +392,7 @@ TestResult pubsub_subscriber(std::string host, uint16_t port, std::string topic,
 // topic: the identifier of the topic, must match what's passed to the subscribers
 // sem: a semaphore to synchronize the publisher and subscriber processes
 // n: the number of subscribers
-TestResult pubsub_publisher(std::string host, uint16_t port, std::string topic, sem_t* sem, int n)
+TestResult pubsub_publisher(std::string host, uint16_t port, std::string topic, pSemaphore sem, int n)
 {
     IOContext context(1);
 
@@ -378,10 +400,16 @@ TestResult pubsub_publisher(std::string host, uint16_t port, std::string topic, 
     syncBindSocket(socket, format_address(host, port));
 
     // wait for the subscribers to be ready
-    for (int i = 0; i < n; i++)
-        if (sem_wait(sem) < 0)
-            throw std::system_error(errno, std::generic_category(), "failed to wait on semaphore");
+    #ifdef __linux__
+    if (sem_wait(sem) < 0)
+        throw std::system_error(errno, std::generic_category(), "failed to signal semaphore");
     sem_close(sem);
+    #endif // __linux__
+    #ifdef _WIN32
+    if (!ReleaseSemaphore(sem, 1, NULL))
+        throw std::system_error(GetLastError(), std::generic_category(), "failed to signal semaphore");
+    CloseHandle(sem);
+    #endif // _WIN32
 
     // the topic is wrong, so no one should receive this
     auto error = syncSendMessage(
@@ -756,8 +784,11 @@ TEST(CcYmqTestSuite, TestPubSub)
     const auto port = 2900;
     auto topic      = "mytopic";
 
+    pSemaphore sem = nullptr;
+
     // allocate a semaphore to synchronize the publisher and subscriber processes
-    sem_t* sem =
+    #ifdef __linux__
+    sem =
         static_cast<sem_t*>(mmap(nullptr, sizeof(sem_t), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
 
     if (sem == MAP_FAILED)
@@ -765,6 +796,16 @@ TEST(CcYmqTestSuite, TestPubSub)
 
     if (sem_init(sem, 1, 0) < 0)
         throw std::system_error(errno, std::generic_category(), "failed to initialize semaphore");
+    #endif // __linux__
+    #ifdef _WIN32
+    sem = CreateSemaphore(
+        nullptr,   // default security attributes
+        0,      // initial count
+        1,      // maximum count
+        nullptr);  // unnamed semaphore
+    if (sem == nullptr)
+        throw std::system_error(GetLastError(), std::generic_category(), "failed to create semaphore");
+    #endif // _WIN32
 
     auto result = test(
         20,
@@ -772,8 +813,13 @@ TEST(CcYmqTestSuite, TestPubSub)
          [=] { return pubsub_subscriber(host, port, topic, 0, sem); },
          [=] { return pubsub_subscriber(host, port, topic, 1, sem); }});
 
+    #ifdef __linux__
     sem_destroy(sem);
     munmap(sem, sizeof(sem_t));
+    #endif // __linux__
+    #ifdef _WIN32
+    CloseHandle(sem);
+    #endif // _WIN32
 
     EXPECT_EQ(result, TestResult::Success);
 }
@@ -785,8 +831,11 @@ TEST(CcYmqTestSuite, TestPubSubEmptyTopic)
     const auto host = "localhost";
     const auto port = 2906;
 
+    pSemaphore sem = nullptr;
+
     // allocate a semaphore to synchronize the publisher and subscriber processes
-    sem_t* sem =
+    #ifdef __linux__
+    sem =
         static_cast<sem_t*>(mmap(nullptr, sizeof(sem_t), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
 
     if (sem == MAP_FAILED)
@@ -794,6 +843,16 @@ TEST(CcYmqTestSuite, TestPubSubEmptyTopic)
 
     if (sem_init(sem, 1, 0) < 0)
         throw std::system_error(errno, std::generic_category(), "failed to initialize semaphore");
+    #endif // __linux__
+    #ifdef _WIN32
+    sem = CreateSemaphore(
+        nullptr,   // default security attributes
+        0,      // initial count
+        1,      // maximum count
+        nullptr);  // unnamed semaphore
+    if (sem == nullptr)
+        throw std::system_error(GetLastError(), std::generic_category(), "failed to create semaphore");
+    #endif // _WIN32
 
     auto result = test(
         20,
@@ -801,8 +860,13 @@ TEST(CcYmqTestSuite, TestPubSubEmptyTopic)
          [=] { return pubsub_subscriber(host, port, "abc", 0, sem); },
          [=] { return pubsub_subscriber(host, port, "def", 1, sem); }});
 
+    #ifdef __linux__
     sem_destroy(sem);
     munmap(sem, sizeof(sem_t));
+    #endif // __linux__
+    #ifdef _WIN32
+    CloseHandle(sem);
+    #endif // _WIN32
 
     EXPECT_EQ(result, TestResult::Success);
 }
