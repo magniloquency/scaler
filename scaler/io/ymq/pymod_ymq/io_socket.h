@@ -4,7 +4,6 @@
 #include "scaler/io/ymq/pymod_ymq/python.h"
 
 // C++
-#include <cassert>
 #include <memory>
 #include <utility>
 
