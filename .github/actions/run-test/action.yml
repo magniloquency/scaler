@@ -19,14 +19,22 @@ runs:
       shell: bash
       run: sudo ./scripts/test.sh
 
+    - name: Run C++ Tests (Windows)
+      shell: pwsh
+      if: inputs.os == 'Windows'
+      run: |
+        ./scripts/test.ps1
+
     # TODO: build wheel first, then run the test
     - name: Run Unittests
       shell: bash
+      if: inputs.os != 'Windows'
       run: |
         python -m unittest discover -v tests
 
     - name: Run Examples
       shell: bash
+      if: inputs.os != 'Windows'
       run: |
         uv pip install --system -r examples/applications/requirements_applications.txt
         for example in "./examples"/*.py; do
