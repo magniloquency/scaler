@@ -37,7 +37,7 @@ runs:
 
 
     - name: Lint With MyPy (Windows)
-      shell: bash
+      shell: pwsh
       if: inputs.os == 'Windows'
       run: |
         mypy --install-types --non-interactive --exclude tests/cpp/ymq/py_mitm .
