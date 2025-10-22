@@ -165,6 +165,7 @@ class PySyncObjectStorageConnector(SyncObjectStorageConnector):
             try:
                 sent = self._socket.sendmsg(buffers)  # type: ignore[attr-defined]
             except AttributeError:
+                # fallback if the os does not support sendmsg
                 sent = 0
                 for buffer in buffers:
                     sent += self.__send_buffer(buffer)
