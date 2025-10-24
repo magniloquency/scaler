@@ -401,13 +401,15 @@ TestResult pubsub_publisher(std::string host, uint16_t port, std::string topic, 
 
     // wait for the subscribers to be ready
     #ifdef __linux__
-    if (sem_wait(sem) < 0)
-        throw std::system_error(errno, std::generic_category(), "failed to signal semaphore");
+    for (int i = 0; i < n; i++)
+        if (sem_wait(sem) < 0)
+            throw std::system_error(errno, std::generic_category(), "failed to signal semaphore");
     sem_close(sem);
     #endif // __linux__
     #ifdef _WIN32
-    if (!ReleaseSemaphore(sem, 1, NULL))
-        throw std::system_error(GetLastError(), std::generic_category(), "failed to signal semaphore");
+    for (int i = 0; i < n; i++)
+        if (!ReleaseSemaphore(sem, 1, NULL))
+            throw std::system_error(GetLastError(), std::generic_category(), "failed to signal semaphore");
     CloseHandle(sem);
     #endif // _WIN32
 
