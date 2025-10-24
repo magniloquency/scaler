@@ -791,7 +791,7 @@ TEST(CcYmqTestSuite, TestPubSub)
     // allocate a semaphore to synchronize the publisher and subscriber processes
     #ifdef __linux__
     sem =
-        static_cast<sem_t*>(mmap(nullptr, sizeof(sem_t), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
+        static_cast<pSemaphore>(mmap(nullptr, sizeof(Semaphore), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
 
     if (sem == MAP_FAILED)
         throw std::system_error(errno, std::generic_category(), "failed to map shared memory for semaphore");
