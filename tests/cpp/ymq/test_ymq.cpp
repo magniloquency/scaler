@@ -34,14 +34,14 @@ typedef HANDLE pSemaphore;
 #include <limits>
 #include <string>
 #include <thread>
+#include <print>
 
-#include "common.h"
 #include "scaler/io/ymq/bytes.h"
 #include "scaler/io/ymq/error.h"
 #include "scaler/io/ymq/io_context.h"
 #include "scaler/io/ymq/io_socket.h"
 #include "scaler/io/ymq/simple_interface.h"
-#include "tests/cpp/ymq/common.h"
+#include "tests/cpp/ymq/common/testing.h"
 
 using namespace scaler::ymq;
 using namespace std::chrono_literals;
@@ -79,13 +79,13 @@ TestResult basic_client_ymq(std::string host, uint16_t port)
     return TestResult::Success;
 }
 
-TestResult basic_server_raw(std::string host, uint16_t port)
+TestResult basic_server_raw(uint16_t port)
 {
-    TcpSocket socket;
+    Socket socket;
 
-    socket.bind(host.c_str(), port);
+    socket.bind(port);
     socket.listen();
-    auto [client, _] = socket.accept();
+    auto client = socket.accept();
     client.write_message("server");
     auto client_identity = client.read_message();
     RETURN_FAILURE_IF_FALSE(client_identity == "client");
@@ -97,10 +97,14 @@ TestResult basic_server_raw(std::string host, uint16_t port)
 
 TestResult basic_client_raw(std::string host, uint16_t port)
 {
-    TcpSocket socket;
+    std::println("clien start");
+    Socket socket;
+    std::println("client created socket");
 
     socket.connect(host.c_str(), port);
+    std::println("writing...");
     socket.write_message("client");
+    std::println("wrote");
     auto server_identity = socket.read_message();
     RETURN_FAILURE_IF_FALSE(server_identity == "server");
     socket.write_message("yi er san si wu liu");
@@ -126,7 +130,7 @@ TestResult server_receives_big_message(std::string host, uint16_t port)
 
 TestResult client_sends_big_message(std::string host, uint16_t port)
 {
-    TcpSocket socket;
+    Socket socket;
 
     socket.connect(host.c_str(), port);
     socket.write_message("client");
@@ -198,7 +202,7 @@ TestResult reconnect_client_main(std::string host, uint16_t port)
 
 TestResult client_simulated_slow_network(const char* host, uint16_t port)
 {
-    TcpSocket socket;
+    Socket socket;
 
     socket.connect(host, port);
     socket.write_message("client");
@@ -223,7 +227,7 @@ TestResult client_sends_incomplete_identity(const char* host, uint16_t port)
 {
     // open a socket, write an incomplete identity and exit
     {
-        TcpSocket socket;
+        Socket socket;
 
         socket.connect(host, port);
 
@@ -239,7 +243,7 @@ TestResult client_sends_incomplete_identity(const char* host, uint16_t port)
 
     // connect again and try to send a message
     {
-        TcpSocket socket;
+        Socket socket;
         socket.connect(host, port);
         auto server_identity = socket.read_message();
         RETURN_FAILURE_IF_FALSE(server_identity == "server");
@@ -274,7 +278,7 @@ TestResult client_sends_huge_header(const char* host, uint16_t port)
     #endif
 
     {
-        TcpSocket socket;
+        Socket socket;
 
         socket.connect(host, port);
         socket.write_message("client");
@@ -308,7 +312,7 @@ TestResult client_sends_huge_header(const char* host, uint16_t port)
     }
 
     {
-        TcpSocket socket;
+        Socket socket;
         socket.connect(host, port);
         socket.write_message("client");
         auto server_identity = socket.read_message();
@@ -602,7 +606,7 @@ TEST(CcYmqTestSuite, TestBasicRawClientRawServer)
     // this is the test harness, it accepts a timeout, a list of functions to run,
     // and an optional third argument used to coordinate the execution of python (for mitm)
     auto result =
-        test(10, {[=] { return basic_client_raw(host, port); }, [=] { return basic_server_raw(host, port); }});
+        test(10, {[=] { return basic_client_raw(host, port); }, [=] { return basic_server_raw(port); }});
 
     // test() aggregates the results across all of the provided functions
     EXPECT_EQ(result, TestResult::Success);
@@ -627,7 +631,7 @@ TEST(CcYmqTestSuite, TestBasicDelayYMQClientRawServer)
     // this is the test harness, it accepts a timeout, a list of functions to run,
     // and an optional third argument used to coordinate the execution of python (for mitm)
     auto result =
-        test(10, {[=] { return basic_client_ymq(host, port); }, [=] { return basic_server_raw(host, port); }});
+        test(10, {[=] { return basic_client_ymq(host, port); }, [=] { return basic_server_raw(port); }});
 
     // test() aggregates the results across all of the provided functions
     EXPECT_EQ(result, TestResult::Success);
@@ -911,4 +915,28 @@ TEST(CcYmqTestSuite, TestRequestSocketStop)
 {
     auto result = test_request_stop();
     EXPECT_EQ(result, TestResult::Success);
+}
+
+// main
+
+int main(int argc, char** argv)
+{
+#ifdef _WIN32
+    // initialize winsock
+    WSADATA wsaData = {};
+    int iResult     = WSAStartup(MAKEWORD(2, 2), &wsaData);
+    if (iResult != 0) {
+        std::cerr << "WSAStartup failed: " << iResult << "\n";
+        return 1;
+    }
+#endif  // _WIN32
+
+    testing::InitGoogleTest(&argc, argv);
+    auto result = RUN_ALL_TESTS();
+
+#ifdef _WIN32
+    WSACleanup();
+#endif  // _WIN32
+
+    return result;
 }

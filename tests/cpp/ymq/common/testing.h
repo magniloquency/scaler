@@ -12,13 +12,14 @@
 #include <Python.h>
 #endif
 
+
 #include <fcntl.h>
 #include <signal.h>
 #include <sys/types.h>
 
 #ifdef __linux__
-#include <ifaddrs.h>
 #include <arpa/inet.h>
+#include <ifaddrs.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
@@ -29,22 +30,17 @@
 #include <sys/timerfd.h>
 #include <sys/wait.h>
 #include <unistd.h>
-
-typedef int pPipe;
-#endif // __linux__
+#endif  // __linux__
 #ifdef _WIN32
+#include <io.h>
 #include <windows.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
-#define close _close
-
 // the windows timer apis work in 100-nanosecond units
 const LONGLONG ns_per_second = 1'000'000'000LL;
 const LONGLONG ns_per_unit   = 100LL;  // 1 unit = 100 nanoseconds
-
-typedef HANDLE pPipe;
-#endif  // _WIN32
+#endif                                 // _WIN32
 
 #include <algorithm>
 #include <cerrno>
@@ -65,6 +61,10 @@ typedef HANDLE pPipe;
 #include <thread>
 #include <utility>
 #include <vector>
+
+#include "utils.h"
+#include "net/socket.h"
+#include "pipe/pipe.h"
 
 using namespace std::chrono_literals;
 
@@ -100,190 +100,8 @@ inline TestResult return_failure_if_false(bool cond, const char* cond_str, const
     if (return_failure_if_false((cond), ##__VA_ARGS__, #cond, __FILE__, __LINE__) == TestResult::Failure) \
         return TestResult::Failure;
 
-inline const char* check_localhost(const char* host)
-{
-    return std::strcmp(host, "localhost") == 0 ? "127.0.0.1" : host;
-}
-
-inline std::string format_address(std::string host, uint16_t port)
-{
-    return std::format("tcp://{}:{}", check_localhost(host.c_str()), port);
-}
-
-class OwnedFd {
-public:
-    int fd;
-
-    OwnedFd(int fd): fd(fd) {}
-
-#ifdef _WIN32
-    OwnedFd(HANDLE handle) : fd(0) {
-        fd = _open_osfhandle((intptr_t)handle, 0);
-        if (fd < 0)
-                    throw std::system_error(errno, std::generic_category(), "failed to open osfhandle");
-    }
-#endif  // _WIN32
-
-    // move-only
-    OwnedFd(const OwnedFd&)            = delete;
-    OwnedFd& operator=(const OwnedFd&) = delete;
-    OwnedFd(OwnedFd&& other) noexcept: fd(other.fd) { other.fd = 0; }
-    OwnedFd& operator=(OwnedFd&& other) noexcept
-    {
-        if (this != &other) {
-            this->fd = other.fd;
-            other.fd = 0;
-        }
-        return *this;
-    }
-
-    ~OwnedFd()
-    {
-        if (fd > 0 && close(fd) < 0)
-            std::cerr << "failed to close fd!" << std::endl;
-    }
-
-    size_t write(const void* data, size_t len)
-    {
-        auto n = ::write(this->fd, data, len);
-        if (n < 0)
-            throw std::system_error(errno, std::generic_category(), "failed to write to socket");
-
-        return n;
-    }
-
-    void write_all(const char* data, size_t len)
-    {
-        for (size_t cursor = 0; cursor < len;)
-            cursor += this->write(data + cursor, len - cursor);
-    }
-
-    void write_all(std::string data) { this->write_all(data.data(), data.length()); }
-
-    void write_all(std::vector<char> data) { this->write_all(data.data(), data.size()); }
-
-    size_t read(void* buffer, size_t len)
-    {
-        auto n = ::read(this->fd, buffer, len);
-        if (n < 0)
-            throw std::system_error(errno, std::generic_category(), "failed to read from socket");
-        return n;
-    }
-
-    void read_exact(char* buffer, size_t len)
-    {
-        for (size_t cursor = 0; cursor < len;)
-            cursor += this->read(buffer + cursor, len - cursor);
-    }
-
-    operator int() { return fd; }
-};
-
-class Socket: public OwnedFd {
-public:
-    Socket(int fd): OwnedFd(fd) {}
-
-    void connect(const char* host, uint16_t port, bool nowait = false)
-    {
-        sockaddr_in addr {
-            .sin_family = AF_INET,
-            .sin_port   = htons(port),
-            .sin_addr   = {0},
-            .sin_zero   = {0}};
-        addr.sin_addr.s_addr = inet_addr(check_localhost(host));
-
-    connect:
-        if (::connect(this->fd, (sockaddr*)&addr, sizeof(addr)) < 0) {
-            if (errno == ECONNREFUSED && !nowait) {
-                std::this_thread::sleep_for(300ms);
-                goto connect;
-            }
-
-            throw std::system_error(errno, std::generic_category(), "failed to connect");
-        }
-    }
-
-    void bind(const char* host, int port)
-    {
-        sockaddr_in addr {.sin_family = AF_INET, .sin_port = htons(port), .sin_addr = {0}, .sin_zero = {0}};
-        addr.sin_addr.s_addr = inet_addr(check_localhost(host));
-
-        auto status = ::bind(this->fd, (sockaddr*)&addr, sizeof(addr));
-        if (status < 0)
-            throw std::system_error(errno, std::generic_category(), "failed to bind");
-    }
-
-    void listen(int n = 32)
-    {
-        auto status = ::listen(this->fd, n);
-        if (status < 0)
-            throw std::system_error(errno, std::generic_category(), "failed to listen on socket");
-    }
-
-    std::pair<Socket, sockaddr_in> accept()
-    {
-        sockaddr_in peer_addr {};
-        socklen_t len = sizeof(peer_addr);
-        auto fd       = ::accept(this->fd, (sockaddr*)&peer_addr, &len);
-        if (fd < 0)
-            throw std::system_error(errno, std::generic_category(), "failed to accept socket");
-
-        return std::make_pair(Socket(fd), peer_addr);
-    }
-
-    void write_message(std::string message)
-    {
-        uint64_t header = message.length();
-        this->write_all((char*)&header, 8);
-        this->write_all(message.data(), message.length());
-    }
-
-    std::string read_message()
-    {
-        uint64_t header = 0;
-        this->read_exact((char*)&header, 8);
-        std::vector<char> buffer(header);
-        this->read_exact(buffer.data(), header);
-        return std::string(buffer.data(), header);
-    }
-};
-
-class TcpSocket: public Socket {
-public:
-    TcpSocket(bool nodelay = true): Socket(0)
-    {
-        this->fd = ::socket(AF_INET, SOCK_STREAM, 0);
-        if (this->fd < 0)
-            throw std::system_error(errno, std::generic_category(), "failed to create socket");
-
-        int on = 1;
-        if (nodelay && setsockopt(this->fd, IPPROTO_TCP, TCP_NODELAY, (char*)&on, sizeof(on)) < 0)
-            throw std::system_error(errno, std::generic_category(), "failed to set nodelay");
-
-        if (setsockopt(this->fd, SOL_SOCKET, SO_REUSEADDR, (char*)&on, sizeof(on)) < 0)
-            throw std::system_error(errno, std::generic_category(), "failed to set reuseaddr");
-    }
-
-    void flush()
-    {
-        int on  = 1;
-        int off = 0;
-
-        if (setsockopt(this->fd, IPPROTO_TCP, TCP_NODELAY, (char*)&off, sizeof(off)) < 0)
-            throw std::system_error(errno, std::generic_category(), "failed to set nodelay");
-
-        if (setsockopt(this->fd, IPPROTO_TCP, TCP_NODELAY, (char*)&on, sizeof(on)) < 0)
-            throw std::system_error(errno, std::generic_category(), "failed to set nodelay");
-
-        if (setsockopt(this->fd, IPPROTO_TCP, TCP_NODELAY, (char*)&off, sizeof(off)) < 0)
-            throw std::system_error(errno, std::generic_category(), "failed to set nodelay");
-
-        if (setsockopt(this->fd, IPPROTO_TCP, TCP_NODELAY, (char*)&on, sizeof(on)) < 0)
-            throw std::system_error(errno, std::generic_category(), "failed to set nodelay");
-    }
-};
-
-inline void fork_wrapper(std::function<TestResult()> fn, int timeout_secs, OwnedFd pipe_wr)
+// hEvent: unused on linux, event handle on windows
+inline void fork_wrapper(std::function<TestResult()> fn, int timeout_secs, PipeWriter pipe_wr, void* hEvent)
 {
     TestResult result = TestResult::Failure;
     try {
@@ -295,8 +113,13 @@ inline void fork_wrapper(std::function<TestResult()> fn, int timeout_secs, Owned
         std::cerr << "Unknown exception" << std::endl;
         result = TestResult::Failure;
     }
+    std::cout << "NORMAL EXIT WITH RESULT: " << (result == TestResult::Success ? "SUCCESS" : "FAILURE") << std::endl;
 
     pipe_wr.write_all((char*)&result, sizeof(TestResult));
+
+#ifdef _WIN32
+    SetEvent((HANDLE)hEvent);
+#endif  // _WIN32
 }
 
 // this function along with `wait_for_python_ready_sigwait()`
@@ -306,28 +129,29 @@ inline void fork_wrapper(std::function<TestResult()> fn, int timeout_secs, Owned
 // hEvent is an output parameter for windows but unused on linux
 inline void wait_for_python_ready_sigblock(void** hEvent)
 {
-    #ifdef __linux__
+#ifdef __linux__
     sigset_t set {};
 
     if (sigemptyset(&set) < 0)
-        throw std::system_error(errno, std::generic_category(), "failed to create empty signal set");
+        raise_system_error("failed to create empty signal set");
 
     if (sigaddset(&set, SIGUSR1) < 0)
-        throw std::system_error(errno, std::generic_category(), "failed to add sigusr1 to the signal set");
+        raise_system_error("failed to add sigusr1 to the signal set");
 
     if (sigprocmask(SIG_BLOCK, &set, nullptr) < 0)
-        throw std::system_error(errno, std::generic_category(), "failed to mask sigusr1");
+        raise_system_error("failed to mask sigusr1");
 
-    #endif // __linux__
-    #ifdef _WIN32
+#endif  // __linux__
+#ifdef _WIN32
+    // TODO: implement signaling of this event in the python mitm
     *hEvent = CreateEvent(
-        NULL,    // default security attributes
-        FALSE,   // auto-reset event
-        FALSE,   // initial state is nonsignaled
-        "Global\\PythonSignal"); // name of the event
+        NULL,                     // default security attributes
+        FALSE,                    // auto-reset event
+        FALSE,                    // initial state is nonsignaled
+        "Global\\PythonSignal");  // name of the event
     if (*hEvent == NULL)
-        throw std::system_error(GetLastError(), std::generic_category(), "failed to create event");
-    #endif // _WIN32
+        raise_system_error("failed to create event");
+#endif  // _WIN32
 
     std::cout << "blocked signal..." << std::endl;
 }
@@ -337,29 +161,29 @@ inline void wait_for_python_ready_sigwait(void** hEvent, int timeout_secs)
 {
     std::cout << "waiting for python to be ready..." << std::endl;
 
-    #ifdef __linux__
+#ifdef __linux__
     timespec ts {.tv_sec = timeout_secs, .tv_nsec = 0};
     sigset_t set {};
     siginfo_t sig {};
 
     if (sigemptyset(&set) < 0)
-        throw std::system_error(errno, std::generic_category(), "failed to create empty signal set");
+        raise_system_error("failed to create empty signal set");
 
     if (sigaddset(&set, SIGUSR1) < 0)
-        throw std::system_error(errno, std::generic_category(), "failed to add sigusr1 to the signal set");
+        raise_system_error("failed to add sigusr1 to the signal set");
 
     if (sigtimedwait(&set, &sig, &ts) < 0)
-        throw std::system_error(errno, std::generic_category(), "failed to wait on sigusr1");
+        raise_system_error("failed to wait on sigusr1");
 
     sigprocmask(SIG_UNBLOCK, &set, nullptr);
 
-    #endif // __linux__
-    #ifdef _WIN32
+#endif  // __linux__
+#ifdef _WIN32
     DWORD waitResult = WaitForSingleObject(*hEvent, timeout_secs * 1000);
     if (waitResult != WAIT_OBJECT_0)
-        throw std::system_error(GetLastError(), std::generic_category(), "failed to wait on event");
+        raise_system_error("failed to wait on event");
     CloseHandle(*hEvent);
-    #endif // _WIN32
+#endif  // _WIN32
 
     std::cout << "signal received; python is ready" << std::endl;
 }
@@ -370,6 +194,8 @@ inline void wait_for_python_ready_sigwait(void** hEvent, int timeout_secs)
 inline TestResult test(
     int timeout_secs, std::vector<std::function<TestResult()>> closures, bool wait_for_python = false)
 {
+    std::println("test() start");
+
 #ifdef __linux__
     std::vector<std::pair<int, int>> pipes {};
     std::vector<int> pids {};
@@ -381,7 +207,7 @@ inline TestResult test(
                 close(pipe.second);
             });
 
-            throw std::system_error(errno, std::generic_category(), "failed to create pipe");
+            raise_system_error("failed to create pipe");
         }
         pipes.push_back(std::make_pair(pipe[0], pipe[1]));
     }
@@ -400,7 +226,7 @@ inline TestResult test(
 
             std::for_each(pids.begin(), pids.end(), [](const auto& pid) { kill(pid, SIGKILL); });
 
-            throw std::system_error(errno, std::generic_category(), "failed to fork");
+            raise_system_error("failed to fork");
         }
 
         if (pid == 0) {
@@ -414,7 +240,7 @@ inline TestResult test(
                 }
             }
 
-            fork_wrapper(closures[i], timeout_secs, pipes[i].second);
+            fork_wrapper(closures[i], timeout_secs, pipes[i].second, nullptr);
             std::exit(EXIT_SUCCESS);
         }
 
@@ -435,7 +261,7 @@ inline TestResult test(
         std::for_each(pipes.begin(), pipes.end(), [](const auto& pipe) { close(pipe.first); });
         std::for_each(pids.begin(), pids.end(), [](const auto& pid) { kill(pid, SIGKILL); });
 
-        throw std::system_error(errno, std::generic_category(), "failed to create timerfd");
+        raise_system_error("failed to create timerfd");
     }
 
     pfds.push_back({.fd = timerfd.fd, .events = POLL_IN, .revents = 0});
@@ -461,7 +287,7 @@ inline TestResult test(
         std::for_each(pipes.begin(), pipes.end(), [](const auto& pipe) { close(pipe.first); });
         std::for_each(pids.begin(), pids.end(), [](const auto& pid) { kill(pid, SIGKILL); });
 
-        throw std::system_error(errno, std::generic_category(), "failed to set timerfd");
+        raise_system_error("failed to set timerfd");
     }
 
     std::vector<std::optional<TestResult>> results(pids.size(), std::nullopt);
@@ -472,7 +298,7 @@ inline TestResult test(
             std::for_each(pipes.begin(), pipes.end(), [](const auto& pipe) { close(pipe.first); });
             std::for_each(pids.begin(), pids.end(), [](const auto& pid) { kill(pid, SIGKILL); });
 
-            throw std::system_error(errno, std::generic_category(), "failed to poll");
+            raise_system_error("failed to poll");
         }
 
         for (auto& pfd: std::vector(pfds)) {
@@ -540,49 +366,32 @@ end:
         return TestResult::Failure;
 
     return TestResult::Success;
-#endif // __linux__
+#endif  // __linux__
 #ifdef _WIN32
-    std::vector<std::pair<HANDLE, HANDLE>> pipes {};
+    std::vector<HANDLE> events {};
+    std::vector<Pipe> pipes {};
     std::vector<std::jthread> threads {};
 
     for (size_t i = 0; i < closures.size(); i++) {
-        pPipe hRead = nullptr;
-        pPipe hWrite = nullptr;
-
-        if (!CreatePipe(&hRead, &hWrite, NULL, 0)) {
-            std::for_each(pipes.begin(), pipes.end(), [](const auto& pipe) {
-                CloseHandle(pipe.first);
-                CloseHandle(pipe.second);
-            });
-            throw std::system_error(GetLastError(), std::generic_category(), "failed to create pipe");
-        }
-
-        pipes.push_back(
-            std::make_pair(hRead, hWrite));
+        HANDLE hEvent = CreateEvent(
+            nullptr,   // default security attributes
+            true,      // auto-reset event
+            false,     // initial state is nonsignaled
+            nullptr);  // unnamed event
+        if (!hEvent)
+            raise_system_error("failed to create event");
+        events.push_back(hEvent);
+        pipes.emplace_back();
     }
-    
+
     for (size_t i = 0; i < closures.size(); i++) {
         HANDLE hEvent = nullptr;
         if (wait_for_python && i == 0)
             wait_for_python_ready_sigblock(&hEvent);
 
-        HANDLE pipe_dup = nullptr;
-        if (!DuplicateHandle(
-            GetCurrentProcess(),
-            pipes[i].second,
-            GetCurrentProcess(),
-            &pipe_dup,
-            0,
-            false,
-            DUPLICATE_SAME_ACCESS)) {
-            std::for_each(pipes.begin(), pipes.end(), [](const auto& pipe) {
-                CloseHandle(pipe.first);
-                CloseHandle(pipe.second);
-            });
-            throw std::system_error(GetLastError(), std::generic_category(), "failed to dupe pipe");
-        }
+        std::println("spawning thread {}", i);
 
-        threads.emplace_back(fork_wrapper, closures[i], timeout_secs, OwnedFd(pipe_dup));
+        threads.emplace_back(fork_wrapper, closures[i], timeout_secs, std::move(pipes[i].writer), events[i]);
 
         if (wait_for_python && i == 0)
             wait_for_python_ready_sigwait(&hEvent, 3);
@@ -590,114 +399,105 @@ end:
 
     HANDLE timer = CreateWaitableTimer(nullptr, true, nullptr);
     if (!timer) {
-        std::for_each(pipes.begin(), pipes.end(), [](const auto& pipe) {
-            CloseHandle(pipe.first);
-            CloseHandle(pipe.second);
-        });
-        throw std::system_error(GetLastError(), std::generic_category(), "failed to create waitable timer");
+        std::for_each(events.begin(), events.end(), [](const auto& ev) { CloseHandle(ev); });
+        raise_system_error("failed to create waitable timer");
     }
 
     LARGE_INTEGER expires_in = {0};
 
     // negative value indicates relative time
-    expires_in.QuadPart      = -static_cast<LONGLONG>(timeout_secs) * ns_per_second / ns_per_unit;
+    expires_in.QuadPart = -static_cast<LONGLONG>(timeout_secs) * ns_per_second / ns_per_unit;
     if (!SetWaitableTimer(timer, &expires_in, 0, nullptr, nullptr, false)) {
-        std::for_each(pipes.begin(), pipes.end(), [](const auto& pipe) {
-            CloseHandle(pipe.first);
-            CloseHandle(pipe.second);
-        });
+        std::for_each(events.begin(), events.end(), [](const auto& ev) { CloseHandle(ev); });
         CloseHandle(timer);
-        throw std::system_error(GetLastError(), std::generic_category(), "failed to set waitable timer");
+        raise_system_error("failed to set waitable timer");
     }
 
-        // these are the handles we're going to poll
-        std::vector<HANDLE> handles {timer};
+    // these are the handles we're going to poll
+    std::vector<HANDLE> wait_handles {timer};
 
-        // poll all read halves of the pipes
-        for (auto pipe: pipes)
-            handles.push_back(pipe.first);
+    // poll all read halves of the pipes
+    for (const auto& ev: events)
+        wait_handles.push_back(ev);
 
-        std::vector<std::optional<TestResult>> results(threads.size(), std::nullopt);
+    std::vector<std::optional<TestResult>> results(threads.size(), std::nullopt);
 
-        for (;;) {
-            DWORD waitResult = WaitForMultipleObjects(
-                handles.size(),
-                handles.data(),
-                false,
-                INFINITE);
-            if (waitResult == WAIT_FAILED) {
-                std::for_each(pipes.begin(), pipes.end(), [](const auto& pipe) {
-                    CloseHandle(pipe.first);
-                    CloseHandle(pipe.second);
-                });
-                CloseHandle(timer);
-                throw std::system_error(GetLastError(), std::generic_category(), "failed to wait on handles");
-            }
+    for (;;) {
+        DWORD waitResult = WaitForMultipleObjects(wait_handles.size(), wait_handles.data(), false, INFINITE);
+        if (waitResult == WAIT_FAILED) {
+            std::for_each(events.begin(), events.end(), [](const auto& ev) { CloseHandle(ev); });
+            CloseHandle(timer);
+            raise_system_error("failed to wait on handles");
+        }
 
-            // the idx of the handle in the handles array
-            // note that index 0 is the timer
-            // and we adjust the handles array as tasks complete
-            // so we need an extra step to calculate the index in `closure`-space
-            size_t wait_idx = waitResult - WAIT_OBJECT_0;
+        // the idx of the handle in the handles array
+        // note that index 0 is the timer
+        // and we adjust the handles array as tasks complete
+        // so we need an extra step to calculate the index in `closure`-space
+        size_t wait_idx = (size_t)waitResult - WAIT_OBJECT_0;
 
-            // timed out
-            if (wait_idx == 0) {
-                std::cout << "Timed out!\n";
-                std::for_each(pipes.begin(), pipes.end(), [](const auto& pipe) {
-                    CloseHandle(pipe.first);
-                    CloseHandle(pipe.second);
-                });
-                CloseHandle(timer);
-                return TestResult::Failure;
-            }
+        // timed out
+        if (wait_idx == 0) {
+            std::cout << "Timed out!\n";
+            std::for_each(threads.begin(), threads.end(), [](auto& t) {
+                t.request_stop();
+                t.detach();
+            });
+            std::for_each(events.begin(), events.end(), [](const auto& ev) { CloseHandle(ev); });
+            CloseHandle(timer);
+            return TestResult::Failure;
+        }
 
-            // find the idx 
-            auto pipe = handles[wait_idx];
-            auto elem      = std::find_if(pipes.begin(), pipes.end(), [pipe](auto p) { return p.first == pipe; });
-            auto idx  = elem - pipes.begin();
-            TestResult result = TestResult::Failure;
-            char buffer       = 0;
-            DWORD n           = 0;
-            if (!ReadFile(handles[idx + 1], &buffer, sizeof(TestResult), &n, nullptr)) {
-                std::cout << "failed to read from pipe: " << GetLastError() << std::endl;
-                result = TestResult::Failure;
-            } else
-                result = (TestResult)buffer;
-            std::cout << "subprocess[" << idx << "] completed with "
-                      << (result == TestResult::Success ? "Success" : "Failure") << std::endl;
-            // store the result
-            results[idx] = result;
-            // this subprocess is done, remove its pipe from the handles
-            handles.erase(std::remove_if(handles.begin(), handles.end(),
-                                 [&](auto h) { return h == handles[idx + 1]; }),
-                handles.end());
-            auto done = std::all_of(results.begin(), results.end(), [](auto result) { return result.has_value(); });
-            if (done)
-                goto end;  // justification for goto: breaks out of two levels of loop
+        // find the idx
+        const auto& hEvent = wait_handles[wait_idx];
+        auto event_it  = std::find_if(events.begin(), events.end(), [hEvent](const auto& ev) { return ev == hEvent; });
+        const auto idx = event_it - events.begin();
+        auto& pipe     = pipes[idx];
+        TestResult result = TestResult::Failure;
+        char buffer       = 0;
+        try {
+            pipe.reader.read_exact(&buffer, sizeof(TestResult));
+            result = (TestResult)buffer;
+        } catch (const std::system_error& e) {
+            std::cout << "failed to read from pipe: " << e.what() << std::endl;
+            result = TestResult::Failure;
+        }
+
+        std::cout << "A" << std::endl;
+        std::cout << "subprocess[" << idx << "] completed with "
+                  << (result == TestResult::Success ? "Success" : "Failure") << std::endl;
+        std::cout << "B" << std::endl;
+        // store the result
+        results[idx] = result;
+        // this subprocess is done, remove its pipe from the handles
+        wait_handles.erase(
+            std::remove_if(wait_handles.begin(), wait_handles.end(), [&](const auto& h) { return h == hEvent; }),
+            wait_handles.end());
+        auto done = std::all_of(results.begin(), results.end(), [](const auto& result) { return result.has_value(); });
+        if (done)
+            goto end;  // justification for goto: breaks out of two levels of loop
     }
 
-    end:
-    std::for_each(pipes.begin(), pipes.end(), [](const auto& pipe) {
-        CloseHandle(pipe.first);
-        CloseHandle(pipe.second);
-    });
+end:
+    std::for_each(events.begin(), events.end(), [](const auto& ev) { CloseHandle(ev); });
+    CloseHandle(timer);
 
     if (std::ranges::any_of(results, [](auto x) { return x == TestResult::Failure; }))
         return TestResult::Failure;
 
     return TestResult::Success;
-#endif // _WIN32
+#endif  // _WIN32
 }
 
 inline TestResult run_python(const char* path, std::vector<const wchar_t*> argv = {})
 {
-    // insert the pid at the start of the argv, this is important for signalling readiness
-    #ifdef __linux__
-    pid_t pid   = getppid();
-    #endif // __linux__
-    #ifdef _WIN32
-    DWORD pid   = GetCurrentProcessId();
-    #endif  // _WIN32
+// insert the pid at the start of the argv, this is important for signalling readiness
+#ifdef __linux__
+    pid_t pid = getppid();
+#endif  // __linux__
+#ifdef _WIN32
+    DWORD pid = GetCurrentProcessId();
+#endif  // _WIN32
 
     auto pid_ws = std::to_wstring(pid);
     argv.insert(argv.begin(), pid_ws.c_str());
@@ -734,7 +534,7 @@ inline TestResult run_python(const char* path, std::vector<const wchar_t*> argv 
     {
         auto file = fopen(path, "r");
         if (!file)
-            throw std::system_error(errno, std::generic_category(), "failed to open python file");
+            raise_system_error("failed to open python file");
 
         PyRun_SimpleFile(file, path);
         fclose(file);
@@ -752,22 +552,6 @@ exception:
     Py_ExitStatusException(status);
 
     return TestResult::Failure;
-}
-
-// change the current working directory to the project root
-// this is important for finding the python mitm script
-inline void chdir_to_project_root()
-{
-    auto cwd = std::filesystem::current_path();
-
-    // if pyproject.toml is in `path`, it's the project root
-    for (auto path = cwd; !path.empty(); path = path.parent_path()) {
-        if (std::filesystem::exists(path / "pyproject.toml")) {
-            // change to the project root
-            std::filesystem::current_path(path);
-            return;
-        }
-    }
 }
 
 inline TestResult run_mitm(
