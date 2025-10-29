@@ -86,6 +86,8 @@ TestResult basic_server_raw(uint16_t port)
     auto msg = client.read_message();
     RETURN_FAILURE_IF_FALSE(msg == "yi er san si wu liu");
 
+    std::this_thread::sleep_for(300ms);
+
     return TestResult::Success;
 }
 
@@ -99,7 +101,7 @@ TestResult basic_client_raw(std::string host, uint16_t port)
     RETURN_FAILURE_IF_FALSE(server_identity == "server");
     socket.write_message("yi er san si wu liu");
 
-    std::this_thread::sleep_for(100ms);
+    std::this_thread::sleep_for(300ms);
 
     return TestResult::Success;
 }
@@ -214,7 +216,7 @@ TestResult client_simulated_slow_network(const char* host, uint16_t port)
     std::this_thread::sleep_for(2s);
     socket.write_all(message.data() + header / 2, header - header / 2);
 
-    std::this_thread::sleep_for(500ms);
+    std::this_thread::sleep_for(300ms);
 
     return TestResult::Success;
 }
@@ -248,7 +250,7 @@ TestResult client_sends_incomplete_identity(const char* host, uint16_t port)
         socket.write_message("client");
         socket.write_message("yi er san si wu liu");
 
-        std::this_thread::sleep_for(500ms);
+        std::this_thread::sleep_for(300ms);
     }
 
     return TestResult::Success;

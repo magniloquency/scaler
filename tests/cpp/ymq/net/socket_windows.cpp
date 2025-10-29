@@ -58,7 +58,6 @@ struct Socket::Impl {
     std::unique_ptr<Impl> accept()
     {
         SOCKET client = ::accept(s, nullptr, nullptr);
-        std::println("accepted client socket: {}", client);
         if (client == INVALID_SOCKET)
             throw std::system_error(last_socket_error(), "failed to accept connection");
         return std::make_unique<Impl>(this->nodelay, client);
