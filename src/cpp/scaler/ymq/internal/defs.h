@@ -17,6 +17,7 @@
 #endif  // __linux__
 #ifdef _WIN32
 // clang-format off
+#define NOMINMAX
 #include <windows.h>
 #include <winsock2.h>
 #include <mswsock.h>
@@ -31,5 +32,4 @@
 #define EPOLLIN             (0)
 #define EPOLLOUT            (0)
 #define EPOLLET             (0)
-#undef max
 #endif  // _WIN32

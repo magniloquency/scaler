@@ -1,18 +1,12 @@
 #include <gtest/gtest.h>
 
-#include <chrono>
 #include <cstdio>
 #include <fstream>
 #include <limits>
 #include <string>
-#include <thread>
 #include <vector>
 
 #include "scaler/logging/logging.h"
-
-#ifdef max
-#undef max
-#endif
 
 // Test fixture for direct unit testing of the log() function's formatting
 class LoggingUnitTest: public ::testing::Test {
