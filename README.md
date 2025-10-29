@@ -633,8 +633,10 @@ pip install build cibuildwheel==2.23.3
 # Parametrize the cibuildwheel's container to build the Boost and Cap'n Proto dependencies.
 export CIBW_BEFORE_ALL='
             yum install sudo -y;
+            sudo ./scripts/library_tool.sh capnp download
             sudo ./scripts/library_tool.sh capnp compile
             sudo ./scripts/library_tool.sh capnp install
+            sudo ./scripts/library_tool.sh boost download
             sudo ./scripts/library_tool.sh boost compile
             sudo ./scripts/library_tool.sh boost install'
 export CIBW_BUILD="*manylinux_x86_64"
