@@ -12,7 +12,6 @@
 #include <Python.h>
 #endif
 
-
 #include <fcntl.h>
 #include <signal.h>
 #include <sys/types.h>
@@ -113,7 +112,6 @@ inline void fork_wrapper(std::function<TestResult()> fn, int timeout_secs, PipeW
         std::cerr << "Unknown exception" << std::endl;
         result = TestResult::Failure;
     }
-    std::cout << "NORMAL EXIT WITH RESULT: " << (result == TestResult::Success ? "SUCCESS" : "FAILURE") << std::endl;
 
     pipe_wr.write_all((char*)&result, sizeof(TestResult));
 
@@ -194,8 +192,6 @@ inline void wait_for_python_ready_sigwait(void** hEvent, int timeout_secs)
 inline TestResult test(
     int timeout_secs, std::vector<std::function<TestResult()>> closures, bool wait_for_python = false)
 {
-    std::println("test() start");
-
 #ifdef __linux__
     std::vector<std::pair<int, int>> pipes {};
     std::vector<int> pids {};
@@ -389,8 +385,6 @@ end:
         if (wait_for_python && i == 0)
             wait_for_python_ready_sigblock(&hEvent);
 
-        std::println("spawning thread {}", i);
-
         threads.emplace_back(fork_wrapper, closures[i], timeout_secs, std::move(pipes[i].writer), events[i]);
 
         if (wait_for_python && i == 0)
@@ -463,12 +457,12 @@ end:
             result = TestResult::Failure;
         }
 
-        std::cout << "A" << std::endl;
         std::cout << "subprocess[" << idx << "] completed with "
                   << (result == TestResult::Success ? "Success" : "Failure") << std::endl;
-        std::cout << "B" << std::endl;
+
         // store the result
         results[idx] = result;
+
         // this subprocess is done, remove its pipe from the handles
         wait_handles.erase(
             std::remove_if(wait_handles.begin(), wait_handles.end(), [&](const auto& h) { return h == hEvent; }),

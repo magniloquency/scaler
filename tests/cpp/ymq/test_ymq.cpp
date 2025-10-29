@@ -9,23 +9,18 @@
 // the test cases are at the bottom of this file, after the clients and servers
 // the documentation for each case is found on the TEST() definition
 
-#include <fcntl.h>
 #include <gtest/gtest.h>
 
 #ifdef __linux__
 #include <netinet/ip.h>
 #include <semaphore.h>
 #include <sys/mman.h>
+#include <fcntl.h>
 
-typedef sem_t Semaphore;
-typedef sem_t* pSemaphore;
 #endif // __linux__
 #ifdef _WIN32
 #define NOMINMAX
 #include <windows.h>
-
-typedef HANDLE Semaphore;
-typedef HANDLE pSemaphore;
 #endif // _WIN32
 
 #include <cassert>
@@ -34,7 +29,6 @@ typedef HANDLE pSemaphore;
 #include <limits>
 #include <string>
 #include <thread>
-#include <print>
 
 #include "scaler/io/ymq/bytes.h"
 #include "scaler/io/ymq/error.h"
@@ -97,17 +91,15 @@ TestResult basic_server_raw(uint16_t port)
 
 TestResult basic_client_raw(std::string host, uint16_t port)
 {
-    std::println("clien start");
     Socket socket;
-    std::println("client created socket");
 
     socket.connect(host.c_str(), port);
-    std::println("writing...");
     socket.write_message("client");
-    std::println("wrote");
     auto server_identity = socket.read_message();
     RETURN_FAILURE_IF_FALSE(server_identity == "server");
     socket.write_message("yi er san si wu liu");
+
+    std::this_thread::sleep_for(100ms);
 
     return TestResult::Success;
 }
@@ -138,6 +130,8 @@ TestResult client_sends_big_message(std::string host, uint16_t port)
     RETURN_FAILURE_IF_FALSE(remote_identity == "server");
     std::string msg(500'000'000, '.');
     socket.write_message(msg);
+
+    std::this_thread::sleep_for(500ms);
 
     return TestResult::Success;
 }
@@ -220,6 +214,8 @@ TestResult client_simulated_slow_network(const char* host, uint16_t port)
     std::this_thread::sleep_for(2s);
     socket.write_all(message.data() + header / 2, header - header / 2);
 
+    std::this_thread::sleep_for(500ms);
+
     return TestResult::Success;
 }
 
@@ -239,6 +235,8 @@ TestResult client_sends_incomplete_identity(const char* host, uint16_t port)
         uint64_t header      = identity.length();
         socket.write_all((char*)&header, 8);
         socket.write_all(identity.data(), identity.length() - 2);
+
+        std::this_thread::sleep_for(500ms);
     }
 
     // connect again and try to send a message
@@ -249,6 +247,8 @@ TestResult client_sends_incomplete_identity(const char* host, uint16_t port)
         RETURN_FAILURE_IF_FALSE(server_identity == "server");
         socket.write_message("client");
         socket.write_message("yi er san si wu liu");
+
+        std::this_thread::sleep_for(500ms);
     }
 
     return TestResult::Success;
@@ -309,6 +309,8 @@ TestResult client_sends_huge_header(const char* host, uint16_t port)
             std::cout << "expected EPIPE after sending huge header\n";
             return TestResult::Failure;
         }
+
+        std::this_thread::sleep_for(500ms);
     }
 
     {
@@ -318,6 +320,8 @@ TestResult client_sends_huge_header(const char* host, uint16_t port)
         auto server_identity = socket.read_message();
         RETURN_FAILURE_IF_FALSE(server_identity == "server");
         socket.write_message("yi er san si wu liu");
+
+        std::this_thread::sleep_for(500ms);
     }
 
     return TestResult::Success;
@@ -361,7 +365,7 @@ TestResult client_sends_empty_messages(std::string host, uint16_t port)
     return TestResult::Success;
 }
 
-TestResult pubsub_subscriber(std::string host, uint16_t port, std::string topic, int differentiator, pSemaphore sem)
+TestResult pubsub_subscriber(std::string host, uint16_t port, std::string topic, int differentiator, void* sem)
 {
     IOContext context(1);
 
@@ -380,9 +384,8 @@ TestResult pubsub_subscriber(std::string host, uint16_t port, std::string topic,
     sem_close(sem);
     #endif // __linux__
     #ifdef _WIN32
-    if (!ReleaseSemaphore(sem, 1, NULL))
+    if (!ReleaseSemaphore(sem, 1, nullptr))
         throw std::system_error(GetLastError(), std::generic_category(), "failed to signal semaphore");
-    CloseHandle(sem);
     #endif // _WIN32
 
     auto msg = syncRecvMessage(socket);
@@ -396,7 +399,7 @@ TestResult pubsub_subscriber(std::string host, uint16_t port, std::string topic,
 // topic: the identifier of the topic, must match what's passed to the subscribers
 // sem: a semaphore to synchronize the publisher and subscriber processes
 // n: the number of subscribers
-TestResult pubsub_publisher(std::string host, uint16_t port, std::string topic, pSemaphore sem, int n)
+TestResult pubsub_publisher(std::string host, uint16_t port, std::string topic, void* sem, int n)
 {
     IOContext context(1);
 
@@ -407,17 +410,16 @@ TestResult pubsub_publisher(std::string host, uint16_t port, std::string topic, 
     #ifdef __linux__
     for (int i = 0; i < n; i++)
         if (sem_wait(sem) < 0)
-            throw std::system_error(errno, std::generic_category(), "failed to signal semaphore");
+            throw std::system_error(errno, std::generic_category(), "failed to wait on semaphore");
     sem_close(sem);
     #endif // __linux__
     #ifdef _WIN32
     for (int i = 0; i < n; i++)
-        if (!ReleaseSemaphore(sem, 1, NULL))
-            throw std::system_error(GetLastError(), std::generic_category(), "failed to signal semaphore");
-    CloseHandle(sem);
+        if (WaitForSingleObject(sem, 3000) != WAIT_OBJECT_0)
+            throw std::system_error(GetLastError(), std::generic_category(), "failed to wait on semaphore");
     #endif // _WIN32
 
-    // the topic is wrong, so no one should receive this
+    // the topic doesn't match, so no one should receive this
     auto error = syncSendMessage(
         socket, Message {.address = Bytes(std::format("x{}", topic)), .payload = Bytes("no one should get this")});
     RETURN_FAILURE_IF_FALSE(!error);
@@ -790,12 +792,10 @@ TEST(CcYmqTestSuite, TestPubSub)
     const auto port = 2900;
     auto topic      = "mytopic";
 
-    pSemaphore sem = nullptr;
-
     // allocate a semaphore to synchronize the publisher and subscriber processes
     #ifdef __linux__
-    sem =
-        static_cast<pSemaphore>(mmap(nullptr, sizeof(Semaphore), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
+    sem_t* sem =
+        static_cast<sem_t*>(mmap(nullptr, sizeof(Semaphore), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
 
     if (sem == MAP_FAILED)
         throw std::system_error(errno, std::generic_category(), "failed to map shared memory for semaphore");
@@ -804,10 +804,10 @@ TEST(CcYmqTestSuite, TestPubSub)
         throw std::system_error(errno, std::generic_category(), "failed to initialize semaphore");
     #endif // __linux__
     #ifdef _WIN32
-    sem = CreateSemaphore(
+    HANDLE sem = CreateSemaphore(
         nullptr,   // default security attributes
         0,      // initial count
-        1,      // maximum count
+        2,      // maximum count
         nullptr);  // unnamed semaphore
     if (sem == nullptr)
         throw std::system_error(GetLastError(), std::generic_category(), "failed to create semaphore");
@@ -837,11 +837,9 @@ TEST(CcYmqTestSuite, TestPubSubEmptyTopic)
     const auto host = "localhost";
     const auto port = 2906;
 
-    pSemaphore sem = nullptr;
-
     // allocate a semaphore to synchronize the publisher and subscriber processes
     #ifdef __linux__
-    sem =
+    sem_t* sem =
         static_cast<sem_t*>(mmap(nullptr, sizeof(sem_t), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
 
     if (sem == MAP_FAILED)
@@ -851,10 +849,10 @@ TEST(CcYmqTestSuite, TestPubSubEmptyTopic)
         throw std::system_error(errno, std::generic_category(), "failed to initialize semaphore");
     #endif // __linux__
     #ifdef _WIN32
-    sem = CreateSemaphore(
+    HANDLE sem = CreateSemaphore(
         nullptr,   // default security attributes
         0,      // initial count
-        1,      // maximum count
+        2,      // maximum count
         nullptr);  // unnamed semaphore
     if (sem == nullptr)
         throw std::system_error(GetLastError(), std::generic_category(), "failed to create semaphore");

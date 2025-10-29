@@ -1,6 +1,8 @@
 #pragma once
 
+#include <print>
 #include <concepts>
+#include <optional>
 #include <cstdint>  // uint64_t
 #include <functional>
 
@@ -47,8 +49,8 @@ public:
 #endif  // __linux__
 #ifdef _WIN32
         if constexpr (std::same_as<Configuration::PollingContext, IocpContext>) {
-            onRead();
-            onWrite();
+                onRead();
+                onWrite();
             if (events & IOCP_SOCKET_CLOSED) {
                 onClose();
             }
@@ -59,12 +61,14 @@ public:
     // User that registered them should have everything they need
     // In the future, we might add more onXX() methods, for now these are all we need.
     using OnEventCallback = std::function<void()>;
-    OnEventCallback onRead;
-    OnEventCallback onWrite;
-    OnEventCallback onClose;
-    OnEventCallback onError;
+    OnEventCallback onRead = [] { std::println("onread unimplemented!"); };
+    OnEventCallback onWrite = [] { std::println("onwrite unimplemented!"); };
+    OnEventCallback onClose = [] { std::println("onclose unimplemented!"); };
+    OnEventCallback onError = [] { std::println("onerror unimplemented!"); };
     // EventManager(): _fd {} {}
-    EventManager() { ZERO_OVERLAPPED(); };
+    EventManager() { ZERO_OVERLAPPED();
+        onWrite = [] { std::println("onwrite unimplemented!"); };
+    };
 };
 
 }  // namespace ymq
