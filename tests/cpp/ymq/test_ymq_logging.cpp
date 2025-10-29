@@ -8,7 +8,7 @@
 #include <thread>
 #include <vector>
 
-#include "scaler/io/ymq/logging.h"
+#include "scaler/logging/logging.h"
 
 #ifdef max
 #undef max
