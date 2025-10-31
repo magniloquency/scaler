@@ -29,7 +29,6 @@
 #include <limits>
 #include <string>
 #include <thread>
-#include <print>
 
 #include "scaler/io/ymq/bytes.h"
 #include "scaler/io/ymq/error.h"
@@ -263,7 +262,6 @@ TestResult server_receives_huge_header(const char* host, uint16_t port)
 
 TestResult client_sends_huge_header(const char* host, uint16_t port)
 {
-    std::println("client start");
     #ifdef __linux__
     // ignore SIGPIPE so that write() returns EPIPE instead of crashing the program
     signal(SIGPIPE, SIG_IGN);
