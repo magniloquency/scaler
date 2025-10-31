@@ -29,6 +29,7 @@
 #include <limits>
 #include <string>
 #include <thread>
+#include <print>
 
 #include "scaler/io/ymq/bytes.h"
 #include "scaler/io/ymq/error.h"
@@ -86,8 +87,6 @@ TestResult basic_server_raw(uint16_t port)
     auto msg = client.read_message();
     RETURN_FAILURE_IF_FALSE(msg == "yi er san si wu liu");
 
-    std::this_thread::sleep_for(300ms);
-
     return TestResult::Success;
 }
 
@@ -100,8 +99,6 @@ TestResult basic_client_raw(std::string host, uint16_t port)
     auto server_identity = socket.read_message();
     RETURN_FAILURE_IF_FALSE(server_identity == "server");
     socket.write_message("yi er san si wu liu");
-
-    std::this_thread::sleep_for(300ms);
 
     return TestResult::Success;
 }
@@ -132,8 +129,6 @@ TestResult client_sends_big_message(std::string host, uint16_t port)
     RETURN_FAILURE_IF_FALSE(remote_identity == "server");
     std::string msg(500'000'000, '.');
     socket.write_message(msg);
-
-    std::this_thread::sleep_for(500ms);
 
     return TestResult::Success;
 }
@@ -216,8 +211,6 @@ TestResult client_simulated_slow_network(const char* host, uint16_t port)
     std::this_thread::sleep_for(2s);
     socket.write_all(message.data() + header / 2, header - header / 2);
 
-    std::this_thread::sleep_for(300ms);
-
     return TestResult::Success;
 }
 
@@ -237,8 +230,6 @@ TestResult client_sends_incomplete_identity(const char* host, uint16_t port)
         uint64_t header      = identity.length();
         socket.write_all((char*)&header, 8);
         socket.write_all(identity.data(), identity.length() - 2);
-
-        std::this_thread::sleep_for(500ms);
     }
 
     // connect again and try to send a message
@@ -249,8 +240,6 @@ TestResult client_sends_incomplete_identity(const char* host, uint16_t port)
         RETURN_FAILURE_IF_FALSE(server_identity == "server");
         socket.write_message("client");
         socket.write_message("yi er san si wu liu");
-
-        std::this_thread::sleep_for(300ms);
     }
 
     return TestResult::Success;
@@ -274,6 +263,7 @@ TestResult server_receives_huge_header(const char* host, uint16_t port)
 
 TestResult client_sends_huge_header(const char* host, uint16_t port)
 {
+    std::println("client start");
     #ifdef __linux__
     // ignore SIGPIPE so that write() returns EPIPE instead of crashing the program
     signal(SIGPIPE, SIG_IGN);
@@ -298,8 +288,13 @@ TestResult client_sends_huge_header(const char* host, uint16_t port)
             try {
                 socket.write_all("yi er san si wu liu");
             } catch (const std::system_error& e) {
+#ifdef __linux__
                 if (e.code().value() == EPIPE) {
-                    std::cout << "writing failed with EPIPE as expected after sending huge header, continuing...\n";
+#endif  // __linux__
+#ifdef _WIN32
+                    if (e.code().value() == WSAECONNABORTED) {
+#endif  // _WIN32
+                    std::cout << "writing failed, as expected after sending huge header, continuing...\n";
                     break;  // this is expected
                 }
 
@@ -311,8 +306,6 @@ TestResult client_sends_huge_header(const char* host, uint16_t port)
             std::cout << "expected EPIPE after sending huge header\n";
             return TestResult::Failure;
         }
-
-        std::this_thread::sleep_for(500ms);
     }
 
     {
@@ -322,8 +315,6 @@ TestResult client_sends_huge_header(const char* host, uint16_t port)
         auto server_identity = socket.read_message();
         RETURN_FAILURE_IF_FALSE(server_identity == "server");
         socket.write_message("yi er san si wu liu");
-
-        std::this_thread::sleep_for(500ms);
     }
 
     return TestResult::Success;
@@ -463,7 +454,7 @@ TestResult client_close_established_connection_server(std::string host, uint16_t
 {
     IOContext context(1);
 
-    auto socket = syncCreateSocket(context, IOSocketType::Connector, "server");
+    auto socket = syncCreateSocket(context, IOSocketType::Binder, "server");
     syncBindSocket(socket, format_address(host, port));
 
     auto error = syncSendMessage(socket, Message {.address = Bytes("client"), .payload = Bytes("1")});
@@ -534,7 +525,7 @@ TestResult client_socket_stop_before_close_connection(std::string host, uint16_t
     RETURN_FAILURE_IF_FALSE(result.has_value());
     RETURN_FAILURE_IF_FALSE(result->payload.as_string() == "1");
 
-    socket->requestStop();
+    context.requestIOSocketStop(socket);
     socket->closeConnection("server");
 
     context.removeIOSocket(socket);
