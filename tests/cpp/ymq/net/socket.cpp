@@ -43,7 +43,6 @@ void Socket::connect(const std::string& host, uint16_t port, int tries)
             if (e.code().value() != WSAECONNREFUSED)
                 throw e;
 #endif  // _WIN32
-            std::println("connect attempt {}/{} to {}:{} failed, retrying... error code {}", i + 1, tries, host, port, e.code().value());
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     }
