@@ -15,14 +15,14 @@ struct Socket::Impl {
     {
         fd = ::socket(AF_INET, SOCK_STREAM, 0);
         if (fd < 0)
-            throw std::system_error(last_error(), "failed to create socket");
+            throw std::system_error(last_socket_error(), "failed to create socket");
 
         int on = 1;
         if (nodelay && setsockopt(this->fd, IPPROTO_TCP, TCP_NODELAY, (char*)&on, sizeof(on)) < 0)
-            throw std::system_error(last_error(), "failed to set nodelay");
+            throw std::system_error(last_socket_error(), "failed to set nodelay");
 
         if (setsockopt(this->fd, SOL_SOCKET, SO_REUSEADDR, (char*)&on, sizeof(on)) < 0)
-            throw std::system_error(last_error(), "failed to set reuseaddr");
+            throw std::system_error(last_socket_error(), "failed to set reuseaddr");
     }
 
     ~Impl() { close(); }
@@ -34,7 +34,7 @@ struct Socket::Impl {
         addr.sin_port   = htons(port);
         inet_pton(AF_INET, host.c_str(), &addr.sin_addr);
         if (::connect(fd, (sockaddr*)&addr, sizeof(addr)) < 0)
-            throw std::system_error(last_error(), "failed to connect");
+            throw std::system_error(last_socket_error(), "failed to connect");
     }
 
     void bind(uint16_t port)
@@ -44,20 +44,20 @@ struct Socket::Impl {
         addr.sin_port        = htons(port);
         addr.sin_addr.s_addr = INADDR_ANY;
         if (::bind(fd, (sockaddr*)&addr, sizeof(addr)) < 0)
-            throw std::system_error(last_error(), "failed to bind");
+            throw std::system_error(last_socket_error(), "failed to bind");
     }
 
     void listen(int backlog)
     {
         if (::listen(fd, backlog) < 0)
-            throw std::system_error(last_error(), "failed to listen");
+            throw std::system_error(last_socket_error(), "failed to listen");
     }
 
     std::unique_ptr<Impl> accept()
     {
         int client = ::accept(fd, nullptr, nullptr);
         if (client < 0)
-            throw std::system_error(last_error(), "failed to accept");
+            throw std::system_error(last_socket_error(), "failed to accept");
 
         auto impl = std::make_unique<Impl>();
         impl->fd  = client;
@@ -68,7 +68,7 @@ struct Socket::Impl {
     {
         ssize_t n = ::write(fd, data, size);
         if (n < 0)
-            throw std::system_error(last_error(), "failed to send");
+            throw std::system_error(last_socket_error(), "failed to send");
         return n;
     }
 
@@ -76,7 +76,7 @@ struct Socket::Impl {
     {
         ssize_t n = ::read(fd, buffer, size);
         if (n < 0)
-            throw std::system_error(last_error(), "failed to recv");
+            throw std::system_error(last_socket_error(), "failed to recv");
         return n;
     }
 

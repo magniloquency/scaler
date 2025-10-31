@@ -252,7 +252,7 @@ inline TestResult test(
 
     std::vector<pollfd> pfds {};
 
-    OwnedFd timerfd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
+    int timerfd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
     if (timerfd < 0) {
         std::for_each(pipes.begin(), pipes.end(), [](const auto& pipe) { close(pipe.first); });
         std::for_each(pids.begin(), pids.end(), [](const auto& pid) { kill(pid, SIGKILL); });
@@ -260,7 +260,7 @@ inline TestResult test(
         raise_system_error("failed to create timerfd");
     }
 
-    pfds.push_back({.fd = timerfd.fd, .events = POLL_IN, .revents = 0});
+    pfds.push_back({.fd = timerfd, .events = POLL_IN, .revents = 0});
     for (auto pipe: pipes)
         pfds.push_back({
             .fd      = pipe.first,
@@ -282,6 +282,7 @@ inline TestResult test(
     if (timerfd_settime(timerfd, 0, &spec, nullptr) < 0) {
         std::for_each(pipes.begin(), pipes.end(), [](const auto& pipe) { close(pipe.first); });
         std::for_each(pids.begin(), pids.end(), [](const auto& pid) { kill(pid, SIGKILL); });
+        close(timerfd);
 
         raise_system_error("failed to set timerfd");
     }
@@ -293,6 +294,7 @@ inline TestResult test(
         if (n < 0) {
             std::for_each(pipes.begin(), pipes.end(), [](const auto& pipe) { close(pipe.first); });
             std::for_each(pids.begin(), pids.end(), [](const auto& pid) { kill(pid, SIGKILL); });
+            close(timerfd);
 
             raise_system_error("failed to poll");
         }
@@ -307,6 +309,7 @@ inline TestResult test(
 
                 std::for_each(pipes.begin(), pipes.end(), [](const auto& pipe) { close(pipe.first); });
                 std::for_each(pids.begin(), pids.end(), [](const auto& pid) { kill(pid, SIGKILL); });
+                close(timerfd);
 
                 return TestResult::Failure;
             }
@@ -357,6 +360,7 @@ inline TestResult test(
 end:
 
     std::for_each(pipes.begin(), pipes.end(), [](const auto& pipe) { close(pipe.first); });
+    close(timerfd);
 
     if (std::ranges::any_of(results, [](auto x) { return x == TestResult::Failure; }))
         return TestResult::Failure;

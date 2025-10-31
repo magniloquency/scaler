@@ -370,9 +370,9 @@ TestResult pubsub_subscriber(std::string host, uint16_t port, std::string topic,
     std::this_thread::sleep_for(500ms);
 
     #ifdef __linux__
-    if (sem_post(sem) < 0)
+    if (sem_post((sem_t*)sem) < 0)
         throw std::system_error(errno, std::generic_category(), "failed to signal semaphore");
-    sem_close(sem);
+    sem_close((sem_t*)sem);
     #endif // __linux__
     #ifdef _WIN32
     if (!ReleaseSemaphore(sem, 1, nullptr))
@@ -400,9 +400,9 @@ TestResult pubsub_publisher(std::string host, uint16_t port, std::string topic, 
     // wait for the subscribers to be ready
     #ifdef __linux__
     for (int i = 0; i < n; i++)
-        if (sem_wait(sem) < 0)
+        if (sem_wait((sem_t*)sem) < 0)
             throw std::system_error(errno, std::generic_category(), "failed to wait on semaphore");
-    sem_close(sem);
+    sem_close((sem_t*)sem);
     #endif // __linux__
     #ifdef _WIN32
     for (int i = 0; i < n; i++)
@@ -786,7 +786,7 @@ TEST(CcYmqTestSuite, TestPubSub)
     // allocate a semaphore to synchronize the publisher and subscriber processes
     #ifdef __linux__
     sem_t* sem =
-        static_cast<sem_t*>(mmap(nullptr, sizeof(Semaphore), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
+        static_cast<sem_t*>(mmap(nullptr, sizeof(sem_t), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
 
     if (sem == MAP_FAILED)
         throw std::system_error(errno, std::generic_category(), "failed to map shared memory for semaphore");
