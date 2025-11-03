@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cassert>  // assert
 
-#include "scaler/ymq/error.h"
+#include "scaler/error/error.h"
 #include "scaler/ymq/internal/defs.h"
 
 namespace scaler {
