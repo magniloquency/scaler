@@ -8,6 +8,9 @@
 #include "scaler/ymq/pymod_ymq/gil.h"
 
 #if PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION < 10
+#define Py_TPFLAGS_IMMUTABLETYPE          (0)
+#define Py_TPFLAGS_DISALLOW_INSTANTIATION (0)
+
 static inline PyObject* Py_NewRef(PyObject* obj)
 {
     Py_INCREF(obj);
@@ -25,9 +28,6 @@ static inline int PyModule_AddObjectRef(PyObject* mod, const char* name, PyObjec
     Py_INCREF(value);  // Since PyModule_AddObject steals a ref, we balance it
     return PyModule_AddObject(mod, name, value);
 }
-
-#define Py_TPFLAGS_IMMUTABLETYPE          (0)
-#define Py_TPFLAGS_DISALLOW_INSTANTIATION (0)
 #endif // <3.10
 
 #if PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION < 9
