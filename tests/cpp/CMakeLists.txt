@@ -6,3 +6,4 @@ else()
 endif()
 
 add_subdirectory(ymq)
+add_subdirectory(logging)
