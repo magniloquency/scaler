@@ -5,8 +5,8 @@
 
 #include <system_error>
 
-#include "socket.h"
 #include "../common/utils.h"
+#include "socket.h"
 
 struct Socket::Impl {
     int fd = -1;
@@ -83,21 +83,22 @@ struct Socket::Impl {
         return n;
     }
 
-    void flush() {
-            int on  = 1;
+    void flush()
+    {
+        int on  = 1;
         int off = 0;
 
-            if (setsockopt(this->fd, IPPROTO_TCP, TCP_NODELAY, (char*)&off, sizeof(off)) < 0)
-                throw std::system_error(last_socket_error(), "failed to disable nodelay");
+        if (setsockopt(this->fd, IPPROTO_TCP, TCP_NODELAY, (char*)&off, sizeof(off)) < 0)
+            throw std::system_error(last_socket_error(), "failed to disable nodelay");
 
-            if (setsockopt(this->fd, IPPROTO_TCP, TCP_NODELAY, (char*)&on, sizeof(on)) < 0)
-                throw std::system_error(last_socket_error(), "failed to enable nodelay");
+        if (setsockopt(this->fd, IPPROTO_TCP, TCP_NODELAY, (char*)&on, sizeof(on)) < 0)
+            throw std::system_error(last_socket_error(), "failed to enable nodelay");
 
-            if (setsockopt(this->fd, IPPROTO_TCP, TCP_NODELAY, (char*)&off, sizeof(off)) < 0)
-                throw std::system_error(last_socket_error(), "failed to disable nodelay");
+        if (setsockopt(this->fd, IPPROTO_TCP, TCP_NODELAY, (char*)&off, sizeof(off)) < 0)
+            throw std::system_error(last_socket_error(), "failed to disable nodelay");
 
-            if (setsockopt(this->fd, IPPROTO_TCP, TCP_NODELAY, (char*)&on, sizeof(on)) < 0)
-                throw std::system_error(last_socket_error(), "failed to enable nodelay");
+        if (setsockopt(this->fd, IPPROTO_TCP, TCP_NODELAY, (char*)&on, sizeof(on)) < 0)
+            throw std::system_error(last_socket_error(), "failed to enable nodelay");
     }
 
     void close()

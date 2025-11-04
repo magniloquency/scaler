@@ -11,7 +11,7 @@ public:
     // move-only
     Socket(Socket&&) noexcept;
     Socket& operator=(Socket&&) noexcept;
-    Socket(const Socket&) = delete;
+    Socket(const Socket&)            = delete;
     Socket& operator=(const Socket&) = delete;
 
     void connect(const std::string& host, uint16_t port, int tries = 10);

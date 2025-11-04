@@ -24,7 +24,6 @@
 #include <netinet/tcp.h>
 #include <poll.h>
 #include <signal.h>
-#include <poll.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/timerfd.h>
@@ -283,8 +282,9 @@ inline TestResult test(
                 return TestResult::Failure;
             }
 
-            auto elem = std::find_if(pipes.begin(), pipes.end(), [fd = pfd.fd](const auto& pipe) { return pipe.reader.fd() == fd; });
-            auto idx  = elem - pipes.begin();
+            auto elem = std::find_if(
+                pipes.begin(), pipes.end(), [fd = pfd.fd](const auto& pipe) { return pipe.reader.fd() == fd; });
+            auto idx = elem - pipes.begin();
 
             TestResult result = TestResult::Failure;
             char buffer       = 0;
@@ -318,9 +318,11 @@ inline TestResult test(
             results[idx] = result;
 
             // this subprocess is done, remove its pipe from the poll fds
-            pfds.erase(std::remove_if(pfds.begin(), pfds.end(), [&](const auto& p) { return p.fd == pfd.fd; }), pfds.end());
+            pfds.erase(
+                std::remove_if(pfds.begin(), pfds.end(), [&](const auto& p) { return p.fd == pfd.fd; }), pfds.end());
 
-            auto done = std::all_of(results.begin(), results.end(), [](const auto& result) { return result.has_value(); });
+            auto done =
+                std::all_of(results.begin(), results.end(), [](const auto& result) { return result.has_value(); });
             if (done)
                 goto end;  // justification for goto: breaks out of two levels of loop
         }

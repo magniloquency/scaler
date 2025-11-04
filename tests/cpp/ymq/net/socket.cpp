@@ -4,7 +4,6 @@
 #include <utility>
 #include <vector>
 
-
 #ifdef __linux__
 #include "socket_linux.cpp"
 #endif  // __linux__
@@ -12,7 +11,9 @@
 #include "socket_windows.cpp"
 #endif  // _WIN32
 
-Socket::Socket(bool nodelay): impl(std::make_unique<Impl>(nodelay)) {}
+Socket::Socket(bool nodelay): impl(std::make_unique<Impl>(nodelay))
+{
+}
 
 Socket::~Socket() = default;
 
