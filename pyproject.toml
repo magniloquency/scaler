@@ -150,7 +150,6 @@ archs = ["x86_64"]
 manylinux-x86_64-image = "manylinux_2_28"
 before-all = """
 yum install -y sudo; \
-sudo ./scripts/library_tool.sh capnp download; \
 sudo ./scripts/library_tool.sh capnp compile; \
 sudo ./scripts/library_tool.sh capnp install;
 """
@@ -159,7 +158,6 @@ sudo ./scripts/library_tool.sh capnp install;
 select = "*-musllinux*"
 before-all = """
 apk add sudo; \
-sudo ./scripts/library_tool.sh capnp download; \
 sudo ./scripts/library_tool.sh capnp compile; \
 sudo ./scripts/library_tool.sh capnp install;
 """
@@ -168,7 +166,6 @@ sudo ./scripts/library_tool.sh capnp install;
 #archs = ["x86_64", "arm64"]
 #before-all = """
 #yum install -y sudo; \
-#sudo ./scripts/library_tool.sh capnp download; \
 #sudo ./scripts/library_tool.sh capnp compile; \
 #sudo ./scripts/library_tool.sh capnp install;
 #"""
