@@ -19,24 +19,14 @@ runs:
       shell: bash
       run: sudo ./scripts/test.sh
 
-    - name: Run C++ Tests (Windows)
-      shell: pwsh
-      if: inputs.os == 'Windows'
-      env: # man in the middle tests are disabled on Windows for now
-        GTEST_FILTER: "-*Mitm*"
-      run: |
-        ./scripts/test.ps1 -C Debug
-
     # TODO: build wheel first, then run the test
     - name: Run Unittests
       shell: bash
-      if: inputs.os != 'Windows'
       run: |
         PYTHONPATH=src python -m unittest discover -v tests
 
     - name: Run Examples
       shell: bash
-      if: inputs.os != 'Windows'
       run: |
         uv pip install --system -r examples/applications/requirements_applications.txt
         for example in "./examples"/*.py; do

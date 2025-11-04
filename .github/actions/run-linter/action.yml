@@ -28,16 +28,7 @@ runs:
       run: |
         pflake8 .
 
-    - name: Lint With MyPy (Linux)
+    - name: Lint With MyPy
       shell: bash
-      if: inputs.os == 'Linux'
-      # at the moment the ymq tests only support unix, so we exclude them on windows
       run: |
         mypy --install-types --non-interactive .
-
-
-    - name: Lint With MyPy (Windows)
-      shell: pwsh
-      if: inputs.os == 'Windows'
-      run: |
-        mypy --install-types --non-interactive --exclude tests/cpp/ymq/py_mitm .
