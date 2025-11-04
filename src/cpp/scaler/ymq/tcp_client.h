@@ -3,9 +3,9 @@
 #include <memory>
 
 // First-party
+#include "scaler/logging/logging.h"
 #include "scaler/ymq/configuration.h"
 #include "scaler/ymq/internal/defs.h"
-#include "scaler/logging/logging.h"
 
 namespace scaler {
 namespace ymq {

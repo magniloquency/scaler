@@ -14,8 +14,8 @@
 #include <memory>
 
 // First-party
-#include "scaler/ymq/configuration.h"
 #include "scaler/logging/logging.h"
+#include "scaler/ymq/configuration.h"
 
 namespace scaler {
 namespace ymq {

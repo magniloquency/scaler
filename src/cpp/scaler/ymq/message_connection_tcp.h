@@ -5,10 +5,10 @@
 #include <optional>
 #include <queue>
 
+#include "scaler/logging/logging.h"
 #include "scaler/ymq/configuration.h"
 #include "scaler/ymq/internal/raw_connection_tcp_fd.h"
 #include "scaler/ymq/io_socket.h"
-#include "scaler/logging/logging.h"
 #include "scaler/ymq/message_connection.h"
 #include "scaler/ymq/tcp_operations.h"
 
