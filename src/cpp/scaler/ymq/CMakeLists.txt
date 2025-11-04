@@ -55,7 +55,7 @@ add_library(ymq_objs OBJECT
     internal/defs.h
 )
 
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/src/scaler/ymq)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/src/scaler/ymq)
 
 if(LINUX)
     # ymq python =======================================================================================================
