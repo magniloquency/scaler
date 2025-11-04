@@ -11,7 +11,7 @@
 #include <object.h>
 #include <semaphore.h>
 #include <sys/eventfd.h>
-#include <sys/poll.h>
+#include <poll.h>
 
 // First-party
 #include "scaler/ymq/bytes.h"
