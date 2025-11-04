@@ -65,7 +65,7 @@ struct Pipe::Impl {
 
         PipeReader reader;
         PipeWriter writer;
-       
+
         reader.impl->fd = fds[0];
         writer.impl->fd = fds[1];
 

@@ -24,7 +24,7 @@ public:
 
 #ifdef __linux__
     int fd() const noexcept;
-#endif // __linux__
+#endif  // __linux__
 
 private:
     struct Impl;

@@ -1,25 +1,27 @@
+#include <winsock2.h>
+#include <ws2tcpip.h>
+
 #include <optional>
 #include <stdexcept>
 #include <system_error>
 
-#include <winsock2.h>
-#include <ws2tcpip.h>
-
-#include "socket.h"
 #include "../common/utils.h"
+#include "socket.h"
 
 struct Socket::Impl {
     SOCKET s = INVALID_SOCKET;
     bool nodelay;
 
-    Impl(bool nodelay, std::optional<SOCKET> socket = std::nullopt) {
+    Impl(bool nodelay, std::optional<SOCKET> socket = std::nullopt)
+    {
         this->nodelay = nodelay;
         s = *socket.or_else([] -> std::optional<SOCKET> { return ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP); });
         if (s == INVALID_SOCKET)
             throw std::system_error(last_socket_error(), "failed to create socket");
 
         int on = 1;
-        if (this->nodelay && setsockopt(this->s, IPPROTO_TCP, TCP_NODELAY, (const char*)&on, sizeof(on)) == SOCKET_ERROR)
+        if (this->nodelay &&
+            setsockopt(this->s, IPPROTO_TCP, TCP_NODELAY, (const char*)&on, sizeof(on)) == SOCKET_ERROR)
             throw std::system_error(last_socket_error(), "failed to set nodelay");
 
         if (setsockopt(this->s, SOL_SOCKET, SO_REUSEADDR, (const char*)&on, sizeof(on)) == SOCKET_ERROR)

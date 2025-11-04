@@ -63,10 +63,11 @@ bool PipeReader::valid() const noexcept
 }
 
 #ifdef __linux__
-int PipeReader::fd() const noexcept {
+int PipeReader::fd() const noexcept
+{
     return impl->fd;
 }
-#endif // __linux__
+#endif  // __linux__
 
 PipeWriter::PipeWriter(): impl(std::make_unique<Impl>())
 {
