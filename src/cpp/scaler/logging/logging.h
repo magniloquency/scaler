@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <format>
 #include <fstream>
+#include <iostream>
 #include <memory>
 #include <string>
 #include <type_traits>
