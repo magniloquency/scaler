@@ -569,9 +569,10 @@ inline TestResult run_python(const char* path, std::vector<std::optional<std::st
         buffer << file.rdbuf();
 
         int rc = PyRun_SimpleString(buffer.str().c_str());
-            std::cout << "PyRun_SimpleString returned " << rc << std::endl;
-
         file.close();
+
+        if (rc < 0)
+            throw std::runtime_error("failed to run python script");
     }
 
     PyGILState_Release(gstate);
