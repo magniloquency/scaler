@@ -1,9 +1,11 @@
-from scapy.all import IP, TCP, Packet
-import pydivert
-from typing import Any
 import socket
+from typing import Any
+
+import pydivert
+from scapy.all import IP, Packet  # type: ignore[attr-defined]
 
 from tests.cpp.ymq.py_mitm.mitm_types import AbstractMITMInterface
+
 
 class WindivertMITMInterface(AbstractMITMInterface):
     _windivert: pydivert.WinDivert
@@ -21,8 +23,6 @@ class WindivertMITMInterface(AbstractMITMInterface):
     def recv(self) -> Packet:
         windivert_packet = self._windivert.recv()
 
-        print(f"pd: {windivert_packet.src_addr}:{windivert_packet.src_port} to {windivert_packet.dst_addr}:{windivert_packet.dst_port}")
-
         # save these for later when we need to re-inject
         self.__interface = windivert_packet.interface
         self.__direction = windivert_packet.direction
@@ -31,5 +31,4 @@ class WindivertMITMInterface(AbstractMITMInterface):
         return scapy_packet
 
     def send(self, pkt: Packet) -> None:
-        print(f"send to: {pkt[IP].dst}:{pkt[TCP].dport}")
         self._windivert.send(pydivert.Packet(bytes(pkt), self.__interface, self.__direction))

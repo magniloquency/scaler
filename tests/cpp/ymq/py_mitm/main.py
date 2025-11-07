@@ -1,9 +1,3 @@
-print("hello from python")
-
-import sys
-
-print(sys.path)
-
 # flake8: noqa: E402
 
 """
@@ -12,15 +6,16 @@ This script provides a framework for running MITM test cases
 
 import argparse
 import os
+import platform
 import signal
 import subprocess
 from typing import List
-import platform
 
 from scapy.all import IP, TCP  # type: ignore
 
 from tests.cpp.ymq.py_mitm import passthrough, randomly_drop_packets, send_rst_to_client
 from tests.cpp.ymq.py_mitm.mitm_types import AbstractMITM, TCPConnection
+
 
 def main(pid: int, mitm_ip: str, mitm_port: int, remote_ip: str, server_port: int, mitm: AbstractMITM):
     """
@@ -50,27 +45,27 @@ def main(pid: int, mitm_ip: str, mitm_port: int, remote_ip: str, server_port: in
     system = platform.system()
     if system == "Windows":
         from tests.cpp.ymq.py_mitm.windivert import WindivertMITMInterface
-        interface = WindivertMITMInterface(mitm_ip, mitm_port, remote_ip, server_port)
 
-        print("setting event...")
+        interface = WindivertMITMInterface(mitm_ip, mitm_port, remote_ip, server_port)
 
         import win32api
         import win32event
+
         handle = win32event.OpenEvent(
             win32event.EVENT_MODIFY_STATE,  # access rights needed to set the event
-            False,                           # do not inherit handle
-            "Global\\PythonSignal"
+            False,  # do not inherit handle
+            "Global\\PythonSignal",
         )
         win32event.SetEvent(handle)
         win32api.CloseHandle(handle)
-        print("event set!")
     elif system in ("Linux", "Darwin"):
         from tests.cpp.ymq.py_mitm.tuntap import create_tuntap_interface
+
         interface = create_tuntap_interface("tun0", mitm_ip, remote_ip)
 
         # signal the caller that the interface has been created
         if pid > 0:
-            os.kill(pid, signal.SIGUSR1)
+            os.kill(pid, signal.SIGUSR1)  # type: ignore[attr-defined]
 
     # these track information about our connections
     # we already know what to expect for the server connection, we are the connector

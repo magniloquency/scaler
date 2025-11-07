@@ -41,9 +41,16 @@ class TCPConnection:
 
         return (
             IP(src=self.local_ip or ip.src, dst=self.remote_ip)
-            / TCP(sport=self.local_port or tcp.sport, dport=self.remote_port, flags=tcp.flags, seq=tcp.seq, ack=ack or tcp.ack)
+            / TCP(
+                sport=self.local_port or tcp.sport,
+                dport=self.remote_port,
+                flags=tcp.flags,
+                seq=tcp.seq,
+                ack=ack or tcp.ack,
+            )
             / bytes(data or tcp.payload)
         )
+
 
 class AbstractMITMInterface(ABC):
     @abstractmethod
@@ -51,6 +58,7 @@ class AbstractMITMInterface(ABC):
 
     @abstractmethod
     def send(self, pkt: Packet) -> None: ...
+
 
 class AbstractMITM(ABC):
     @abstractmethod

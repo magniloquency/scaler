@@ -5,7 +5,7 @@ This MITM drops a % of packets
 import random
 from typing import Optional
 
-from tests.cpp.ymq.py_mitm.mitm_types import IP, AbstractMITM, TCPConnection, AbstractMITMInterface
+from tests.cpp.ymq.py_mitm.mitm_types import IP, AbstractMITM, AbstractMITMInterface, TCPConnection
 
 
 class MITM(AbstractMITM):

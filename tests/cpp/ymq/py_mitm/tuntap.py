@@ -1,6 +1,8 @@
-from typing import List
 import subprocess
-from scapy.all import TunTapInterface
+from typing import List
+
+from scapy.all import TunTapInterface  # type: ignore [attr-defined]
+
 
 def echo_call(cmd: List[str]):
     print(f"+ {' '.join(cmd)}")
