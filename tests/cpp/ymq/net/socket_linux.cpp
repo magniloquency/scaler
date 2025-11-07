@@ -16,7 +16,7 @@ struct Socket::Impl {
     {
         this->nodelay = nodelay;
 
-        fd = ::socket(AF_INET, SOCK_STREAM, 0);
+        fd = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
         if (fd < 0)
             throw std::system_error(last_socket_error(), "failed to create socket");
 
