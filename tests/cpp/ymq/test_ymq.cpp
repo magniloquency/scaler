@@ -677,6 +677,32 @@ TestResult client_sends_huge_header(const char* host, uint16_t port)
         EXPECT_EQ(result, TestResult::Success);
     }
 
+    // this is the same as the above, but both the client and server use raw sockets
+        TEST(CcYmqTestSuite, TestMitmPassthroughRaw)
+    {
+#ifdef __linux__
+        auto mitm_ip   = "192.0.2.4";
+        auto remote_ip = "192.0.2.3";
+#endif  // __linux__
+#ifdef _WIN32
+        auto mitm_ip   = "127.0.0.1";
+        auto remote_ip = "127.0.0.1";
+#endif  // _WIN32
+        auto mitm_port   = 2323;
+        auto remote_port = 23571;
+
+        // the Python program must be the first and only the first function passed to test()
+        // we must also pass `true` as the third argument to ensure that Python is fully started
+        // before beginning the test
+        auto result = test(
+            20,
+            {[=] { return run_mitm("passthrough", mitm_ip, mitm_port, remote_ip, remote_port); },
+             [=] { return basic_client_raw(mitm_ip, mitm_port); },
+             [=] { return basic_server_raw(remote_port); }},
+            true);
+        EXPECT_EQ(result, TestResult::Success);
+    }
+
     // this test uses the mitm to test the reconnect logic of YMQ by sending RST packets
     TEST(CcYmqTestSuite, TestMitmReconnect)
     {
