@@ -138,15 +138,19 @@ TestResult reconnect_server_main(std::string host, uint16_t port)
 
     auto socket = syncCreateSocket(context, IOSocketType::Binder, "server");
     syncBindSocket(socket, format_address(host, port));
+    std::println("BOUND TO {}", format_address(host, port));
     auto result = syncRecvMessage(socket);
+    std::println("recvd msg");
 
     RETURN_FAILURE_IF_FALSE(result.has_value());
     RETURN_FAILURE_IF_FALSE(result->payload.as_string() == "sync");
 
     auto error = syncSendMessage(socket, {.address = Bytes("client"), .payload = Bytes("acknowledge")});
+    std::println("sent msg 2342342342356 344");
     RETURN_FAILURE_IF_FALSE(!error);
 
     context.removeIOSocket(socket);
+    std::println("removed socket");
 
     return TestResult::Success;
 }
@@ -654,9 +658,15 @@ TestResult client_sends_huge_header(const char* host, uint16_t port)
     // for more, see the python mitm files
     TEST(CcYmqTestSuite, TestMitmPassthrough)
     {
+#ifdef __linux__
         auto mitm_ip     = "192.0.2.4";
-        auto mitm_port   = 2323;
         auto remote_ip   = "192.0.2.3";
+#endif  // __linux__
+#ifdef _WIN32
+        auto mitm_ip     = "127.0.0.1";
+        auto remote_ip   = "127.0.0.1";
+#endif  // _WIN32
+        auto mitm_port   = 2323;
         auto remote_port = 23571;
 
         // the Python program must be the first and only the first function passed to test()
@@ -674,13 +684,19 @@ TestResult client_sends_huge_header(const char* host, uint16_t port)
     // this test uses the mitm to test the reconnect logic of YMQ by sending RST packets
     TEST(CcYmqTestSuite, TestMitmReconnect)
     {
-        auto mitm_ip     = "192.0.2.4";
-        auto mitm_port   = 2525;
-        auto remote_ip   = "192.0.2.3";
-        auto remote_port = 23575;
+#ifdef __linux__
+        auto mitm_ip   = "192.0.2.4";
+        auto remote_ip = "192.0.2.3";
+#endif  // __linux__
+#ifdef _WIN32
+        auto mitm_ip   = "127.0.0.1";
+        auto remote_ip = "127.0.0.1";
+#endif  // _WIN32
+        auto mitm_port   = 2324;
+        auto remote_port = 23572;
 
         auto result = test(
-            10,
+            30,
             {[=] { return run_mitm("send_rst_to_client", mitm_ip, mitm_port, remote_ip, remote_port); },
              [=] { return reconnect_client_main(mitm_ip, mitm_port); },
              [=] { return reconnect_server_main(remote_ip, remote_port); }},
@@ -692,10 +708,16 @@ TestResult client_sends_huge_header(const char* host, uint16_t port)
     // in this test, the mitm drops a random % of packets arriving from the client and server
     TEST(CcYmqTestSuite, TestMitmRandomlyDropPackets)
     {
-        auto mitm_ip     = "192.0.2.4";
-        auto mitm_port   = 2828;
-        auto remote_ip   = "192.0.2.3";
-        auto remote_port = 23591;
+#ifdef __linux__
+        auto mitm_ip   = "192.0.2.4";
+        auto remote_ip = "192.0.2.3";
+#endif  // __linux__
+#ifdef _WIN32
+        auto mitm_ip   = "127.0.0.1";
+        auto remote_ip = "127.0.0.1";
+#endif  // _WIN32
+        auto mitm_port   = 2325;
+        auto remote_port = 23573;
 
         auto result = test(
             60,
@@ -927,5 +949,6 @@ TestResult client_sends_huge_header(const char* host, uint16_t port)
         WSACleanup();
 #endif  // _WIN32
 
+        maybe_finalize_python();
         return result;
     }

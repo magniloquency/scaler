@@ -39,6 +39,9 @@
 // the windows timer apis work in 100-nanosecond units
 const LONGLONG ns_per_second = 1'000'000'000LL;
 const LONGLONG ns_per_unit   = 100LL;  // 1 unit = 100 nanoseconds
+
+#define popen _popen
+#define pclose _pclose
 #endif                                 // _WIN32
 
 #include <algorithm>
@@ -60,6 +63,7 @@ const LONGLONG ns_per_unit   = 100LL;  // 1 unit = 100 nanoseconds
 #include <thread>
 #include <utility>
 #include <vector>
+#include <print>
 
 #include "tests/cpp/ymq/common/utils.h"
 #include "tests/cpp/ymq/net/socket.h"
@@ -155,9 +159,9 @@ inline void wait_for_python_ready_sigblock(void** hEvent)
 }
 
 // as in the above function, hEvent is unused on linux
-inline void wait_for_python_ready_sigwait(void** hEvent, int timeout_secs)
+inline void wait_for_python_ready_sigwait(void* hEvent, int timeout_secs)
 {
-    std::cout << "waiting for python to be ready..." << std::endl;
+    std::cout << "waiting for python to be ready... 234234" << std::endl;
 
 #ifdef __linux__
     timespec ts {.tv_sec = timeout_secs, .tv_nsec = 0};
@@ -177,10 +181,15 @@ inline void wait_for_python_ready_sigwait(void** hEvent, int timeout_secs)
 
 #endif  // __linux__
 #ifdef _WIN32
-    DWORD waitResult = WaitForSingleObject(*hEvent, timeout_secs * 1000);
-    if (waitResult != WAIT_OBJECT_0)
+    std::cout << "ummm 1111" << std::endl;
+    DWORD waitResult = WaitForSingleObject(hEvent, timeout_secs * 1000);
+    std::cout << "sus" << std::endl;
+    if (waitResult != WAIT_OBJECT_0) {
+        std::cout << "mega sus: " << waitResult << std::endl;
         raise_system_error("failed to wait on event");
-    CloseHandle(*hEvent);
+    }
+    std::cout << "ummm 2222" << std::endl;
+    CloseHandle(hEvent);
 #endif  // _WIN32
 
     std::cout << "signal received; python is ready" << std::endl;
@@ -359,7 +368,7 @@ end:
         threads.emplace_back(fork_wrapper, closures[i], timeout_secs, std::move(pipes[i].writer), events[i]);
 
         if (wait_for_python && i == 0)
-            wait_for_python_ready_sigwait(&hEvent, 3);
+            wait_for_python_ready_sigwait(hEvent, 3);
     }
 
     HANDLE timer = CreateWaitableTimer(nullptr, true, nullptr);
@@ -454,8 +463,74 @@ end:
 #endif  // _WIN32
 }
 
-inline TestResult run_python(const char* path, std::vector<const wchar_t*> argv = {})
+inline std::wstring discover_python_home()
 {
+    // leverage the system's command line to get the current python prefix
+    FILE* pipe = popen("python -c \"import sys; print(sys.prefix)\"", "r");
+    if (!pipe)
+        throw std::runtime_error("failed to start python process to discover prefix");
+
+    std::array<char, 128> buffer {};
+    std::string output {};
+
+    size_t n;
+    while ((n = fread(buffer.data(), 1, buffer.size(), pipe)) > 0)
+        output.append(buffer.data(), n);
+
+    // remove trailing whitespace
+    output.erase(output.find_last_not_of("\r\n") + 1);
+
+    pclose(pipe);
+
+    // assume it's ascii, so we can just cast it as a wstring
+    return std::wstring(output.begin(), output.end());
+}
+
+inline void ensure_python_initialized()
+{
+    if (Py_IsInitialized())
+        return;
+
+    auto python_home = discover_python_home();
+    Py_SetPythonHome(python_home.c_str());
+
+    Py_Initialize();
+
+    // add the cwd to the path
+    {
+        PyObject* sysPath = PySys_GetObject("path");
+        if (!sysPath)
+            throw std::runtime_error("failed to get sys.path");
+
+        PyObject* newPath = PyUnicode_FromString(".");
+        if (!newPath)
+            throw std::runtime_error("failed to create Python string");
+
+        if (PyList_Append(sysPath, newPath) < 0) {
+            Py_DECREF(newPath);
+            throw std::runtime_error("failed to append to sys.path");
+        }
+
+        Py_DECREF(newPath);
+    }
+
+    // release the GIL, the caller will have to acquire it again
+    PyThreadState* mainThreadState = PyEval_SaveThread();
+}
+
+inline void maybe_finalize_python()
+{
+    if (!Py_IsInitialized())
+        return;
+
+    Py_Finalize();
+}
+
+inline TestResult run_python(const char* path, std::vector<std::optional<std::string>> argv = {})
+{
+    ensure_python_initialized();
+    PyGILState_STATE gstate = PyGILState_Ensure();
+
 // insert the pid at the start of the argv, this is important for signalling readiness
 #ifdef __linux__
     pid_t pid = getppid();
@@ -464,65 +539,71 @@ inline TestResult run_python(const char* path, std::vector<const wchar_t*> argv 
     DWORD pid = GetCurrentProcessId();
 #endif  // _WIN32
 
-    auto pid_ws = std::to_wstring(pid);
-    argv.insert(argv.begin(), pid_ws.c_str());
+    auto pid_s = std::to_string(pid);
+    argv.insert(argv.begin(), pid_s.c_str());
+    argv.insert(argv.begin(), "mitm");
 
-    PyStatus status;
-    PyConfig config;
-    PyConfig_InitPythonConfig(&config);
+    //auto state = Py_NewInterpreter();
 
-    status = PyConfig_SetBytesString(&config, &config.program_name, "mitm");
-    if (PyStatus_Exception(status))
-        goto exception;
-
-    argv.insert(argv.begin(), L"mitm");
-    status = PyConfig_SetArgv(&config, argv.size(), (wchar_t**)argv.data());
-    if (PyStatus_Exception(status))
-        goto exception;
-
-    // pass argv to the script as-is
-    config.parse_argv = 0;
-
-    status = Py_InitializeFromConfig(&config);
-    if (PyStatus_Exception(status))
-        goto exception;
-    PyConfig_Clear(&config);
-
-    // add the cwd to the path
+    // set argv
     {
-        PyObject* sysPath = PySys_GetObject("path");
-        PyObject* newPath = PyUnicode_FromString(".");
-        PyList_Append(sysPath, newPath);
-        Py_DECREF(newPath);
+        PyObject* py_argv = PyList_New(argv.size());
+        if (!py_argv)
+            goto exception;
+
+        for (size_t i = 0; i < argv.size(); i++)
+            if (argv[i])
+                PyList_SET_ITEM(py_argv, i, PyUnicode_FromString(argv[i].value().c_str()));
+            else
+                PyList_SET_ITEM(py_argv, i, Py_None);
+
+        if (PySys_SetObject("argv", py_argv) < 0)
+            goto exception;
+
+        Py_DECREF(py_argv);
     }
 
+    std::println("set argv");
+
+
+
+    std::println("set path");
+
     {
-        auto file = fopen(path, "r");
+        std::ifstream file(path);
+        std::stringstream buffer;
+        buffer << file.rdbuf();
+        auto x = buffer.str();
+        auto y = x.c_str();
+
+        int rc = PyRun_SimpleString(y);
+            std::cout << "PyRun_SimpleString returned " << rc << std::endl;
+
+        file.close();
+
+        /* auto file = fopen(path, "r");
         if (!file)
             raise_system_error("failed to open python file");
-
-        PyRun_SimpleFile(file, path);
-        fclose(file);
+        auto cwd = std::filesystem::current_path();
+        std::println("A: {}: {}: {}", (void*)file, path, cwd.string());
+        PyRun_SimpleFileExFlags(file, path, 1, nullptr);
+        std::println("B");
+        fclose(file);*/
     }
 
-    if (Py_FinalizeEx() < 0) {
-        std::cerr << "finalization failure" << std::endl;
-        return TestResult::Failure;
-    }
-
+    PyGILState_Release(gstate);
+    std::println("released the gil!");
     return TestResult::Success;
 
 exception:
-    PyConfig_Clear(&config);
-    Py_ExitStatusException(status);
-
+    PyGILState_Release(gstate);
     return TestResult::Failure;
 }
 
 inline TestResult run_mitm(
     std::string testcase,
-    std::string mitm_ip,
-    uint16_t mitm_port,
+    std::optional<std::string> mitm_ip,
+    std::optional<uint16_t> mitm_port,
     std::string remote_ip,
     uint16_t remote_port,
     std::vector<std::string> extra_args = {})
@@ -531,24 +612,19 @@ inline TestResult run_mitm(
     chdir_to_project_root();
 
     // we build the args for the user to make calling the function more convenient
-    std::vector<std::string> args {
-        testcase, mitm_ip, std::to_string(mitm_port), remote_ip, std::to_string(remote_port)};
+    std::vector<std::optional<std::string>> args {
+        testcase,
+        mitm_ip,
+        mitm_port.transform([](uint16_t x) {
+        return std::to_string(x);
+             }),
+        remote_ip,
+        std::to_string(remote_port)};
 
     for (auto arg: extra_args)
         args.push_back(arg);
 
-    // we need to convert to wide strings to pass to Python
-    std::vector<std::wstring> wide_args_owned {};
-
-    // the strings are ascii so we can just make them into wstrings
-    for (const auto& str: args)
-        wide_args_owned.emplace_back(str.begin(), str.end());
-
-    std::vector<const wchar_t*> wide_args {};
-    for (const auto& wstr: wide_args_owned)
-        wide_args.push_back(wstr.c_str());
-
-    auto result = run_python("tests/cpp/ymq/py_mitm/main.py", wide_args);
+    auto result = run_python("tests/cpp/ymq/py_mitm/main.py", args);
 
     // change back to the original working directory
     std::filesystem::current_path(cwd);
