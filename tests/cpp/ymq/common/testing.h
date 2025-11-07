@@ -160,7 +160,7 @@ inline void wait_for_python_ready_sigblock(void** hEvent)
 // as in the above function, hEvent is unused on linux
 inline void wait_for_python_ready_sigwait(void* hEvent, int timeout_secs)
 {
-    std::cout << "waiting for python to be ready... 234234" << std::endl;
+    std::cout << "waiting for python to be ready..." << std::endl;
 
 #ifdef __linux__
     timespec ts {.tv_sec = timeout_secs, .tv_nsec = 0};
@@ -180,14 +180,10 @@ inline void wait_for_python_ready_sigwait(void* hEvent, int timeout_secs)
 
 #endif  // __linux__
 #ifdef _WIN32
-    std::cout << "ummm 1111" << std::endl;
     DWORD waitResult = WaitForSingleObject(hEvent, timeout_secs * 1000);
-    std::cout << "sus" << std::endl;
     if (waitResult != WAIT_OBJECT_0) {
-        std::cout << "mega sus: " << waitResult << std::endl;
         raise_system_error("failed to wait on event");
     }
-    std::cout << "ummm 2222" << std::endl;
     CloseHandle(hEvent);
 #endif  // _WIN32
 
@@ -479,7 +475,11 @@ inline std::wstring discover_python_home()
     // remove trailing whitespace
     output.erase(output.find_last_not_of("\r\n") + 1);
 
-    pclose(pipe);
+    auto status = pclose(pipe);
+    if (status < 0)
+        throw std::runtime_error("failed to close close process");
+    else if (status > 0)
+        throw std::runtime_error("process returned non-zero exit code: " + std::to_string(status));
 
     // assume it's ascii, so we can just cast it as a wstring
     return std::wstring(output.begin(), output.end());
