@@ -93,9 +93,11 @@ elseif ($dependency -eq "capnp")
     }
     elseif ($action -eq "install")
     {
+        $oldDir = Get-Location
         Set-Location -Path "$THIRD_PARTY_COMPILED\$CAPNP_FOLDER_NAME"
         cmake --install build --config Release --prefix $PREFIX
         Write-Host "Installed capnp into $PREFIX"
+        Set-Location $oldDir
     }
     else
     {
