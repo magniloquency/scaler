@@ -9,9 +9,13 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Install dependencies for MITM tests
+    - name: Install scapy for MITM tests
       shell: bash
       run: uv pip install --system scapy==2.*
+
+    - name: Install pydivert for MITM tests (Windows)
+      if: inputs.os == 'Windows'
+      run: uv pip install --system pydivert
 
     - name: Run C++ Tests (Linux)
       if: inputs.os == 'Linux'
