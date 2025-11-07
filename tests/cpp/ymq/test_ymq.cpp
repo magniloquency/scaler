@@ -688,8 +688,8 @@ TestResult client_sends_huge_header(const char* host, uint16_t port)
         auto mitm_ip   = "127.0.0.1";
         auto remote_ip = "127.0.0.1";
 #endif  // _WIN32
-        auto mitm_port   = 2323;
-        auto remote_port = 23571;
+        auto mitm_port   = 2326;
+        auto remote_port = 23574;
 
         // the Python program must be the first and only the first function passed to test()
         // we must also pass `true` as the third argument to ensure that Python is fully started
