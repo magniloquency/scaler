@@ -521,6 +521,7 @@ inline void ensure_python_initialized()
 
 inline void maybe_finalize_python()
 {
+    PyGILState_STATE gstate = PyGILState_Ensure();
     if (!Py_IsInitialized())
         return;
 
@@ -529,7 +530,7 @@ inline void maybe_finalize_python()
 
 inline TestResult run_python(const char* path, std::vector<std::optional<std::string>> argv = {})
 {
-    ensure_python_initialized();
+    //ensure_python_initialized();
     PyGILState_STATE gstate = PyGILState_Ensure();
 
 // insert the pid at the start of the argv, this is important for signalling readiness

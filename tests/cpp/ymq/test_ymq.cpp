@@ -928,6 +928,8 @@ TestResult client_sends_huge_header(const char* host, uint16_t port)
 
     int main(int argc, char** argv)
     {
+        ensure_python_initialized();
+
 #ifdef _WIN32
         // initialize winsock
         WSADATA wsaData = {};
