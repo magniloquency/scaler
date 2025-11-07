@@ -40,9 +40,9 @@
 const LONGLONG ns_per_second = 1'000'000'000LL;
 const LONGLONG ns_per_unit   = 100LL;  // 1 unit = 100 nanoseconds
 
-#define popen _popen
+#define popen  _popen
 #define pclose _pclose
-#endif                                 // _WIN32
+#endif  // _WIN32
 
 #include <algorithm>
 #include <cerrno>
@@ -493,7 +493,7 @@ inline void ensure_python_initialized()
 #ifdef _WIN32
     auto python_home = discover_python_home("python");
     Py_SetPythonHome(python_home.c_str());
-#endif // _WIN32
+#endif  // _WIN32
 
     Py_Initialize();
 
@@ -530,7 +530,7 @@ inline void maybe_finalize_python()
 
 inline TestResult run_python(const char* path, std::vector<std::optional<std::string>> argv = {})
 {
-    //ensure_python_initialized();
+    // ensure_python_initialized();
     PyGILState_STATE gstate = PyGILState_Ensure();
 
 // insert the pid at the start of the argv, this is important for signalling readiness
@@ -598,9 +598,7 @@ inline TestResult run_mitm(
     std::vector<std::optional<std::string>> args {
         testcase,
         mitm_ip,
-        mitm_port.transform([](uint16_t x) {
-        return std::to_string(x);
-             }),
+        mitm_port.transform([](uint16_t x) { return std::to_string(x); }),
         remote_ip,
         std::to_string(remote_port)};
 

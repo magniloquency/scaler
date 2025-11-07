@@ -6,6 +6,7 @@ This script provides a framework for running MITM test cases
 
 # only load the scapy layers that we need
 from scapy.config import conf
+
 conf.load_layers = ["inet"]
 
 import argparse

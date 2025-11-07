@@ -655,12 +655,12 @@ TestResult client_sends_huge_header(const char* host, uint16_t port)
     TEST(CcYmqTestSuite, TestMitmPassthrough)
     {
 #ifdef __linux__
-        auto mitm_ip     = "192.0.2.4";
-        auto remote_ip   = "192.0.2.3";
+        auto mitm_ip   = "192.0.2.4";
+        auto remote_ip = "192.0.2.3";
 #endif  // __linux__
 #ifdef _WIN32
-        auto mitm_ip     = "127.0.0.1";
-        auto remote_ip   = "127.0.0.1";
+        auto mitm_ip   = "127.0.0.1";
+        auto remote_ip = "127.0.0.1";
 #endif  // _WIN32
         auto mitm_port   = 2323;
         auto remote_port = 23571;
@@ -678,7 +678,7 @@ TestResult client_sends_huge_header(const char* host, uint16_t port)
     }
 
     // this is the same as the above, but both the client and server use raw sockets
-        TEST(CcYmqTestSuite, TestMitmPassthroughRaw)
+    TEST(CcYmqTestSuite, TestMitmPassthroughRaw)
     {
 #ifdef __linux__
         auto mitm_ip   = "192.0.2.4";
