@@ -22,7 +22,7 @@ runs:
     - name: Run C++ Tests (Windows)
       if: inputs.os == 'Windows'
       shell: pwsh
-      run: ./scripts/test.ps1
+      run: ./scripts/test.ps1 -C Release
 
     # TODO: build wheel first, then run the test
     - name: Run Unittests
