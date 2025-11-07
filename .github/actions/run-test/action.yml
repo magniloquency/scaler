@@ -10,7 +10,6 @@ runs:
   using: "composite"
   steps:
     - name: Install dependencies for MITM tests
-      if: inputs.os == 'Linux'
       shell: bash
       run: uv pip install --system scapy==2.*
 
