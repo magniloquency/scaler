@@ -15,6 +15,7 @@ runs:
 
     - name: Install pydivert for MITM tests (Windows)
       if: inputs.os == 'Windows'
+      shell: pwsh
       run: uv pip install --system pydivert
 
     - name: Run C++ Tests (Linux)
