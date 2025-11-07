@@ -138,19 +138,15 @@ TestResult reconnect_server_main(std::string host, uint16_t port)
 
     auto socket = syncCreateSocket(context, IOSocketType::Binder, "server");
     syncBindSocket(socket, format_address(host, port));
-    std::println("BOUND TO {}", format_address(host, port));
     auto result = syncRecvMessage(socket);
-    std::println("recvd msg");
 
     RETURN_FAILURE_IF_FALSE(result.has_value());
     RETURN_FAILURE_IF_FALSE(result->payload.as_string() == "sync");
 
     auto error = syncSendMessage(socket, {.address = Bytes("client"), .payload = Bytes("acknowledge")});
-    std::println("sent msg 2342342342356 344");
     RETURN_FAILURE_IF_FALSE(!error);
 
     context.removeIOSocket(socket);
-    std::println("removed socket");
 
     return TestResult::Success;
 }

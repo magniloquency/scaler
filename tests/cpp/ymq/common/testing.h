@@ -514,7 +514,7 @@ inline void ensure_python_initialized()
     }
 
     // release the GIL, the caller will have to acquire it again
-    PyThreadState* mainThreadState = PyEval_SaveThread();
+    PyEval_SaveThread();
 }
 
 inline void maybe_finalize_python()
