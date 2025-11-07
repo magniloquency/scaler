@@ -13,10 +13,10 @@ runs:
       shell: bash
       run: uv pip install --system scapy==2.*
 
-    - name: Install pydivert for MITM tests (Windows)
+    - name: Install pydivert and pywin32 for MITM tests (Windows)
       if: inputs.os == 'Windows'
       shell: pwsh
-      run: uv pip install --system pydivert
+      run: uv pip install --system pydivert pywin32
 
     - name: Run C++ Tests (Linux)
       if: inputs.os == 'Linux'
