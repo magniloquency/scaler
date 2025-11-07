@@ -63,7 +63,6 @@ const LONGLONG ns_per_unit   = 100LL;  // 1 unit = 100 nanoseconds
 #include <thread>
 #include <utility>
 #include <vector>
-#include <print>
 
 #include "tests/cpp/ymq/common/utils.h"
 #include "tests/cpp/ymq/net/socket.h"
@@ -543,8 +542,6 @@ inline TestResult run_python(const char* path, std::vector<std::optional<std::st
     argv.insert(argv.begin(), pid_s.c_str());
     argv.insert(argv.begin(), "mitm");
 
-    //auto state = Py_NewInterpreter();
-
     // set argv
     {
         PyObject* py_argv = PyList_New(argv.size());
@@ -563,36 +560,18 @@ inline TestResult run_python(const char* path, std::vector<std::optional<std::st
         Py_DECREF(py_argv);
     }
 
-    std::println("set argv");
-
-
-
-    std::println("set path");
-
     {
         std::ifstream file(path);
         std::stringstream buffer;
         buffer << file.rdbuf();
-        auto x = buffer.str();
-        auto y = x.c_str();
 
-        int rc = PyRun_SimpleString(y);
+        int rc = PyRun_SimpleString(buffer.str().c_str());
             std::cout << "PyRun_SimpleString returned " << rc << std::endl;
 
         file.close();
-
-        /* auto file = fopen(path, "r");
-        if (!file)
-            raise_system_error("failed to open python file");
-        auto cwd = std::filesystem::current_path();
-        std::println("A: {}: {}: {}", (void*)file, path, cwd.string());
-        PyRun_SimpleFileExFlags(file, path, 1, nullptr);
-        std::println("B");
-        fclose(file);*/
     }
 
     PyGILState_Release(gstate);
-    std::println("released the gil!");
     return TestResult::Success;
 
 exception:
