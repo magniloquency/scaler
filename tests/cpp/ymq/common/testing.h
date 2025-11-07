@@ -458,10 +458,10 @@ end:
 #endif  // _WIN32
 }
 
-inline std::wstring discover_python_home()
+inline std::wstring discover_python_home(std::string command)
 {
     // leverage the system's command line to get the current python prefix
-    FILE* pipe = popen("python -c \"import sys; print(sys.prefix)\"", "r");
+    FILE* pipe = popen(std::format("{} -c \"import sys; print(sys.prefix)\"", command).c_str(), "r");
     if (!pipe)
         throw std::runtime_error("failed to start python process to discover prefix");
 
@@ -490,8 +490,10 @@ inline void ensure_python_initialized()
     if (Py_IsInitialized())
         return;
 
-    auto python_home = discover_python_home();
+#ifdef _WIN32
+    auto python_home = discover_python_home("python");
     Py_SetPythonHome(python_home.c_str());
+#endif // _WIN32
 
     Py_Initialize();
 
