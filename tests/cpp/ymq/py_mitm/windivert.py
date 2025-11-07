@@ -2,7 +2,7 @@ import socket
 from typing import Any
 
 import pydivert
-from scapy.all import IP, Packet  # type: ignore[attr-defined]
+from scapy.all import IP, TCP, Packet  # type: ignore[attr-defined]
 
 from tests.cpp.ymq.py_mitm.mitm_types import AbstractMITMInterface
 
@@ -31,4 +31,5 @@ class WindivertMITMInterface(AbstractMITMInterface):
         return scapy_packet
 
     def send(self, pkt: Packet) -> None:
+        print(f"sending {pkt[TCP].flags} to {pkt[IP].dst}:{pkt[TCP].dport}")
         self._windivert.send(pydivert.Packet(bytes(pkt), self.__interface, self.__direction))
