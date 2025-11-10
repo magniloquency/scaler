@@ -22,9 +22,8 @@
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <netinet/tcp.h>
-#include <poll.h>
-#include <sys/poll.h>
 #include <signal.h>
+#include <sys/poll.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/timerfd.h>
@@ -52,18 +51,14 @@ const LONGLONG ns_per_unit   = 100LL;  // 1 unit = 100 nanoseconds
 #include <ctime>
 #include <exception>
 #include <filesystem>
-#include <format>
 #include <functional>
 #include <iostream>
 #include <optional>
 #include <string>
-#include <system_error>
-#include <thread>
 #include <utility>
 #include <vector>
 
 #include "tests/cpp/ymq/common/utils.h"
-#include "tests/cpp/ymq/net/socket.h"
 #include "tests/cpp/ymq/pipe/pipe.h"
 
 using namespace std::chrono_literals;

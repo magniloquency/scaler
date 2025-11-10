@@ -33,9 +33,9 @@
 #include "scaler/error/error.h"
 #include "scaler/ymq/bytes.h"
 #include "scaler/ymq/io_context.h"
-#include "scaler/ymq/io_socket.h"
 #include "scaler/ymq/simple_interface.h"
 #include "tests/cpp/ymq/common/testing.h"
+#include "tests/cpp/ymq/net/socket.h"
 
 using namespace scaler::ymq;
 using namespace std::chrono_literals;
