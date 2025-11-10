@@ -24,8 +24,9 @@ struct Socket::Impl {
             setsockopt(this->s, IPPROTO_TCP, TCP_NODELAY, (const char*)&on, sizeof(on)) == SOCKET_ERROR)
             throw std::system_error(last_socket_error(), "failed to set nodelay");
 
-        if (setsockopt(this->s, SOL_SOCKET, SO_REUSEADDR, (const char*)&on, sizeof(on)) == SOCKET_ERROR)
-            throw std::system_error(last_socket_error(), "failed to set reuseaddr");
+        // reuse addr behaves weirdly on windows, so we don't use it
+        // if (setsockopt(this->s, SOL_SOCKET, SO_REUSEADDR, (const char*)&on, sizeof(on)) == SOCKET_ERROR)
+        //    throw std::system_error(last_socket_error(), "failed to set reuseaddr");
     }
 
     ~Impl() { close(); }

@@ -36,6 +36,7 @@
 #include "scaler/ymq/io_socket.h"
 #include "scaler/ymq/simple_interface.h"
 #include "tests/cpp/ymq/common/testing.h"
+#include "tests/cpp/ymq/common/utils.h"
 
 using namespace scaler::ymq;
 using namespace std::chrono_literals;
@@ -662,7 +663,7 @@ TestResult client_sends_huge_header(const char* host, uint16_t port)
         auto mitm_ip   = "127.0.0.1";
         auto remote_ip = "127.0.0.1";
 #endif  // _WIN32
-        auto mitm_port   = 2323;
+        auto mitm_port   = random_port();
         auto remote_port = 23571;
 
         // the Python program must be the first and only the first function passed to test()
@@ -688,7 +689,7 @@ TestResult client_sends_huge_header(const char* host, uint16_t port)
         auto mitm_ip   = "127.0.0.1";
         auto remote_ip = "127.0.0.1";
 #endif  // _WIN32
-        auto mitm_port   = 2326;
+        auto mitm_port   = random_port();
         auto remote_port = 23574;
 
         // the Python program must be the first and only the first function passed to test()
@@ -714,7 +715,7 @@ TestResult client_sends_huge_header(const char* host, uint16_t port)
         auto mitm_ip   = "127.0.0.1";
         auto remote_ip = "127.0.0.1";
 #endif  // _WIN32
-        auto mitm_port   = 2324;
+        auto mitm_port   = random_port();
         auto remote_port = 23572;
 
         auto result = test(
@@ -738,7 +739,7 @@ TestResult client_sends_huge_header(const char* host, uint16_t port)
         auto mitm_ip   = "127.0.0.1";
         auto remote_ip = "127.0.0.1";
 #endif  // _WIN32
-        auto mitm_port   = 2325;
+        auto mitm_port   = random_port();
         auto remote_port = 23573;
 
         auto result = test(

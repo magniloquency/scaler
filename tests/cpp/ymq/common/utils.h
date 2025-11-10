@@ -1,5 +1,8 @@
+#pragma once
+
 #include <cstring>
 #include <filesystem>
+#include <random>
 #include <sstream>
 
 inline void raise_system_error(const char* msg)
@@ -48,4 +51,11 @@ inline std::error_code last_socket_error()
 #ifdef _WIN32
     return std::error_code(WSAGetLastError(), std::system_category());
 #endif  // _WIN32
+}
+
+inline unsigned short random_port(unsigned short min_port = 1024, unsigned short max_port = 65535)
+{
+    static thread_local std::mt19937_64 rng(std::random_device {}());
+    std::uniform_int_distribution<unsigned int> dist(min_port, max_port);
+    return static_cast<unsigned short>(dist(rng));
 }
