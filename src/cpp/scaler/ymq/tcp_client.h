@@ -5,7 +5,6 @@
 // First-party
 #include "scaler/logging/logging.h"
 #include "scaler/ymq/configuration.h"
-#include "scaler/ymq/internal/defs.h"
 #include "scaler/ymq/internal/raw_client_tcp_fd.h"
 
 namespace scaler {
