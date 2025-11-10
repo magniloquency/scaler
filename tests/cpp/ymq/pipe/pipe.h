@@ -1,7 +1,6 @@
 #pragma once
 #include <cstddef>
 #include <memory>
-#include <system_error>
 
 struct Pipe;
 

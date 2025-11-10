@@ -1,14 +1,7 @@
 #include <unistd.h>
 
-#include <cerrno>
-#include <system_error>
-
-#include "pipe.h"
-
-static std::error_code last_error()
-{
-    return std::error_code(errno, std::system_category());
-}
+#include "tests/cpp/ymq/common/utils.h"
+#include "tests/cpp/ymq/pipe/pipe.h"
 
 struct PipeReader::Impl {
     int fd = -1;
@@ -17,7 +10,7 @@ struct PipeReader::Impl {
     {
         ssize_t n = ::read(fd, buffer, size);
         if (n < 0)
-            throw std::system_error(last_error(), "read");
+            raise_system_error("read");
         return n;
     }
 
@@ -40,7 +33,7 @@ struct PipeWriter::Impl {
     {
         ssize_t n = ::write(fd, data, size);
         if (n < 0)
-            throw std::system_error(last_error(), "write");
+            raise_system_error("write");
         return n;
     }
 
@@ -61,7 +54,7 @@ struct Pipe::Impl {
     {
         int fds[2];
         if (::pipe(fds) < 0)
-            throw std::system_error(last_error(), "pipe");
+            raise_system_error("pipe");
 
         PipeReader reader;
         PipeWriter writer;

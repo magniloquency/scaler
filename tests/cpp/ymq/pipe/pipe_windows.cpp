@@ -1,13 +1,7 @@
 #include <windows.h>
 
-#include <system_error>
-
-#include "pipe.h"
-
-static std::error_code last_error()
-{
-    return std::error_code(GetLastError(), std::system_category());
-}
+#include "tests/cpp/ymq/common/utils.h"
+#include "tests/cpp/ymq/pipe/pipe.h"
 
 struct PipeReader::Impl {
     HANDLE h = INVALID_HANDLE_VALUE;
@@ -16,7 +10,7 @@ struct PipeReader::Impl {
     {
         DWORD bytesRead = 0;
         if (!ReadFile(h, buffer, (DWORD)size, &bytesRead, nullptr))
-            throw std::system_error(last_error(), "failed to read");
+            raise_system_error("failed to read");
         return bytesRead;
     }
 
@@ -39,7 +33,7 @@ struct PipeWriter::Impl {
     {
         DWORD bytesWritten = 0;
         if (!WriteFile(h, data, (DWORD)size, &bytesWritten, nullptr))
-            throw std::system_error(last_error(), "failed to write to pipe");
+            raise_system_error("failed to write to pipe");
         return bytesWritten;
     }
 
@@ -66,7 +60,7 @@ struct Pipe::Impl {
         PipeReader reader;
         PipeWriter writer;
         if (!CreatePipe(&reader.impl->h, &writer.impl->h, &sa, 0))
-            throw std::system_error(last_error(), "failed to create pipe");
+            raise_system_error("failed to create pipe");
 
         return std::make_pair(std::move(reader), std::move(writer));
     }

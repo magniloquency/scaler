@@ -1,12 +1,12 @@
-#include "pipe.h"
+#include "tests/cpp/ymq/pipe/pipe.h"
 
 #include <utility>
 
 #ifdef __linux__
-#include "pipe_linux.cpp"
+#include "tests/cpp/ymq/pipe/pipe_linux.cpp"
 #endif  // __linux__
 #ifdef _WIN32
-#include "pipe_windows.cpp"
+#include "tests/cpp/ymq/pipe/pipe_windows.cpp"
 #endif  // _WIN32
 
 Pipe::Pipe()

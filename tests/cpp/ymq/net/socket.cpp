@@ -5,10 +5,10 @@
 #include <vector>
 
 #ifdef __linux__
-#include "socket_linux.cpp"
+#include "tests/cpp/ymq/net/socket_linux.cpp"
 #endif  // __linux__
 #ifdef _WIN32
-#include "socket_windows.cpp"
+#include "tests/cpp/ymq/net/socket_windows.cpp"
 #endif  // _WIN32
 
 Socket::Socket(bool nodelay): impl(std::make_unique<Impl>(nodelay))

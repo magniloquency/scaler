@@ -3,10 +3,9 @@
 
 #include <optional>
 #include <stdexcept>
-#include <system_error>
 
-#include "../common/utils.h"
-#include "socket.h"
+#include "tests/cpp/ymq/common/utils.h"
+#include "tests/cpp/ymq/net/socket.h"
 
 struct Socket::Impl {
     SOCKET s = INVALID_SOCKET;
@@ -17,15 +16,15 @@ struct Socket::Impl {
         this->nodelay = nodelay;
         s = *socket.or_else([] -> std::optional<SOCKET> { return ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP); });
         if (s == INVALID_SOCKET)
-            throw std::system_error(last_socket_error(), "failed to create socket");
+            raise_socket_error("failed to create socket");
 
         int on = 1;
         if (this->nodelay &&
             setsockopt(this->s, IPPROTO_TCP, TCP_NODELAY, (const char*)&on, sizeof(on)) == SOCKET_ERROR)
-            throw std::system_error(last_socket_error(), "failed to set nodelay");
+            raise_socket_error("failed to set nodelay");
 
         if (setsockopt(this->s, SOL_SOCKET, SO_REUSEADDR, (const char*)&on, sizeof(on)) == SOCKET_ERROR)
-            throw std::system_error(last_socket_error(), "failed to set reuseaddr");
+            raise_socket_error("failed to set reuseaddr");
     }
 
     ~Impl() { close(); }
@@ -37,7 +36,7 @@ struct Socket::Impl {
         addr.sin_port   = htons(port);
         inet_pton(AF_INET, host.c_str(), &addr.sin_addr);
         if (::connect(s, (sockaddr*)&addr, sizeof(addr)) == SOCKET_ERROR)
-            throw std::system_error(last_socket_error(), "failed to connect");
+            raise_socket_error("failed to connect");
     }
 
     void bind(uint16_t port)
@@ -47,20 +46,20 @@ struct Socket::Impl {
         addr.sin_port        = htons(port);
         addr.sin_addr.s_addr = INADDR_ANY;
         if (::bind(s, (sockaddr*)&addr, sizeof(addr)) == SOCKET_ERROR)
-            throw std::system_error(last_socket_error(), "failed to bind");
+            raise_socket_error("failed to bind");
     }
 
     void listen(int backlog)
     {
         if (::listen(s, backlog) == SOCKET_ERROR)
-            throw std::system_error(last_socket_error(), "failed to listen");
+            raise_socket_error("failed to listen");
     }
 
     std::unique_ptr<Impl> accept()
     {
         SOCKET client = ::accept(s, nullptr, nullptr);
         if (client == INVALID_SOCKET)
-            throw std::system_error(last_socket_error(), "failed to accept connection");
+            raise_socket_error("failed to accept connection");
         return std::make_unique<Impl>(this->nodelay, client);
     }
 
@@ -68,7 +67,7 @@ struct Socket::Impl {
     {
         auto n = ::send(s, static_cast<const char*>(data), (int)size, 0);
         if (n == SOCKET_ERROR)
-            throw std::system_error(last_socket_error(), "failed to send data");
+            raise_socket_error("failed to send data");
         return n;
     }
 
@@ -76,7 +75,7 @@ struct Socket::Impl {
     {
         auto n = ::recv(s, static_cast<char*>(buffer), (int)size, 0);
         if (n == SOCKET_ERROR)
-            throw std::system_error(last_socket_error(), "failed to receive data");
+            raise_socket_error("failed to receive data");
         return n;
     }
 
