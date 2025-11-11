@@ -3,6 +3,7 @@
 #include <cstring>
 #include <filesystem>
 #include <sstream>
+#include <random>
 
 #ifdef __linux__
 #include <errno.h>
@@ -58,4 +59,11 @@ void chdir_to_project_root()
             return;
         }
     }
+}
+
+unsigned short random_port(unsigned short min_port, unsigned short max_port)
+{
+    static thread_local std::mt19937_64 rng(std::random_device {}());
+    std::uniform_int_distribution<unsigned int> dist(min_port, max_port);
+    return static_cast<unsigned short>(dist(rng));
 }
