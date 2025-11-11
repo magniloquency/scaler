@@ -7,5 +7,13 @@ target_sources(test_ymq PRIVATE
 	net/socket.h
 	net/socket.cpp
 	pipe/pipe.h
-	pipe/pipe.cpp
+	pipe/pipe_common.cpp
 )
+
+if(LINUX OR APPLE)
+	target_sources(test_ymq PRIVATE
+		pipe/pipe_linux.cpp)
+elseif(WIN32)
+	target_sources(test_ymq PRIVATE
+		pipe/pipe_windows.cpp)
+endif()

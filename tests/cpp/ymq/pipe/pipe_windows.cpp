@@ -3,10 +3,10 @@
 #include "tests/cpp/ymq/common/utils.h"
 #include "tests/cpp/ymq/pipe/pipe.h"
 
-struct PipeReader::Impl {
+struct PipeReaderImpl: PipeReader::Impl {
     HANDLE h = INVALID_HANDLE_VALUE;
 
-    int read(void* buffer, size_t size)
+    int read(void* buffer, size_t size) override
     {
         DWORD bytesRead = 0;
         if (!ReadFile(h, buffer, (DWORD)size, &bytesRead, nullptr))
@@ -14,22 +14,23 @@ struct PipeReader::Impl {
         return bytesRead;
     }
 
-    void close()
+    void close() override
     {
-        if (h != INVALID_HANDLE_VALUE) {
+        if (h != INVALID_HANDLE_VALUE)
             CloseHandle(h);
-            h = INVALID_HANDLE_VALUE;
-        }
+        h = INVALID_HANDLE_VALUE;
     }
 
-    bool valid() const noexcept { return h != INVALID_HANDLE_VALUE; }
-    ~Impl() { close(); }
+    void* handle() override { return this->h; }
+
+    bool valid() const noexcept override { return h != INVALID_HANDLE_VALUE; }
+    ~PipeReaderImpl() override { close(); }
 };
 
-struct PipeWriter::Impl {
+struct PipeWriterImpl: public PipeWriter::Impl {
     HANDLE h = INVALID_HANDLE_VALUE;
 
-    int write(const void* data, size_t size)
+    int write(const void* data, size_t size) override
     {
         DWORD bytesWritten = 0;
         if (!WriteFile(h, data, (DWORD)size, &bytesWritten, nullptr))
@@ -37,7 +38,7 @@ struct PipeWriter::Impl {
         return bytesWritten;
     }
 
-    void close()
+    void close() override
     {
         if (h != INVALID_HANDLE_VALUE) {
             CloseHandle(h);
@@ -45,23 +46,24 @@ struct PipeWriter::Impl {
         }
     }
 
-    bool valid() const noexcept { return h != INVALID_HANDLE_VALUE; }
-    ~Impl() { close(); }
+    bool valid() const noexcept override { return h != INVALID_HANDLE_VALUE; }
+    ~PipeWriterImpl() override { close(); }
 };
 
-struct Pipe::Impl {
-    static std::pair<PipeReader, PipeWriter> create()
-    {
-        Impl p;
-        SECURITY_ATTRIBUTES sa {};
-        sa.nLength        = sizeof(sa);
-        sa.bInheritHandle = TRUE;
+std::pair<PipeReader, PipeWriter> create_pipe()
+{
+    SECURITY_ATTRIBUTES sa {};
+    sa.nLength        = sizeof(sa);
+    sa.bInheritHandle = TRUE;
 
-        PipeReader reader;
-        PipeWriter writer;
-        if (!CreatePipe(&reader.impl->h, &writer.impl->h, &sa, 0))
-            raise_system_error("failed to create pipe");
+    auto reader_impl = std::make_unique<PipeReaderImpl>();
+    auto writer_impl = std::make_unique<PipeWriterImpl>();
 
-        return std::make_pair(std::move(reader), std::move(writer));
-    }
-};
+    if (!CreatePipe(&reader_impl->h, &writer_impl->h, &sa, 0))
+        raise_system_error("failed to create pipe");
+
+    PipeReader reader(std::move(reader_impl));
+    PipeWriter writer(std::move(writer_impl));
+
+    return std::make_pair(std::move(reader), std::move(writer));
+}

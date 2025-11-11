@@ -1,9 +1,9 @@
 #include "socket.h"
 
+#include <system_error>
 #include <thread>
 #include <utility>
 #include <vector>
-#include <system_error>
 
 #ifdef __linux__
 #include "tests/cpp/ymq/net/socket_linux.cpp"

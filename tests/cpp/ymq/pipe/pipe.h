@@ -6,7 +6,15 @@ struct Pipe;
 
 class PipeReader {
 public:
-    PipeReader();
+    struct Impl {
+        virtual int read(void* buffer, size_t size) = 0;
+        virtual const void* handle() const noexcept = 0;
+        virtual bool valid() const noexcept         = 0;
+        virtual void close()                        = 0;
+        virtual ~Impl()                             = default;
+    };
+
+    PipeReader(std::unique_ptr<Impl> impl);
     ~PipeReader();
 
     // Move-only
@@ -21,19 +29,26 @@ public:
 
     bool valid() const noexcept;
 
-#ifdef __linux__
-    int fd() const noexcept;
-#endif  // __linux__
+    // returns the native handle for this pipe reader
+    // on linux, this is a pointer to the file descriptor
+    // on windows, this is the HANDLE
+    const void* handle() const noexcept;
 
 private:
-    struct Impl;
-    std::unique_ptr<Impl> impl;
+    std::unique_ptr<Impl> _impl;
     friend struct Pipe;
 };
 
 class PipeWriter {
 public:
-    PipeWriter();
+    struct Impl {
+        virtual int write(const void* data, size_t size) = 0;
+        virtual bool valid() const noexcept              = 0;
+        virtual void close()                             = 0;
+        virtual ~Impl()                                  = default;
+    };
+
+    PipeWriter(std::unique_ptr<Impl> impl);
     ~PipeWriter();
 
     // Move-only
@@ -49,8 +64,7 @@ public:
     bool valid() const noexcept;
 
 private:
-    struct Impl;
-    std::unique_ptr<Impl> impl;
+    std::unique_ptr<Impl> _impl;
     friend struct Pipe;
 };
 
@@ -67,7 +81,6 @@ public:
 
     PipeReader reader;
     PipeWriter writer;
-
-private:
-    struct Impl;
 };
+
+std::pair<PipeReader, PipeWriter> create_pipe();

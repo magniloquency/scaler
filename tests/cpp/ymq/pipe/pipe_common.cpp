@@ -1,24 +1,17 @@
-#include "tests/cpp/ymq/pipe/pipe.h"
-
 #include <utility>
 
-#ifdef __linux__
-#include "tests/cpp/ymq/pipe/pipe_linux.cpp"
-#endif  // __linux__
-#ifdef _WIN32
-#include "tests/cpp/ymq/pipe/pipe_windows.cpp"
-#endif  // _WIN32
+#include "tests/cpp/ymq/pipe/pipe.h"
 
-Pipe::Pipe()
+Pipe::Pipe(): reader(nullptr), writer(nullptr)
 {
-    std::pair<PipeReader, PipeWriter> pair = Impl::create();
+    std::pair<PipeReader, PipeWriter> pair = create_pipe();
     this->reader                           = std::move(pair.first);
     this->writer                           = std::move(pair.second);
 }
 
 Pipe::~Pipe() = default;
 
-Pipe::Pipe(Pipe&& p) noexcept
+Pipe::Pipe(Pipe&& p) noexcept: reader(nullptr), writer(nullptr)
 {
     this->reader = std::move(p.reader);
     this->writer = std::move(p.writer);
@@ -31,7 +24,7 @@ Pipe& Pipe::operator=(Pipe&& p) noexcept
     return *this;
 }
 
-PipeReader::PipeReader(): impl(std::make_unique<Impl>())
+PipeReader::PipeReader(std::unique_ptr<Impl> impl): _impl(std::move(impl))
 {
 }
 
@@ -42,7 +35,7 @@ PipeReader& PipeReader::operator=(PipeReader&&) noexcept = default;
 
 int PipeReader::read(void* buffer, size_t size)
 {
-    return impl->read(buffer, size);
+    return _impl->read(buffer, size);
 }
 
 void PipeReader::read_exact(void* buffer, size_t size)
@@ -54,22 +47,20 @@ void PipeReader::read_exact(void* buffer, size_t size)
 
 void PipeReader::close()
 {
-    impl->close();
+    _impl->close();
 }
 
 bool PipeReader::valid() const noexcept
 {
-    return impl && impl->valid();
+    return _impl && _impl->valid();
 }
 
-#ifdef __linux__
-int PipeReader::fd() const noexcept
+const void* PipeReader::handle() const noexcept
 {
-    return impl->fd;
+    return _impl->handle();
 }
-#endif  // __linux__
 
-PipeWriter::PipeWriter(): impl(std::make_unique<Impl>())
+PipeWriter::PipeWriter(std::unique_ptr<Impl> impl): _impl(std::move(impl))
 {
 }
 
@@ -80,22 +71,22 @@ PipeWriter& PipeWriter::operator=(PipeWriter&&) noexcept = default;
 
 int PipeWriter::write(const void* data, size_t size)
 {
-    return impl->write((const char*)data, size);
+    return _impl->write((const char*)data, size);
 }
 
 void PipeWriter::write_all(const void* data, size_t size)
 {
     size_t cursor = 0;
     while (cursor < size)
-        cursor += this->write((char*)data + cursor, size - cursor);
+        cursor += (size_t)this->write((char*)data + cursor, size - cursor);
 }
 
 void PipeWriter::close()
 {
-    impl->close();
+    _impl->close();
 }
 
 bool PipeWriter::valid() const noexcept
 {
-    return impl && impl->valid();
+    return _impl && _impl->valid();
 }

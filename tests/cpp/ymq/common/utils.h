@@ -1,3 +1,4 @@
+#include <cstdint>
 #include <string>
 
 // throw an error with the last system error code
