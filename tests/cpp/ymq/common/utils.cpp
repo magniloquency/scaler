@@ -9,7 +9,7 @@
 #endif  // __linux__
 #ifdef _WIN32
 #include <Windows.h>
-#include <winsock.h>
+#include <winsock2.h>
 #endif  // _WIN32
 
 void raise_system_error(const char* msg)

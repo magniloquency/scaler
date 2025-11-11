@@ -1,31 +1,26 @@
-#include "socket.h"
-
 #include <system_error>
 #include <thread>
 #include <utility>
 #include <vector>
 
-#ifdef __linux__
-#include "tests/cpp/ymq/net/socket_linux.cpp"
-#endif  // __linux__
-#ifdef _WIN32
-#include "tests/cpp/ymq/net/socket_windows.cpp"
-#endif  // _WIN32
+#include "tests/cpp/ymq/common/utils.h"
+#include "tests/cpp/ymq/net/socket.h"
 
-Socket::Socket(bool nodelay): impl(std::make_unique<Impl>(nodelay))
+Socket::Socket(bool nodelay): _impl(nullptr)
 {
+    this->_impl = create_socket(nodelay);
 }
 
 Socket::~Socket() = default;
 
 Socket::Socket(Socket&& s) noexcept
 {
-    this->impl = std::move(s.impl);
+    this->_impl = std::move(s._impl);
 }
 
 Socket& Socket::operator=(Socket&& s) noexcept
 {
-    this->impl = std::move(s.impl);
+    this->_impl = std::move(s._impl);
     return *this;
 }
 
@@ -35,16 +30,8 @@ void Socket::connect(const std::string& host, uint16_t port, int tries)
 
     for (int i = 0; i < tries || tries < 0; i++) {
         try {
-            return impl->connect(host_checked, port);
-        } catch (const std::system_error& e) {
-#ifdef __linux__
-            if (e.code().value() != ECONNREFUSED)
-                throw e;
-#endif  // __linux__
-#ifdef _WIN32
-            if (e.code().value() != WSAECONNREFUSED)
-                throw e;
-#endif  // _WIN32
+            return _impl->connect(host_checked, port);
+        } catch (const ConnectionRefusedException& e) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
     }
@@ -54,40 +41,40 @@ void Socket::connect(const std::string& host, uint16_t port, int tries)
 
 void Socket::bind(uint16_t port)
 {
-    impl->bind(port);
+    _impl->bind(port);
 }
 
 void Socket::listen(int backlog)
 {
-    impl->listen(backlog);
+    _impl->listen(backlog);
 }
 
 Socket Socket::accept()
 {
-    auto clientImpl = impl->accept();
+    auto clientImpl = _impl->accept();
     Socket s;
-    s.impl = std::move(clientImpl);
+    s._impl = std::move(clientImpl);
     return s;
 }
 
 int Socket::send(const void* data, size_t size)
 {
-    return impl->send(data, size);
+    return _impl->send(data, size);
 }
 
 int Socket::recv(void* buffer, size_t size)
 {
-    return impl->recv(buffer, size);
+    return _impl->recv(buffer, size);
 }
 
 void Socket::flush()
 {
-    return impl->flush();
+    return _impl->flush();
 }
 
 void Socket::close()
 {
-    impl->close();
+    _impl->close();
 }
 
 void Socket::write_all(const void* data, size_t size)

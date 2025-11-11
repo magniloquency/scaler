@@ -1,10 +1,28 @@
 #pragma once
 #include <cstdint>
+#include <exception>
 #include <memory>
 #include <string>
 
+class ConnectionRefusedException: public std::exception {
+public:
+    const char* what() const noexcept override { return "Socket connection was refused"; }
+};
+
 class Socket {
 public:
+    struct Impl {
+        virtual void connect(const std::string& host, uint16_t port) = 0;
+        virtual void bind(uint16_t port)                             = 0;
+        virtual void listen(int backlog)                             = 0;
+        virtual std::unique_ptr<Impl> accept()                       = 0;
+        virtual int send(const void* data, size_t size)              = 0;
+        virtual int recv(void* buffer, size_t size)                  = 0;
+        virtual void flush()                                         = 0;
+        virtual void close()                                         = 0;
+        virtual ~Impl()                                              = default;
+    };
+
     Socket(bool nodelay = false);
     ~Socket();
 
@@ -32,6 +50,7 @@ public:
     std::string read_message();
 
 private:
-    struct Impl;                 // Forward declaration
-    std::unique_ptr<Impl> impl;  // Pointer to platform-specific implementation
+    std::unique_ptr<Impl> _impl;  // Pointer to platform-specific implementation
 };
+
+std::unique_ptr<Socket::Impl> create_socket(bool nodelay);

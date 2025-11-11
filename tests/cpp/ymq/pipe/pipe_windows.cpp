@@ -21,7 +21,7 @@ struct PipeReaderImpl: PipeReader::Impl {
         h = INVALID_HANDLE_VALUE;
     }
 
-    void* handle() override { return this->h; }
+    const void* handle() const noexcept override { return this->h; }
 
     bool valid() const noexcept override { return h != INVALID_HANDLE_VALUE; }
     ~PipeReaderImpl() override { close(); }
