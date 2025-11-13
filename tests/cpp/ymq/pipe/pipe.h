@@ -1,11 +1,8 @@
 #pragma once
 
 #include "tests/cpp/ymq/pipe/pipe_reader.h"
+#include "tests/cpp/ymq/pipe/pipe_utils.h"
 #include "tests/cpp/ymq/pipe/pipe_writer.h"
-
-// create platform-specific pipe handles
-// the first handle is read, the second handle is write
-std::pair<long long, long long> create_pipe();
 
 struct Pipe {
 public:

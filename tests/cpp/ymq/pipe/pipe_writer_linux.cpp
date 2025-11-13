@@ -1,5 +1,7 @@
 #include <unistd.h>
 
+#include <cstddef>
+
 #include "tests/cpp/ymq/common/utils.h"
 #include "tests/cpp/ymq/pipe/pipe_writer.h"
 
