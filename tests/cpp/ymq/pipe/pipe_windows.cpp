@@ -3,67 +3,96 @@
 #include "tests/cpp/ymq/common/utils.h"
 #include "tests/cpp/ymq/pipe/pipe.h"
 
-struct PipeReaderImpl: PipeReader::Impl {
-    HANDLE h = INVALID_HANDLE_VALUE;
+PipeReader::PipeReader(long long fd): _fd(fd)
+{
+}
 
-    int read(void* buffer, size_t size) override
-    {
-        DWORD bytesRead = 0;
-        if (!ReadFile(h, buffer, (DWORD)size, &bytesRead, nullptr))
-            raise_system_error("failed to read");
-        return bytesRead;
-    }
+PipeReader::~PipeReader()
+{
+    CloseHandle((HANDLE)this->_fd);
+}
 
-    void close() override
-    {
-        if (h != INVALID_HANDLE_VALUE)
-            CloseHandle(h);
-        h = INVALID_HANDLE_VALUE;
-    }
+PipeReader::PipeReader(PipeReader&& other) noexcept
+{
+    this->_fd = other._fd;
+    other._fd = -1;
+}
 
-    const void* handle() const noexcept override { return this->h; }
+PipeReader& PipeReader::operator=(PipeReader&& other) noexcept
+{
+    this->_fd = other._fd;
+    other._fd = -1;
+    return *this;
+}
 
-    bool valid() const noexcept override { return h != INVALID_HANDLE_VALUE; }
-    ~PipeReaderImpl() override { close(); }
-};
+const long long PipeReader::fd() const noexcept
+{
+    return this->_fd;
+}
 
-struct PipeWriterImpl: public PipeWriter::Impl {
-    HANDLE h = INVALID_HANDLE_VALUE;
+int PipeReader::read(void* buffer, size_t size)
+{
+    DWORD bytes_read = 0;
+    if (!ReadFile((HANDLE)this->_fd, buffer, (DWORD)size, &bytes_read, nullptr))
+        raise_system_error("failed to read");
+    return bytes_read;
+}
 
-    int write(const void* data, size_t size) override
-    {
-        DWORD bytesWritten = 0;
-        if (!WriteFile(h, data, (DWORD)size, &bytesWritten, nullptr))
-            raise_system_error("failed to write to pipe");
-        return bytesWritten;
-    }
+void PipeReader::read_exact(void* buffer, size_t size)
+{
+    size_t cursor = 0;
+    while (cursor < size)
+        cursor += (size_t)this->read((char*)buffer + cursor, size - cursor);
+}
 
-    void close() override
-    {
-        if (h != INVALID_HANDLE_VALUE) {
-            CloseHandle(h);
-            h = INVALID_HANDLE_VALUE;
-        }
-    }
+PipeWriter::PipeWriter(long long fd): _fd(fd)
+{
+}
 
-    bool valid() const noexcept override { return h != INVALID_HANDLE_VALUE; }
-    ~PipeWriterImpl() override { close(); }
-};
+PipeWriter::~PipeWriter()
+{
+    CloseHandle((HANDLE)this->_fd);
+}
 
-std::pair<PipeReader, PipeWriter> create_pipe()
+PipeWriter::PipeWriter(PipeWriter&& other) noexcept
+{
+    this->_fd = other._fd;
+    other._fd = -1;
+}
+
+PipeWriter& PipeWriter::operator=(PipeWriter&& other) noexcept
+{
+    this->_fd = other._fd;
+    other._fd = -1;
+    return *this;
+}
+
+int PipeWriter::write(const void* buffer, size_t size)
+{
+    DWORD bytes_written = 0;
+    if (!WriteFile((HANDLE)this->_fd, buffer, (DWORD)size, &bytes_written, nullptr))
+        raise_system_error("failed to write to pipe");
+    return bytes_written;
+}
+
+void PipeWriter::write_all(const void* buffer, size_t size)
+{
+    size_t cursor = 0;
+    while (cursor < size)
+        cursor += (size_t)this->write((char*)buffer + cursor, size - cursor);
+}
+
+std::pair<long long, long long> create_pipe()
 {
     SECURITY_ATTRIBUTES sa {};
     sa.nLength        = sizeof(sa);
     sa.bInheritHandle = TRUE;
 
-    auto reader_impl = std::make_unique<PipeReaderImpl>();
-    auto writer_impl = std::make_unique<PipeWriterImpl>();
+    HANDLE reader = INVALID_HANDLE_VALUE;
+    HANDLE writer = INVALID_HANDLE_VALUE;
 
-    if (!CreatePipe(&reader_impl->h, &writer_impl->h, &sa, 0))
+    if (!CreatePipe(&reader, &writer, &sa, 0))
         raise_system_error("failed to create pipe");
 
-    PipeReader reader(std::move(reader_impl));
-    PipeWriter writer(std::move(writer_impl));
-
-    return std::make_pair(std::move(reader), std::move(writer));
+    return std::make_pair((long long)reader, (long long)writer);
 }

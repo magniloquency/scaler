@@ -1,29 +1,13 @@
 #pragma once
 #include <cstdint>
-#include <exception>
 #include <memory>
+#include <optional>
 #include <string>
-
-class ConnectionRefusedException: public std::exception {
-public:
-    const char* what() const noexcept override { return "Socket connection was refused"; }
-};
 
 class Socket {
 public:
-    struct Impl {
-        virtual void connect(const std::string& host, uint16_t port) = 0;
-        virtual void bind(uint16_t port)                             = 0;
-        virtual void listen(int backlog)                             = 0;
-        virtual std::unique_ptr<Impl> accept()                       = 0;
-        virtual int send(const void* data, size_t size)              = 0;
-        virtual int recv(void* buffer, size_t size)                  = 0;
-        virtual void flush()                                         = 0;
-        virtual void close()                                         = 0;
-        virtual ~Impl()                                              = default;
-    };
-
     Socket(bool nodelay = false);
+    Socket(bool nodelay, long long fd);
     ~Socket();
 
     // move-only
@@ -32,25 +16,37 @@ public:
     Socket(const Socket&)            = delete;
     Socket& operator=(const Socket&) = delete;
 
-    void connect(const std::string& host, uint16_t port, int tries = 10);
-    void bind(uint16_t port);
-    void listen(int backlog = 5);
-    Socket accept();
+    // try to connect, retrying up to `tries` times when the connection is refused
+    void try_connect(const std::string& host, short port, int tries = 10) const;
+    void bind(short port) const;
+    void listen(int backlog = 5) const;
+    Socket accept() const;
 
-    int send(const void* data, size_t size);
-    int recv(void* buffer, size_t size);
-    void flush();
-    void close();
+    // write an entire buffer
+    void write_all(const void* data, size_t size) const;
+    void write_all(std::string msg) const;
 
-    void write_all(const void* data, size_t size);
-    void write_all(std::string msg);
-    void read_exact(void* buffer, size_t size);
+    // read exactly `size` bytes
+    void read_exact(void* buffer, size_t size) const;
 
-    void write_message(std::string msg);
-    std::string read_message();
+    // write a message in the YMQ protocol
+    void write_message(std::string msg) const;
+
+    // read a YMQ message
+    std::string read_message() const;
 
 private:
-    std::unique_ptr<Impl> _impl;  // Pointer to platform-specific implementation
-};
+    // the native handle for this pipe reader
+    // on Linux, this is a file descriptor
+    // on Windows, this is a SOCKET
+    long long _fd;
 
-std::unique_ptr<Socket::Impl> create_socket(bool nodelay);
+    // indicates if nodelay was set
+    bool _nodelay;
+
+    // write up to `size` bytes
+    int write(const void* buffer, size_t size) const;
+
+    // read up to `size` bytes
+    int read(void* buffer, size_t size) const;
+};

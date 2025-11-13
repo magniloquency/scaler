@@ -93,7 +93,7 @@ TestResult basic_client_raw(std::string host, uint16_t port)
 {
     Socket socket;
 
-    socket.connect(host.c_str(), port);
+    socket.try_connect(host.c_str(), port);
     socket.write_message("client");
     auto server_identity = socket.read_message();
     RETURN_FAILURE_IF_FALSE(server_identity == "server");
@@ -122,7 +122,7 @@ TestResult client_sends_big_message(std::string host, uint16_t port)
 {
     Socket socket;
 
-    socket.connect(host.c_str(), port);
+    socket.try_connect(host.c_str(), port);
     socket.write_message("client");
     auto remote_identity = socket.read_message();
     RETURN_FAILURE_IF_FALSE(remote_identity == "server");
@@ -194,7 +194,7 @@ TestResult client_simulated_slow_network(const char* host, uint16_t port)
 {
     Socket socket;
 
-    socket.connect(host, port);
+    socket.try_connect(host, port);
     socket.write_message("client");
     auto remote_identity = socket.read_message();
     RETURN_FAILURE_IF_FALSE(remote_identity == "server");
@@ -219,7 +219,7 @@ TestResult client_sends_incomplete_identity(const char* host, uint16_t port)
     {
         Socket socket;
 
-        socket.connect(host, port);
+        socket.try_connect(host, port);
 
         auto server_identity = socket.read_message();
         RETURN_FAILURE_IF_FALSE(server_identity == "server");
@@ -234,7 +234,7 @@ TestResult client_sends_incomplete_identity(const char* host, uint16_t port)
     // connect again and try to send a message
     {
         Socket socket;
-        socket.connect(host, port);
+        socket.try_connect(host, port);
         auto server_identity = socket.read_message();
         RETURN_FAILURE_IF_FALSE(server_identity == "server");
         socket.write_message("client");
@@ -270,7 +270,7 @@ TestResult client_sends_huge_header(const char* host, uint16_t port)
     {
         Socket socket;
 
-        socket.connect(host, port);
+        socket.try_connect(host, port);
         socket.write_message("client");
         auto server_identity = socket.read_message();
         RETURN_FAILURE_IF_FALSE(server_identity == "server");
@@ -308,7 +308,7 @@ TestResult client_sends_huge_header(const char* host, uint16_t port)
 
         {
             Socket socket;
-            socket.connect(host, port);
+            socket.try_connect(host, port);
             socket.write_message("client");
             auto server_identity = socket.read_message();
             RETURN_FAILURE_IF_FALSE(server_identity == "server");

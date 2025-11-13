@@ -6,15 +6,7 @@ struct Pipe;
 
 class PipeReader {
 public:
-    struct Impl {
-        virtual int read(void* buffer, size_t size) = 0;
-        virtual const void* handle() const noexcept = 0;
-        virtual bool valid() const noexcept         = 0;
-        virtual void close()                        = 0;
-        virtual ~Impl()                             = default;
-    };
-
-    PipeReader(std::unique_ptr<Impl> impl);
+    PipeReader(long long fd);
     ~PipeReader();
 
     // Move-only
@@ -23,32 +15,27 @@ public:
     PipeReader(const PipeReader&)            = delete;
     PipeReader& operator=(const PipeReader&) = delete;
 
-    int read(void* buffer, size_t size);
+    // read exactly `size` bytes
     void read_exact(void* buffer, size_t size);
-    void close();
-
-    bool valid() const noexcept;
 
     // returns the native handle for this pipe reader
     // on linux, this is a pointer to the file descriptor
     // on windows, this is the HANDLE
-    const void* handle() const noexcept;
+    const long long fd() const noexcept;
 
 private:
-    std::unique_ptr<Impl> _impl;
-    friend struct Pipe;
+    // the native handle for this pipe reader
+    // on Linux, this is a file descriptor
+    // on Windows, this is a HANDLE
+    long long _fd;
+
+    // read up to `size` bytes
+    int read(void* buffer, size_t size);
 };
 
 class PipeWriter {
 public:
-    struct Impl {
-        virtual int write(const void* data, size_t size) = 0;
-        virtual bool valid() const noexcept              = 0;
-        virtual void close()                             = 0;
-        virtual ~Impl()                                  = default;
-    };
-
-    PipeWriter(std::unique_ptr<Impl> impl);
+    PipeWriter(long long fd);
     ~PipeWriter();
 
     // Move-only
@@ -57,21 +44,23 @@ public:
     PipeWriter(const PipeWriter&)            = delete;
     PipeWriter& operator=(const PipeWriter&) = delete;
 
-    int write(const void* data, size_t size);
+    // write `size` bytes
     void write_all(const void* data, size_t size);
-    void close();
-
-    bool valid() const noexcept;
 
 private:
-    std::unique_ptr<Impl> _impl;
-    friend struct Pipe;
+    // the native handle for this pipe reader
+    // on Linux, this is a file descriptor
+    // on Windows, this is a HANDLE
+    long long _fd;
+
+    // write up to `size` bytes
+    int write(const void* buffer, size_t size);
 };
 
 struct Pipe {
 public:
     Pipe();
-    ~Pipe();
+    ~Pipe() = default;
 
     // Move-only
     Pipe(Pipe&&) noexcept;
@@ -83,4 +72,6 @@ public:
     PipeWriter writer;
 };
 
-std::pair<PipeReader, PipeWriter> create_pipe();
+// create platform-specific pipe handles
+// the first handle is read, the second handle is write
+std::pair<long long, long long> create_pipe();

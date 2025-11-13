@@ -230,7 +230,7 @@ inline TestResult test(
     pfds.push_back({.fd = timerfd, .events = POLL_IN, .revents = 0});
     for (const auto& pipe: pipes)
         pfds.push_back({
-            .fd      = *static_cast<const int*>(pipe.reader.handle()),
+            .fd      = (int)pipe.reader.fd(),
             .events  = POLL_IN,
             .revents = 0,
         });
@@ -278,10 +278,9 @@ inline TestResult test(
                 return TestResult::Failure;
             }
 
-            auto elem = std::find_if(pipes.begin(), pipes.end(), [fd = pfd.fd](const auto& pipe) {
-                return *static_cast<const int*>(pipe.reader.handle()) == fd;
-            });
-            auto idx  = elem - pipes.begin();
+            auto elem = std::find_if(
+                pipes.begin(), pipes.end(), [fd = pfd.fd](const auto& pipe) { return pipe.reader.fd() == fd; });
+            auto idx = elem - pipes.begin();
 
             TestResult result = TestResult::Failure;
             char buffer       = 0;

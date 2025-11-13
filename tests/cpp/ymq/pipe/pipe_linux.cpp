@@ -3,68 +3,90 @@
 #include "tests/cpp/ymq/common/utils.h"
 #include "tests/cpp/ymq/pipe/pipe.h"
 
-struct PipeReaderImpl: public PipeReader::Impl {
-    int fd = -1;
+PipeReader::PipeReader(long long fd): _fd(fd)
+{
+}
 
-    int read(void* buffer, size_t size) override
-    {
-        ssize_t n = ::read(fd, buffer, size);
-        if (n < 0)
-            raise_system_error("read");
-        return n;
-    }
+PipeReader::~PipeReader()
+{
+    close(this->_fd);
+}
 
-    void close() override
-    {
-        if (fd >= 0) {
-            ::close(fd);
-            fd = -1;
-        }
-    }
+PipeReader::PipeReader(PipeReader&& other) noexcept
+{
+    this->_fd = other._fd;
+    other._fd = -1;
+}
 
-    const void* handle() const noexcept override { return &this->fd; }
+PipeReader& PipeReader::operator=(PipeReader&& other) noexcept
+{
+    this->_fd = other._fd;
+    other._fd = -1;
+    return *this;
+}
 
-    bool valid() const noexcept override { return fd >= 0; }
-    ~PipeReaderImpl() override { close(); }
-};
+const long long PipeReader::fd() const noexcept
+{
+    return this->_fd;
+}
 
-struct PipeWriterImpl: public PipeWriter::Impl {
-    int fd = -1;
+int PipeReader::read(void* buffer, size_t size)
+{
+    ssize_t n = ::read(this->_fd, buffer, size);
+    if (n < 0)
+        raise_system_error("read");
+    return n;
+}
 
-    int write(const void* data, size_t size) override
-    {
-        ssize_t n = ::write(fd, data, size);
-        if (n < 0)
-            raise_system_error("write");
-        return n;
-    }
+void PipeReader::read_exact(void* buffer, size_t size)
+{
+    size_t cursor = 0;
+    while (cursor < size)
+        cursor += (size_t)this->read((char*)buffer + cursor, size - cursor);
+}
 
-    void close() override
-    {
-        if (fd >= 0) {
-            ::close(fd);
-            fd = -1;
-        }
-    }
+PipeWriter::PipeWriter(long long fd): _fd(fd)
+{
+}
 
-    bool valid() const noexcept override { return fd >= 0; }
-    ~PipeWriterImpl() override { close(); }
-};
+PipeWriter::~PipeWriter()
+{
+    close(this->_fd);
+}
 
-std::pair<PipeReader, PipeWriter> create_pipe()
+PipeWriter::PipeWriter(PipeWriter&& other) noexcept
+{
+    this->_fd = other._fd;
+    other._fd = -1;
+}
+
+PipeWriter& PipeWriter::operator=(PipeWriter&& other) noexcept
+{
+    this->_fd = other._fd;
+    other._fd = -1;
+    return *this;
+}
+
+int PipeWriter::write(const void* buffer, size_t size)
+{
+    ssize_t n = ::write(this->_fd, buffer, size);
+    if (n < 0)
+        raise_system_error("write");
+    return n;
+}
+
+void PipeWriter::write_all(const void* buffer, size_t size)
+{
+    size_t cursor = 0;
+    while (cursor < size)
+        cursor += (size_t)this->write((char*)buffer + cursor, size - cursor);
+}
+
+std::pair<long long, long long> create_pipe()
 {
     int fds[2];
     if (::pipe(fds) < 0)
         raise_system_error("pipe");
 
-    auto reader_impl = std::make_unique<PipeReaderImpl>();
-    auto writer_impl = std::make_unique<PipeWriterImpl>();
-
-    reader_impl->fd = fds[0];
-    writer_impl->fd = fds[1];
-
-    PipeReader reader(std::move(reader_impl));
-    PipeWriter writer(std::move(writer_impl));
-
-    return std::make_pair(std::move(reader), std::move(writer));
+    return std::make_pair(fds[0], fds[1]);
 }

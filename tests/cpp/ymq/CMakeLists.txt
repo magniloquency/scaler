@@ -5,7 +5,6 @@ target_sources(test_ymq PRIVATE
 	common/utils.h
 	common/utils.cpp
 	net/socket.h
-	net/socket_common.cpp
 	pipe/pipe.h
 	pipe/pipe_common.cpp
 )
