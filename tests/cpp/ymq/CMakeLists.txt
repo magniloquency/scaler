@@ -6,7 +6,6 @@ target_sources(test_ymq PRIVATE
 	common/utils.cpp
 	net/socket.h
 	pipe/pipe.h
-	pipe/pipe_common.cpp
 )
 
 if(LINUX OR APPLE)
