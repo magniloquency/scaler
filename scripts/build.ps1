@@ -8,6 +8,7 @@ $OS = "windows"
 $ARCH = "x64"
 $BUILD_DIR = "build_${OS}_${ARCH}"
 $BUILD_PRESET = "${OS}-${ARCH}"
+$INSTALL_PREFIX = "src"
 
 # Clean up previous build artifacts
 if (Test-Path $BUILD_DIR) {
@@ -25,4 +26,4 @@ cmake --preset $BUILD_PRESET @args
 cmake --build --preset $BUILD_PRESET
 
 # Install
-cmake --install $BUILD_DIR
+cmake --install $BUILD_DIR --prefix $INSTALL_PREFIX
