@@ -10,7 +10,6 @@ ARCH="$(uname -m)"                              # e.g. x86_64 or arm64
 
 BUILD_DIR="build_${OS}_${ARCH}"
 BUILD_PRESET="${OS}-${ARCH}"
-INSTALL_PREFIX="src"
 
 rm -rf $BUILD_DIR
 rm -f src/scaler/protocol/capnp/*.c++
@@ -25,4 +24,4 @@ cmake --preset $BUILD_PRESET "${CMAKE_ARGS[@]}"
 cmake --build --preset $BUILD_PRESET
 
 # Install
-cmake --install $BUILD_DIR --prefix $INSTALL_PREFIX
+cmake --install $BUILD_DIR
