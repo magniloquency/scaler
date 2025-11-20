@@ -29,11 +29,24 @@ runs:
       run: ./scripts/test.ps1 -C Debug
 
     # TODO: build wheel first, then run the test
+    - name: Build Wheel
+      shell: bash
+      run: |
+        uv pip install --system build
+        python -m build --wheel
+
+    - name: Install Wheel
+      shell: bash
+      run: |
+        wheel_file=$(ls dist/*.whl | head -n 1)
+        echo "Installing wheel: $wheel_file"
+        uv pip install --system "$wheel_file"
+
     - name: Run Unittests
       if: inputs.os != 'Windows'
       shell: bash
       run: |
-        PYTHONPATH=src python -m unittest discover -v tests
+        python -m unittest discover -v tests
 
     - name: Run Examples
       if: inputs.os != 'Windows'
@@ -42,7 +55,7 @@ runs:
         uv pip install --system -r examples/applications/requirements_applications.txt
         for example in "./examples"/*.py; do
           echo "Running $example"
-          PYTHONPATH=src python $example
+          python $example
         done
         for example in "./examples/applications"/*.py; do
           if python -c 'import sys; sys.exit(not sys.version_info <= (3, 10))'; then
@@ -53,5 +66,5 @@ runs:
           fi
 
           echo "Running $example"
-          PYTHONPATH=src python $example
+          python $example
         done
