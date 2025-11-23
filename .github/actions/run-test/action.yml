@@ -28,7 +28,6 @@ runs:
       shell: pwsh
       run: ./scripts/test.ps1 -C Debug
 
-    # TODO: build wheel first, then run the test
     - name: Build Wheel
       if: inputs.os != 'Windows'
       shell: bash
