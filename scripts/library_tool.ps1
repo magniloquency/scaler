@@ -80,6 +80,7 @@ elseif ($dependency -eq "capnp")
     }
     elseif ($action -eq "compile")
     {
+        Remove-Item -Path "$THIRD_PARTY_DOWNLOADED\$CAPNP_FOLDER_NAME" -Recurse -Force -ErrorAction SilentlyContinue
         mkdir "$THIRD_PARTY_COMPILED" -Force
         tar -xzvf "$THIRD_PARTY_DOWNLOADED\$CAPNP_FOLDER_NAME.tar.gz" -C "$THIRD_PARTY_COMPILED"
 
