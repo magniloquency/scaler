@@ -153,22 +153,17 @@ class PySyncObjectStorageConnector(SyncObjectStorageConnector):
             self.__send_buffers([struct.pack("<Q", len(header_bytes)), header_bytes])
 
     def __send_buffers(self, buffers: List[bytes]) -> None:
-        assert self._socket is not None
         if len(buffers) < 1:
             return
+
+        assert self._socket is not None
 
         total_size = sum(len(buffer) for buffer in buffers)
 
         # If the message is small enough, first try to send it at once with sendmsg(). This would ensure the message can
         # be transmitted within a single TCP segment.
         if total_size < MAX_CHUNK_SIZE:
-            try:
-                sent = self._socket.sendmsg(buffers)  # type: ignore[attr-defined]
-            except AttributeError:
-                # fallback if the os does not support sendmsg
-                sent = 0
-                for buffer in buffers:
-                    sent += self.__send_buffer(buffer)
+            sent = self._socket.sendmsg(buffers)  # type: ignore[attr-defined]
 
             if sent <= 0:
                 self.__raise_connection_failure()
@@ -188,7 +183,7 @@ class PySyncObjectStorageConnector(SyncObjectStorageConnector):
         for buffer in buffers:
             self.__send_buffer(buffer)
 
-    def __send_buffer(self, buffer: bytes) -> int:
+    def __send_buffer(self, buffer: bytes) -> None:
         buffer_view = memoryview(buffer)
 
         total_sent = 0
@@ -199,7 +194,6 @@ class PySyncObjectStorageConnector(SyncObjectStorageConnector):
                 self.__raise_connection_failure()
 
             total_sent += sent
-        return total_sent
 
     def __receive_response(self) -> Tuple[ObjectResponseHeader, bytearray]:
         assert self._socket is not None
