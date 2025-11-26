@@ -7,7 +7,7 @@ from scaler.config.types.zmq import ZMQConfig
 @dataclasses.dataclass
 class TopConfig(ConfigClass):
     monitor_address: ZMQConfig = dataclasses.field(
-        metadata=dict(positional=True, nargs="?", help="scheduler monitor address to connect to")
+        metadata=dict(positional=True, help="scheduler monitor address to connect to")
     )
     timeout: int = dataclasses.field(default=5, metadata=dict(short="-t", help="timeout seconds"))
 

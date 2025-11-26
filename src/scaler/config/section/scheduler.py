@@ -15,7 +15,7 @@ from scaler.utility.event_loop import EventLoopType
 @dataclasses.dataclass
 class SchedulerConfig(ConfigClass):
     scheduler_address: ZMQConfig = dataclasses.field(
-        metadata=dict(positional=True, nargs="?", help="scheduler address to connect to, e.g.: `tcp://localhost:6378`")
+        metadata=dict(positional=True, help="scheduler address to connect to, e.g.: `tcp://localhost:6378`")
     )
     object_storage_address: Optional[ObjectStorageAddressConfig] = dataclasses.field(
         default=None,
@@ -54,7 +54,7 @@ class SchedulerConfig(ConfigClass):
         ),
     )
     protected: bool = dataclasses.field(
-        default=True,
+        default=False,
         metadata=dict(
             short="-p", action="store_true", help="protect scheduler and worker from being shutdown by client"
         ),

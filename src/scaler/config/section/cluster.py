@@ -15,7 +15,7 @@ from scaler.utility.event_loop import EventLoopType
 @dataclasses.dataclass
 class ClusterConfig(ConfigClass):
     scheduler_address: ZMQConfig = dataclasses.field(
-        metadata=dict(positional=True, nargs="?", help="the scheduler address to connect to")
+        metadata=dict(positional=True, help="the scheduler address to connect to")
     )
     object_storage_address: Optional[ObjectStorageAddressConfig] = dataclasses.field(
         default=None,

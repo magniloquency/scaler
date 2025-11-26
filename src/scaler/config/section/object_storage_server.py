@@ -8,8 +8,6 @@ from scaler.config.types.object_storage_server import ObjectStorageAddressConfig
 class ObjectStorageServerConfig(ConfigClass):
     object_storage_address: ObjectStorageAddressConfig = dataclasses.field(
         metadata=dict(
-            positional=True,
-            nargs="?",
-            help="specify the object storage server address to listen to, e.g. tcp://localhost:2345.",
+            positional=True, help="specify the object storage server address to listen to, e.g. tcp://localhost:2345."
         )
     )
