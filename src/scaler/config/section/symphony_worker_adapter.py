@@ -15,8 +15,8 @@ class SymphonyWorkerConfig(ConfigClass):
 
     web_config: WebConfig
     worker_adapter_config: WorkerAdapterConfig
-    worker_config: WorkerConfig = WorkerConfig()
-    logging_config: LoggingConfig = LoggingConfig()
+    worker_config: WorkerConfig = dataclasses.field(default_factory=WorkerConfig)
+    logging_config: LoggingConfig = dataclasses.field(default_factory=LoggingConfig)
     event_loop: str = dataclasses.field(
         default="builtin",
         metadata=dict(short="-el", choices=EventLoopType.allowed_types(), help="select the event loop type"),

@@ -51,8 +51,8 @@ class ClusterConfig(ConfigClass):
         default=defaults.DEFAULT_IO_THREADS,
         metadata=dict(short="-wit", help="set the number of io threads for io backend per worker"),
     )
-    worker_config: WorkerConfig = WorkerConfig()
-    logging_config: LoggingConfig = LoggingConfig()
+    worker_config: WorkerConfig = dataclasses.field(default_factory=WorkerConfig)
+    logging_config: LoggingConfig = dataclasses.field(default_factory=LoggingConfig)
 
     def __post_init__(self):
         if self.worker_names.names and len(self.worker_names.names) != self.num_of_workers:

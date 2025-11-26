@@ -13,4 +13,4 @@ class WebUIConfig(ConfigClass):
     web_host: str = dataclasses.field(default="0.0.0.0", metadata=dict(help="host for webserver to connect to"))
     web_port: int = dataclasses.field(default=50001, metadata=dict(help="host for webserver to connect to"))
 
-    logging_config: LoggingConfig = LoggingConfig()
+    logging_config: LoggingConfig = dataclasses.field(default_factory=LoggingConfig)

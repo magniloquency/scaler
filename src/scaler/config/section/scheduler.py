@@ -104,7 +104,7 @@ class SchedulerConfig(ConfigClass):
         default=defaults.DEFAULT_IO_THREADS,
         metadata=dict(short="-wit", help="set the number of io threads for io backend per worker"),
     )
-    logging_config: LoggingConfig = LoggingConfig()
+    logging_config: LoggingConfig = dataclasses.field(default_factory=LoggingConfig)
 
     def __post_init__(self):
         if self.max_number_of_tasks_waiting < -1:
