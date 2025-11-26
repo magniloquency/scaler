@@ -127,7 +127,7 @@ This can be set using the CLI:
 
 .. code:: bash
 
-    scaler_cluster -n 10 tcp://127.0.0.1:8516 -ds 300
+    scaler_cluster -n 10 tcp://127.0.0.1:8516 -dts 300
 
 Or through the programmatic API:
 

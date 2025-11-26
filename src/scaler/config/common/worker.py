@@ -28,7 +28,7 @@ class WorkerConfig(ConfigClass):
         ),
     )
     death_timeout_seconds: int = dataclasses.field(
-        default=defaults.DEFAULT_WORKER_DEATH_TIMEOUT, metadata=dict(short="-ds", help="death timeout seconds")
+        default=defaults.DEFAULT_WORKER_DEATH_TIMEOUT, metadata=dict(short="-dts", help="death timeout seconds")
     )
     garbage_collect_interval_seconds: int = dataclasses.field(
         default=defaults.DEFAULT_GARBAGE_COLLECT_INTERVAL_SECONDS,
