@@ -61,7 +61,7 @@ void TCPSocket::try_connect(const std::string& address_str, int tries) const
     sockaddr_in addr {};
     addr.sin_family = AF_INET;
     addr.sin_port   = htons(address.port);
-    inet_pton(AF_INET, check_localhost(address.host.c_str()), &addr.sin_addr);
+    inet_pton(AF_INET, address.host.c_str(), &addr.sin_addr);
 
     for (int i = 0; i < tries; i++) {
         auto code = ::connect((SOCKET)this->_fd, (sockaddr*)&addr, sizeof(addr));
