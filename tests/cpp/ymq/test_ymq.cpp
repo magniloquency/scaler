@@ -35,6 +35,7 @@
 #include "scaler/ymq/io_context.h"
 #include "scaler/ymq/simple_interface.h"
 #include "tests/cpp/ymq/common/testing.h"
+#include "tests/cpp/ymq/common/utils.h"
 #include "tests/cpp/ymq/net/socket_utils.h"
 
 using namespace scaler::ymq;
