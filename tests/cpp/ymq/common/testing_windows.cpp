@@ -45,7 +45,6 @@ void signal_event(void* hEvent)
 
 void wait_for_python_ready_sigblock(void** hEvent)
 {
-    // TODO: implement signaling of this event in the python mitm
     *hEvent = CreateEvent(
         NULL,                     // default security attributes
         false,                    // auto-reset event
