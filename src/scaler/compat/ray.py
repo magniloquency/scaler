@@ -1,7 +1,7 @@
 from typing import Any, Callable, Generic, List, Optional, TypeVar, Union
 
 import psutil
-from typing_extensions import ParamSpec
+from typing_extensions import Concatenate, ParamSpec
 
 from scaler.client.client import Client
 from scaler.client.future import ScalerFuture
@@ -28,8 +28,8 @@ def init(address: Optional[str] = None, n_workers: Optional[int] = psutil.cpu_co
 def shutdown() -> None:
     global client, combo
 
-    client.disconnect()
-
+    if client:
+        client.disconnect()
     if combo:
         combo.shutdown()
 
@@ -58,13 +58,23 @@ class RayObjectReference(Generic[T]):
 
 
 class RayRemote(Generic[P, T]):
-    _fn: Callable[P, T]
+    _fn: Callable[Concatenate[Client, P], T]
 
     def __init__(self, fn: Callable[P, T]) -> None:
-        self._fn = fn
+        # this function forwards the implicit client to the worker and enables nesting
+        def forward_client(client: Client, *args: P.args, **kwargs: P.kwargs) -> T:
+            from scaler.compat import ray
+
+            ray.client = client
+            return fn(*args, **kwargs)
+
+        self._fn = forward_client
 
     def remote(self, *args: P.args, **kwargs: P.kwargs) -> RayObjectReference:
-        future = client.submit(self._fn, *args, **kwargs)
+        if not is_initialized():
+            raise RuntimeError("Scaler is not initialized")
+
+        future = client.submit(self._fn, client, *args, **kwargs)
         return RayObjectReference(future)
 
 

@@ -1,11 +1,16 @@
+import time
 import unittest
 
 import numpy as np
+from numpy import random
 
 from scaler.compat import ray
 
 
 class TestRayCompat(unittest.TestCase):
+    def tearDown(self):
+        ray.shutdown()
+
     def test_basic(self) -> None:
         ray.init()
 
@@ -16,7 +21,6 @@ class TestRayCompat(unittest.TestCase):
         ref = remote_fn.remote()
 
         self.assertEqual(ray.get(ref), 7)
-        ray.shutdown()
 
     # https://docs.ray.io/en/latest/ray-core/walkthrough.html#running-a-task
     def test_ray_example_square(self) -> None:
@@ -30,8 +34,6 @@ class TestRayCompat(unittest.TestCase):
 
         # Retrieve results.
         self.assertEqual(ray.get(futures), [0, 1, 4, 9])
-
-        ray.shutdown()
 
     # https://docs.ray.io/en/latest/ray-core/walkthrough.html#passing-objects
     def test_ray_example_numpy(self) -> None:
@@ -51,3 +53,58 @@ class TestRayCompat(unittest.TestCase):
         self.assertEqual(ray.get(sum_matrix.remote(matrix_ref)), 1000000.0)
 
         ray.shutdown()
+
+    def test_ray_example_nested(self) -> None:
+        def partition(collection):
+            # Use the last element as the pivot
+            pivot = collection.pop()
+            greater, lesser = [], []
+            for element in collection:
+                if element > pivot:
+                    greater.append(element)
+                else:
+                    lesser.append(element)
+            return lesser, pivot, greater
+
+        def quick_sort(collection):
+            if len(collection) <= 200000:  # magic number
+                return sorted(collection)
+            else:
+                lesser, pivot, greater = partition(collection)
+                lesser = quick_sort(lesser)
+                greater = quick_sort(greater)
+            return lesser + [pivot] + greater
+
+        @ray.remote
+        def quick_sort_distributed(collection):
+            # Tiny tasks are an antipattern.
+            # Thus, in our example we have a "magic number" to
+            # toggle when distributed recursion should be used vs
+            # when the sorting should be done in place. The rule
+            # of thumb is that the duration of an individual task
+            # should be at least 1 second.
+            if len(collection) <= 200000:  # magic number
+                return sorted(collection)
+            else:
+                lesser, pivot, greater = partition(collection)
+                lesser = quick_sort_distributed.remote(lesser)
+                greater = quick_sort_distributed.remote(greater)
+                return ray.get(lesser) + [pivot] + ray.get(greater)
+
+        for size in [200000, 4000000, 8000000]:
+            unsorted = random.randint(1000000, size=(size)).tolist()
+            s = time.time()
+            sequential_sorted = quick_sort(unsorted)
+            print(f"Sequential execution: {(time.time() - s):.3f}")
+            s = time.time()
+            distributed_sorted = ray.get(quick_sort_distributed.remote(unsorted))
+            print(f"Distributed execution: {(time.time() - s):.3f}")
+            print("--" * 10)
+
+            print(len(sequential_sorted), len(distributed_sorted))
+
+            self.assertEqual(
+                sequential_sorted,
+                distributed_sorted,
+                msg=f"Expected sequential and distributed sorts to match for {size} element case",
+            )
