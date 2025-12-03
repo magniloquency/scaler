@@ -54,8 +54,27 @@ class TestRayCompat(unittest.TestCase):
 
         ray.shutdown()
 
+    # https://docs.ray.io/en/latest/ray-core/tasks/nested-tasks.html#nested-remote-functions
+    def test_ray_example_nested_simple(self) -> None:
+        @ray.remote
+        def f():
+            return 1
+
+        @ray.remote
+        def g():
+            # Call f 4 times and return the resulting object refs.
+            return [f.remote() for _ in range(4)]
+
+        @ray.remote
+        def h():
+            # Call f 4 times, block until those 4 tasks finish,
+            # retrieve the results, and return the values.
+            return ray.get([f.remote() for _ in range(4)])
+
+        self.assertEqual(ray.get(h.remote()), [1, 1, 1, 1])
+
     # https://docs.ray.io/en/latest/ray-core/patterns/nested-tasks.html#code-example
-    def test_ray_example_nested(self) -> None:
+    def test_ray_example_nested_quicksort(self) -> None:
         def partition(collection):
             # Use the last element as the pivot
             pivot = collection.pop()
