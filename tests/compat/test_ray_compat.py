@@ -2,9 +2,12 @@ import time
 import unittest
 
 import numpy as np
+import ray
 from numpy import random
 
-from scaler.compat import ray
+# this patches ray
+import scaler.compat.ray
+from scaler.cluster.combo import SchedulerClusterCombo
 
 
 class TestRayCompat(unittest.TestCase):
@@ -54,8 +57,27 @@ class TestRayCompat(unittest.TestCase):
 
         ray.shutdown()
 
+    # https://docs.ray.io/en/latest/ray-core/tasks/nested-tasks.html#nested-remote-functions
+    def test_ray_example_nested_simple(self) -> None:
+        @ray.remote
+        def f():
+            return 1
+
+        @ray.remote
+        def g():
+            # Call f 4 times and return the resulting object refs.
+            return [f.remote() for _ in range(4)]
+
+        @ray.remote
+        def h():
+            # Call f 4 times, block until those 4 tasks finish,
+            # retrieve the results, and return the values.
+            return ray.get([f.remote() for _ in range(4)])
+
+        self.assertEqual(ray.get(h.remote()), [1, 1, 1, 1])
+
     # https://docs.ray.io/en/latest/ray-core/patterns/nested-tasks.html#code-example
-    def test_ray_example_nested(self) -> None:
+    def test_ray_example_nested_quicksort(self) -> None:
         def partition(collection):
             # Use the last element as the pivot
             pivot = collection.pop()
@@ -158,3 +180,49 @@ class TestRayCompat(unittest.TestCase):
 
         self.assertEqual(ready, refs[:1])
         self.assertEqual(remaining, refs[1:])
+
+    def test_ray_util_as_completed(self) -> None:
+        @ray.remote
+        def sleep(secs: int) -> int:
+            time.sleep(secs)
+            return secs
+
+        refs = [sleep.remote(x) for x in (2, 1, 3)]
+        completed_refs = []
+        for ref in ray.util.as_completed(refs):
+            completed_refs.append(ref)
+
+        # The order of completion should be 1, 2, 3
+        self.assertEqual(ray.get(completed_refs[0]), 1)
+        self.assertEqual(ray.get(completed_refs[1]), 2)
+        self.assertEqual(ray.get(completed_refs[2]), 3)
+
+    def test_ray_util_map_unordered(self) -> None:
+        @ray.remote
+        def square(x: int) -> int:
+            time.sleep(random.uniform(0, 0.1))
+            return x * x
+
+        values = list(range(10))
+        results = []
+        for result in ray.util.map_unordered(square, values):
+            results.append(result)
+
+        self.assertEqual(sorted(results), [x * x for x in values])
+
+    def test_ray_external_cluster(self) -> None:
+        combo = SchedulerClusterCombo(n_workers=1)
+
+        # explicitly init scaler's ray interface, passing the address of an existing cluster
+        scaler.compat.ray.init(address=combo.get_address())
+
+        @ray.remote
+        def random() -> int:
+            return 7
+
+        self.assertEqual(ray.get(random.remote()), 7)
+
+    def test_ray_actor_not_implemented(self) -> None:
+        with self.assertRaises(NotImplementedError):
+            # Any access to ray.actor should raise NotImplementedError
+            _ = ray.actor.ActorClass

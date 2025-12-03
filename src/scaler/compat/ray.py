@@ -5,7 +5,9 @@ including remote function execution, object referencing, and waiting for task co
 """
 
 import concurrent.futures
-from typing import Any, Callable, Dict, Generic, List, Optional, Tuple, TypeVar, Union
+import functools
+from typing import Any, Callable, Dict, Generic, Iterator, List, Optional, Tuple, TypeVar, Union, cast
+from unittest.mock import Mock, patch
 
 import psutil
 from typing_extensions import Concatenate, ParamSpec
@@ -13,6 +15,8 @@ from typing_extensions import Concatenate, ParamSpec
 from scaler.client.client import Client
 from scaler.client.future import ScalerFuture
 from scaler.client.object_reference import ObjectReference
+from scaler.client.serializer.default import DefaultSerializer
+from scaler.client.serializer.mixins import Serializer
 from scaler.cluster.combo import SchedulerClusterCombo
 from scaler.config.defaults import (
     DEFAULT_CLIENT_TIMEOUT_SECONDS,
@@ -34,11 +38,50 @@ from scaler.config.defaults import (
 )
 from scaler.scheduler.allocate_policy.allocate_policy import AllocatePolicy
 
+
+def _not_implemented(*args, **kwargs) -> None:
+    raise NotImplementedError
+
+
+def _no_op(*_args, **_kwargs) -> None:
+    pass
+
+
+class NotImplementedMock(Mock):
+    def __getattr__(self, _name):
+        raise NotImplementedError("this module is not supported in Scaler compatibility layer.")
+
+
+# We patch the underlying init and shutdown functions to prevent the real
+# ray from being initialized or shut down, which can cause issues with our
+# compatibility layer, especially during atexit.
+patch("ray._private.worker.init", new=_no_op).start()
+patch("ray._private.worker.shutdown", new=_no_op).start()
+
+# Prevent the import of a module that causes issues during ray shutdown
+# by replacing it with a mock object. This module contains a class decorated
+# with @ray.remote, which is not yet supported by the Scaler compatibility layer.
+patch("ray.experimental.channel.cpu_communicator", new=Mock()).start()
+patch("ray.dag.compiled_dag_node", new=Mock()).start()
+
+
+# Add no-op, mock, or not-implemented patches for various ray functions and modules
+patch("ray.init", new=_no_op).start()
+patch("ray.method", new=_not_implemented).start()
+patch("ray.actor", new=NotImplementedMock()).start()
+patch("ray.runtime_context", new=NotImplementedMock()).start()
+patch("ray.cross_language", new=NotImplementedMock()).start()
+patch("ray.get_actor", new=_no_op).start()
+patch("ray.get_gpu_ids", new=_not_implemented).start()
+patch("ray.get_runtime_context", new=_not_implemented).start()
+patch("ray.kill", new=_not_implemented).start()
+
+
 combo: Optional[SchedulerClusterCombo] = None
 client: Optional[Client] = None
 
 
-def init(
+def scaler_init(
     address: Optional[str] = None,
     *,
     n_workers: Optional[int] = psutil.cpu_count(),
@@ -66,12 +109,18 @@ def init(
     logging_paths: Tuple[str, ...] = DEFAULT_LOGGING_PATHS,
     logging_level: str = DEFAULT_LOGGING_LEVEL,
     logging_config_file: Optional[str] = None,
+    # client-specific options
+    profiling: bool = False,
+    timeout_seconds: int = DEFAULT_CLIENT_TIMEOUT_SECONDS,
+    serializer: Serializer = DefaultSerializer(),
+    stream_output: bool = False,
 ) -> None:
     """
-    Initializes a Scaler cluster. Mimics the behavior of `ray.init()`.
+    Initializes Scaler's Ray compatibility layer.
 
-    If `address` is provided, it connects to an existing Scaler cluster.
+    If `address` is provided, we connect to an existing Scaler cluster.
     Otherwise, it starts a new local cluster with the specified configuration.
+    Several client-specific options can also be set, and shared options are passed to both client and cluster.
 
     Args:
         address: The address of the Scaler scheduler to connect to.
@@ -112,9 +161,18 @@ def init(
             logging_level=logging_level,
             logging_config_file=logging_config_file,
         )
-        client = Client(combo.get_address())
-    else:
-        client = Client(address=address)
+
+        address = combo.get_address()
+
+    client = Client(
+        address=address,
+        profiling=profiling,
+        timeout_seconds=timeout_seconds,
+        heartbeat_interval_seconds=heartbeat_interval_seconds,
+        serializer=serializer,
+        stream_output=stream_output,
+        object_storage_address=object_storage_address,
+    )
 
 
 def shutdown() -> None:
@@ -134,9 +192,15 @@ def shutdown() -> None:
     combo = None
 
 
+patch("ray.shutdown", new=shutdown).start()
+
+
 def is_initialized() -> bool:
     """Checks if the Scaler client has been initialized."""
     return client is not None
+
+
+patch("ray.is_initialized", new=is_initialized).start()
 
 
 def ensure_init():
@@ -145,11 +209,12 @@ def ensure_init():
     default parameters if it is not.
     """
     if not is_initialized():
-        init()
+        scaler_init()
 
 
 T = TypeVar("T")
 P = ParamSpec("P")
+V = TypeVar("V")
 
 
 class RayObjectReference(Generic[T]):
@@ -220,7 +285,9 @@ class RayRemote(Generic[P, T]):
         Args:
             fn: The Python function to be executed remotely.
         """
+
         # this function forwards the implicit client to the worker and enables nesting
+        @functools.wraps(fn)
         def forward_client(client: Client, *args: P.args, **kwargs: P.kwargs) -> T:
             from scaler.compat import ray
 
@@ -245,10 +312,10 @@ class RayRemote(Generic[P, T]):
 
         # Ray supports passing object references into other remote functions
         # so we must take special care to get their values
-        args = [unwrap_ray_object_reference(arg) for arg in args]
-        kwargs = {k: unwrap_ray_object_reference(v) for k, v in kwargs.items()}
+        processed_args = [unwrap_ray_object_reference(arg) for arg in args]
+        processed_kwargs = {k: unwrap_ray_object_reference(v) for k, v in kwargs.items()}
 
-        future = client.submit(self._fn, client, *args, **kwargs)
+        future = client.submit(self._fn, client, *processed_args, **processed_kwargs)
         return RayObjectReference(future)
 
 
@@ -271,6 +338,9 @@ def get(ref: Union[RayObjectReference[T], List[RayObjectReference[Any]]]) -> Uni
     raise RuntimeError(f"Unknown type [{type(ref)}] passed to ray.get()")
 
 
+patch("ray.get", new=get).start()
+
+
 def put(obj: Any) -> ObjectReference:
     """
     Stores an object in the Scaler object store. Mimics `ray.put()`.
@@ -281,26 +351,43 @@ def put(obj: Any) -> ObjectReference:
     Returns:
         An ObjectReference that can be used to retrieve the object.
     """
-    ensure_init()
-
     return client.send_object(obj)
 
 
-def remote(fn, *_args, **_kwargs) -> RayRemote:
+patch("ray.put", new=put).start()
+
+
+def remote(*args, **kwargs) -> Union[RayRemote, Callable]:
     """
     A decorator that creates a `RayRemote` instance from a regular function.
 
-    Mimics the behavior of `@ray.remote`.
+    Mimics the behavior of `@ray.remote`. This decorator can be used with or without arguments,
+    e.g., `@ray.remote` or `@ray.remote(num_cpus=1)`.
 
-    Args:
-        fn: The function to be converted into a remote function.
+    All arguments passed to the decorator are ignored.
 
     Returns:
-        A RayRemote instance that can be called with `.remote()`.
+        A RayRemote instance that can be called with `.remote()`, or a decorator
+        that produces a RayRemote instance.
     """
     ensure_init()
 
-    return RayRemote(fn)
+    def _decorator(fn: Callable) -> RayRemote:
+        if isinstance(fn, type):  # Check if 'fn' is a class
+            raise NotImplementedError(
+                "Decorating classes with @ray.remote is not yet supported in Scaler compatibility layer."
+            )
+        return RayRemote(fn)
+
+    if len(args) == 1 and callable(args[0]) and not kwargs:
+        # This is the case: @ray.remote
+        return _decorator(args[0])
+    else:
+        # This is the case: @ray.remote(...)
+        return _decorator
+
+
+patch("ray.remote", new=remote).start()
 
 
 def cancel(ref: RayObjectReference) -> None:
@@ -313,9 +400,40 @@ def cancel(ref: RayObjectReference) -> None:
     ref.cancel()
 
 
+patch("ray.cancel", new=cancel).start()
+
+
+class _RayUtil:
+    def as_completed(self, refs: List[RayObjectReference[T]]) -> Iterator[RayObjectReference[T]]:
+        """
+        Returns an iterator that yields object references as they are completed.
+        Mimics `ray.util.as_completed()`.
+        """
+        future_to_ref = {ref._future: ref for ref in refs}
+        for future in concurrent.futures.as_completed(future_to_ref.keys()):
+            yield future_to_ref[cast(ScalerFuture, future)]
+
+    def map_unordered(self, fn: RayRemote[[V], T], values: List[V]) -> Iterator[T]:
+        """
+        Applies a remote function to each value in a list and yields the results
+        as they become available. Mimics `ray.util.map_unordered()`.
+
+        The function `fn` must be a @ray.remote decorated function.
+        """
+        if not hasattr(fn, "remote") or not callable(fn.remote):
+            raise TypeError("The function passed to map_unordered must be a @ray.remote function.")
+
+        refs = [fn.remote(v) for v in values]
+        for ref in self.as_completed(refs):
+            yield ref.get()
+
+
+patch("ray.util", new=_RayUtil()).start()
+
+
 def wait(
-    refs: List[RayObjectReference], *, num_returns: Optional[int] = 1, timeout: Optional[float] = None
-) -> Tuple[List[RayObjectReference], List[RayObjectReference]]:
+    refs: List[RayObjectReference[T]], *, num_returns: Optional[int] = 1, timeout: Optional[float] = None
+) -> Tuple[List[RayObjectReference[T]], List[RayObjectReference[T]]]:
     """
     Waits for a number of object references to be ready. Mimics `ray.wait()`.
 
@@ -340,7 +458,7 @@ def wait(
 
     try:
         for future in concurrent.futures.as_completed((ref._future for ref in refs), timeout=timeout):
-            done.add(future_to_ref[future])
+            done.add(future_to_ref[cast(ScalerFuture, future)])
 
             if num_returns is not None and len(done) == num_returns:
                 break
@@ -348,3 +466,6 @@ def wait(
         pass
 
     return list(done), [ref for ref in refs if ref not in done]
+
+
+patch("ray.wait", new=wait).start()
