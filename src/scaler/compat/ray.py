@@ -5,7 +5,7 @@ including remote function execution, object referencing, and waiting for task co
 """
 
 import concurrent.futures
-from typing import Any, Callable, Dict, Generic, List, Optional, Tuple, TypeVar, Union
+from typing import Any, Callable, Dict, Generic, List, Optional, Tuple, TypeVar, Union, cast
 
 import psutil
 from typing_extensions import Concatenate, ParamSpec
@@ -220,6 +220,7 @@ class RayRemote(Generic[P, T]):
         Args:
             fn: The Python function to be executed remotely.
         """
+
         # this function forwards the implicit client to the worker and enables nesting
         def forward_client(client: Client, *args: P.args, **kwargs: P.kwargs) -> T:
             from scaler.compat import ray
@@ -245,10 +246,10 @@ class RayRemote(Generic[P, T]):
 
         # Ray supports passing object references into other remote functions
         # so we must take special care to get their values
-        args = [unwrap_ray_object_reference(arg) for arg in args]
-        kwargs = {k: unwrap_ray_object_reference(v) for k, v in kwargs.items()}
+        processed_args = [unwrap_ray_object_reference(arg) for arg in args]
+        processed_kwargs = {k: unwrap_ray_object_reference(v) for k, v in kwargs.items()}
 
-        future = client.submit(self._fn, client, *args, **kwargs)
+        future = client.submit(self._fn, client, *processed_args, **processed_kwargs)
         return RayObjectReference(future)
 
 
@@ -295,6 +296,8 @@ def remote(fn, *_args, **_kwargs) -> RayRemote:
     Args:
         fn: The function to be converted into a remote function.
 
+    All other args are ignored.
+
     Returns:
         A RayRemote instance that can be called with `.remote()`.
     """
@@ -314,8 +317,8 @@ def cancel(ref: RayObjectReference) -> None:
 
 
 def wait(
-    refs: List[RayObjectReference], *, num_returns: Optional[int] = 1, timeout: Optional[float] = None
-) -> Tuple[List[RayObjectReference], List[RayObjectReference]]:
+    refs: List[RayObjectReference[T]], *, num_returns: Optional[int] = 1, timeout: Optional[float] = None
+) -> Tuple[List[RayObjectReference[T]], List[RayObjectReference[T]]]:
     """
     Waits for a number of object references to be ready. Mimics `ray.wait()`.
 
@@ -340,7 +343,7 @@ def wait(
 
     try:
         for future in concurrent.futures.as_completed((ref._future for ref in refs), timeout=timeout):
-            done.add(future_to_ref[future])
+            done.add(future_to_ref[cast(ScalerFuture, future)])
 
             if num_returns is not None and len(done) == num_returns:
                 break
