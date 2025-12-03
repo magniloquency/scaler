@@ -54,6 +54,7 @@ class TestRayCompat(unittest.TestCase):
 
         ray.shutdown()
 
+    # https://docs.ray.io/en/latest/ray-core/patterns/nested-tasks.html#code-example
     def test_ray_example_nested(self) -> None:
         def partition(collection):
             # Use the last element as the pivot
