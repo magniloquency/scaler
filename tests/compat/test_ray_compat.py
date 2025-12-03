@@ -125,3 +125,36 @@ class TestRayCompat(unittest.TestCase):
         # You can pass an object ref as an argument to another Ray task.
         obj_ref2 = function_with_an_argument.remote(obj_ref1)
         self.assertEqual(ray.get(obj_ref2), 2)
+
+    def test_ray_wait_timeout(self) -> None:
+        @ray.remote
+        def sleep(secs: int) -> None:
+            time.sleep(secs)
+
+        refs = [sleep.remote(x) for x in (2, 10)]
+        ready, remaining = ray.wait(refs, timeout=5)
+
+        self.assertEqual(ready, refs[:1])
+        self.assertEqual(remaining, refs[1:])
+
+    def test_ray_wait_no_timeout(self) -> None:
+        @ray.remote
+        def sleep(secs: int) -> None:
+            time.sleep(secs)
+
+        refs = [sleep.remote(x) for x in (2, 10)]
+        ready, remaining = ray.wait(refs, num_returns=2, timeout=None)
+
+        self.assertEqual(ready, refs)
+        self.assertEqual(remaining, [])
+
+    def test_ray_wait_num_returns(self) -> None:
+        @ray.remote
+        def sleep(secs: int) -> None:
+            time.sleep(secs)
+
+        refs = [sleep.remote(x) for x in (2, 10)]
+        ready, remaining = ray.wait(refs, num_returns=1, timeout=None)
+
+        self.assertEqual(ready, refs[:1])
+        self.assertEqual(remaining, refs[1:])

@@ -1,3 +1,4 @@
+import concurrent.futures
 from typing import Any, Callable, Dict, Generic, List, Optional, Tuple, TypeVar, Union
 
 import psutil
@@ -33,7 +34,7 @@ client: Optional[Client] = None
 
 def init(
     address: Optional[str] = None,
-    /,
+    *,
     n_workers: Optional[int] = psutil.cpu_count(),
     object_storage_address: Optional[str] = None,
     monitor_address: Optional[str] = None,
@@ -132,6 +133,9 @@ class RayObjectReference(Generic[T]):
     def get(self) -> T:
         return self._future.result()
 
+    def cancel(self) -> None:
+        self._future.cancel()
+
 
 # returns the result of a RayObjectReference or passes back its input otherwise
 def unwrap_ray_object_reference(maybe_ref: Union[T, RayObjectReference[T]]) -> T:
@@ -185,3 +189,33 @@ def remote(fn, *_args, **_kwargs) -> RayRemote:
     ensure_init()
 
     return RayRemote(fn)
+
+
+def cancel(ref: RayObjectReference) -> None:
+    ref.cancel()
+
+
+def wait(
+    refs: List[RayObjectReference], *, num_returns: Optional[int] = 1, timeout: Optional[float] = None
+) -> Tuple[List[RayObjectReference], List[RayObjectReference]]:
+    """Works the same way as ray.wait(), except that `num_returns` can be `None` to put no limit on the number of returns"""
+
+    if num_returns > len(refs):
+        raise ValueError("num_returns cannot be greater than the number of provided object references")
+
+    if num_returns <= 0:
+        return [], list(refs)
+
+    future_to_ref = {ref._future: ref for ref in refs}
+    done = set()
+
+    try:
+        for future in concurrent.futures.as_completed((ref._future for ref in refs), timeout=timeout):
+            done.add(future_to_ref[future])
+
+            if num_returns is not None and len(done) == num_returns:
+                break
+    except concurrent.futures.TimeoutError:
+        pass
+
+    return list(done), [ref for ref in refs if ref not in done]
