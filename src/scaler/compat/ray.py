@@ -1,3 +1,9 @@
+"""
+This module provides a compatibility layer for Scaler that mimics the Ray interface.
+It allows users familiar with Ray's API to interact with Scaler in a similar fashion,
+including remote function execution, object referencing, and waiting for task completion.
+"""
+
 import concurrent.futures
 from typing import Any, Callable, Dict, Generic, List, Optional, Tuple, TypeVar, Union
 
