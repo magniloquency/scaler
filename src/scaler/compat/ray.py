@@ -61,6 +61,18 @@ def init(
     logging_level: str = DEFAULT_LOGGING_LEVEL,
     logging_config_file: Optional[str] = None,
 ) -> None:
+    """
+    Initializes a Scaler cluster. Mimics the behavior of `ray.init()`.
+
+    If `address` is provided, it connects to an existing Scaler cluster.
+    Otherwise, it starts a new local cluster with the specified configuration.
+
+    Args:
+        address: The address of the Scaler scheduler to connect to.
+        n_workers: The number of workers to start in the local cluster.
+            Defaults to the number of CPU cores.
+        **kwargs: Other Scaler cluster configuration options.
+    """
     global client, combo
 
     if client is not None:
@@ -100,6 +112,11 @@ def init(
 
 
 def shutdown() -> None:
+    """
+    Disconnects the client and shuts down the local cluster if one was created.
+
+    Mimics the behavior of `ray.shutdown()`.
+    """
     global client, combo
 
     if client:
@@ -112,10 +129,15 @@ def shutdown() -> None:
 
 
 def is_initialized() -> bool:
+    """Checks if the Scaler client has been initialized."""
     return client is not None
 
 
 def ensure_init():
+    """
+    This is an internal function that ensures the Scaler client is initialized, calling `init()` with
+    default parameters if it is not.
+    """
     if not is_initialized():
         init()
 
@@ -125,29 +147,73 @@ P = ParamSpec("P")
 
 
 class RayObjectReference(Generic[T]):
+    """
+    A wrapper around a ScalerFuture to provide an API similar to a Ray ObjectRef.
+
+    This class allows treating results of asynchronous Scaler tasks in a way
+    that is compatible with the Ray API.
+    """
+
     _future: ScalerFuture
 
     def __init__(self, future: ScalerFuture) -> None:
+        """
+        Initializes the RayObjectReference with a ScalerFuture.
+
+        Args:
+            future: The ScalerFuture instance to wrap.
+        """
         self._future = future
 
     def get(self) -> T:
+        """
+        Retrieves the result of the future, blocking until it's available.
+
+        Returns:
+            The result of the completed future.
+        """
         return self._future.result()
 
     def cancel(self) -> None:
+        """Attempts to cancel the future."""
         self._future.cancel()
 
 
-# returns the result of a RayObjectReference or passes back its input otherwise
 def unwrap_ray_object_reference(maybe_ref: Union[T, RayObjectReference[T]]) -> T:
+    """
+    Helper to get the result if the input is a RayObjectReference.
+
+    If the input is a `RayObjectReference`, its result is returned.
+    Otherwise, the input is returned as is. This is used to transparently
+    handle passing of object references as arguments to remote functions.
+
+    Args:
+        maybe_ref: The object to unwrap.
+
+    Returns:
+        The result of the reference or the original object.
+    """
     if isinstance(maybe_ref, RayObjectReference):
         return maybe_ref.get()
     return maybe_ref
 
 
 class RayRemote(Generic[P, T]):
+    """
+    A wrapper for a function to make it "remote," similar to a Ray remote function.
+
+    This class is typically instantiated by the `@ray.remote` decorator.
+    """
+
     _fn: Callable[Concatenate[Client, P], T]
 
     def __init__(self, fn: Callable[P, T]) -> None:
+        """
+        Initializes the remote function wrapper.
+
+        Args:
+            fn: The Python function to be executed remotely.
+        """
         # this function forwards the implicit client to the worker and enables nesting
         def forward_client(client: Client, *args: P.args, **kwargs: P.kwargs) -> T:
             from scaler.compat import ray
@@ -158,6 +224,16 @@ class RayRemote(Generic[P, T]):
         self._fn = forward_client
 
     def remote(self, *args: P.args, **kwargs: P.kwargs) -> RayObjectReference:
+        """
+        Executes the wrapped function remotely.
+
+        Args:
+            *args: Positional arguments for the remote function.
+            **kwargs: Keyword arguments for the remote function.
+
+        Returns:
+            A RayObjectReference that can be used to retrieve the result.
+        """
         if not is_initialized():
             raise RuntimeError("Scaler is not initialized")
 
@@ -170,8 +246,18 @@ class RayRemote(Generic[P, T]):
         return RayObjectReference(future)
 
 
-# there is practically no way to express that each element of the list can be a different generic type, so we use Any
 def get(ref: Union[RayObjectReference[T], List[RayObjectReference[Any]]]) -> Union[T, List[Any]]:
+    """
+    Retrieves the result from one or more RayObjectReferences.
+
+    This function blocks until the results are available. Mimics `ray.get()`.
+
+    Args:
+        ref: A single RayObjectReference or a list of them.
+
+    Returns:
+        The result of the reference or a list of results.
+    """
     if isinstance(ref, List):
         return [get(x) for x in ref]
     if isinstance(ref, RayObjectReference):
@@ -180,30 +266,67 @@ def get(ref: Union[RayObjectReference[T], List[RayObjectReference[Any]]]) -> Uni
 
 
 def put(obj: Any) -> ObjectReference:
+    """
+    Stores an object in the Scaler object store. Mimics `ray.put()`.
+
+    Args:
+        obj: The Python object to be stored.
+
+    Returns:
+        An ObjectReference that can be used to retrieve the object.
+    """
     ensure_init()
 
     return client.send_object(obj)
 
 
 def remote(fn, *_args, **_kwargs) -> RayRemote:
+    """
+    A decorator that creates a `RayRemote` instance from a regular function.
+
+    Mimics the behavior of `@ray.remote`.
+
+    Args:
+        fn: The function to be converted into a remote function.
+
+    Returns:
+        A RayRemote instance that can be called with `.remote()`.
+    """
     ensure_init()
 
     return RayRemote(fn)
 
 
 def cancel(ref: RayObjectReference) -> None:
+    """
+    Attempts to cancel the execution of a task. Mimics `ray.cancel()`.
+
+    Args:
+        ref: The RayObjectReference corresponding to the task to be canceled.
+    """
     ref.cancel()
 
 
 def wait(
     refs: List[RayObjectReference], *, num_returns: Optional[int] = 1, timeout: Optional[float] = None
 ) -> Tuple[List[RayObjectReference], List[RayObjectReference]]:
-    """Works the same way as ray.wait(), except that `num_returns` can be `None` to put no limit on the number of returns"""
+    """
+    Waits for a number of object references to be ready. Mimics `ray.wait()`.
 
-    if num_returns > len(refs):
+    Args:
+        refs: A list of RayObjectReferences to wait on.
+        num_returns: The number of references to wait for. If None, waits for all.
+        timeout: The maximum time in seconds to wait.
+
+    Returns:
+        A tuple containing two lists: the list of ready references and the
+        list of remaining, not-ready references.
+    """
+
+    if num_returns is not None and num_returns > len(refs):
         raise ValueError("num_returns cannot be greater than the number of provided object references")
 
-    if num_returns <= 0:
+    if num_returns is not None and num_returns <= 0:
         return [], list(refs)
 
     future_to_ref = {ref._future: ref for ref in refs}
