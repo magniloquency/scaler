@@ -129,6 +129,16 @@ class RayObjectReference(Generic[T]):
     def __init__(self, future: ScalerFuture) -> None:
         self._future = future
 
+    def get(self) -> T:
+        return self._future.result()
+
+
+# returns the result of a RayObjectReference or passes back its input otherwise
+def unwrap_ray_object_reference(maybe_ref: Union[T, RayObjectReference[T]]) -> T:
+    if isinstance(maybe_ref, RayObjectReference):
+        return maybe_ref.get()
+    return maybe_ref
+
 
 class RayRemote(Generic[P, T]):
     _fn: Callable[Concatenate[Client, P], T]
@@ -147,6 +157,11 @@ class RayRemote(Generic[P, T]):
         if not is_initialized():
             raise RuntimeError("Scaler is not initialized")
 
+        # Ray supports passing object references into other remote functions
+        # so we must take special care to get their values
+        args = [unwrap_ray_object_reference(arg) for arg in args]
+        kwargs = {k: unwrap_ray_object_reference(v) for k, v in kwargs.items()}
+
         future = client.submit(self._fn, client, *args, **kwargs)
         return RayObjectReference(future)
 
@@ -156,7 +171,7 @@ def get(ref: Union[RayObjectReference[T], List[RayObjectReference[Any]]]) -> Uni
     if isinstance(ref, List):
         return [get(x) for x in ref]
     if isinstance(ref, RayObjectReference):
-        return ref._future.result()
+        return ref.get()
     raise RuntimeError(f"Unknown type [{type(ref)}] passed to ray.get()")
 
 

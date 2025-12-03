@@ -109,3 +109,19 @@ class TestRayCompat(unittest.TestCase):
                 distributed_sorted,
                 msg=f"Expected sequential and distributed sorts to match for {size} element case",
             )
+
+    def test_ray_passing_refs(self) -> None:
+        @ray.remote
+        def my_function() -> int:
+            return 1
+
+        @ray.remote
+        def function_with_an_argument(value: int) -> int:
+            return value + 1
+
+        obj_ref1 = my_function.remote()
+        self.assertEqual(ray.get(obj_ref1), 1)
+
+        # You can pass an object ref as an argument to another Ray task.
+        obj_ref2 = function_with_an_argument.remote(obj_ref1)
+        self.assertEqual(ray.get(obj_ref2), 2)
