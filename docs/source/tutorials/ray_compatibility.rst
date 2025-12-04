@@ -12,13 +12,18 @@ To enable the Ray compatibility layer, simply import ``scaler.compat.ray`` in yo
 
 .. code-block:: python
 
+    import ray
+
     # Import the compatibility layer to patch the Ray API
     import scaler.compat.ray
 
-    # Now you can use the ray API
-    import ray
-
+    # this is a no-op
     ray.init()
+
+    # you can use this fn to configure scaler-specific options
+    # you can pass the address of an existing cluster
+    # otherwise a new scheduler cluster combo will be created on the current machine
+    scaler.compat.ray.init()
 
     @ray.remote
     def my_function():
@@ -27,6 +32,8 @@ To enable the Ray compatibility layer, simply import ``scaler.compat.ray`` in yo
     future = my_function.remote()
     assert ray.get(future) == 1
 
+    # this disconnects the client
+    # and shuts down the combo, if it was created
     ray.shutdown()
 
 Supported APIs
