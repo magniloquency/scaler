@@ -6,7 +6,6 @@ import ray
 from numpy import random
 
 # this patches ray
-# silence unused warning from flake8
 import scaler.compat.ray
 from scaler.cluster.combo import SchedulerClusterCombo
 
