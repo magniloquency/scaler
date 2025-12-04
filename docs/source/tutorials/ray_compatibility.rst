@@ -23,6 +23,8 @@ To enable the Ray compatibility layer, simply import ``scaler.compat.ray`` in yo
     # you can use this fn to configure scaler-specific options
     # you can pass the address of an existing cluster
     # otherwise a new scheduler cluster combo will be created on the current machine
+    #
+    # similarly to ray, this will implicitly be called on the first use of a remote function with no arguments
     scaler.compat.ray.init()
 
     @ray.remote
