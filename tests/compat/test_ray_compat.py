@@ -4,7 +4,10 @@ import unittest
 import numpy as np
 from numpy import random
 
-from scaler.compat import ray
+import ray
+
+# this patches ray
+import scaler.compat.ray
 
 
 class TestRayCompat(unittest.TestCase):

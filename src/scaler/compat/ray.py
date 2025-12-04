@@ -5,7 +5,9 @@ including remote function execution, object referencing, and waiting for task co
 """
 
 import concurrent.futures
+import functools
 from typing import Any, Callable, Dict, Generic, List, Optional, Tuple, TypeVar, Union, cast
+from unittest.mock import patch
 
 import psutil
 from typing_extensions import Concatenate, ParamSpec
@@ -117,6 +119,9 @@ def init(
         client = Client(address=address)
 
 
+patch("ray.init", new=init).start()
+
+
 def shutdown() -> None:
     """
     Disconnects the client and shuts down the local cluster if one was created.
@@ -134,9 +139,15 @@ def shutdown() -> None:
     combo = None
 
 
+patch("ray.shutdown", new=shutdown).start()
+
+
 def is_initialized() -> bool:
     """Checks if the Scaler client has been initialized."""
     return client is not None
+
+
+patch("ray.is_initialized", new=is_initialized).start()
 
 
 def ensure_init():
@@ -222,6 +233,7 @@ class RayRemote(Generic[P, T]):
         """
 
         # this function forwards the implicit client to the worker and enables nesting
+        @functools.wraps(fn)
         def forward_client(client: Client, *args: P.args, **kwargs: P.kwargs) -> T:
             from scaler.compat import ray
 
@@ -272,6 +284,9 @@ def get(ref: Union[RayObjectReference[T], List[RayObjectReference[Any]]]) -> Uni
     raise RuntimeError(f"Unknown type [{type(ref)}] passed to ray.get()")
 
 
+patch("ray.get", new=get).start()
+
+
 def put(obj: Any) -> ObjectReference:
     """
     Stores an object in the Scaler object store. Mimics `ray.put()`.
@@ -287,23 +302,36 @@ def put(obj: Any) -> ObjectReference:
     return client.send_object(obj)
 
 
-def remote(fn, *_args, **_kwargs) -> RayRemote:
+patch("ray.put", new=put).start()
+
+
+def remote(*args, **kwargs) -> Union[RayRemote, Callable]:
     """
     A decorator that creates a `RayRemote` instance from a regular function.
 
-    Mimics the behavior of `@ray.remote`.
+    Mimics the behavior of `@ray.remote`. This decorator can be used with or without arguments,
+    e.g., `@ray.remote` or `@ray.remote(num_cpus=1)`.
 
-    Args:
-        fn: The function to be converted into a remote function.
-
-    All other args are ignored.
+    All arguments passed to the decorator are ignored.
 
     Returns:
-        A RayRemote instance that can be called with `.remote()`.
+        A RayRemote instance that can be called with `.remote()`, or a decorator
+        that produces a RayRemote instance.
     """
     ensure_init()
 
-    return RayRemote(fn)
+    def _decorator(fn: Callable) -> RayRemote:
+        return RayRemote(fn)
+
+    if len(args) == 1 and callable(args[0]) and not kwargs:
+        # This is the case: @ray.remote
+        return _decorator(args[0])
+    else:
+        # This is the case: @ray.remote(...)
+        return _decorator
+
+
+patch("ray.remote", new=remote).start()
 
 
 def cancel(ref: RayObjectReference) -> None:
@@ -314,6 +342,9 @@ def cancel(ref: RayObjectReference) -> None:
         ref: The RayObjectReference corresponding to the task to be canceled.
     """
     ref.cancel()
+
+
+patch("ray.cancel", new=cancel).start()
 
 
 def wait(
@@ -351,3 +382,6 @@ def wait(
         pass
 
     return list(done), [ref for ref in refs if ref not in done]
+
+
+patch("ray.wait", new=wait).start()
