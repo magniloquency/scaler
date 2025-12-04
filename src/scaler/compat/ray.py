@@ -6,8 +6,8 @@ including remote function execution, object referencing, and waiting for task co
 
 import concurrent.futures
 import functools
-from typing import Any, Callable, Dict, Generic, List, Optional, Tuple, TypeVar, Union, cast
-from unittest.mock import patch
+from typing import Any, Callable, Dict, Generic, Iterator, List, Optional, Tuple, TypeVar, Union, cast
+from unittest.mock import Mock, patch
 
 import psutil
 from typing_extensions import Concatenate, ParamSpec
@@ -35,6 +35,24 @@ from scaler.config.defaults import (
     DEFAULT_WORKER_TIMEOUT_SECONDS,
 )
 from scaler.scheduler.allocate_policy.allocate_policy import AllocatePolicy
+
+
+def _no_op(*_args, **_kwargs):
+    pass
+
+
+# We patch the underlying init and shutdown functions to prevent the real
+# ray from being initialized or shut down, which can cause issues with our
+# compatibility layer, especially during atexit.
+patch("ray._private.worker.init", new=_no_op).start()
+patch("ray._private.worker.shutdown", new=_no_op).start()
+
+# Prevent the import of a module that causes issues during ray shutdown
+# by replacing it with a mock object. This module contains a class decorated
+# with @ray.remote, which is not yet supported by the Scaler compatibility layer.
+patch("ray.experimental.channel.cpu_communicator", new=Mock()).start()
+patch("ray.dag.compiled_dag_node", new=Mock()).start()
+
 
 combo: Optional[SchedulerClusterCombo] = None
 client: Optional[Client] = None
@@ -119,7 +137,7 @@ def init(
         client = Client(address=address)
 
 
-patch("ray.init", new=init).start()
+patch("ray.init", new=_no_op).start()
 
 
 def shutdown() -> None:
@@ -349,6 +367,34 @@ def cancel(ref: RayObjectReference) -> None:
 
 
 patch("ray.cancel", new=cancel).start()
+
+
+class _RayUtil:
+    def as_completed(self, refs: List[RayObjectReference[T]]) -> Iterator[RayObjectReference[T]]:
+        """
+        Returns an iterator that yields object references as they are completed.
+        Mimics `ray.util.as_completed()`.
+        """
+        future_to_ref = {ref._future: ref for ref in refs}
+        for future in concurrent.futures.as_completed(future_to_ref.keys()):
+            yield future_to_ref[cast(ScalerFuture, future)]
+
+    def map_unordered(self, fn: Callable[..., Any], values: List[Any]) -> Iterator[Any]:
+        """
+        Applies a remote function to each value in a list and yields the results
+        as they become available. Mimics `ray.util.map_unordered()`.
+
+        The function `fn` must be a @ray.remote decorated function.
+        """
+        if not hasattr(fn, "remote") or not callable(fn.remote):
+            raise TypeError("The function passed to map_unordered must be a @ray.remote function.")
+
+        refs = [fn.remote(v) for v in values]
+        for ref in self.as_completed(refs):
+            yield ref.get()
+
+
+patch("ray.util", new=_RayUtil()).start()
 
 
 def wait(

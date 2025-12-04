@@ -7,7 +7,8 @@ from numpy import random
 
 # this patches ray
 # silence unused warning from flake8
-import scaler.compat.ray  # noqa: F401
+import scaler.compat.ray
+from scaler.cluster.combo import SchedulerClusterCombo
 
 
 class TestRayCompat(unittest.TestCase):
@@ -180,3 +181,44 @@ class TestRayCompat(unittest.TestCase):
 
         self.assertEqual(ready, refs[:1])
         self.assertEqual(remaining, refs[1:])
+
+    def test_ray_util_as_completed(self) -> None:
+        @ray.remote
+        def sleep(secs: int) -> int:
+            time.sleep(secs)
+            return secs
+
+        refs = [sleep.remote(x) for x in (2, 1, 3)]
+        completed_refs = []
+        for ref in ray.util.as_completed(refs):
+            completed_refs.append(ref)
+
+        # The order of completion should be 1, 2, 3
+        self.assertEqual(ray.get(completed_refs[0]), 1)
+        self.assertEqual(ray.get(completed_refs[1]), 2)
+        self.assertEqual(ray.get(completed_refs[2]), 3)
+
+    def test_ray_util_map_unordered(self) -> None:
+        @ray.remote
+        def square(x: int) -> int:
+            time.sleep(random.uniform(0, 0.1))
+            return x * x
+
+        values = list(range(10))
+        results = []
+        for result in ray.util.map_unordered(square, values):
+            results.append(result)
+
+        self.assertEqual(sorted(results), [x * x for x in values])
+
+    def test_ray_external_cluster(self) -> None:
+        combo = SchedulerClusterCombo(n_workers=1)
+
+        # explicitly init scaler's ray interface, passing the address of an existing cluster
+        scaler.compat.ray.init(address=combo.get_address())
+
+        @ray.remote
+        def random() -> int:
+            return 7
+
+        self.assertEqual(ray.get(random.remote()), 7)
