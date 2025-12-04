@@ -37,8 +37,25 @@ from scaler.config.defaults import (
 from scaler.scheduler.allocate_policy.allocate_policy import AllocatePolicy
 
 
-def _no_op(*_args, **_kwargs):
+def _not_implemented(*args, **kwargs) -> None:
+    raise NotImplementedError
+
+
+def _no_op(*_args, **_kwargs) -> None:
     pass
+
+
+def _return_empty_dict(*_args, **_kwargs) -> Dict:
+    return {}
+
+
+def _return_empty_list(*_args, **_kwargs) -> List:
+    return []
+
+
+class NotImplementedMock(Mock):
+    def __getattr__(self, _name):
+        raise NotImplementedError("this module is not supported in Scaler compatibility layer.")
 
 
 # We patch the underlying init and shutdown functions to prevent the real
@@ -52,6 +69,22 @@ patch("ray._private.worker.shutdown", new=_no_op).start()
 # with @ray.remote, which is not yet supported by the Scaler compatibility layer.
 patch("ray.experimental.channel.cpu_communicator", new=Mock()).start()
 patch("ray.dag.compiled_dag_node", new=Mock()).start()
+
+
+# Add no-op patches for unsupported functions
+patch("ray.method", new=_not_implemented).start()
+patch("ray.actor", new=NotImplementedMock()).start()
+patch("ray.runtime_context", new=NotImplementedMock()).start()
+patch("ray.cross_language", new=NotImplementedMock()).start()
+patch("ray.available_resources", new=_return_empty_dict).start()
+patch("ray.client", new=Mock()).start()
+patch("ray.cluster_resources", new=_return_empty_dict).start()
+patch("ray.get_actor", new=_no_op).start()
+patch("ray.get_gpu_ids", new=_return_empty_list).start()
+patch("ray.get_runtime_context", new=Mock()).start()
+patch("ray.kill", new=_no_op).start()
+patch("ray.nodes", new=_return_empty_list).start()
+patch("ray.timeline", new=_return_empty_list).start()
 
 
 combo: Optional[SchedulerClusterCombo] = None

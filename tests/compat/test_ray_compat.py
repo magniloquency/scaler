@@ -222,3 +222,8 @@ class TestRayCompat(unittest.TestCase):
             return 7
 
         self.assertEqual(ray.get(random.remote()), 7)
+
+    def test_ray_actor_not_implemented(self) -> None:
+        with self.assertRaises(NotImplementedError):
+            # Any access to ray.actor should raise NotImplementedError
+            _ = ray.actor.ActorClass
