@@ -179,6 +179,7 @@ def ensure_init():
 
 T = TypeVar("T")
 P = ParamSpec("P")
+V = TypeVar("V")
 
 
 class RayObjectReference(Generic[T]):
@@ -379,7 +380,7 @@ class _RayUtil:
         for future in concurrent.futures.as_completed(future_to_ref.keys()):
             yield future_to_ref[cast(ScalerFuture, future)]
 
-    def map_unordered(self, fn: Callable[..., Any], values: List[Any]) -> Iterator[Any]:
+    def map_unordered(self, fn: RayRemote[[V], T], values: List[V]) -> Iterator[T]:
         """
         Applies a remote function to each value in a list and yields the results
         as they become available. Mimics `ray.util.map_unordered()`.
