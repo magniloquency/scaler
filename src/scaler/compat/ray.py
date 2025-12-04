@@ -321,6 +321,8 @@ def remote(*args, **kwargs) -> Union[RayRemote, Callable]:
     ensure_init()
 
     def _decorator(fn: Callable) -> RayRemote:
+        if isinstance(fn, type): # Check if 'fn' is a class
+            raise NotImplementedError("Decorating classes with @ray.remote is not yet supported in Scaler compatibility layer.")
         return RayRemote(fn)
 
     if len(args) == 1 and callable(args[0]) and not kwargs:
