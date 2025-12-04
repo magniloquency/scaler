@@ -2,12 +2,12 @@ import time
 import unittest
 
 import numpy as np
+import ray
 from numpy import random
 
-import ray
-
 # this patches ray
-import scaler.compat.ray
+# silence unused warning from flake8
+import scaler.compat.ray  # noqa: F401
 
 
 class TestRayCompat(unittest.TestCase):
