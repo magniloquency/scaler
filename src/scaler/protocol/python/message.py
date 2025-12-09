@@ -642,11 +642,11 @@ class StateGraphTask(Message):
 
     @property
     def graph_task_id(self) -> TaskID:
-        return self._msg.graphTaskId
+        return TaskID(self._msg.graphTaskId)
 
     @property
     def task_id(self) -> TaskID:
-        return self._msg.taskId
+        return TaskID(self._msg.taskId)
 
     @property
     def node_task_type(self) -> NodeTaskType:
