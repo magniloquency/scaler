@@ -444,34 +444,34 @@ TestResult pubsub_publisher(std::string address, std::string topic, void* sem, i
     return TestResult::Success;
 }
 
-TestResult client_close_established_connection_client(std::string address)
-{
-    IOContext context(1);
-
-    auto socket = syncCreateSocket(context, IOSocketType::Connector, "client");
-    syncConnectSocket(socket, address);
-
-    auto error = syncSendMessage(socket, Message {.address = Bytes("server"), .payload = Bytes("0")});
-    RETURN_FAILURE_IF_FALSE(!error);
-    auto result = syncRecvMessage(socket);
-    RETURN_FAILURE_IF_FALSE(result.has_value());
-    RETURN_FAILURE_IF_FALSE(result->payload.as_string() == "1");
-
-    socket->closeConnection("server");
-    context.requestIOSocketStop(socket);
-
-    context.removeIOSocket(socket);
-    return TestResult::Success;
-}
-
-TestResult client_close_established_connection_server(std::string address)
+TestResult server_close_established_connection_server(std::string address)
 {
     IOContext context(1);
 
     auto socket = syncCreateSocket(context, IOSocketType::Binder, "server");
     syncBindSocket(socket, address);
 
-    auto error = syncSendMessage(socket, Message {.address = Bytes("client"), .payload = Bytes("1")});
+    auto error = syncSendMessage(socket, Message {.address = Bytes("client"), .payload = Bytes("0")});
+    RETURN_FAILURE_IF_FALSE(!error);
+    auto result = syncRecvMessage(socket);
+    RETURN_FAILURE_IF_FALSE(result.has_value());
+    RETURN_FAILURE_IF_FALSE(result->payload.as_string() == "1");
+
+    socket->closeConnection("client");
+    context.requestIOSocketStop(socket);
+
+    context.removeIOSocket(socket);
+    return TestResult::Success;
+}
+
+TestResult server_close_established_connection_client(std::string address)
+{
+    IOContext context(1);
+
+    auto socket = syncCreateSocket(context, IOSocketType::Connector, "client");
+    syncConnectSocket(socket, address);
+
+    auto error = syncSendMessage(socket, Message {.address = Bytes("server"), .payload = Bytes("1")});
     RETURN_FAILURE_IF_FALSE(!error);
     auto result = syncRecvMessage(socket);
     RETURN_FAILURE_IF_FALSE(result.has_value());
@@ -907,16 +907,16 @@ TEST_P(CcYmqTestSuiteParametrized, TestPubSubEmptyTopic)
     EXPECT_EQ(result, TestResult::Success);
 }
 
-// in this test case, the client establishes a connection with the server and then explicitly closes it
-TEST_P(CcYmqTestSuiteParametrized, DISABLED_TestClientCloseEstablishedConnection)
+// in this test case, the server establishes a connection with the client and then explicitly closes it
+TEST_P(CcYmqTestSuiteParametrized, TestServerCloseEstablishedConnection)
 
 {
     const auto address = GetAddress(2902);
 
     auto result = test(
         20,
-        {[=] { return client_close_established_connection_client(address); },
-         [=] { return client_close_established_connection_server(address); }});
+        {[=] { return server_close_established_connection_client(address); },
+         [=] { return server_close_established_connection_server(address); }});
 
     EXPECT_EQ(result, TestResult::Success);
 }
