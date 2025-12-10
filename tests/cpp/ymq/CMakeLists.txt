@@ -31,6 +31,7 @@ elseif(WIN32)
 		pipe/pipe_utils_windows.cpp
 		pipe/pipe_reader_windows.cpp
 		pipe/pipe_writer_windows.cpp
+		net/socket_utils_windows.cpp
 		net/socket_windows.cpp
 		net/tcp_socket_windows.cpp)
 endif()
