@@ -55,7 +55,7 @@ void Socket::try_connect(const std::string& host, short port, int tries) const
     sockaddr_in addr {};
     addr.sin_family = AF_INET;
     addr.sin_port   = htons(port);
-    inet_pton(AF_INET, check_localhost(host.c_str()), &addr.sin_addr);
+    inet_pton(AF_INET, host.c_str(), &addr.sin_addr);
 
     for (int i = 0; i < tries; i++) {
         auto code = ::connect(this->_fd, (sockaddr*)&addr, sizeof(addr));
