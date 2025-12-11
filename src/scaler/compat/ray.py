@@ -5,7 +5,7 @@ including remote function execution, object referencing, and waiting for task co
 """
 
 import concurrent.futures
-import functools
+import inspect
 from typing import Any, Callable, Dict, Generic, Iterator, List, Optional, Tuple, TypeVar, Union, cast
 from unittest.mock import Mock, patch
 
@@ -68,7 +68,7 @@ patch("ray.dag.compiled_dag_node", new=Mock()).start()
 # Add no-op, mock, or not-implemented patches for various ray functions and modules
 patch("ray.init", new=_no_op).start()
 patch("ray.method", new=_not_implemented).start()
-patch("ray.actor", new=NotImplementedMock()).start()
+patch("ray.actor", new=Mock()).start()
 patch("ray.runtime_context", new=NotImplementedMock()).start()
 patch("ray.cross_language", new=NotImplementedMock()).start()
 patch("ray.get_actor", new=_no_op).start()
@@ -287,12 +287,24 @@ class RayRemote(Generic[P, T]):
         """
 
         # this function forwards the implicit client to the worker and enables nesting
-        @functools.wraps(fn)
         def forward_client(client: Client, *args: P.args, **kwargs: P.kwargs) -> T:
-            from scaler.compat import ray
+            import scaler.compat.ray
 
-            ray.client = client
+            scaler.compat.ray.client = client
             return fn(*args, **kwargs)
+
+        fn_signature = inspect.signature(fn)
+        fn_parameters = list(fn_signature.parameters.values())
+
+        client_parameter = inspect.Parameter("client", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=Client)
+
+        # add `client` to the parameter list
+        wrapped_parameters = [client_parameter] + fn_parameters
+
+        # explicitly set the signature, inheriting `fn`'s parameters
+        forward_client.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
+            parameters=wrapped_parameters, return_annotation=fn_signature.return_annotation
+        )
 
         self._fn = forward_client
 

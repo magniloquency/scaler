@@ -53,6 +53,13 @@ You can also provide scheduler and cluster configuration options to ``scaler_ini
 
     # existing Ray app
 
+Shutting Down
+-------------
+
+The implicitly-created local cluster is a subprocess with global scope, and won't be shut down automatically.
+This can cause your program to keep executing after your program has completed, therefore it is important to call ``ray.shutdown()``
+when your program is done, when using the implicit local cluster.
+
 A Note about the Actor Model
 ----------------------------
 
@@ -65,9 +72,9 @@ Decorating a class with ``@ray.remote`` will raise a ``NotImplementedError``.
 Full Examples
 -------------
 
-See `the examples directory <https://github.com/finos/opengris-scaler/tree/main/examples>`_ for complete Scaler Ray compatibility layer examples including:
-*   `ray_compat_local_cluster.py`: Demonstrates using the Scaler Ray compatibility layer with the implicitly-created local cluster.
-*   `ray_compat_remote_cluster.py`: Demonstrates using the Scaler Ray compatibility layer with an existing remote cluster.
+See `the examples directory <https://github.com/finos/opengris-scaler/tree/main/examples/ray_compat>`_ for complete Scaler Ray compatibility layer examples including:
+*   `basic_local_cluster.py`: Demonstrates using the Scaler Ray compatibility layer with the implicitly-created local cluster.
+*   `basic_remote_cluster.py`: Demonstrates using the Scaler Ray compatibility layer with an existing remote cluster.
 
 Supported APIs
 --------------
@@ -98,14 +105,14 @@ Unsupported APIs
 
 The following APIs are not supported by the Scaler Ray compatibility layer.
 
-Some functions will be no-ops, while others will raise a ``NotImplementedError`` exception.
+Some functions will be no-ops or return a mock object while others will raise a ``NotImplementedError`` exception.
  
 *   ``ray.init()``: No-op. Use ``scaler_init()`` from ``scaler.compat.ray`` instead.
+*   ``ray.get_actor()``: Returns a mock object.
 *   ``ray.method()``: Raises ``NotImplementedError``.
 *   ``ray.actor``: Raises ``NotImplementedError``.
 *   ``ray.runtime_context``: Raises ``NotImplementedError``.
 *   ``ray.cross_language``: Raises ``NotImplementedError``.
-*   ``ray.get_actor()``: Raises ``NotImplementedError``.
 *   ``ray.get_gpu_ids()``: Raises ``NotImplementedError``.
 *   ``ray.get_runtime_context()``: Raises ``NotImplementedError``.
 *   ``ray.kill()``: Raises ``NotImplementedError``.

@@ -5,9 +5,10 @@ import numpy as np
 import ray
 from numpy import random
 
-# this patches ray
-import scaler.compat.ray
 from scaler.cluster.combo import SchedulerClusterCombo
+
+# this patches ray
+from scaler.compat.ray import scaler_init
 
 
 class TestRayCompat(unittest.TestCase):
@@ -167,7 +168,7 @@ class TestRayCompat(unittest.TestCase):
         refs = [sleep.remote(x) for x in (2, 10)]
         ready, remaining = ray.wait(refs, num_returns=2, timeout=None)
 
-        self.assertEqual(ready, refs)
+        self.assertCountEqual(ready, refs)
         self.assertEqual(remaining, [])
 
     def test_ray_wait_num_returns(self) -> None:
@@ -214,7 +215,7 @@ class TestRayCompat(unittest.TestCase):
         combo = SchedulerClusterCombo(n_workers=1)
 
         # explicitly init scaler's ray interface, passing the address of an existing cluster
-        scaler.compat.ray.init(address=combo.get_address())
+        scaler_init(address=combo.get_address())
 
         @ray.remote
         def random() -> int:

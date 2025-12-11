@@ -2,15 +2,17 @@
 
 import ray
 
+from scaler.cluster.combo import SchedulerClusterCombo
+
 # this patches the ray module
 from scaler.compat.ray import scaler_init
 
-from scaler.cluster.combo import SchedulerClusterCombo
 
 # this is an example and we don't have a real remote cluster here
 # so for demonstration purposes we just start a local cluster
 def start_remote_cluster() -> SchedulerClusterCombo:
     return SchedulerClusterCombo(n_workers=1)
+
 
 def main(address: str):
     # explicitly init the scaler
@@ -25,6 +27,9 @@ def main(address: str):
     future = my_function.remote()
     assert ray.get(future) == 1
 
+
 if __name__ == "__main__":
     combo = start_remote_cluster()
     main(combo.get_address())
+
+    combo.shutdown()
