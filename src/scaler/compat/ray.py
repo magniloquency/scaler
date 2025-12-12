@@ -10,7 +10,7 @@ from typing import Any, Callable, Dict, Generic, Iterator, List, Optional, Tuple
 from unittest.mock import Mock, patch
 
 import psutil
-from typing_extensions import Concatenate, ParamSpec
+from typing_extensions import ParamSpec
 
 from scaler.client.client import Client
 from scaler.client.future import ScalerFuture
@@ -286,26 +286,15 @@ def unwrap_ray_object_reference(maybe_ref: Union[T, RayObjectReference[T]]) -> T
     return maybe_ref
 
 
-def _wrap_remote_fn(fn: Callable[P, T]) -> Callable[Concatenate[Client, P], T]:
+def _wrap_remote_fn(fn: Callable[P, T], client: Client) -> Callable[P, T]:
     # this function forwards the implicit client to the worker and enables nesting
-    def forward_client(client: Client, *args: P.args, **kwargs: P.kwargs) -> T:
+    def forward_client(*args: P.args, **kwargs: P.kwargs) -> T:
         import scaler.compat.ray
 
         scaler.compat.ray.client = client
         return fn(*args, **kwargs)
 
-    fn_signature = inspect.signature(fn)
-    fn_parameters = list(fn_signature.parameters.values())
-
-    client_parameter = inspect.Parameter("client", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=Client)
-
-    # add `client` to the parameter list
-    wrapped_parameters = [client_parameter] + fn_parameters
-
-    # explicitly set the signature, inheriting `fn`'s parameters
-    forward_client.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
-        parameters=wrapped_parameters, return_annotation=fn_signature.return_annotation
-    )
+    forward_client.__signature__ = inspect.signature(fn)  # type: ignore[attr-defined]
 
     return forward_client
 
@@ -367,7 +356,7 @@ class RayRemote(Generic[P, T]):
         processed_args = [unwrap_ray_object_reference(arg) for arg in args]
         processed_kwargs = {k: unwrap_ray_object_reference(v) for k, v in kwargs.items()}
 
-        future = client.submit(_wrap_remote_fn(self._fn), client, *processed_args, **processed_kwargs)
+        future = client.submit(_wrap_remote_fn(self._fn, client), *processed_args, **processed_kwargs)
 
         if self._num_returns == 1:
             return RayObjectReference(future)
