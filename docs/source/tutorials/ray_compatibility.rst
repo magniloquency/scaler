@@ -53,6 +53,11 @@ You can also provide scheduler and cluster configuration options to ``scaler_ini
 
     # existing Ray app
 
+Remote Function Limitations
+---------------------------
+
+``ray.remote()`` accepts many parameters, but Scaler's compatibility layer only supports ``num_returns``. Other parameters will be ignored.
+
 Shutting Down
 -------------
 
@@ -75,6 +80,11 @@ Full Examples
 See `the examples directory <https://github.com/finos/opengris-scaler/tree/main/examples/ray_compat>`_ for complete Scaler Ray compatibility layer examples including:
 *   `basic_local_cluster.py`: Demonstrates using the Scaler Ray compatibility layer with the implicitly-created local cluster.
 *   `basic_remote_cluster.py`: Demonstrates using the Scaler Ray compatibility layer with an existing remote cluster.
+*   `batch_prediction.py`: Demonstrates using Scaler's Ray compatibility layer for batch prediction, copied from Ray Core's documentation.
+*   `highly_parallel.py`: Demonstrates highly parallel computations, copied from Ray Core's documentation.
+*   `map_reduce.py`: Demonstrates a MapReduce pattern using Scaler's Ray compatibility layer, copied from Ray Core's documentation.
+*   `plot_hyperparameter.py`: Demonstrates hyperparameter tuning and plotting, copied from Ray Core's documentation.
+*   `web_crawler.py`: Demonstrates a web crawling example, copied from Ray Core's documentation.
 
 Supported APIs
 --------------

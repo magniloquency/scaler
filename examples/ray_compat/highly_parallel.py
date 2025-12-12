@@ -1,4 +1,10 @@
-"""Copied from https://docs.ray.io/en/latest/ray-core/examples/highly_parallel.html"""
+"""
+This example was copied from https://docs.ray.io/en/latest/ray-core/examples/highly_parallel.html
+
+Only one or two changes are needed to make this example work on Scaler.
+First is to import the compatibility layer, this patches Ray Core's API.
+The second is to call `ray.shutdown()`, necessary only if using a local cluster.
+"""
 
 import random
 import time

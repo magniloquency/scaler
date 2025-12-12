@@ -61,7 +61,12 @@ patch("ray._private.worker.shutdown", new=_no_op).start()
 # Prevent the import of a module that causes issues during ray shutdown
 # by replacing it with a mock object. This module contains a class decorated
 # with @ray.remote, which is not yet supported by the Scaler compatibility layer.
-patch("ray.experimental.channel.cpu_communicator", new=Mock()).start()
+
+try:
+    patch("ray.experimental.channel.cpu_communicator", new=Mock()).start()
+except AttributeError:
+    pass  # this doesn't exist on old versions of Ray
+
 patch("ray.dag.compiled_dag_node", new=Mock()).start()
 
 
@@ -227,7 +232,10 @@ class RayObjectReference(Generic[T]):
 
     _future: ScalerFuture
 
-    def __init__(self, future: ScalerFuture) -> None:
+    # the index into the return value for num_results > 1
+    _index: Optional[int]
+
+    def __init__(self, future: ScalerFuture, index: Optional[int] = None) -> None:
         """
         Initializes the RayObjectReference with a ScalerFuture.
 
@@ -235,6 +243,7 @@ class RayObjectReference(Generic[T]):
             future: The ScalerFuture instance to wrap.
         """
         self._future = future
+        self._index = index
 
     def get(self) -> T:
         """
@@ -243,7 +252,15 @@ class RayObjectReference(Generic[T]):
         Returns:
             The result of the completed future.
         """
-        return self._future.result()
+        obj = self._future.result()
+
+        if self._index is None:
+            return obj
+
+        try:
+            return obj[self._index]
+        except TypeError as e:
+            raise TypeError("num_returns can only be used on a function that returns an indexable object") from e
 
     def cancel(self) -> None:
         """Attempts to cancel the future."""
@@ -269,6 +286,30 @@ def unwrap_ray_object_reference(maybe_ref: Union[T, RayObjectReference[T]]) -> T
     return maybe_ref
 
 
+def _wrap_remote_fn(fn: Callable[P, T]) -> Callable[Concatenate[Client, P], T]:
+    # this function forwards the implicit client to the worker and enables nesting
+    def forward_client(client: Client, *args: P.args, **kwargs: P.kwargs) -> T:
+        import scaler.compat.ray
+
+        scaler.compat.ray.client = client
+        return fn(*args, **kwargs)
+
+    fn_signature = inspect.signature(fn)
+    fn_parameters = list(fn_signature.parameters.values())
+
+    client_parameter = inspect.Parameter("client", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=Client)
+
+    # add `client` to the parameter list
+    wrapped_parameters = [client_parameter] + fn_parameters
+
+    # explicitly set the signature, inheriting `fn`'s parameters
+    forward_client.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
+        parameters=wrapped_parameters, return_annotation=fn_signature.return_annotation
+    )
+
+    return forward_client
+
+
 class RayRemote(Generic[P, T]):
     """
     A wrapper for a function to make it "remote," similar to a Ray remote function.
@@ -276,39 +317,37 @@ class RayRemote(Generic[P, T]):
     This class is typically instantiated by the `@ray.remote` decorator.
     """
 
-    _fn: Callable[Concatenate[Client, P], T]
+    _fn: Callable[P, T]
 
-    def __init__(self, fn: Callable[P, T]) -> None:
+    _num_returns: int
+
+    def __init__(self, fn: Callable[P, T], num_returns: int = 1, **kwargs) -> None:
         """
         Initializes the remote function wrapper.
 
         Args:
             fn: The Python function to be executed remotely.
+            num_returns: The number of object refs returned by a call to this remote function.
+            **kwargs: This is provided for callsite compatibility. All additional keyword arguments are ignored.
         """
 
-        # this function forwards the implicit client to the worker and enables nesting
-        def forward_client(client: Client, *args: P.args, **kwargs: P.kwargs) -> T:
-            import scaler.compat.ray
+        self._set_options(num_returns=num_returns)
+        self._fn = fn
 
-            scaler.compat.ray.client = client
-            return fn(*args, **kwargs)
+    def _set_options(self, **kwargs) -> None:
+        if "num_returns" in kwargs:
+            self._set_num_returns(kwargs["num_returns"])
 
-        fn_signature = inspect.signature(fn)
-        fn_parameters = list(fn_signature.parameters.values())
+    def _set_num_returns(self, num_returns: Any) -> None:
+        if not isinstance(num_returns, int):
+            raise ValueError("num_returns must be an integer")
 
-        client_parameter = inspect.Parameter("client", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=Client)
+        if num_returns <= 0:
+            raise ValueError("num_returns must be > 0")
 
-        # add `client` to the parameter list
-        wrapped_parameters = [client_parameter] + fn_parameters
+        self._num_returns = num_returns
 
-        # explicitly set the signature, inheriting `fn`'s parameters
-        forward_client.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
-            parameters=wrapped_parameters, return_annotation=fn_signature.return_annotation
-        )
-
-        self._fn = forward_client
-
-    def remote(self, *args: P.args, **kwargs: P.kwargs) -> RayObjectReference:
+    def remote(self, *args: P.args, **kwargs: P.kwargs) -> Union[RayObjectReference, List[RayObjectReference]]:
         """
         Executes the wrapped function remotely.
 
@@ -317,7 +356,8 @@ class RayRemote(Generic[P, T]):
             **kwargs: Keyword arguments for the remote function.
 
         Returns:
-            A RayObjectReference that can be used to retrieve the result.
+            A RayObjectReference that can be used to retrieve the result,
+            or a list of RayObjectReferences if num_returns > 1.
         """
         if not is_initialized():
             raise RuntimeError("Scaler is not initialized")
@@ -327,8 +367,15 @@ class RayRemote(Generic[P, T]):
         processed_args = [unwrap_ray_object_reference(arg) for arg in args]
         processed_kwargs = {k: unwrap_ray_object_reference(v) for k, v in kwargs.items()}
 
-        future = client.submit(self._fn, client, *processed_args, **processed_kwargs)
-        return RayObjectReference(future)
+        future = client.submit(_wrap_remote_fn(self._fn), client, *processed_args, **processed_kwargs)
+
+        if self._num_returns == 1:
+            return RayObjectReference(future)
+
+        return [RayObjectReference(future, index=i) for i in range(self._num_returns)]
+
+    def options(self, *args, **kwargs) -> "RayRemote[P, T]":
+        return RayRemote(self._fn, *args, **kwargs)
 
 
 def get(ref: Union[RayObjectReference[T], List[RayObjectReference[Any]]]) -> Union[T, List[Any]]:
@@ -347,6 +394,7 @@ def get(ref: Union[RayObjectReference[T], List[RayObjectReference[Any]]]) -> Uni
         return [get(x) for x in ref]
     if isinstance(ref, RayObjectReference):
         return ref.get()
+
     raise RuntimeError(f"Unknown type [{type(ref)}] passed to ray.get()")
 
 
@@ -389,7 +437,7 @@ def remote(*args, **kwargs) -> Union[RayRemote, Callable]:
             raise NotImplementedError(
                 "Decorating classes with @ray.remote is not yet supported in Scaler compatibility layer."
             )
-        return RayRemote(fn)
+        return RayRemote(fn, **kwargs)
 
     if len(args) == 1 and callable(args[0]) and not kwargs:
         # This is the case: @ray.remote
@@ -425,17 +473,21 @@ class _RayUtil:
         for future in concurrent.futures.as_completed(future_to_ref.keys()):
             yield future_to_ref[cast(ScalerFuture, future)]
 
-    def map_unordered(self, fn: RayRemote[[V], T], values: List[V]) -> Iterator[T]:
+    # python3.8 cannot handle giving real type hints to `fn`
+    def map_unordered(self, fn: RayRemote, values: List[V]) -> Iterator[T]:
         """
         Applies a remote function to each value in a list and yields the results
         as they become available. Mimics `ray.util.map_unordered()`.
 
-        The function `fn` must be a @ray.remote decorated function.
+        The function `fn` must be a @ray.remote decorated function, with `num_returns=1`.
         """
         if not hasattr(fn, "remote") or not callable(fn.remote):
             raise TypeError("The function passed to map_unordered must be a @ray.remote function.")
 
-        refs = [fn.remote(v) for v in values]
+        if fn._num_returns > 1:
+            raise TypeError("map_unordered only supports remote functions with num_returns=1")
+
+        refs = [cast(RayObjectReference, fn.remote(v)) for v in values]
         for ref in self.as_completed(refs):
             yield ref.get()
 
