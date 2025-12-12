@@ -261,7 +261,7 @@ def parse_enum(s: str, enumm: Type[enum.Enum]) -> Any:
     try:
         return enumm[s]
     except KeyError as e:
-        raise ArgumentTypeError(f"'{s}' is not a valid {enumm.__name__}")
+        raise ArgumentTypeError(f"'{s}' is not a valid {enumm.__name__}") from e
 
 
 def is_optional(ty: Any) -> bool:
