@@ -1,6 +1,6 @@
 import dataclasses
-import typing
 import enum
+import typing
 from typing import Any, Dict, Type, TypeVar
 
 from configargparse import ArgParser, ArgumentDefaultsHelpFormatter, TomlConfigParser
@@ -291,13 +291,15 @@ def is_config_class(ty: Any) -> bool:
         return issubclass(ty, ConfigClass)
     except TypeError:
         return False
-    
+
+
 def is_enum(ty: Any):
     """determines if ty is a subclass of Enum"""
     try:
         return issubclass(ty, enum.Enum)
     except TypeError:
         return False
+
 
 def get_type_args(ty: Any) -> Dict[str, Any]:
     """

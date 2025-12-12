@@ -1,7 +1,7 @@
 import dataclasses
 import unittest
-from typing import Dict, List, Optional, Tuple
 from enum import Enum
+from typing import Dict, List, Optional, Tuple
 from unittest.mock import mock_open, patch
 
 from scaler.config.config_class import ConfigClass, parse_bool
