@@ -3,7 +3,7 @@ import enum
 import typing
 from typing import Any, Dict, Type, TypeVar
 
-from configargparse import ArgParser, ArgumentDefaultsHelpFormatter, TomlConfigParser
+from configargparse import ArgParser, ArgumentDefaultsHelpFormatter, ArgumentTypeError, TomlConfigParser
 
 from scaler.config.mixins import ConfigType
 
@@ -254,7 +254,14 @@ def parse_bool(s: str) -> bool:
     if lower == "false":
         return False
 
-    raise TypeError(f"[{s}] is not a valid bool")
+    raise ArgumentTypeError(f"'{s}' is not a valid bool")
+
+
+def parse_enum(s: str, enumm: Type[enum.Enum]) -> Any:
+    try:
+        return enumm[s]
+    except KeyError as e:
+        raise ArgumentTypeError(f"'{s}' is not a valid {enumm.__name__}")
 
 
 def is_optional(ty: Any) -> bool:
@@ -339,7 +346,7 @@ def get_type_args(ty: Any) -> Dict[str, Any]:
 
     # for enums we get their value by name
     if is_enum(ty):
-        return {"type": lambda name: ty[name]}
+        return {"type": lambda name: parse_enum(name, ty)}
 
     # the default, just use the type as-is
     return {"type": ty}
