@@ -11,7 +11,7 @@ std::unique_ptr<ISocket> connect_socket(std::string& address_str)
 
     if (address.protocol == "tcp") {
         auto socket = std::make_unique<TCPSocket>();
-        socket->try_connect(address_str);
+        socket->tryConnect(address_str);
         return socket;
     }
 

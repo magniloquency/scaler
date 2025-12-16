@@ -51,7 +51,7 @@ TCPSocket& TCPSocket::operator=(TCPSocket&& other) noexcept
     return *this;
 }
 
-void TCPSocket::try_connect(const std::string& address_str, int tries) const
+void TCPSocket::tryConnect(const std::string& address_str, int tries) const
 {
     auto address = parseAddress(address_str);
     if (address.protocol != "tcp") {
@@ -117,23 +117,23 @@ int TCPSocket::write(const void* buffer, size_t size) const
     return n;
 }
 
-void TCPSocket::write_all(const void* buffer, size_t size) const
+void TCPSocket::writeAll(const void* buffer, size_t size) const
 {
     size_t cursor = 0;
     while (cursor < size)
         cursor += (size_t)this->write((char*)buffer + cursor, size - cursor);
 }
 
-void TCPSocket::write_all(std::string msg) const
+void TCPSocket::writeAll(std::string msg) const
 {
-    this->write_all(msg.data(), msg.size());
+    this->writeAll(msg.data(), msg.size());
 }
 
-void TCPSocket::write_message(std::string msg) const
+void TCPSocket::writeMessage(std::string msg) const
 {
     uint64_t header = msg.length();
-    this->write_all(&header, 8);
-    this->write_all(msg.data(), msg.length());
+    this->writeAll(&header, 8);
+    this->writeAll(msg.data(), msg.length());
 }
 
 int TCPSocket::read(void* buffer, size_t size) const
@@ -144,18 +144,18 @@ int TCPSocket::read(void* buffer, size_t size) const
     return n;
 }
 
-void TCPSocket::read_exact(void* buffer, size_t size) const
+void TCPSocket::readExact(void* buffer, size_t size) const
 {
     size_t cursor = 0;
     while (cursor < size)
         cursor += (size_t)this->read((char*)buffer + cursor, size - cursor);
 }
 
-std::string TCPSocket::read_message() const
+std::string TCPSocket::readMessage() const
 {
     uint64_t header = 0;
-    this->read_exact(&header, 8);
+    this->readExact(&header, 8);
     std::vector<char> buffer(header);
-    this->read_exact(buffer.data(), header);
+    this->readExact(buffer.data(), header);
     return std::string(buffer.data(), header);
 }

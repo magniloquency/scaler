@@ -19,19 +19,19 @@ public:
     UDSSocket(const UDSSocket&)            = delete;
     UDSSocket& operator=(const UDSSocket&) = delete;
 
-    void try_connect(const std::string& address, int tries = 10) const override;
+    void tryConnect(const std::string& address, int tries = 10) const override;
     void bind(const std::string& address) const override;
     void listen(int backlog = 5) const override;
     std::unique_ptr<ISocket> accept() const override;
 
-    void write_all(const void* data, size_t size) const override;
-    void write_all(std::string msg) const override;
+    void writeAll(const void* data, size_t size) const override;
+    void writeAll(std::string msg) const override;
 
-    void read_exact(void* buffer, size_t size) const override;
+    void readExact(void* buffer, size_t size) const override;
 
-    void write_message(std::string msg) const override;
+    void writeMessage(std::string msg) const override;
 
-    std::string read_message() const override;
+    std::string readMessage() const override;
 
 private:
     long long _fd;

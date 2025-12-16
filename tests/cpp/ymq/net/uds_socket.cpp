@@ -40,7 +40,7 @@ UDSSocket& UDSSocket::operator=(UDSSocket&& other) noexcept
     return *this;
 }
 
-void UDSSocket::try_connect(const std::string& address_str, int tries) const
+void UDSSocket::tryConnect(const std::string& address_str, int tries) const
 {
     auto address = parseAddress(address_str);
     if (address.protocol != "ipc") {
@@ -105,23 +105,23 @@ int UDSSocket::write(const void* buffer, size_t size) const
     return n;
 }
 
-void UDSSocket::write_all(const void* buffer, size_t size) const
+void UDSSocket::writeAll(const void* buffer, size_t size) const
 {
     size_t cursor = 0;
     while (cursor < size)
         cursor += (size_t)this->write((char*)buffer + cursor, size - cursor);
 }
 
-void UDSSocket::write_all(std::string msg) const
+void UDSSocket::writeAll(std::string msg) const
 {
-    this->write_all(msg.data(), msg.size());
+    this->writeAll(msg.data(), msg.size());
 }
 
-void UDSSocket::write_message(std::string msg) const
+void UDSSocket::writeMessage(std::string msg) const
 {
     uint64_t header = msg.length();
-    this->write_all(&header, 8);
-    this->write_all(msg.data(), msg.length());
+    this->writeAll(&header, 8);
+    this->writeAll(msg.data(), msg.length());
 }
 
 int UDSSocket::read(void* buffer, size_t size) const
@@ -132,18 +132,18 @@ int UDSSocket::read(void* buffer, size_t size) const
     return n;
 }
 
-void UDSSocket::read_exact(void* buffer, size_t size) const
+void UDSSocket::readExact(void* buffer, size_t size) const
 {
     size_t cursor = 0;
     while (cursor < size)
         cursor += (size_t)this->read((char*)buffer + cursor, size - cursor);
 }
 
-std::string UDSSocket::read_message() const
+std::string UDSSocket::readMessage() const
 {
     uint64_t header = 0;
-    this->read_exact(&header, 8);
+    this->readExact(&header, 8);
     std::vector<char> buffer(header);
-    this->read_exact(buffer.data(), header);
+    this->readExact(buffer.data(), header);
     return std::string(buffer.data(), header);
 }

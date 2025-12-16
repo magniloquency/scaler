@@ -51,7 +51,7 @@ Socket& Socket::operator=(Socket&& other) noexcept
     return *this;
 }
 
-void Socket::try_connect(const std::string& host, short port, int tries) const
+void Socket::tryConnect(const std::string& host, short port, int tries) const
 {
     sockaddr_in addr {};
     addr.sin_family = AF_INET;
@@ -107,23 +107,23 @@ int Socket::write(const void* buffer, size_t size) const
     return n;
 }
 
-void Socket::write_all(const void* buffer, size_t size) const
+void Socket::writeAll(const void* buffer, size_t size) const
 {
     size_t cursor = 0;
     while (cursor < size)
         cursor += (size_t)this->write((char*)buffer + cursor, size - cursor);
 }
 
-void Socket::write_all(std::string msg) const
+void Socket::writeAll(std::string msg) const
 {
-    this->write_all(msg.data(), msg.size());
+    this->writeAll(msg.data(), msg.size());
 }
 
 void Socket::write_message(std::string msg) const
 {
     uint64_t header = msg.length();
-    this->write_all(&header, 8);
-    this->write_all(msg.data(), msg.length());
+    this->writeAll(&header, 8);
+    this->writeAll(msg.data(), msg.length());
 }
 
 int Socket::read(void* buffer, size_t size) const
@@ -134,18 +134,18 @@ int Socket::read(void* buffer, size_t size) const
     return n;
 }
 
-void Socket::read_exact(void* buffer, size_t size) const
+void Socket::readExact(void* buffer, size_t size) const
 {
     size_t cursor = 0;
     while (cursor < size)
         cursor += (size_t)this->read((char*)buffer + cursor, size - cursor);
 }
 
-std::string Socket::read_message() const
+std::string Socket::readMessage() const
 {
     uint64_t header = 0;
-    this->read_exact(&header, 8);
+    this->readExact(&header, 8);
     std::vector<char> buffer(header);
-    this->read_exact(buffer.data(), header);
+    this->readExact(buffer.data(), header);
     return std::string(buffer.data(), header);
 }

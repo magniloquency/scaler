@@ -103,10 +103,10 @@ TestResult basic_server_raw(std::string address_str)
 
     socket->listen(5);  // Default backlog
     auto client = socket->accept();
-    client->write_message("server");
-    auto client_identity = client->read_message();
+    client->writeMessage("server");
+    auto client_identity = client->readMessage();
     RETURN_FAILURE_IF_FALSE(client_identity == "client");
-    auto msg = client->read_message();
+    auto msg = client->readMessage();
     RETURN_FAILURE_IF_FALSE(msg == "yi er san si wu liu");
 
     return TestResult::Success;
@@ -116,10 +116,10 @@ TestResult basic_client_raw(std::string address_str)
 {
     auto socket = connect_socket(address_str);
 
-    socket->write_message("client");
-    auto server_identity = socket->read_message();
+    socket->writeMessage("client");
+    auto server_identity = socket->readMessage();
     RETURN_FAILURE_IF_FALSE(server_identity == "server");
-    socket->write_message("yi er san si wu liu");
+    socket->writeMessage("yi er san si wu liu");
 
     return TestResult::Success;
 }
@@ -144,11 +144,11 @@ TestResult client_sends_big_message(std::string address_str)
 {
     auto socket = connect_socket(address_str);
 
-    socket->write_message("client");
-    auto remote_identity = socket->read_message();
+    socket->writeMessage("client");
+    auto remote_identity = socket->readMessage();
     RETURN_FAILURE_IF_FALSE(remote_identity == "server");
     std::string msg(500'000'000, '.');
-    socket->write_message(msg);
+    socket->writeMessage(msg);
 
     return TestResult::Success;
 }
@@ -215,20 +215,20 @@ TestResult client_simulated_slow_network(std::string address)
 {
     auto socket = connect_socket(address);
 
-    socket->write_message("client");
-    auto remote_identity = socket->read_message();
+    socket->writeMessage("client");
+    auto remote_identity = socket->readMessage();
     RETURN_FAILURE_IF_FALSE(remote_identity == "server");
 
     std::string message = "yi er san si wu liu";
     uint64_t header     = message.length();
 
-    socket->write_all((char*)&header, 4);
+    socket->writeAll((char*)&header, 4);
     std::this_thread::sleep_for(2s);
-    socket->write_all((char*)&header + 4, 4);
+    socket->writeAll((char*)&header + 4, 4);
     std::this_thread::sleep_for(3s);
-    socket->write_all(message.data(), header / 2);
+    socket->writeAll(message.data(), header / 2);
     std::this_thread::sleep_for(2s);
-    socket->write_all(message.data() + header / 2, header - header / 2);
+    socket->writeAll(message.data() + header / 2, header - header / 2);
 
     return TestResult::Success;
 }
@@ -239,24 +239,24 @@ TestResult client_sends_incomplete_identity(std::string address)
     {
         auto socket = connect_socket(address);
 
-        auto server_identity = socket->read_message();
+        auto server_identity = socket->readMessage();
         RETURN_FAILURE_IF_FALSE(server_identity == "server");
 
         // write incomplete identity and exit
         std::string identity = "client";
         uint64_t header      = identity.length();
-        socket->write_all((char*)&header, 8);
-        socket->write_all(identity.data(), identity.length() - 2);
+        socket->writeAll((char*)&header, 8);
+        socket->writeAll(identity.data(), identity.length() - 2);
     }
 
     // connect again and try to send a message
     {
         auto socket = connect_socket(address);
 
-        auto server_identity = socket->read_message();
+        auto server_identity = socket->readMessage();
         RETURN_FAILURE_IF_FALSE(server_identity == "server");
-        socket->write_message("client");
-        socket->write_message("yi er san si wu liu");
+        socket->writeMessage("client");
+        socket->writeMessage("yi er san si wu liu");
     }
 
     return TestResult::Success;
@@ -293,20 +293,20 @@ TestResult client_sends_huge_header(std::string address)
     {
         auto socket = connect_socket(address);
 
-        socket->write_message("client");
-        auto server_identity = socket->read_message();
+        socket->writeMessage("client");
+        auto server_identity = socket->readMessage();
         RETURN_FAILURE_IF_FALSE(server_identity == "server");
 
         // write the huge header
         uint64_t header = std::numeric_limits<uint64_t>::max();
-        socket->write_all((char*)&header, 8);
+        socket->writeAll((char*)&header, 8);
 
         size_t i = 0;
         for (; i < 10; i++) {
             std::this_thread::sleep_for(1s);
 
             try {
-                socket->write_all("yi er san si wu liu");
+                socket->writeAll("yi er san si wu liu");
             } catch (const std::system_error& e) {
                 if (e.code().value() == expected_error) {
                     std::cout << "writing failed, as expected after sending huge header, continuing...\n";
@@ -325,10 +325,10 @@ TestResult client_sends_huge_header(std::string address)
         {
             auto socket = connect_socket(address);
 
-            socket->write_message("client");
-            auto server_identity = socket->read_message();
+            socket->writeMessage("client");
+            auto server_identity = socket->readMessage();
             RETURN_FAILURE_IF_FALSE(server_identity == "server");
-            socket->write_message("yi er san si wu liu");
+            socket->writeMessage("yi er san si wu liu");
         }
 
         return TestResult::Success;
