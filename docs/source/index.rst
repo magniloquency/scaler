@@ -26,7 +26,7 @@ Content
 
    tutorials/quickstart
    tutorials/features
-   tutorials/ray_compatibility
+   tutorials/compatibility/ray
    tutorials/configuration
    tutorials/examples
    tutorials/development/devcontainer

@@ -62,8 +62,8 @@ Shutting Down
 -------------
 
 The implicitly-created local cluster is a subprocess with global scope, and won't be shut down automatically.
-This can cause your program to keep executing after your program has completed, therefore it is important to call ``ray.shutdown()``
-when your program is done, when using the implicit local cluster.
+This can cause your program to keep executing after your program has completed, it is therefore important to call ``ray.shutdown()``
+when your program is done when using the implicit local cluster.
 
 A Note about the Actor Model
 ----------------------------
