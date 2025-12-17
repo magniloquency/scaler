@@ -1,6 +1,6 @@
 #include <memory>
 
-#include "tests/cpp/ymq/net/i_socket.h"
+#include "tests/cpp/ymq/net/socket.h"
 
-std::unique_ptr<ISocket> connect_socket(std::string& address_str);
-std::unique_ptr<ISocket> bind_socket(std::string& address_str);
+std::unique_ptr<Socket> connect_socket(std::string& address_str);
+std::unique_ptr<Socket> bind_socket(std::string& address_str);

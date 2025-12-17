@@ -100,7 +100,7 @@ void TCPSocket::listen(int backlog) const
         raise_socket_error("failed to listen");
 }
 
-std::unique_ptr<ISocket> TCPSocket::accept() const
+std::unique_ptr<Socket> TCPSocket::accept() const
 {
     long long fd = ::accept((SOCKET)this->_fd, nullptr, nullptr);
     if (fd == SOCKET_ERROR)

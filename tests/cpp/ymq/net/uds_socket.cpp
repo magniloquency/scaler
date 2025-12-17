@@ -88,7 +88,7 @@ void UDSSocket::listen(int backlog) const
         raise_socket_error("failed to listen");
 }
 
-std::unique_ptr<ISocket> UDSSocket::accept() const
+std::unique_ptr<Socket> UDSSocket::accept() const
 {
     long long fd = ::accept(this->_fd, nullptr, nullptr);
     if (fd < 0)

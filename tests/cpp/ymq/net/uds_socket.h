@@ -5,9 +5,9 @@
 #include <string>
 
 #include "address.h"
-#include "i_socket.h"
+#include "socket.h"
 
-class UDSSocket: public ISocket {
+class UDSSocket: public Socket {
 public:
     UDSSocket();
     UDSSocket(long long fd);
@@ -22,7 +22,7 @@ public:
     void tryConnect(const std::string& address, int tries = 10) const override;
     void bind(const std::string& address) const override;
     void listen(int backlog = 5) const override;
-    std::unique_ptr<ISocket> accept() const override;
+    std::unique_ptr<Socket> accept() const override;
 
     void writeAll(const void* data, size_t size) const override;
     void writeAll(std::string msg) const override;

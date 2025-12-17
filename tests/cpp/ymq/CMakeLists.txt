@@ -7,7 +7,7 @@ target_sources(test_ymq PRIVATE
 
 	net/address.h
 	net/address.cpp
-	net/i_socket.h
+	net/socket.h
 	net/socket_utils.h
 	net/tcp_socket.h
 	net/uds_socket.h

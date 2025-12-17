@@ -5,7 +5,7 @@
 #include "tests/cpp/ymq/net/socket_utils.h"
 #include "tests/cpp/ymq/net/tcp_socket.h"
 
-std::unique_ptr<ISocket> connect_socket(std::string& address_str)
+std::unique_ptr<Socket> connect_socket(std::string& address_str)
 {
     auto address = parseAddress(address_str);
 
@@ -18,7 +18,7 @@ std::unique_ptr<ISocket> connect_socket(std::string& address_str)
     throw std::runtime_error(std::format("Unsupported protocol for raw client: '{}'", address.protocol));
 }
 
-std::unique_ptr<ISocket> bind_socket(std::string& address_str)
+std::unique_ptr<Socket> bind_socket(std::string& address_str)
 {
     auto address = parseAddress(address_str);
 
