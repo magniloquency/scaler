@@ -1,14 +1,20 @@
 #include <arpa/inet.h>
+#include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
 #include <cerrno>
+#include <format>
 #include <thread>
 #include <vector>
 
+#include "scaler/ymq/internal/network_utils.h"
+#include "scaler/ymq/internal/socket_address.h"
 #include "tests/cpp/ymq/common/utils.h"
 #include "tests/cpp/ymq/net/tcp_socket.h"
+
+using scaler::ymq::SocketAddress;
 
 TCPSocket::TCPSocket(bool nodelay): _fd(-1), _nodelay(nodelay)
 {
@@ -52,15 +58,12 @@ TCPSocket& TCPSocket::operator=(TCPSocket&& other) noexcept
 
 void TCPSocket::tryConnect(const std::string& address_str, int tries) const
 {
-    auto address = parseAddress(address_str);
-    if (address.protocol != "tcp") {
-        throw std::runtime_error("Unsupported protocol for TCPSocket: " + address.protocol);
+    auto address = scaler::ymq::stringToSocketAddress(address_str);
+    if (address.nativeHandleType() != SocketAddress::Type::TCP) {
+        throw std::runtime_error(std::format("Unsupported protocol for TCPSocket: {}", address.nativeHandleType()));
     }
 
-    sockaddr_in addr {};
-    addr.sin_family = AF_INET;
-    addr.sin_port   = htons(address.port);
-    inet_pton(AF_INET, address.host.c_str(), &addr.sin_addr);
+    sockaddr_in addr = *(sockaddr_in*)address.nativeHandle();
 
     for (int i = 0; i < tries; i++) {
         auto code = ::connect(this->_fd, (sockaddr*)&addr, sizeof(addr));
@@ -80,15 +83,13 @@ void TCPSocket::tryConnect(const std::string& address_str, int tries) const
 
 void TCPSocket::bind(const std::string& address_str) const
 {
-    auto address = parseAddress(address_str);
-    if (address.protocol != "tcp") {
-        throw std::runtime_error("Unsupported protocol for TCPSocket: " + address.protocol);
+    auto address = scaler::ymq::stringToSocketAddress(address_str);
+    if (address.nativeHandleType() != SocketAddress::Type::TCP) {
+        throw std::runtime_error(std::format("Unsupported protocol for TCPSocket: {}", address.nativeHandleType()));
     }
 
-    sockaddr_in addr {};
-    addr.sin_family      = AF_INET;
-    addr.sin_port        = htons(address.port);
-    addr.sin_addr.s_addr = INADDR_ANY;
+    sockaddr_in addr = *(sockaddr_in*)address.nativeHandle();
+
     if (::bind(this->_fd, (sockaddr*)&addr, sizeof(addr)) < 0)
         raise_socket_error("failed to bind");
 }

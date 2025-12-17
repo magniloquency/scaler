@@ -9,7 +9,11 @@
 #include <thread>
 #include <vector>
 
+#include "scaler/ymq/internal/network_utils.h"
+#include "scaler/ymq/internal/socket_address.h"
 #include "tests/cpp/ymq/common/utils.h"
+
+using scaler::ymq::SocketAddress;
 
 UDSSocket::UDSSocket(): _fd(-1)
 {
@@ -42,14 +46,12 @@ UDSSocket& UDSSocket::operator=(UDSSocket&& other) noexcept
 
 void UDSSocket::tryConnect(const std::string& address_str, int tries) const
 {
-    auto address = parseAddress(address_str);
-    if (address.protocol != "ipc") {
-        throw std::runtime_error("Unsupported protocol for UDSSocket: " + address.protocol);
+    auto address = scaler::ymq::stringToSocketAddress(address_str);
+    if (address.nativeHandleType() != SocketAddress::Type::IPC) {
+        throw std::runtime_error(std::format("Unsupported protocol for UDSSocket: {}", address.nativeHandleType()));
     }
 
-    sockaddr_un addr {};
-    addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, address.path.c_str(), sizeof(addr.sun_path) - 1);
+    sockaddr_un addr = *(sockaddr_un*)address.nativeHandle();
 
     for (int i = 0; i < tries; i++) {
         auto code = ::connect(this->_fd, (sockaddr*)&addr, sizeof(addr));
@@ -69,15 +71,14 @@ void UDSSocket::tryConnect(const std::string& address_str, int tries) const
 
 void UDSSocket::bind(const std::string& address_str) const
 {
-    auto address = parseAddress(address_str);
-    if (address.protocol != "ipc") {
-        throw std::runtime_error("Unsupported protocol for UDSSocket: " + address.protocol);
+    auto address = scaler::ymq::stringToSocketAddress(address_str);
+    if (address.nativeHandleType() != SocketAddress::Type::IPC) {
+        throw std::runtime_error(std::format("Unsupported protocol for UDSSocket: {}", address.nativeHandleType()));
     }
 
-    sockaddr_un addr {};
-    addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, address.path.c_str(), sizeof(addr.sun_path) - 1);
-    ::unlink(address.path.c_str());
+    sockaddr_un addr = *(sockaddr_un*)address.nativeHandle();
+
+    ::unlink(addr.sun_path);
     if (::bind(this->_fd, (sockaddr*)&addr, sizeof(addr)) < 0)
         raise_socket_error("failed to bind");
 }

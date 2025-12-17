@@ -5,8 +5,6 @@ target_sources(test_ymq PRIVATE
 	common/utils.h
 	common/utils.cpp
 
-	net/address.h
-	net/address.cpp
 	net/socket.h
 	net/socket_utils.h
 	net/tcp_socket.h
