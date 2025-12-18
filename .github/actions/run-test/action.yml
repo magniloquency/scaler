@@ -59,7 +59,22 @@ runs:
           echo "Running $example"
           python $example
         done
+        mapfile -t skipped_tests < examples/ray_compat/skipped_tests.txt
         for example in "./examples/ray_compat"/*.py; do
+          filename=$(basename "$example")
+          should_skip=false
+          for skipped_test in "${skipped_tests[@]}"; do
+            skipped_test_file=$(echo "$skipped_test" | cut -d'#' -f1 | tr -d '[:space:]')
+            if [ "$skipped_test_file" = "$filename" ]; then
+              echo "Skipping $example because: $(echo "$skipped_test" | cut -d'#' -f2-)"
+              should_skip=true
+              break
+            fi
+          done
+          if [ "$should_skip" = true ]; then
+            continue
+          fi
+
           echo "Running $example"
           python $example
         done
