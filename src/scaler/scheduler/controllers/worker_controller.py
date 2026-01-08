@@ -6,7 +6,6 @@ from scaler.io.mixins import AsyncBinder, AsyncConnector
 from scaler.protocol.python.common import WorkerState
 from scaler.protocol.python.message import (
     ClientDisconnect,
-    DisconnectResponse,
     StateWorker,
     Task,
     TaskCancel,
