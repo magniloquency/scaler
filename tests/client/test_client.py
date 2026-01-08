@@ -339,7 +339,7 @@ class TestClientPreload(unittest.TestCase):
     def setUp(self) -> None:
         setup_logger()
         logging_test_name(self)
-        self.combo = SchedulerClusterCombo(n_workers=0, event_loop="builtin")
+        self.combo = SchedulerClusterCombo(n_workers=1, event_loop="builtin")
 
     def tearDown(self) -> None:
         self.combo.shutdown()
