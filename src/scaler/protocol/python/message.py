@@ -397,7 +397,7 @@ class ObjectInstruction(Message):
         )
 
 
-class DisconnectRequest(Message):
+class WorkerDisconnectNotification(Message):
     def __init__(self, msg):
         super().__init__(msg)
 
@@ -406,8 +406,8 @@ class DisconnectRequest(Message):
         return WorkerID(self._msg.worker)
 
     @staticmethod
-    def new_msg(worker: WorkerID) -> "DisconnectRequest":
-        return DisconnectRequest(_message.DisconnectRequest(worker=bytes(worker)))
+    def new_msg(worker: WorkerID) -> "WorkerDisconnectNotification":
+        return WorkerDisconnectNotification(_message.WorkerDisconnectNotification(worker=bytes(worker)))
 
 
 @dataclasses.dataclass
@@ -733,7 +733,7 @@ PROTOCOL: bidict.bidict[str, Type[Message]] = bidict.bidict(
         "clientHeartbeatEcho": ClientHeartbeatEcho,
         "workerHeartbeat": WorkerHeartbeat,
         "workerHeartbeatEcho": WorkerHeartbeatEcho,
-        "disconnectRequest": DisconnectRequest,
+        "workerDisconnectNotification": WorkerDisconnectNotification,
         "disconnectResponse": DisconnectResponse,
         "stateClient": StateClient,
         "stateObject": StateObject,

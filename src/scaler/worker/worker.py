@@ -23,7 +23,6 @@ from scaler.io.utility import (
 from scaler.io.ymq import ymq
 from scaler.protocol.python.message import (
     ClientDisconnect,
-    DisconnectRequest,
     DisconnectResponse,
     ObjectInstruction,
     ProcessorInitialized,
@@ -31,6 +30,7 @@ from scaler.protocol.python.message import (
     TaskCancel,
     TaskLog,
     TaskResult,
+    WorkerDisconnectNotification,
     WorkerHeartbeatEcho,
 )
 from scaler.protocol.python.mixins import Message
@@ -200,7 +200,7 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
             return
 
         if isinstance(message, DisconnectResponse):
-            logging.error("Worker initiated DisconnectRequest got replied")
+            logging.error("received disconnect response")
             self._task.cancel()
             return
 
@@ -261,7 +261,7 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
             logging.exception(f"{self.identity!r}: failed with unhandled exception:\n{e}")
 
         if get_scaler_network_backend_from_env() == NetworkBackend.tcp_zmq:
-            await self._connector_external.send(DisconnectRequest.new_msg(self.identity))
+            await self._connector_external.send(WorkerDisconnectNotification.new_msg(self.identity))
 
         self._connector_external.destroy()
         self._processor_manager.destroy("quit")
@@ -282,7 +282,7 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
             self._loop.add_signal_handler(signal.SIGINT, lambda: asyncio.ensure_future(self.__graceful_shutdown()))
 
     async def __graceful_shutdown(self):
-        await self._connector_external.send(DisconnectRequest.new_msg(self.identity))
+        await self._connector_external.send(WorkerDisconnectNotification.new_msg(self.identity))
 
     def __destroy(self):
         self._task.cancel()

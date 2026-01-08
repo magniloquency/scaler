@@ -6,11 +6,11 @@ from scaler.io.mixins import AsyncBinder, AsyncConnector
 from scaler.protocol.python.common import WorkerState
 from scaler.protocol.python.message import (
     ClientDisconnect,
-    DisconnectRequest,
     DisconnectResponse,
     StateWorker,
     Task,
     TaskCancel,
+    WorkerDisconnectNotification,
     WorkerHeartbeat,
     WorkerHeartbeatEcho,
 )
@@ -76,9 +76,8 @@ class VanillaWorkerController(WorkerController, Looper, Reporter):
         for worker in self._allocator_policy.get_worker_ids():
             await self.__shutdown_worker(worker)
 
-    async def on_disconnect(self, worker_id: WorkerID, request: DisconnectRequest):
+    async def on_disconnect(self, worker_id: WorkerID, request: WorkerDisconnectNotification):
         await self.__disconnect_worker(request.worker)
-        await self._binder.send(worker_id, DisconnectResponse.new_msg(request.worker))
 
     async def routine(self):
         await self.__clean_workers()

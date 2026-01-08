@@ -15,7 +15,6 @@ from scaler.protocol.python.common import ObjectStorageAddress
 from scaler.protocol.python.message import (
     ClientDisconnect,
     ClientHeartbeat,
-    DisconnectRequest,
     GraphTask,
     InformationRequest,
     ObjectInstruction,
@@ -24,6 +23,7 @@ from scaler.protocol.python.message import (
     TaskCancelConfirm,
     TaskLog,
     TaskResult,
+    WorkerDisconnectNotification,
     WorkerHeartbeat,
 )
 from scaler.protocol.python.mixins import Message
@@ -200,8 +200,8 @@ class Scheduler:
             await self._worker_controller.on_heartbeat(WorkerID(source), message)
             return
 
-        # scheduler receives worker disconnect request from downstream
-        if isinstance(message, DisconnectRequest):
+        # scheduler receives worker disconnect notification
+        if isinstance(message, WorkerDisconnectNotification):
             await self._worker_controller.on_disconnect(WorkerID(source), message)
             return
 

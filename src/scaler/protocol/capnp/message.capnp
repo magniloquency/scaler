@@ -97,7 +97,7 @@ struct ObjectInstruction {
     }
 }
 
-struct DisconnectRequest {
+struct WorkerDisconnectNotification {
     worker @0 :Data;
 }
 
@@ -196,7 +196,7 @@ struct Message {
         workerHeartbeat @9 :WorkerHeartbeat;
         workerHeartbeatEcho @10 :WorkerHeartbeatEcho;
 
-        disconnectRequest @11 :DisconnectRequest;
+        workerDisconnectNotification @11 :WorkerDisconnectNotification;
         disconnectResponse @12 :DisconnectResponse;
 
         stateClient @13 :StateClient;

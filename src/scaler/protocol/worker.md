@@ -217,12 +217,12 @@ then worker can deserialize the object content and start executing the task
 Worker must send a `WorkerHeartbeat` message every heartbeat interval (at least 1 second) or else the scheduler will
 consider the worker dead.
 
-### DisconnectRequest `DR` (optional)
+### WorkerDisconnectNotification `WDN` (optional)
 
 | message_type | worker  |
 |:------------:|:-------:|
-|    b"DR"     | X bytes |
+|    b"WDN"     | X bytes |
 
 * worker: Worker ID
 
-When a `DisconnectRequest` message is sent, the worker should disconnect from the scheduler.
+When a `WorkerDisconnectNotification` message is sent, the worker should disconnect from the scheduler.

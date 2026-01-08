@@ -14,10 +14,10 @@ from scaler.io.mixins import AsyncConnector, AsyncObjectStorageConnector
 from scaler.io.utility import create_async_object_storage_connector
 from scaler.protocol.python.message import (
     ClientDisconnect,
-    DisconnectRequest,
     ObjectInstruction,
     Task,
     TaskCancel,
+    WorkerDisconnectNotification,
     WorkerHeartbeatEcho,
 )
 from scaler.protocol.python.mixins import Message
@@ -189,7 +189,7 @@ class SymphonyWorker(multiprocessing.get_context("spawn").Process):  # type: ign
         except Exception as e:
             logging.exception(f"{self.identity!r}: failed with unhandled exception:\n{e}")
 
-        await self._connector_external.send(DisconnectRequest.new_msg(self.identity))
+        await self._connector_external.send(WorkerDisconnectNotification.new_msg(self.identity))
 
         self._connector_external.destroy()
         logging.info(f"{self.identity!r}: quit")

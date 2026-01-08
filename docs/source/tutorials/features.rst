@@ -18,16 +18,16 @@ Which will show an interface similar to the standard Linux `top` command:
 .. code:: console
 
    scheduler        | task_manager        |     scheduler_sent         | scheduler_received
-         cpu   0.0% |   unassigned      0 |      HeartbeatEcho 283,701 |          Heartbeat 283,701
-         rss 130.1m |      running      0 |     ObjectResponse     233 |      ObjectRequest     215
-                    |      success 53,704 |           TaskEcho  53,780 |               Task  53,764
-                    |       failed     14 |               Task  54,660 |         TaskResult  53,794
-                    |     canceled     48 |         TaskResult  53,766 |  DisconnectRequest      21
-                    |    not_found     14 |      ObjectRequest     366 |         TaskCancel      60
-                                          | DisconnectResponse      21 |    BalanceResponse      15
-                                          |         TaskCancel      62 |          GraphTask       6
-                                          |     BalanceRequest      15 |
+         cpu   0.0% |   unassigned      0 |      HeartbeatEcho 283,701 |          Heartbeat            283,701
+         rss 130.1m |      running      0 |     ObjectResponse     233 |      ObjectRequest            215
+                    |      success 53,704 |           TaskEcho  53,780 |               Task            53,764
+                    |       failed     14 |               Task  54,660 |         TaskResult            53,794
+                    |     canceled     48 |         TaskResult  53,766 |  WorkerDisconnectNotification 21
+                    |    not_found     14 |      ObjectRequest     366 |         TaskCancel            60
+                                          |         TaskCancel      62 |    BalanceResponse            15
+                                          |     BalanceRequest      15 |          GraphTask             6
                                           |    GraphTaskResult       6 |
+                                          |                            |
    -------------------------------------------------------------------------------------------------
    Shortcuts: worker[n] agt_cpu[C] agt_rss[M] cpu[c] rss[m] free[f] sent[w] queued[d] lag[l]
 

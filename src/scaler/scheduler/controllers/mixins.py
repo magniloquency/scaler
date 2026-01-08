@@ -5,7 +5,6 @@ from scaler.protocol.python.common import ObjectMetadata
 from scaler.protocol.python.message import (
     ClientDisconnect,
     ClientHeartbeat,
-    DisconnectRequest,
     GraphTask,
     InformationRequest,
     ObjectInstruction,
@@ -13,6 +12,7 @@ from scaler.protocol.python.message import (
     TaskCancel,
     TaskCancelConfirm,
     TaskResult,
+    WorkerDisconnectNotification,
     WorkerHeartbeat,
 )
 from scaler.utility.identifiers import ClientID, ObjectID, TaskID, WorkerID
@@ -172,7 +172,7 @@ class WorkerController(Reporter):
         raise NotImplementedError()
 
     @abc.abstractmethod
-    async def on_disconnect(self, worker_id: WorkerID, request: DisconnectRequest):
+    async def on_disconnect(self, worker_id: WorkerID, request: WorkerDisconnectNotification):
         raise NotImplementedError()
 
     @abc.abstractmethod
