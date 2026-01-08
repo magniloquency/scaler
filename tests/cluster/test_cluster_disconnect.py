@@ -21,7 +21,7 @@ class TestClusterDisconnect(unittest.TestCase):
     def setUp(self) -> None:
         setup_logger()
         logging_test_name(self)
-        self.combo = SchedulerClusterCombo(n_workers=1, event_loop="builtin")
+        self.combo = SchedulerClusterCombo(n_workers=0, event_loop="builtin")
         self.address = self.combo.get_address()
 
     def tearDown(self) -> None:

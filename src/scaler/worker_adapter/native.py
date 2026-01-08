@@ -27,6 +27,7 @@ class NativeWorkerAdapter:
         self._trim_memory_threshold_bytes = config.worker_config.trim_memory_threshold_bytes
         self._hard_processor_suspend = config.worker_config.hard_processor_suspend
         self._event_loop = config.event_loop
+        self._preload = config.preload
         self._logging_paths = config.logging_config.paths
         self._logging_level = config.logging_config.level
         self._logging_config_file = config.logging_config.config_file
@@ -46,7 +47,7 @@ class NativeWorkerAdapter:
             name=f"NAT|{uuid.uuid4().hex}",
             address=self._address,
             object_storage_address=self._object_storage_address,
-            preload=None,
+            preload=self._preload,
             capabilities=self._capabilities,
             io_threads=self._io_threads,
             task_queue_size=self._task_queue_size,

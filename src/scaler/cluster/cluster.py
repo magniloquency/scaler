@@ -35,6 +35,7 @@ class Cluster(multiprocessing.get_context("spawn").Process):  # type: ignore[mis
         self._worker_adapter = NativeWorkerAdapter(
             NativeWorkerAdapterConfig(
                 web_config=None,
+                preload=config.preload,
                 worker_adapter_config=WorkerAdapterConfig(
                     scheduler_address=config.scheduler_address,
                     object_storage_address=config.object_storage_address,
