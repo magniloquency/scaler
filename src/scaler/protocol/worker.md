@@ -227,11 +227,11 @@ consider the worker dead.
 
 When a `DisconnectRequest` message is sent, the worker should disconnect from the scheduler.
 
-### WorkerDisconnectNotification `WD` (optional)
+### WorkerDisconnectNotification `WDN` (optional)
 
 | message_type | worker  |
 |:------------:|:-------:|
-|    b"WD"     | X bytes |
+|    b"WDN"     | X bytes |
 
 * worker: Worker ID
 
