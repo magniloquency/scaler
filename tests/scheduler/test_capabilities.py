@@ -40,6 +40,7 @@ class TestCapabilities(unittest.TestCase):
             gpu_cluster = Cluster(
                 config=ClusterConfig(
                     scheduler_address=base_cluster._address,
+                    web_config=base_cluster._web_config,
                     object_storage_address=None,
                     preload=None,
                     worker_names=WorkerNames(["gpu_worker"]),
@@ -86,6 +87,7 @@ class TestCapabilities(unittest.TestCase):
             gpu_cluster = Cluster(
                 config=ClusterConfig(
                     scheduler_address=base_cluster._address,
+                    web_config=base_cluster._web_config,
                     object_storage_address=None,
                     preload=None,
                     worker_names=WorkerNames(["gpu_worker"]),

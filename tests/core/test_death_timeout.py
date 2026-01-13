@@ -4,6 +4,7 @@ import unittest
 
 from scaler import Client, Cluster, SchedulerClusterCombo
 from scaler.config.common.logging import LoggingConfig
+from scaler.config.common.web import WebConfig
 from scaler.config.common.worker import WorkerConfig
 from scaler.config.defaults import (
     DEFAULT_GARBAGE_COLLECT_INTERVAL_SECONDS,
@@ -36,6 +37,7 @@ class TestDeathTimeout(unittest.TestCase):
         cluster = Cluster(
             config=ClusterConfig(
                 scheduler_address=ZMQConfig.from_string(f"tcp://127.0.0.1:{get_available_tcp_port()}"),
+                web_config=WebConfig("127.0.0.1", get_available_tcp_port()),
                 object_storage_address=None,
                 preload=None,
                 worker_names=WorkerNames(["a", "b"]),

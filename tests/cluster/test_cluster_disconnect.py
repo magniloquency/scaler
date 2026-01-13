@@ -33,6 +33,7 @@ class TestClusterDisconnect(unittest.TestCase):
         dying_cluster = Cluster(
             config=ClusterConfig(
                 scheduler_address=self.combo._address,
+                web_config=base_cluster._web_config,
                 object_storage_address=self.combo._object_storage_address,
                 preload=None,
                 worker_names=WorkerNames(["dying_worker"]),  # Just one worker would suffice

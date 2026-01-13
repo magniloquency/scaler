@@ -49,6 +49,7 @@ class TestBalance(unittest.TestCase):
         new_cluster = Cluster(
             config=ClusterConfig(
                 scheduler_address=combo._cluster._address,
+                web_config=combo._cluster._web_config,
                 object_storage_address=None,
                 preload=None,
                 worker_names=WorkerNames([str(i) for i in range(0, N_WORKERS - 1)]),

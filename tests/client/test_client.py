@@ -349,6 +349,7 @@ class TestClientPreload(unittest.TestCase):
         preload_cluster = Cluster(
             config=ClusterConfig(
                 scheduler_address=self.combo._address,
+                web_config=base_cluster._web_config,
                 object_storage_address=self.combo._object_storage_address,
                 preload=preload,
                 worker_names=WorkerNames(["preload_worker"]),
