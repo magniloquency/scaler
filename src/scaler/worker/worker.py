@@ -255,7 +255,16 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
         except Exception as e:
             logging.exception(f"{self.identity!r}: failed with unhandled exception:\n{e}")
 
-        await self._connector_external.send(WorkerDisconnectNotification.new_msg(self.identity))
+        try:
+            await self._connector_external.send(WorkerDisconnectNotification.new_msg(self.identity))
+        except ymq.YMQException as e:
+
+            # this means that the scheduler shut down before we could send our notification
+            # we don't consider this to be an error
+            if e.code == ymq.ErrorCode.ConnectorSocketClosedByRemoteEnd:
+                pass
+            else:
+                raise
 
         self._connector_external.destroy()
         self._processor_manager.destroy("quit")
@@ -272,4 +281,5 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
         self._loop.add_signal_handler(signal.SIGINT, self.__destroy)
 
     def __destroy(self):
+        print("DESTROYING WORKER!!!")
         self._task.cancel()
