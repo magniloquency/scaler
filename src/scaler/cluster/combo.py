@@ -64,6 +64,7 @@ class SchedulerClusterCombo:
         logging_paths: Tuple[str, ...] = DEFAULT_LOGGING_PATHS,
         logging_level: str = DEFAULT_LOGGING_LEVEL,
         logging_config_file: Optional[str] = None,
+        additional_adapter_webhook_urls: Tuple[str, ...] = (),
     ):
         if address is None:
             self._address = ZMQConfig.from_string(f"tcp://127.0.0.1:{get_available_tcp_port()}")
@@ -123,7 +124,10 @@ class SchedulerClusterCombo:
             max_number_of_tasks_waiting=max_number_of_tasks_waiting,
             client_timeout_seconds=client_timeout_seconds,
             scaling_controller_strategy=ScalingControllerStrategy.VANILLA,
-            adapter_webhook_urls=(f"http://{self._web_config.adapter_web_host}:{self._web_config.adapter_web_port}",),
+            adapter_webhook_urls=(
+                f"http://{self._web_config.adapter_web_host}:{self._web_config.adapter_web_port}",
+                *additional_adapter_webhook_urls,
+            ),
             worker_timeout_seconds=worker_timeout_seconds,
             object_retention_seconds=object_retention_seconds,
             load_balance_seconds=load_balance_seconds,
