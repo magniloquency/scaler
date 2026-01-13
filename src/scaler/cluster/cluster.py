@@ -2,6 +2,8 @@ import logging
 import multiprocessing
 import signal
 
+from aiohttp import web
+
 from scaler.config.common.worker_adapter import WorkerAdapterConfig
 from scaler.config.section.cluster import ClusterConfig
 from scaler.utility.logging.utility import setup_logger
@@ -32,9 +34,11 @@ class Cluster(multiprocessing.get_context("spawn").Process):  # type: ignore[mis
         self._logging_config_file = config.logging_config.config_file
         self._logging_level = config.logging_config.level
 
+        self._web_config = config.web_config
+
         self._worker_adapter = NativeWorkerAdapter(
             NativeWorkerAdapterConfig(
-                web_config=None,
+                web_config=config.web_config,
                 preload=config.preload,
                 worker_adapter_config=WorkerAdapterConfig(
                     scheduler_address=config.scheduler_address,
@@ -63,17 +67,11 @@ class Cluster(multiprocessing.get_context("spawn").Process):  # type: ignore[mis
         signal.signal(signal.SIGTERM, self.__destroy)
 
     def __start_workers_and_run_forever(self):
-        logging.info(
-            f"{self.__get_prefix()} starting {len(self._worker_names)} workers, heartbeat_interval_seconds="
-            f"{self._heartbeat_interval_seconds}, task_timeout_seconds={self._task_timeout_seconds}"
+        web.run_app(
+            app=self._worker_adapter.create_app(),
+            host=self._web_config.adapter_web_host,
+            port=self._web_config.adapter_web_port,
         )
-
-        for _ in self._worker_names:
-            group_id = self._worker_adapter.start_worker_group()
-            logging.info(f"{self.__get_prefix()} started worker group {group_id!r}")
-
-        self._worker_adapter.join()
-        logging.info(f"{self.__get_prefix()} shutdown")
 
     def __get_prefix(self):
         return f"{self.__class__.__name__}:"

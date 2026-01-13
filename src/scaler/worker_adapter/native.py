@@ -27,6 +27,8 @@ class NativeWorkerAdapter:
         self._trim_memory_threshold_bytes = config.worker_config.trim_memory_threshold_bytes
         self._hard_processor_suspend = config.worker_config.hard_processor_suspend
         self._event_loop = config.event_loop
+        self._adapter_web_host = config.web_config.adapter_web_host
+        self._adapter_web_port = config.web_config.adapter_web_port
         self._preload = config.preload
         self._logging_paths = config.logging_config.paths
         self._logging_level = config.logging_config.level
@@ -80,11 +82,6 @@ class NativeWorkerAdapter:
             worker.join()
 
         self._worker_groups.pop(worker_group_id)
-
-    def join(self) -> None:
-        for group in list(self._worker_groups.values()):
-            for worker in group.values():
-                worker.join()
 
     async def webhook_handler(self, request: Request):
         request_json = await request.json()

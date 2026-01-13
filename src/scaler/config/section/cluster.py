@@ -4,6 +4,7 @@ from typing import Optional
 
 from scaler.config import defaults
 from scaler.config.common.logging import LoggingConfig
+from scaler.config.common.web import WebConfig
 from scaler.config.common.worker import WorkerConfig
 from scaler.config.config_class import ConfigClass
 from scaler.config.types.object_storage_server import ObjectStorageAddressConfig
@@ -17,6 +18,7 @@ class ClusterConfig(ConfigClass):
     scheduler_address: ZMQConfig = dataclasses.field(
         metadata=dict(positional=True, help="the scheduler address to connect to")
     )
+    web_config: WebConfig
     object_storage_address: Optional[ObjectStorageAddressConfig] = dataclasses.field(
         default=None,
         metadata=dict(

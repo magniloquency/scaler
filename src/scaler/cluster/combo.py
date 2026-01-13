@@ -6,6 +6,7 @@ from scaler.cluster.cluster import Cluster
 from scaler.cluster.object_storage_server import ObjectStorageServerProcess
 from scaler.cluster.scheduler import SchedulerProcess
 from scaler.config.common.logging import LoggingConfig
+from scaler.config.common.web import WebConfig
 from scaler.config.common.worker import WorkerConfig
 from scaler.config.defaults import (
     DEFAULT_CLIENT_TIMEOUT_SECONDS,
@@ -88,9 +89,12 @@ class SchedulerClusterCombo:
         self._object_storage.start()
         self._object_storage.wait_until_ready()  # object storage should be ready before starting the cluster
 
+        web_config = WebConfig("127.0.0.1", get_available_tcp_port())
+
         self._cluster = Cluster(
             config=ClusterConfig(
                 scheduler_address=self._address,
+                web_config=web_config,
                 object_storage_address=self._object_storage_address,
                 preload=None,
                 worker_names=WorkerNames([f"{socket.gethostname().split('.')[0]}" for _ in range(n_workers)]),
@@ -118,8 +122,8 @@ class SchedulerClusterCombo:
             io_threads=scheduler_io_threads,
             max_number_of_tasks_waiting=max_number_of_tasks_waiting,
             client_timeout_seconds=client_timeout_seconds,
-            scaling_controller_strategy=ScalingControllerStrategy.NULL,
-            adapter_webhook_urls=(),
+            scaling_controller_strategy=ScalingControllerStrategy.VANILLA,
+            adapter_webhook_urls=(f"http://{web_config.adapter_web_host}:{web_config.adapter_web_port}",),
             worker_timeout_seconds=worker_timeout_seconds,
             object_retention_seconds=object_retention_seconds,
             load_balance_seconds=load_balance_seconds,
