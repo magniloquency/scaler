@@ -1,6 +1,5 @@
 import logging
 import multiprocessing
-import signal
 
 from aiohttp import web
 
@@ -54,24 +53,16 @@ class Cluster(multiprocessing.get_context("spawn").Process):  # type: ignore[mis
 
     def run(self):
         setup_logger(self._logging_paths, self._logging_config_file, self._logging_level)
-        self.__register_signal()
         self.__start_workers_and_run_forever()
 
-    def __destroy(self, *args):
-        assert args is not None
+    async def __on_shutdown(self, app):
         logging.info(f"{self.__get_prefix()} received signal, shutting down")
         self._worker_adapter.shutdown()
 
-    def __register_signal(self):
-        signal.signal(signal.SIGINT, self.__destroy)
-        signal.signal(signal.SIGTERM, self.__destroy)
-
     def __start_workers_and_run_forever(self):
-        web.run_app(
-            app=self._worker_adapter.create_app(),
-            host=self._web_config.adapter_web_host,
-            port=self._web_config.adapter_web_port,
-        )
+        app = self._worker_adapter.create_app()
+        app.on_shutdown.append(self.__on_shutdown)
+        web.run_app(app=app, host=self._web_config.adapter_web_host, port=self._web_config.adapter_web_port)
 
     def __get_prefix(self):
         return f"{self.__class__.__name__}:"
