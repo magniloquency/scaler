@@ -9,6 +9,7 @@
 
 namespace scaler {
 namespace ymq {
+namespace pymod {
 
 struct PyMessage {
     PyObject_HEAD;
@@ -101,5 +102,6 @@ static PyType_Spec PyMessage_spec = {
     .slots     = PyMessage_slots,
 };
 
+}  // namespace pymod
 }  // namespace ymq
 }  // namespace scaler

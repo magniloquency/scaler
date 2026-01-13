@@ -6,6 +6,7 @@
 
 namespace scaler {
 namespace ymq {
+namespace pymod {
 
 inline void ymqUnrecoverableError(scaler::ymq::Error e)
 {
@@ -18,12 +19,13 @@ inline void ymqUnrecoverableError(scaler::ymq::Error e)
     std::exit(EXIT_FAILURE);
 }
 
+}  // namespace pymod
 }  // namespace ymq
 }  // namespace scaler
 
 PyMODINIT_FUNC PyInit__ymq(void)
 {
-    unrecoverableErrorFunctionHookPtr = scaler::ymq::ymqUnrecoverableError;
+    unrecoverableErrorFunctionHookPtr = scaler::ymq::pymod::ymqUnrecoverableError;
 
-    return PyModuleDef_Init(&scaler::ymq::YMQ_module);
+    return PyModuleDef_Init(&scaler::ymq::pymod::YMQ_module);
 }

@@ -15,6 +15,7 @@
 
 namespace scaler {
 namespace ymq {
+namespace pymod {
 
 using Identity = Configuration::IOSocketIdentity;
 
@@ -169,5 +170,6 @@ static PyType_Spec PyIOContext_spec = {
     .slots     = PyIOContext_slots,
 };
 
+}  // namespace pymod
 }  // namespace ymq
 }  // namespace scaler

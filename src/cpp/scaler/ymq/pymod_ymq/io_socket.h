@@ -21,6 +21,7 @@
 
 namespace scaler {
 namespace ymq {
+namespace pymod {
 
 struct PyIOSocket {
     PyObject_HEAD;
@@ -292,5 +293,6 @@ static PyType_Spec PyIOSocket_spec = {
     .slots     = PyIOSocket_slots,
 };
 
+}  // namespace pymod
 }  // namespace ymq
 }  // namespace scaler

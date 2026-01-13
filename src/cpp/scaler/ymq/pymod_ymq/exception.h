@@ -9,6 +9,7 @@
 
 namespace scaler {
 namespace ymq {
+namespace pymod {
 
 // the order of the members in the exception args tuple
 const Py_ssize_t YMQException_errorCodeIndex = 0;
@@ -120,5 +121,6 @@ inline OwnedPyObject<> YMQException_createFromCoreError(YMQState* state, const E
     return PyObject_CallObject(*state->PyExceptionType, *tuple);
 }
 
+}  // namespace pymod
 }  // namespace ymq
 }  // namespace scaler

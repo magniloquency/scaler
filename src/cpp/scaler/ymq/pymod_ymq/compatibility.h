@@ -21,6 +21,7 @@
 
 namespace scaler {
 namespace ymq {
+namespace pymod {
 
 #if PY_MAJOR_VERSION == 3 && PY_MINOR_VERSION < 10
 #define Py_TPFLAGS_IMMUTABLETYPE          (0)
@@ -173,5 +174,6 @@ static inline PyObject* PyObject_CallOneArg(PyObject* callable, PyObject* arg)
 }
 #endif
 
+}  // namespace pymod
 }  // namespace ymq
 }  // namespace scaler

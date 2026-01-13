@@ -5,6 +5,7 @@
 
 namespace scaler {
 namespace ymq {
+namespace pymod {
 
 class AcquireGIL {
 public:
@@ -20,5 +21,6 @@ private:
     PyGILState_STATE _state;
 };
 
+}  // namespace pymod
 }  // namespace ymq
 }  // namespace scaler

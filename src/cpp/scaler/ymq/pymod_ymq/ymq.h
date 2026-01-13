@@ -19,6 +19,7 @@
 
 namespace scaler {
 namespace ymq {
+namespace pymod {
 
 struct YMQState {
     OwnedPyObject<> enumModule;     // Reference to the enum module
@@ -80,6 +81,7 @@ inline void completeCallbackWithRaisedException(PyObject* callback)
     OwnedPyObject _         = PyObject_CallFunctionObjArgs(callback, *exception, nullptr);
 }
 
+}  // namespace pymod
 }  // namespace ymq
 }  // namespace scaler
 
@@ -92,6 +94,7 @@ inline void completeCallbackWithRaisedException(PyObject* callback)
 
 namespace scaler {
 namespace ymq {
+namespace pymod {
 
 inline void YMQ_free(void* stateVoid)
 {
@@ -359,6 +362,7 @@ static PyModuleDef YMQ_module = {
     .m_free  = (freefunc)YMQ_free,
 };
 
+}  // namespace pymod
 }  // namespace ymq
 }  // namespace scaler
 
