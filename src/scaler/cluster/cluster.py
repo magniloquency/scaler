@@ -62,7 +62,13 @@ class Cluster(multiprocessing.get_context("spawn").Process):  # type: ignore[mis
     def __start_workers_and_run_forever(self):
         app = self._worker_adapter.create_app()
         app.on_shutdown.append(self.__on_shutdown)
-        web.run_app(app=app, host=self._web_config.adapter_web_host, port=self._web_config.adapter_web_port)
+        web.run_app(
+            app=app,
+            host=self._web_config.adapter_web_host,
+            port=self._web_config.adapter_web_port,
+            reuse_address=True,
+            reuse_port=True,
+        )
 
     def __get_prefix(self):
         return f"{self.__class__.__name__}:"
