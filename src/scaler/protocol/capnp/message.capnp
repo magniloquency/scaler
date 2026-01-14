@@ -101,11 +101,11 @@ struct DisconnectRequest {
     worker @0 :Data;
 }
 
-struct WorkerDisconnectNotification {
+struct DisconnectResponse {
     worker @0 :Data;
 }
 
-struct DisconnectResponse {
+struct WorkerDisconnectNotification {
     worker @0 :Data;
 }
 
