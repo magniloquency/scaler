@@ -32,6 +32,7 @@ class NativeWorkerAdapter:
         self._logging_paths = config.logging_config.paths
         self._logging_level = config.logging_config.level
         self._logging_config_file = config.logging_config.config_file
+        self._preload = config.preload
 
         """
         Although a worker group can contain multiple workers, in this native adapter implementation,
@@ -48,7 +49,7 @@ class NativeWorkerAdapter:
             name=f"NAT|{uuid.uuid4().hex}",
             address=self._address,
             object_storage_address=self._object_storage_address,
-            preload=None,
+            preload=self._preload,
             capabilities=self._capabilities,
             io_threads=self._io_threads,
             task_queue_size=self._task_queue_size,
