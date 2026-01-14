@@ -281,5 +281,4 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
         self._loop.add_signal_handler(signal.SIGINT, self.__destroy)
 
     def __destroy(self):
-        print("DESTROYING WORKER!!!")
         self._task.cancel()
