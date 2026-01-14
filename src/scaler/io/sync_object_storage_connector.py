@@ -26,7 +26,7 @@ class PySyncObjectStorageConnector(SyncObjectStorageConnector):
             f"{self.__class__.__name__}|{socket.gethostname().split('.')[0]}|{uuid.uuid4()}".encode()
         )
 
-        self._socket: Optional[socket.socket] = socket.create_connection((self._host, self._port))
+        self._socket: Optional[socket.socket] = socket.create_connection((self._host, self._port), timeout=10)
         self._socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
         self._next_request_id = 0
@@ -44,6 +44,11 @@ class PySyncObjectStorageConnector(SyncObjectStorageConnector):
             if self._socket is not None:
                 self._socket.close()
                 self._socket = None
+        # if hasattr(self, "_socket_lock"):
+        #     with self._socket_lock:
+        #         if hasattr(self, "_socket") and self._socket is not None:
+        #             self._socket.close()
+        #             self._socket = None
 
     @property
     def address(self) -> str:
