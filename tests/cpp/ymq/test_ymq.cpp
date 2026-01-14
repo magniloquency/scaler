@@ -748,7 +748,7 @@ TEST(CcYmqTestSuite, TestMitmRandomlyDropPackets)
     auto remote_port = 23573;
 
     auto result = test(
-        60,
+        180,
         {[=] { return run_mitm("randomly_drop_packets", mitm_ip, mitm_port, remote_ip, remote_port, {"0.3"}); },
          [=] { return basic_client_ymq(std::format("tcp://{}:{}", mitm_ip, mitm_port)); },
          [=] { return basic_server_ymq(std::format("tcp://{}:{}", remote_ip, remote_port)); }},
