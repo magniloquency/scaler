@@ -117,15 +117,13 @@ class ClientAgent(threading.Thread):
         )
         self._heartbeat_manager.register(connector_external=self._connector_external)
 
-    def __run_loop(self):
-        self._loop = asyncio.new_event_loop()
-        self._task = self._loop.create_task(self.__get_loops())
-        self._loop.run_until_complete(self._task)
-        self._loop.close()
-
     def run(self):
+        self._loop = asyncio.new_event_loop()
+        self._loop.run_until_complete(self._run())
+
+    async def _run(self):
         self.__initialize()
-        self.__run_loop()
+        await self.__get_loops()
 
     def get_object_storage_address(self) -> ObjectStorageAddress:
         """Returns the object storage address, or block until it receives it."""
