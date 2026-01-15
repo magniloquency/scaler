@@ -79,7 +79,7 @@ class FixedNativeWorkerAdapter:
         # this specific adapter cannot dynamically spawn workers
         # therefore we just wait for all existing workers to finish
         for worker in self._workers.values():
-                worker.join()
+            worker.join()
 
     async def webhook_handler(self, request: Request):
         request_json = await request.json()

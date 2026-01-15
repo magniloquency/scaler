@@ -1,8 +1,9 @@
+import asyncio
 import logging
 import multiprocessing
-import asyncio
-from aiohttp import web
 import signal
+
+from aiohttp import web
 
 from scaler.config.common.web import WebConfig
 from scaler.config.common.worker_adapter import WorkerAdapterConfig
@@ -55,7 +56,7 @@ class Cluster(multiprocessing.get_context("spawn").Process):  # type: ignore[mis
 
     def run(self):
         setup_logger(self._logging_paths, self._logging_config_file, self._logging_level)
-        
+
         self._loop = asyncio.new_event_loop()
         self._loop.run_until_complete(self._run())
 
