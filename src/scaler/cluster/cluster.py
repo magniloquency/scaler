@@ -96,6 +96,8 @@ class Cluster(multiprocessing.get_context("spawn").Process):  # type: ignore[mis
         # run until stopped
         try:
             stop_task = asyncio.create_task(self._stopped.wait())
+
+            # this is a blocking call, so we must run it in the executor
             join_task = self._loop.run_in_executor(None, self._worker_adapter.join)
 
             # we're done when either all the workers have exited, or we received a stop signal
