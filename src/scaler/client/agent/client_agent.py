@@ -61,7 +61,7 @@ class ClientAgent(threading.Thread):
         self._identity = identity
         self._client_agent_address = client_agent_address
         self._scheduler_address = scheduler_address
-        self._zmq_context = context
+        self._io_context = context
         self._object_storage_address: Future[ObjectStorageAddress] = Future()
         if object_storage_address is not None:
             manual_config = ZMQConfig.from_string(object_storage_address)
@@ -72,7 +72,7 @@ class ClientAgent(threading.Thread):
         self._future_manager = future_manager
 
         self._connector_internal: AsyncConnector = ZMQAsyncConnector(
-            context=zmq.asyncio.Context.shadow(self._zmq_context),
+            context=zmq.asyncio.Context.shadow(self._io_context),
             name="client_agent_internal",
             socket_type=zmq.PAIR,
             bind_or_connect="bind",
@@ -82,7 +82,7 @@ class ClientAgent(threading.Thread):
         )
 
         self._connector_external: AsyncConnector = create_async_connector(
-            zmq.asyncio.Context.shadow(self._zmq_context),
+            zmq.asyncio.Context.shadow(self._io_context),
             name="client_agent_external",
             socket_type=zmq.DEALER,
             address=self._scheduler_address,
