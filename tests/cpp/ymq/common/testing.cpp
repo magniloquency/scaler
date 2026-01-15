@@ -205,7 +205,7 @@ void test_wrapper(std::function<TestResult()> fn, int timeout_secs, PipeWriter p
         result = TestResult::Failure;
     }
 
-    pipe_wr.write_all((char*)&result, sizeof(TestResult));
+    pipe_wr.writeAll((char*)&result, sizeof(TestResult));
 
     signal_event(hEvent);
 }

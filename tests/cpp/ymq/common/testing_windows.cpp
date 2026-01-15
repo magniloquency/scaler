@@ -162,7 +162,7 @@ TestResult test(int timeout_secs, std::vector<std::function<TestResult()>> closu
         TestResult result = TestResult::Failure;
         char buffer       = 0;
         try {
-            pipe.reader.read_exact(&buffer, sizeof(TestResult));
+            pipe.reader.readExact(&buffer, sizeof(TestResult));
             result = (TestResult)buffer;
         } catch (const std::system_error& e) {
             std::cout << "failed to read from pipe: " << e.what() << std::endl;
