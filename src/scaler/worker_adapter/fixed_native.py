@@ -73,7 +73,7 @@ class FixedNativeWorkerAdapter:
         for worker_id in list(self._workers.keys()):
             self._shutdown_worker(worker_id)
 
-    async def join(self):
+    def join(self):
         """Wait for all workers to finish."""
 
         # this specific adapter cannot dynamically spawn workers
