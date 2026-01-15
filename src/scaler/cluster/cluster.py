@@ -1,7 +1,8 @@
 import logging
 import multiprocessing
-
+import asyncio
 from aiohttp import web
+import signal
 
 from scaler.config.common.web import WebConfig
 from scaler.config.common.worker_adapter import WorkerAdapterConfig
@@ -54,13 +55,25 @@ class Cluster(multiprocessing.get_context("spawn").Process):  # type: ignore[mis
 
     def run(self):
         setup_logger(self._logging_paths, self._logging_config_file, self._logging_level)
-        self.__start_workers_and_run_forever()
+        
+        self._loop = asyncio.new_event_loop()
+        self._loop.run_until_complete(self._run())
 
-    async def __destroy(self, app):
+    async def _run(self):
+        self._stopped = asyncio.Event()
+
+        signal.signal(signal.SIGINT, lambda s, f: self.__destroy())
+        signal.signal(signal.SIGTERM, lambda s, f: self.__destroy())
+
+        await self.__start_workers_and_run_forever()
+
+    def __destroy(self):
         logging.info(f"{self.__get_prefix()} received signal, shutting down")
-        self._worker_adapter.shutdown()
 
-    def __start_workers_and_run_forever(self):
+        # set the stopped event to exit the main loop
+        self._loop.call_soon_threadsafe(self._stopped.set)
+
+    async def __start_workers_and_run_forever(self):
         logging.info(
             f"{self.__get_prefix()} starting {len(self._worker_names)} workers, heartbeat_interval_seconds="
             f"{self._heartbeat_interval_seconds}, task_timeout_seconds={self._task_timeout_seconds}"
@@ -68,12 +81,26 @@ class Cluster(multiprocessing.get_context("spawn").Process):  # type: ignore[mis
 
         self._worker_adapter.start()
         app = self._worker_adapter.create_app()
-        app.on_shutdown.append(self.__destroy)
 
         # the fixed native worker adapter doesn't actually support spawning and shutting down workers dynamically,
         # but we run the server here to keep the interface consistent
         # it may become useful in the future
-        web.run_app(app, host="127.0.0.1", port=get_available_tcp_port(), reuse_address=True, reuse_port=True)
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, "127.0.0.1", get_available_tcp_port(), reuse_address=True, reuse_port=True)
+        await site.start()
+
+        logging.info(f"{self.__get_prefix()} started worker adapter web server on {site._host}:{site._port}")
+
+        # run until stopped
+        try:
+            await self._stopped.wait()
+        finally:
+            # stop the web server
+            await runner.cleanup()
+            # shut down all workers
+            self._worker_adapter.shutdown()
+
         logging.info(f"{self.__get_prefix()} shutdown")
 
     def __get_prefix(self):
