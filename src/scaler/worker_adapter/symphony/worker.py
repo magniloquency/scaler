@@ -129,9 +129,13 @@ class SymphonyWorker(multiprocessing.get_context("spawn").Process):  # type: ign
             heartbeat_manager=self._heartbeat_manager,
         )
 
-        self._loop = asyncio.get_event_loop()
-        self.__register_signal()
+        self._loop = asyncio.new_event_loop()
+        self._loop.run_until_complete(self._run())
+
+    async def _run(self) -> None:
         self._task = self._loop.create_task(self.__get_loops())
+        self.__register_signal()
+        await self._task
 
     async def __on_receive_external(self, message: Message):
         if not self._heartbeat_received and not isinstance(message, WorkerHeartbeatEcho):
@@ -199,6 +203,7 @@ class SymphonyWorker(multiprocessing.get_context("spawn").Process):  # type: ign
 
     def __register_signal(self):
         self._loop.add_signal_handler(signal.SIGINT, self.__destroy)
+        self._loop.add_signal_handler(signal.SIGTERM, self.__destroy)
 
     def __destroy(self):
         self._task.cancel()
