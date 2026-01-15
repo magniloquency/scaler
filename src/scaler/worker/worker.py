@@ -179,11 +179,6 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
             connector_storage=self._connector_storage,
         )
 
-    async def _run(self) -> None:
-        self._task = self._loop.create_task(self.__get_loops())
-        self.__register_signal()
-        await self._task
-
     async def __on_receive_external(self, message: Message):
         if isinstance(message, WorkerHeartbeatEcho):
             await self._heartbeat_manager.on_heartbeat_echo(message)
