@@ -26,7 +26,7 @@ class PySyncObjectStorageConnector(SyncObjectStorageConnector):
             f"{self.__class__.__name__}|{socket.gethostname().split('.')[0]}|{uuid.uuid4()}".encode()
         )
 
-        self._socket: Optional[socket.socket] = socket.create_connection((self._host, self._port), timeout=10)
+        self._socket: Optional[socket.socket] = socket.create_connection((self._host, self._port), timeout=60)
         self._socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
         self._next_request_id = 0
