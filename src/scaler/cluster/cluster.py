@@ -94,7 +94,11 @@ class Cluster(multiprocessing.get_context("spawn").Process):  # type: ignore[mis
 
         # run until stopped
         try:
-            await self._stopped.wait()
+            stop_task = asyncio.create_task(self._stopped.wait())
+            join_task = asyncio.create_task(self._worker_adapter.join())
+
+            # we're done when either all the workers have exited, or we received a stop signal
+            await asyncio.wait([stop_task, join_task], return_when=asyncio.FIRST_COMPLETED)
         finally:
             # stop the web server
             await runner.cleanup()

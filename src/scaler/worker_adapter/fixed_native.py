@@ -73,6 +73,14 @@ class FixedNativeWorkerAdapter:
         for worker_id in list(self._workers.keys()):
             self._shutdown_worker(worker_id)
 
+    async def join(self):
+        """Wait for all workers to finish."""
+
+        # this specific adapter cannot dynamically spawn workers
+        # therefore we just wait for all existing workers to finish
+        for worker in self._workers.values():
+                worker.join()
+
     async def webhook_handler(self, request: Request):
         request_json = await request.json()
 
