@@ -63,8 +63,8 @@ class Cluster(multiprocessing.get_context("spawn").Process):  # type: ignore[mis
     async def _run(self):
         self._stopped = asyncio.Event()
 
-        signal.signal(signal.SIGINT, lambda s, f: self.__destroy())
-        signal.signal(signal.SIGTERM, lambda s, f: self.__destroy())
+        self._loop.add_signal_handler(signal.SIGINT, self.__destroy)
+        self._loop.add_signal_handler(signal.SIGTERM, self.__destroy)
 
         await self.__start_workers_and_run_forever()
 
