@@ -114,4 +114,3 @@ class TestCapabilities(unittest.TestCase):
             self.assertEqual(future.result(), 8)
 
             gpu_cluster.terminate()
-            gpu_cluster.join()
