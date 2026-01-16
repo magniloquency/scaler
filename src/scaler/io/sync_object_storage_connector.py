@@ -44,11 +44,6 @@ class PySyncObjectStorageConnector(SyncObjectStorageConnector):
             if self._socket is not None:
                 self._socket.close()
                 self._socket = None
-        # if hasattr(self, "_socket_lock"):
-        #     with self._socket_lock:
-        #         if hasattr(self, "_socket") and self._socket is not None:
-        #             self._socket.close()
-        #             self._socket = None
 
     @property
     def address(self) -> str:
