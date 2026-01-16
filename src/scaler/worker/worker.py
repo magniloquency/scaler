@@ -106,8 +106,15 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
         return self._ident
 
     def run(self) -> None:
+        self._loop = asyncio.new_event_loop()
+        self._loop.run_until_complete(self._run())
+
+    async def _run(self) -> None:
         self.__initialize()
-        self.__run_forever()
+
+        self._task = self._loop.create_task(self.__get_loops())
+        self.__register_signal()
+        await self._task
 
     def __initialize(self):
         setup_logger()
@@ -171,10 +178,6 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
             binder_internal=self._binder_internal,
             connector_storage=self._connector_storage,
         )
-
-        self._loop = asyncio.get_event_loop()
-        self.__register_signal()
-        self._task = self._loop.create_task(self.__get_loops())
 
     async def __on_receive_external(self, message: Message):
         if isinstance(message, WorkerHeartbeatEcho):
@@ -270,9 +273,6 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
         os.remove(self._address_path_internal)
 
         logging.info(f"{self.identity!r}: quit")
-
-    def __run_forever(self):
-        self._loop.run_until_complete(self._task)
 
     def __register_signal(self):
         backend = get_scaler_network_backend_from_env()
