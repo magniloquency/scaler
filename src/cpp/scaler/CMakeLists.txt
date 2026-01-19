@@ -1,4 +1,4 @@
-add_subdirectory(uv)
+add_subdirectory(wrapper/uv)
 
 if(LINUX OR APPLE)
   add_subdirectory(object_storage)
@@ -11,3 +11,5 @@ if(LINUX OR WIN32)
 else()
   message(WARNING "Not building YMQ, as it's not supported on this system currently!")
 endif()
+
+add_subdirectory(utility)
