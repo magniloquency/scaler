@@ -43,3 +43,5 @@ class ObjectStorageServerProcess(multiprocessing.get_context("fork").Process):  
             log_format_str,
             logging_paths,
         )
+
+        print("OSS: RETURNED TO PYTHON")

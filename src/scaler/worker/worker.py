@@ -111,10 +111,7 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
 
     async def _run(self) -> None:
         self.__initialize()
-
-        self._task = self._loop.create_task(self.__get_loops())
-        self.__register_signal()
-        await self._task
+        await self.__run_forever()
 
     def __initialize(self):
         setup_logger()
@@ -247,6 +244,7 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
                 create_async_loop_routine(self._profiling_manager.routine, PROFILING_INTERVAL_SECONDS),
             )
         except asyncio.CancelledError:
+            print("CANCELATION RECEIVED")
             pass
 
         except ObjectStorageException:
@@ -263,8 +261,26 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
         except Exception as e:
             logging.exception(f"{self.identity!r}: failed with unhandled exception:\n{e}")
 
-        if get_scaler_network_backend_from_env() == NetworkBackend.tcp_zmq:
-            await self._connector_external.send(DisconnectRequest.new_msg(self.identity))
+        try:
+            send = self._connector_external.send(WorkerDisconnectNotification.new_msg(self.identity))
+            await asyncio.wait_for(send, timeout=5.0)
+            #done, pending = await asyncio.wait([send], timeout=5.0)
+            #print(f"done: {done}, pending: {pending}")
+        except ymq.YMQException as e:
+
+            # this can happen if the scheduler shut down before we could send our notification
+            # we don't consider this to be an error
+            if e.code == ymq.ErrorCode.ConnectorSocketClosedByRemoteEnd:
+                print("CLOSED BY REMOTE END!")
+                pass
+            else:
+                raise
+        except (asyncio.TimeoutError, TimeoutError):
+            # this can also happen if the scheduler shut down before we could send our notification
+            # also not considered an error
+            logging.warning(f"{self.identity!r}: timed out sending WorkerDisconnectNotification to scheduler")
+
+        print("END GAME")
 
         self._connector_external.destroy()
         self._processor_manager.destroy("quit")
@@ -274,17 +290,14 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
 
         logging.info(f"{self.identity!r}: quit")
 
-    def __register_signal(self):
-        backend = get_scaler_network_backend_from_env()
-        if backend == NetworkBackend.tcp_zmq:
-            self._loop.add_signal_handler(signal.SIGINT, self.__destroy)
-            self._loop.add_signal_handler(signal.SIGTERM, self.__destroy)
-        elif backend == NetworkBackend.ymq:
-            self._loop.add_signal_handler(signal.SIGINT, lambda: asyncio.ensure_future(self.__graceful_shutdown()))
-            self._loop.add_signal_handler(signal.SIGTERM, lambda: asyncio.ensure_future(self.__graceful_shutdown()))
+    async def __run_forever(self):
+        self._task = self._loop.create_task(self.__get_loops())
+        self.__register_signal()
+        await self._task
 
-    async def __graceful_shutdown(self):
-        await self._connector_external.send(DisconnectRequest.new_msg(self.identity))
+    def __register_signal(self):
+        self._loop.add_signal_handler(signal.SIGINT, self.__destroy)
+        self._loop.add_signal_handler(signal.SIGTERM, self.__destroy)
 
     def __destroy(self):
         self._task.cancel()

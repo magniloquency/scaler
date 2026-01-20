@@ -56,15 +56,20 @@ static PyObject* PyObjectStorageServerRun(PyObject* self, PyObject* args)
 
     int res {};
     auto running = [&] -> bool {
-        scaler::utility::pymod::AcquireGIL gil;
-        (void)gil;
+        // scaler::ymq::pymod::AcquireGIL gil;
+        //(void)gil;
         res = PyErr_CheckSignals();
         return res == 0;
     };
 
+    // Py_BEGIN_ALLOW_THREADS;
+
     ((PyObjectStorageServer*)self)
         ->server.run(
             addr, std::to_string(port), identity, log_level, log_format, std::move(logging_paths), std::move(running));
+    printf("OSS: ACQUIRE GIL\n");
+    // Py_END_ALLOW_THREADS;
+    printf("OSS: GIL ACQUIRED\n");
 
     if (!res) {
         Py_RETURN_NONE;
