@@ -153,11 +153,6 @@ class SchedulerClusterCombo:
         print("JOIN SCHEDULER")
         self._scheduler.join()
 
-        print("TERMINATING OBJECT STORAGE!!!!!")
-
-        import traceback
-        traceback.print_stack()
-
         # object storage should terminate after the cluster and scheduler.
         self._object_storage.terminate()
         self._object_storage.join()
