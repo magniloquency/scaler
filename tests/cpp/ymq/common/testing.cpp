@@ -62,7 +62,7 @@ std::wstring discover_python_home(std::string command)
     std::array<char, 128> buffer {};
     std::string output {};
 
-    size_t n;
+    size_t n = 0;
     while ((n = fread(buffer.data(), 1, buffer.size(), pipe)) > 0)
         output.append(buffer.data(), n);
 
