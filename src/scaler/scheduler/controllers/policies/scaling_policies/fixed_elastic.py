@@ -7,8 +7,8 @@ from aiohttp import web
 
 from scaler.protocol.python.message import InformationSnapshot
 from scaler.protocol.python.status import ScalingManagerStatus
-from scaler.scheduler.controllers.scaling_policies.mixins import ScalingController
-from scaler.scheduler.controllers.scaling_policies.types import WorkerGroupID
+from scaler.scheduler.controllers.policies.scaling_policies.mixins import ScalingController
+from scaler.scheduler.controllers.policies.scaling_policies.types import WorkerGroupID
 from scaler.utility.identifiers import WorkerID
 
 WorkerAdapterLabel = Literal["primary", "secondary"]

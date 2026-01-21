@@ -6,7 +6,7 @@ from scaler.config.common.logging import LoggingConfig
 from scaler.config.common.worker import WorkerConfig
 from scaler.config.section.cluster import ClusterConfig
 from scaler.config.types.worker import WorkerCapabilities, WorkerNames
-from scaler.scheduler.allocate_policy.allocate_policy import AllocatePolicy
+from scaler.scheduler.controllers.policies.allocate_policy.allocate_policy import AllocatePolicy
 from scaler.utility.logging.utility import setup_logger
 from tests.utility.utility import logging_test_name
 

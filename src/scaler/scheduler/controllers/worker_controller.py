@@ -15,7 +15,7 @@ from scaler.protocol.python.message import (
     WorkerHeartbeatEcho,
 )
 from scaler.protocol.python.status import ProcessorStatus, Resource, WorkerManagerStatus, WorkerStatus
-from scaler.scheduler.allocate_policy.mixins import TaskAllocatePolicy
+from scaler.scheduler.controllers.policies.allocate_policy.mixins import TaskAllocatePolicy
 from scaler.scheduler.controllers.config_controller import VanillaConfigController
 from scaler.scheduler.controllers.mixins import TaskController, WorkerController
 from scaler.utility.identifiers import ClientID, TaskID, WorkerID
