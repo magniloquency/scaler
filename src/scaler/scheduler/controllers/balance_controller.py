@@ -3,9 +3,9 @@ from typing import Dict, List, Optional
 
 from scaler.io.mixins import AsyncBinder, AsyncConnector
 from scaler.protocol.python.message import StateBalanceAdvice
-from scaler.scheduler.controllers.policies.allocation.mixins import TaskAllocatePolicy
 from scaler.scheduler.controllers.config_controller import VanillaConfigController
 from scaler.scheduler.controllers.mixins import TaskController
+from scaler.scheduler.controllers.policies.allocation.mixins import TaskAllocatePolicy
 from scaler.utility.identifiers import TaskID, WorkerID
 from scaler.utility.mixins import Looper
 

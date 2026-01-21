@@ -1,13 +1,8 @@
 import abc
 from typing import Dict, List, Optional, Set
 
-from scaler.protocol.python.message import Task
+from scaler.protocol.python.message import InformationSnapshot, Task
 from scaler.utility.identifiers import TaskID, WorkerID
-
-
-import abc
-
-from scaler.protocol.python.message import InformationSnapshot
 from scaler.utility.mixins import Reporter
 
 
