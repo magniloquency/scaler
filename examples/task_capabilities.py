@@ -12,7 +12,7 @@ from scaler.config.common.logging import LoggingConfig
 from scaler.config.common.worker import WorkerConfig
 from scaler.config.section.cluster import ClusterConfig
 from scaler.config.types.worker import WorkerCapabilities, WorkerNames
-from scaler.scheduler.controllers.policies.allocate_policy.allocate_policy import AllocatePolicy
+from scaler.scheduler.controllers.policies.allocation.allocate_policy import AllocatePolicy
 
 
 def gpu_task(x: float) -> float:

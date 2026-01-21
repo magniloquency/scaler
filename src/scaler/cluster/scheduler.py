@@ -7,7 +7,7 @@ from typing import Any, Optional, Tuple
 from scaler.config.section.scheduler import SchedulerConfig
 from scaler.config.types.object_storage_server import ObjectStorageAddressConfig
 from scaler.config.types.zmq import ZMQConfig
-from scaler.scheduler.controllers.policies.allocate_policy.allocate_policy import AllocatePolicy
+from scaler.scheduler.controllers.policies.allocation.allocate_policy import AllocatePolicy
 from scaler.scheduler.controllers.policies.scaling_policies.types import ScalingControllerStrategy
 from scaler.scheduler.scheduler import Scheduler, scheduler_main
 from scaler.utility.event_loop import register_event_loop

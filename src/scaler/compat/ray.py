@@ -36,7 +36,7 @@ from scaler.config.defaults import (
     DEFAULT_WORKER_DEATH_TIMEOUT,
     DEFAULT_WORKER_TIMEOUT_SECONDS,
 )
-from scaler.scheduler.controllers.policies.allocate_policy.allocate_policy import AllocatePolicy
+from scaler.scheduler.controllers.policies.allocation.allocate_policy import AllocatePolicy
 
 
 def _not_implemented(*args, **kwargs) -> None:
