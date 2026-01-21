@@ -148,9 +148,7 @@ class SchedulerClusterCombo:
         logging.info(f"{self.__get_prefix()} shutdown")
         self._cluster.terminate()
         self._scheduler.terminate()
-        print("JOIN CLUSTER")
         self._cluster.join()
-        print("JOIN SCHEDULER")
         self._scheduler.join()
 
         # object storage should terminate after the cluster and scheduler.

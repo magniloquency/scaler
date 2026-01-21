@@ -54,12 +54,12 @@ static PyObject* PyObjectStorageServerRun(PyObject* self, PyObject* args)
         logging_paths.push_back(PyUnicode_AsUTF8(path_obj));
     }
 
-    PyThreadState *_save = PyEval_SaveThread();
+    PyThreadState* _save = PyEval_SaveThread();
 
     int res {};
     auto running = [&] -> bool {
         PyEval_RestoreThread(_save);
-        res = PyErr_CheckSignals();
+        res   = PyErr_CheckSignals();
         _save = PyEval_SaveThread();
         return res == 0;
     };
@@ -67,9 +67,7 @@ static PyObject* PyObjectStorageServerRun(PyObject* self, PyObject* args)
     ((PyObjectStorageServer*)self)
         ->server.run(
             addr, std::to_string(port), identity, log_level, log_format, std::move(logging_paths), std::move(running));
-    printf("OSS: ACQUIRE GIL\n");
     PyEval_RestoreThread(_save);
-    printf("OSS: GIL ACQUIRED\n");
 
     if (!res) {
         Py_RETURN_NONE;
