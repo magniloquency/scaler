@@ -1,6 +1,7 @@
 import logging
 import multiprocessing
-import threading
+import socket
+import time
 from typing import Optional, Tuple
 
 from scaler.config.types.object_storage_server import ObjectStorageAddressConfig
@@ -24,11 +25,21 @@ class ObjectStorageServerProcess(multiprocessing.get_context("spawn").Process): 
 
         self._object_storage_address = object_storage_address
 
-        self._ready_event = multiprocessing.get_context("spawn").Event()
-
     def wait_until_ready(self) -> None:
         """Blocks until the object storage server is available to server requests."""
-        self._ready_event.wait()
+        host = self._object_storage_address.host
+        port = int(self._object_storage_address.port)
+
+        start_time = time.time()
+        while time.time() - start_time < 30:
+            try:
+                # Try to connect to the port
+                with socket.create_connection((host, port), timeout=1):
+                    return
+            except (ConnectionRefusedError, socket.timeout, OSError):
+                time.sleep(0.1)
+
+        raise TimeoutError(f"ObjectStorageServer at {host}:{port} failed to start within 30 seconds")
 
     def run(self) -> None:
         setup_logger(self._logging_paths, self._logging_config_file, self._logging_level)
@@ -37,15 +48,6 @@ class ObjectStorageServerProcess(multiprocessing.get_context("spawn").Process): 
         log_format_str, log_level_str, logging_paths = get_logger_info(logging.getLogger())
 
         server = ObjectStorageServer()
-
-        # Start a thread to signal readiness by waiting on the internal C++ pipe.
-        # This is needed because server.run() blocks.
-        def signal_ready():
-            server.wait_until_ready()
-            self._ready_event.set()
-
-        threading.Thread(target=signal_ready, daemon=True).start()
-
         server.run(
             self._object_storage_address.host,
             self._object_storage_address.port,
