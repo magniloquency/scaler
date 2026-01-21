@@ -30,7 +30,7 @@ from scaler.config.types.object_storage_server import ObjectStorageAddressConfig
 from scaler.config.types.worker import WorkerCapabilities, WorkerNames
 from scaler.config.types.zmq import ZMQConfig
 from scaler.scheduler.controllers.policies.allocation.allocate_policy import AllocatePolicy
-from scaler.scheduler.controllers.policies.scaling_policies.types import ScalingControllerStrategy
+from scaler.scheduler.controllers.policies.scaling.types import ScalingControllerStrategy
 from scaler.utility.network_util import get_available_tcp_port
 
 

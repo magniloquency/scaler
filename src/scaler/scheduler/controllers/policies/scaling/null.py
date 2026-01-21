@@ -1,6 +1,6 @@
 from scaler.protocol.python.message import InformationSnapshot
 from scaler.protocol.python.status import ScalingManagerStatus
-from scaler.scheduler.controllers.policies.scaling_policies.mixins import ScalingController
+from scaler.scheduler.controllers.policies.scaling.mixins import ScalingController
 
 
 class NullScalingController(ScalingController):
