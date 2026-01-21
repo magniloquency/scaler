@@ -53,11 +53,11 @@ void wait_for_python_ready_sigblock(void** hEvent)
     std::cout << "blocked signal..." << std::endl;
 }
 
-void wait_for_python_ready_sigwait(void* hEvent, int timeout_secs)
+void wait_for_python_ready_sigwait(void* hEvent, int timeoutSecs)
 {
     std::cout << "waiting for python to be ready..." << std::endl;
 
-    timespec ts {.tv_sec = timeout_secs, .tv_nsec = 0};
+    timespec ts {.tv_sec = timeoutSecs, .tv_nsec = 0};
     sigset_t set {};
     siginfo_t sig {};
 
@@ -75,7 +75,7 @@ void wait_for_python_ready_sigwait(void* hEvent, int timeout_secs)
     std::cout << "signal received; python is ready" << std::endl;
 }
 
-TestResult test(int timeout_secs, std::vector<std::function<TestResult()>> closures, bool wait_for_python)
+TestResult test(int timeoutSecs, std::vector<std::function<TestResult()>> closures, bool waitForPython)
 {
     std::vector<Pipe> pipes {};
 
@@ -85,7 +85,7 @@ TestResult test(int timeout_secs, std::vector<std::function<TestResult()>> closu
     std::vector<int> pids {};
     void* hEvent = nullptr;
     for (size_t i = 0; i < closures.size(); i++) {
-        if (wait_for_python && i == 0)
+        if (waitForPython && i == 0)
             wait_for_python_ready_sigblock(&hEvent);
 
         auto pid = fork();
@@ -96,28 +96,28 @@ TestResult test(int timeout_secs, std::vector<std::function<TestResult()>> closu
         }
 
         if (pid == 0) {
-            test_wrapper(closures[i], timeout_secs, std::move(pipes[i].writer), nullptr);
+            test_wrapper(closures[i], timeoutSecs, std::move(pipes[i].writer), nullptr);
             std::exit(EXIT_SUCCESS);
         }
 
         pids.push_back(pid);
 
-        if (wait_for_python && i == 0)
+        if (waitForPython && i == 0)
             wait_for_python_ready_sigwait(&hEvent, 3);
     }
 
-    std::vector<pollfd> pfds {};
+    std::vector<pollfd> pollFds {};
 
-    int timerfd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
-    if (timerfd < 0) {
+    int timerFd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
+    if (timerFd < 0) {
         std::for_each(pids.begin(), pids.end(), [](const auto& pid) { kill(pid, SIGKILL); });
 
         raise_system_error("failed to create timerfd");
     }
 
-    pfds.push_back({.fd = timerfd, .events = POLL_IN, .revents = 0});
+    pollFds.push_back({.fd = timerFd, .events = POLL_IN, .revents = 0});
     for (const auto& pipe: pipes)
-        pfds.push_back({
+        pollFds.push_back({
             .fd      = (int)pipe.reader.fd(),
             .events  = POLL_IN,
             .revents = 0,
@@ -130,13 +130,13 @@ TestResult test(int timeout_secs, std::vector<std::function<TestResult()>> closu
                 .tv_nsec = 0,
             },
         .it_value = {
-            .tv_sec  = timeout_secs,
+            .tv_sec  = timeoutSecs,
             .tv_nsec = 0,
         }};
 
-    if (timerfd_settime(timerfd, 0, &spec, nullptr) < 0) {
+    if (timerfd_settime(timerFd, 0, &spec, nullptr) < 0) {
         std::for_each(pids.begin(), pids.end(), [](const auto& pid) { kill(pid, SIGKILL); });
-        close(timerfd);
+        close(timerFd);
 
         raise_system_error("failed to set timerfd");
     }
@@ -144,24 +144,24 @@ TestResult test(int timeout_secs, std::vector<std::function<TestResult()>> closu
     std::vector<std::optional<TestResult>> results(pids.size(), std::nullopt);
 
     for (;;) {
-        auto n = poll(pfds.data(), pfds.size(), -1);
+        auto n = poll(pollFds.data(), pollFds.size(), -1);
         if (n < 0) {
             std::for_each(pids.begin(), pids.end(), [](const auto& pid) { kill(pid, SIGKILL); });
-            close(timerfd);
+            close(timerFd);
 
             raise_system_error("failed to poll");
         }
 
-        for (auto& pfd: std::vector(pfds)) {
+        for (auto& pfd: std::vector(pollFds)) {
             if (pfd.revents == 0)
                 continue;
 
             // timed out
-            if (pfd.fd == timerfd) {
+            if (pfd.fd == timerFd) {
                 std::cout << "Timed out!\n";
 
                 std::for_each(pids.begin(), pids.end(), [](const auto& pid) { kill(pid, SIGKILL); });
-                close(timerfd);
+                close(timerFd);
 
                 return TestResult::Failure;
             }
@@ -188,9 +188,9 @@ TestResult test(int timeout_secs, std::vector<std::function<TestResult()>> closu
             if (waitpid(pids[idx], &status, 0) < 0)
                 std::cout << "failed to wait on subprocess[" << idx << "]: " << std::strerror(errno) << std::endl;
 
-            auto exit_status = WEXITSTATUS(status);
-            if (WIFEXITED(status) && exit_status != EXIT_SUCCESS) {
-                std::cout << "subprocess[" << idx << "] exited with status " << exit_status << std::endl;
+            auto exitStatus = WEXITSTATUS(status);
+            if (WIFEXITED(status) && exitStatus != EXIT_SUCCESS) {
+                std::cout << "subprocess[" << idx << "] exited with status " << exitStatus << std::endl;
             } else if (WIFSIGNALED(status)) {
                 std::cout << "subprocess[" << idx << "] killed by signal " << WTERMSIG(status) << std::endl;
             } else {
@@ -202,8 +202,8 @@ TestResult test(int timeout_secs, std::vector<std::function<TestResult()>> closu
             results[idx] = result;
 
             // this subprocess is done, remove its pipe from the poll fds
-            pfds.erase(
-                std::remove_if(pfds.begin(), pfds.end(), [&](const auto& p) { return p.fd == pfd.fd; }), pfds.end());
+            pollFds.erase(
+                std::remove_if(pollFds.begin(), pollFds.end(), [&](const auto& p) { return p.fd == pfd.fd; }), pollFds.end());
 
             auto done =
                 std::all_of(results.begin(), results.end(), [](const auto& result) { return result.has_value(); });
@@ -213,7 +213,7 @@ TestResult test(int timeout_secs, std::vector<std::function<TestResult()>> closu
     }
 
 end:
-    close(timerfd);
+    close(timerFd);
 
     if (std::ranges::any_of(results, [](const auto& x) { return x == TestResult::Failure; }))
         return TestResult::Failure;

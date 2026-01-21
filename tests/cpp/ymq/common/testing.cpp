@@ -27,13 +27,13 @@
 #define pclose _pclose
 #endif
 
-TestResult return_failure_if_false(bool cond, const char* msg, const char* cond_str, const char* file, int line)
+TestResult return_failure_if_false(bool cond, const char* msg, const char* condStr, const char* file, int line)
 {
     // Failure: ... (assertion failed) at file:line
     if (!cond) {
         std::cerr << "Failure";
-        if (cond_str)
-            std::cerr << ": " << cond_str;
+        if (condStr)
+            std::cerr << ": " << condStr;
         if (msg)
             std::cerr << " (" << msg << ")";
         else
@@ -47,9 +47,9 @@ TestResult return_failure_if_false(bool cond, const char* msg, const char* cond_
 }
 
 // in the case that there's no msg, delegate
-TestResult return_failure_if_false(bool cond, const char* cond_str, const char* file, int line)
+TestResult return_failure_if_false(bool cond, const char* condStr, const char* file, int line)
 {
-    return return_failure_if_false(cond, nullptr, cond_str, file, line);
+    return return_failure_if_false(cond, nullptr, condStr, file, line);
 }
 
 std::wstring discover_python_home(std::string command)
@@ -125,26 +125,26 @@ TestResult run_python(const char* path, std::vector<std::optional<std::string>> 
 {
     PyGILState_STATE gstate = PyGILState_Ensure();
 
-    auto pid_s = std::to_string(get_listener_pid());
-    argv.insert(argv.begin(), pid_s.c_str());
+    auto pidStr = std::to_string(get_listener_pid());
+    argv.insert(argv.begin(), pidStr.c_str());
     argv.insert(argv.begin(), "mitm");
 
     // set argv
     {
-        PyObject* py_argv = PyList_New(argv.size());
-        if (!py_argv)
+        PyObject* pyArgv = PyList_New(argv.size());
+        if (!pyArgv)
             goto exception;
 
         for (size_t i = 0; i < argv.size(); i++)
             if (argv[i])
-                PyList_SET_ITEM(py_argv, i, PyUnicode_FromString(argv[i].value().c_str()));
+                PyList_SET_ITEM(pyArgv, i, PyUnicode_FromString(argv[i].value().c_str()));
             else
-                PyList_SET_ITEM(py_argv, i, Py_None);
+                PyList_SET_ITEM(pyArgv, i, Py_None);
 
-        if (PySys_SetObject("argv", py_argv) < 0)
+        if (PySys_SetObject("argv", pyArgv) < 0)
             goto exception;
 
-        Py_DECREF(py_argv);
+        Py_DECREF(pyArgv);
     }
 
     {
@@ -168,21 +168,21 @@ exception:
 }
 
 TestResult run_mitm(
-    std::string testcase,
-    std::string mitm_ip,
-    uint16_t mitm_port,
-    std::string remote_ip,
-    uint16_t remote_port,
-    std::vector<std::string> extra_args)
+    std::string testCase,
+    std::string mitmIp,
+    uint16_t mitmPort,
+    std::string remoteIp,
+    uint16_t remotePort,
+    std::vector<std::string> extraArgs)
 {
     auto cwd = std::filesystem::current_path();
     chdir_to_project_root();
 
     // we build the args for the user to make calling the function more convenient
     std::vector<std::optional<std::string>> args {
-        testcase, mitm_ip, std::to_string(mitm_port), remote_ip, std::to_string(remote_port)};
+        testCase, mitmIp, std::to_string(mitmPort), remoteIp, std::to_string(remotePort)};
 
-    for (auto arg: extra_args)
+    for (auto arg: extraArgs)
         args.push_back(arg);
 
     auto result = run_python("tests/cpp/ymq/py_mitm/main.py", args);
@@ -192,7 +192,7 @@ TestResult run_mitm(
     return result;
 }
 
-void test_wrapper(std::function<TestResult()> fn, int timeout_secs, PipeWriter pipe_wr, void* hEvent)
+void test_wrapper(std::function<TestResult()> fn, int timeoutSecs, PipeWriter pipeWr, void* hEvent)
 {
     TestResult result = TestResult::Failure;
     try {
@@ -205,7 +205,7 @@ void test_wrapper(std::function<TestResult()> fn, int timeout_secs, PipeWriter p
         result = TestResult::Failure;
     }
 
-    pipe_wr.write_all((char*)&result, sizeof(TestResult));
+    pipeWr.write_all((char*)&result, sizeof(TestResult));
 
     signal_event(hEvent);
 }

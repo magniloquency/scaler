@@ -19,9 +19,9 @@ void chdir_to_project_root()
     }
 }
 
-unsigned short random_port(unsigned short min_port, unsigned short max_port)
+unsigned short random_port(unsigned short minPort, unsigned short maxPort)
 {
     static thread_local std::mt19937_64 rng(std::random_device {}());
-    std::uniform_int_distribution<unsigned int> dist(min_port, max_port);
+    std::uniform_int_distribution<unsigned int> dist(minPort, maxPort);
     return static_cast<unsigned short>(dist(rng));
 }
