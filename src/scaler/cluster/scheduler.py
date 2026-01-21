@@ -78,11 +78,6 @@ class SchedulerProcess(multiprocessing.get_context("spawn").Process):  # type: i
         setup_logger(self._logging_paths, self._logging_config_file, self._logging_level)
         register_event_loop(self._scheduler_config.event_loop)
 
-        self._loop = asyncio.get_event_loop()
-        self.__register_signal()
-        self._task = self._loop.create_task(scheduler_main(self._scheduler_config))
-        self._loop.run_until_complete(self._task)
-
     def __register_signal(self):
         self._loop.add_signal_handler(signal.SIGINT, self.__handle_signal)
         self._loop.add_signal_handler(signal.SIGTERM, self.__handle_signal)
