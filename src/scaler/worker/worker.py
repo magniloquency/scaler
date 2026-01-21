@@ -283,8 +283,8 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
             self._loop.add_signal_handler(signal.SIGINT, self.__destroy)
             self._loop.add_signal_handler(signal.SIGTERM, self.__destroy)
         elif backend == NetworkBackend.ymq:
-            self._loop.add_signal_handler(signal.SIGINT, lambda: asyncio.ensure_future(self.__graceful_shutdown()))
-            self._loop.add_signal_handler(signal.SIGTERM, lambda: asyncio.ensure_future(self.__graceful_shutdown()))
+            self._loop.add_signal_handler(signal.SIGINT, lambda: asyncio.create_task(self.__graceful_shutdown()))
+            self._loop.add_signal_handler(signal.SIGTERM, lambda: asyncio.create_task(self.__graceful_shutdown()))
 
     async def __graceful_shutdown(self):
         try:
