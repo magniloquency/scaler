@@ -1,7 +1,7 @@
 import dataclasses
 import enum
 import typing
-from typing import Any, Dict, OrderedDict, Type, TypeVar
+from typing import Any, Dict, List, Optional, OrderedDict, Type, TypeVar
 
 from configargparse import ArgParser, ArgumentDefaultsHelpFormatter, ArgumentTypeError, TomlConfigParser
 
@@ -269,7 +269,7 @@ class ConfigClass:
 class UnderscoreTomlConfigParser:
     """A TOML config parser that converts underscores to hyphens in key names"""
 
-    def __init__(self, sections: typing.List[str] | None = None):
+    def __init__(self, sections: Optional[List[str]] = None):
         self._parser = TomlConfigParser(sections=sections)
 
     def __call__(self):
