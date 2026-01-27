@@ -23,7 +23,8 @@ class ConfigClass:
     All options with a long name can be parsed from a TOML config file specified with `--config` or `-c`.
     The section name is determined by the subclass' implementation of `.section_name()`.
 
-    Keys in the config file correspond to the long name of the argument and may use underscores or hyphens interchangeably.
+    Keys in the config file correspond to the long name of the argument
+    and may use underscores or hyphens interchangeably.
 
     For example, given the config class:
     ```python
