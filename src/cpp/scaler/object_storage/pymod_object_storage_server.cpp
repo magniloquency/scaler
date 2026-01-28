@@ -54,20 +54,31 @@ static PyObject* PyObjectStorageServerRun(PyObject* self, PyObject* args)
         logging_paths.push_back(PyUnicode_AsUTF8(path_obj));
     }
 
-    PyThreadState* _save = PyEval_SaveThread();
-
     int res {};
     auto running = [&] -> bool {
-        PyEval_RestoreThread(_save);
-        res   = PyErr_CheckSignals();
-        _save = PyEval_SaveThread();
+        PyGILState_STATE gstate = PyGILState_Ensure();
+        res                     = PyErr_CheckSignals();
+        PyGILState_Release(gstate);
         return res == 0;
     };
 
+    std::string s_addr(addr);
+    std::string s_port = std::to_string(port);
+    std::string s_identity(identity);
+    std::string s_log_level(log_level);
+    std::string s_log_format(log_format);
+
+    Py_BEGIN_ALLOW_THREADS
     ((PyObjectStorageServer*)self)
         ->server.run(
-            addr, std::to_string(port), identity, log_level, log_format, std::move(logging_paths), std::move(running));
-    PyEval_RestoreThread(_save);
+            std::move(s_addr),
+            std::move(s_port),
+            std::move(s_identity),
+            std::move(s_log_level),
+            std::move(s_log_format),
+            std::move(logging_paths),
+            std::move(running));
+    Py_END_ALLOW_THREADS
 
     if (!res) {
         Py_RETURN_NONE;
@@ -78,7 +89,9 @@ static PyObject* PyObjectStorageServerRun(PyObject* self, PyObject* args)
 
 static PyObject* PyObjectStorageServerWaitUntilReady(PyObject* self, [[maybe_unused]] PyObject* args)
 {
+    Py_BEGIN_ALLOW_THREADS
     ((PyObjectStorageServer*)self)->server.waitUntilReady();
+    Py_END_ALLOW_THREADS
     Py_RETURN_NONE;
 }
 

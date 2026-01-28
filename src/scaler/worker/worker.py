@@ -263,10 +263,10 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
 
         try:
             await self._connector_external.send(DisconnectRequest.new_msg(self.identity))
-        except ymq.YMQException as e:
+        except (asyncio.CancelledError, ymq.YMQException) as e:
 
             # This can happen if the scheduler has already closed the connection.
-            if e.code == ymq.ErrorCode.ConnectorSocketClosedByRemoteEnd:
+            if isinstance(e, asyncio.CancelledError) or e.code == ymq.ErrorCode.ConnectorSocketClosedByRemoteEnd:
                 pass
             else:
                 logging.exception(f"{self.identity!r}: failed to send DisconnectRequest:\n{e}")
