@@ -68,8 +68,7 @@ static PyObject* PyObjectStorageServerRun(PyObject* self, PyObject* args)
     std::string s_log_level(log_level);
     std::string s_log_format(log_format);
 
-    Py_BEGIN_ALLOW_THREADS
-    ((PyObjectStorageServer*)self)
+    Py_BEGIN_ALLOW_THREADS((PyObjectStorageServer*)self)
         ->server.run(
             std::move(s_addr),
             std::move(s_port),
@@ -80,19 +79,20 @@ static PyObject* PyObjectStorageServerRun(PyObject* self, PyObject* args)
             std::move(running));
     Py_END_ALLOW_THREADS
 
-    if (!res) {
+        if (!res)
+    {
         Py_RETURN_NONE;
-    } else {
+    }
+    else
+    {
         return nullptr;
     }
 }
 
 static PyObject* PyObjectStorageServerWaitUntilReady(PyObject* self, [[maybe_unused]] PyObject* args)
 {
-    Py_BEGIN_ALLOW_THREADS
-    ((PyObjectStorageServer*)self)->server.waitUntilReady();
-    Py_END_ALLOW_THREADS
-    Py_RETURN_NONE;
+    Py_BEGIN_ALLOW_THREADS((PyObjectStorageServer*)self)->server.waitUntilReady();
+    Py_END_ALLOW_THREADS Py_RETURN_NONE;
 }
 
 static PyMethodDef PyObjectStorageServerMethods[] = {
