@@ -4,7 +4,7 @@ WorkerGroupID = bytes
 
 
 class ScalingControllerStrategy(enum.Enum):
-    NO = "no"
+    NULL = "null"
     VANILLA = "vanilla"
     FIXED_ELASTIC = "fixed_elastic"
     CAPABILITY = "capability"

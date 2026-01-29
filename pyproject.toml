@@ -52,6 +52,10 @@ graphblas = [
 aws = [
     "boto3",
 ]
+orb = [
+    "orb-py~=1.1; python_version >= '3.9'",
+    "boto3",
+]
 all = [
     "nicegui[plotly]==2.24.2; python_version == '3.8'",
     "nicegui[plotly]==3.6.0; python_version >= '3.9'",
@@ -63,6 +67,7 @@ all = [
     "numpy==2.2.6; python_version >= '3.10'",
     "uvloop; platform_system != 'Windows'",
     "boto3",
+    "orb-py~=1.1; python_version >= '3.9'"
 ]
 
 [dependency-groups]
@@ -97,6 +102,7 @@ scaler_object_storage_server = "scaler.entry_points.object_storage_server:main"
 scaler_worker_adapter_native = "scaler.entry_points.worker_adapter_native:main"
 scaler_worker_adapter_symphony = "scaler.entry_points.worker_adapter_symphony:main"
 scaler_worker_adapter_ecs = "scaler.entry_points.worker_adapter_ecs:main"
+scaler_worker_adapter_orb = "scaler.entry_points.worker_adapter_orb:main"
 
 [tool.scikit-build]
 cmake.source-dir = "."
@@ -156,30 +162,17 @@ skip = "pp* cp39-*"
 archs = ["x86_64"]
 manylinux-x86_64-image = "manylinux_2_28"
 before-all = """
-yum install -y cmake gcc-toolset-14-gcc gcc-toolset-14-gcc-c++; \
-source /opt/rh/gcc-toolset-14/enable; \
-./scripts/library_tool.sh capnp download; \
-./scripts/library_tool.sh capnp compile; \
-./scripts/library_tool.sh capnp install; \
-./scripts/library_tool.sh libuv download; \
-./scripts/library_tool.sh libuv compile; \
-./scripts/library_tool.sh libuv install; \
-echo "/usr/local/lib" > /etc/ld.so.conf.d/local.conf; \
-ldconfig;
+yum install -y sudo; \
+sudo ./scripts/library_tool.sh capnp compile; \
+sudo ./scripts/library_tool.sh capnp install;
 """
-environment = { PATH = "/opt/rh/gcc-toolset-14/root/usr/bin:$PATH", LD_LIBRARY_PATH = "/usr/local/lib:$LD_LIBRARY_PATH" }
 
 [[tool.cibuildwheel.overrides]]
 select = "*-musllinux*"
 before-all = """
-apk add cmake g++ make; \
-./scripts/library_tool.sh capnp download; \
-./scripts/library_tool.sh capnp compile; \
-./scripts/library_tool.sh capnp install; \
-./scripts/library_tool.sh libuv download; \
-./scripts/library_tool.sh libuv compile; \
-./scripts/library_tool.sh libuv install; \
-ldconfig /usr/local/lib;
+apk add sudo; \
+sudo ./scripts/library_tool.sh capnp compile; \
+sudo ./scripts/library_tool.sh capnp install;
 """
 
 #[tool.cibuildwheel.macos]

@@ -36,7 +36,7 @@ from scaler.config.defaults import (
     DEFAULT_WORKER_DEATH_TIMEOUT,
     DEFAULT_WORKER_TIMEOUT_SECONDS,
 )
-from scaler.config.section.scheduler import PolicyConfig
+from scaler.scheduler.allocate_policy.allocate_policy import AllocatePolicy
 
 
 def _not_implemented(*args, **kwargs) -> None:
@@ -109,7 +109,7 @@ def scaler_init(
     per_worker_task_queue_size: int = DEFAULT_PER_WORKER_QUEUE_SIZE,
     hard_processor_suspend: bool = DEFAULT_HARD_PROCESSOR_SUSPEND,
     protected: bool = True,
-    scaler_policy: PolicyConfig = PolicyConfig(policy_content="allocate=even_load; scaling=no"),
+    allocate_policy: AllocatePolicy = AllocatePolicy.even,
     event_loop: str = "builtin",
     logging_paths: Tuple[str, ...] = DEFAULT_LOGGING_PATHS,
     logging_level: str = DEFAULT_LOGGING_LEVEL,
@@ -160,7 +160,7 @@ def scaler_init(
             per_worker_task_queue_size=per_worker_task_queue_size,
             hard_processor_suspend=hard_processor_suspend,
             protected=protected,
-            scaler_policy=scaler_policy,
+            allocate_policy=allocate_policy,
             event_loop=event_loop,
             logging_paths=logging_paths,
             logging_level=logging_level,
