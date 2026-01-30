@@ -28,8 +28,13 @@ variable "ami_groups" {
   description = "A list of groups to share the AMI with. Set to ['all'] to make public."
 }
 
+variable "python_version" {
+  type    = string
+  default = "3.13"
+}
+
 source "amazon-ebs" "opengris-scaler" {
-  ami_name      = "opengris-scaler-${var.version}"
+  ami_name      = "opengris-scaler-${var.version}-py${var.python_version}"
   instance_type = "t2.small"
   region        = var.aws_region
   ami_regions   = var.ami_regions
@@ -41,7 +46,7 @@ source "amazon-ebs" "opengris-scaler" {
       virtualization-type = "hvm"
     }
     most_recent = true
-    owners      = ["898188442017"]
+    owners      = ["amazon"]
   }
   ssh_username = "ec2-user"
 }
@@ -53,8 +58,12 @@ build {
   provisioner "shell" {
     inline = [
       "sudo dnf update -y",
-      "sudo dnf install -y python3-pip",
-      "sudo pip3 install opengris-scaler==${var.version}"
+      "sudo dnf install -y python${var.python_version} python${var.python_version}-pip",
+      "sudo python${var.python_version} -m venv /opt/opengris-scaler",
+      "sudo /opt/opengris-scaler/bin/python -m pip install --upgrade pip",
+      "sudo /opt/opengris-scaler/bin/pip install opengris-scaler==${var.version}",
+      "sudo ln -sf /opt/opengris-scaler/bin/scaler_* /usr/local/bin/",
+      "sudo ln -sf /opt/opengris-scaler/bin/python /usr/local/bin/opengris-python"
     ]
   }
 }
