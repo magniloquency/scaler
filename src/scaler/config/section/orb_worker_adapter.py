@@ -19,8 +19,8 @@ class ORBWorkerAdapterConfig(ConfigClass):
 
     # ORB Template configuration
     image_id: str = dataclasses.field(metadata=dict(help="AMI ID for the worker instances"))
-    subnet_id: str = dataclasses.field(
-        metadata=dict(required=True, help="AWS subnet ID where the instances will be launched")
+    subnet_id: Optional[str] = dataclasses.field(
+        default=None, metadata=dict(help="AWS subnet ID where the instances will be launched (optional)")
     )
 
     worker_config: WorkerConfig = dataclasses.field(default_factory=WorkerConfig)
@@ -41,7 +41,7 @@ class ORBWorkerAdapterConfig(ConfigClass):
 
     instance_type: str = dataclasses.field(default="t2.micro", metadata=dict(help="EC2 instance type"))
     aws_region: Optional[str] = dataclasses.field(
-        default=None, metadata=dict(help="AWS region (optional, defaults to environment/profile settings)")
+        default="us-east-1", metadata=dict(help="AWS region (defaults to us-east-1)")
     )
     security_group_ids: List[str] = dataclasses.field(
         default_factory=list,
@@ -65,5 +65,5 @@ class ORBWorkerAdapterConfig(ConfigClass):
             raise ValueError("image_id must be provided.")
         if not self.instance_type:
             raise ValueError("instance_type must be provided.")
-        if not self.subnet_id:
-            raise ValueError("subnet_id must be provided.")
+        if not self.aws_region:
+            self.aws_region = "us-east-1"

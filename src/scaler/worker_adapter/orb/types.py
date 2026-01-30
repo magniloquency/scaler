@@ -11,6 +11,7 @@ class ORBTemplate:
     instance_type: Optional[str] = None
     image_id: Optional[str] = None
     max_instances: int = 1
+    subnet_id: Optional[str] = None
     subnet_ids: List[str] = field(default_factory=list)
     security_group_ids: List[str] = field(default_factory=list)
     price_type: str = "ondemand"

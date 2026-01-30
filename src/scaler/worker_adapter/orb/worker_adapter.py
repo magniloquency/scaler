@@ -40,9 +40,12 @@ class ORBAdapter:
         self._orb = ORBHelper(config.orb_config_path)
         self._worker_groups = {}
         self._created_security_group_id = None
-        self._ec2 = None
+        self._ec2 = boto3.client("ec2", region_name=self._config.aws_region)
 
         self._template_id = os.urandom(8).hex()
+
+        if not self._config.subnet_id:
+            self._config.subnet_id = self._discover_default_subnet()
 
         security_group_ids = self._config.security_group_ids
         if not security_group_ids:
@@ -57,7 +60,7 @@ class ORBAdapter:
             provider_api="RunInstances",
             image_id=self._config.image_id,
             vm_type=self._config.instance_type,
-            subnet_ids=[self._config.subnet_id],
+            subnet_id=self._config.subnet_id,
             security_group_ids=security_group_ids,
             key_name="",
             user_data=user_data,
@@ -124,9 +127,21 @@ nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address
 
         return base64.b64encode(script.encode()).decode()
 
-    def _create_security_group(self):
-        self._ec2 = boto3.client("ec2", region_name=self._config.aws_region)
+    def _discover_default_subnet(self) -> str:
+        vpcs = self._ec2.describe_vpcs(Filters=[{"Name": "isDefault", "Values": ["true"]}])
+        if not vpcs["Vpcs"]:
+            raise RuntimeError("No default VPC found, and no subnet_id provided.")
+        default_vpc_id = vpcs["Vpcs"][0]["VpcId"]
 
+        subnets = self._ec2.describe_subnets(Filters=[{"Name": "vpc-id", "Values": [default_vpc_id]}])
+        if not subnets["Subnets"]:
+            raise RuntimeError(f"No subnets found in default VPC {default_vpc_id}.")
+
+        subnet_id = subnets["Subnets"][0]["SubnetId"]
+        logger.info(f"Auto-discovered subnet_id: {subnet_id}")
+        return subnet_id
+
+    def _create_security_group(self):
         # Determine IP to allow
         if self._config.allowed_ip:
             ip_address = self._config.allowed_ip
