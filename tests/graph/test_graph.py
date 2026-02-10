@@ -157,11 +157,7 @@ class TestGraph(unittest.TestCase):
         # Cancels a graph task that hasn't been assigned to a worker yet.
         combo = SchedulerClusterCombo(n_workers=0, event_loop="builtin")
 
-        graph = {
-            "a": 3.14,
-            "b": (round, "a"),
-            "c": (minus, "a", "b")
-        }
+        graph = {"a": 3.14, "b": (round, "a"), "c": (minus, "a", "b")}
 
         with Client(address=combo.get_address()) as client:
             future = client.get(graph, ["c"], block=False)["c"]
