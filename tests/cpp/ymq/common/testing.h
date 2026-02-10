@@ -10,10 +10,10 @@
 enum class TestResult : char { Success = 1, Failure = 2 };
 
 TestResult return_failure_if_false(
-    bool cond, const char* msg = nullptr, const char* cond_str = nullptr, const char* file = nullptr, int line = 0);
+    bool cond, const char* msg = nullptr, const char* condStr = nullptr, const char* file = nullptr, int line = 0);
 
 // in the case that there's no msg, delegate
-TestResult return_failure_if_false(bool cond, const char* cond_str, const char* file, int line);
+TestResult return_failure_if_false(bool cond, const char* condStr, const char* file, int line);
 
 #define RETURN_FAILURE_IF_FALSE(cond, ...)                                                                \
     if (return_failure_if_false((cond), ##__VA_ARGS__, #cond, __FILE__, __LINE__) == TestResult::Failure) \
@@ -22,7 +22,7 @@ TestResult return_failure_if_false(bool cond, const char* cond_str, const char* 
 void signal_event(void* hEvent);
 
 // hEvent: unused on linux, event handle on windows
-void test_wrapper(std::function<TestResult()> fn, int timeout_secs, PipeWriter pipe_wr, void* hEvent);
+void test_wrapper(std::function<TestResult()> fn, int timeoutSecs, PipeWriter pipeWr, void* hEvent);
 
 // this function along with `wait_for_python_ready_sigwait()`
 // work together to wait on a signal from the python process
@@ -32,12 +32,12 @@ void test_wrapper(std::function<TestResult()> fn, int timeout_secs, PipeWriter p
 void wait_for_python_ready_sigblock(void** hEvent);
 
 // as in the above function, hEvent is unused on linux
-void wait_for_python_ready_sigwait(void* hEvent, int timeout_secs);
+void wait_for_python_ready_sigwait(void* hEvent, int timeoutSecs);
 
 // run a test
 // forks and runs each of the provided closures
 // if `wait_for_python` is true, wait for SIGUSR1 after forking and executing the first closure
-TestResult test(int timeout_secs, std::vector<std::function<TestResult()>> closures, bool wait_for_python = false);
+TestResult test(int timeoutSecs, std::vector<std::function<TestResult()>> closures, bool waitForPython = false);
 
 std::wstring discover_python_home(std::string command);
 
@@ -51,9 +51,9 @@ int get_listener_pid();
 TestResult run_python(const char* path, std::vector<std::optional<std::string>> argv = {});
 
 TestResult run_mitm(
-    std::string testcase,
-    std::string mitm_ip,
-    uint16_t mitm_port,
-    std::string remote_ip,
-    uint16_t remote_port,
-    std::vector<std::string> extra_args = {});
+    std::string testCase,
+    std::string mitmIp,
+    uint16_t mitmPort,
+    std::string remoteIp,
+    uint16_t remotePort,
+    std::vector<std::string> extraArgs = {});

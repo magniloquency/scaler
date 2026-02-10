@@ -24,13 +24,13 @@
 #include "tests/cpp/ymq/pipe/pipe.h"
 
 // the windows timer apis work in 100-nanosecond units
-const LONGLONG ns_per_second = 1'000'000'000LL;
-const LONGLONG ns_per_unit   = 100LL;  // 1 unit = 100 nanoseconds
+const LONGLONG nsPerSecond = 1'000'000'000LL;
+const LONGLONG nsPerUnit   = 100LL;  // 1 unit = 100 nanoseconds
 
 void ensure_python_home()
 {
-    auto python_home = discover_python_home("python");
-    Py_SetPythonHome(python_home.c_str());
+    auto pythonHome = discover_python_home("python");
+    Py_SetPythonHome(pythonHome.c_str());
 }
 
 int get_listener_pid()
@@ -56,11 +56,11 @@ void wait_for_python_ready_sigblock(void** hEvent)
     std::cout << "blocked signal..." << std::endl;
 }
 
-void wait_for_python_ready_sigwait(void* hEvent, int timeout_secs)
+void wait_for_python_ready_sigwait(void* hEvent, int timeoutSecs)
 {
     std::cout << "waiting for python to be ready..." << std::endl;
 
-    DWORD waitResult = WaitForSingleObject(hEvent, timeout_secs * 1000);
+    DWORD waitResult = WaitForSingleObject(hEvent, timeoutSecs * 1000);
 
     if (waitResult != WAIT_OBJECT_0) {
         raise_system_error("failed to wait on event");
@@ -71,7 +71,7 @@ void wait_for_python_ready_sigwait(void* hEvent, int timeout_secs)
     std::cout << "signal received; python is ready" << std::endl;
 }
 
-TestResult test(int timeout_secs, std::vector<std::function<TestResult()>> closures, bool wait_for_python)
+TestResult test(int timeoutSecs, std::vector<std::function<TestResult()>> closures, bool waitForPython)
 {
     std::vector<Pipe> pipes {};
 
@@ -94,12 +94,12 @@ TestResult test(int timeout_secs, std::vector<std::function<TestResult()>> closu
 
     for (size_t i = 0; i < closures.size(); i++) {
         HANDLE hEvent = nullptr;
-        if (wait_for_python && i == 0)
+        if (waitForPython && i == 0)
             wait_for_python_ready_sigblock(&hEvent);
 
-        threads.emplace_back(test_wrapper, closures[i], timeout_secs, std::move(pipes[i].writer), events[i]);
+        threads.emplace_back(test_wrapper, closures[i], timeoutSecs, std::move(pipes[i].writer), events[i]);
 
-        if (wait_for_python && i == 0)
+        if (waitForPython && i == 0)
             wait_for_python_ready_sigwait(hEvent, 3);
     }
 
@@ -109,27 +109,27 @@ TestResult test(int timeout_secs, std::vector<std::function<TestResult()>> closu
         raise_system_error("failed to create waitable timer");
     }
 
-    LARGE_INTEGER expires_in = {0};
+    LARGE_INTEGER expiresIn = {0};
 
     // negative value indicates relative time
-    expires_in.QuadPart = -static_cast<LONGLONG>(timeout_secs) * ns_per_second / ns_per_unit;
-    if (!SetWaitableTimer(timer, &expires_in, 0, nullptr, nullptr, false)) {
+    expiresIn.QuadPart = -static_cast<LONGLONG>(timeoutSecs) * nsPerSecond / nsPerUnit;
+    if (!SetWaitableTimer(timer, &expiresIn, 0, nullptr, nullptr, false)) {
         std::for_each(events.begin(), events.end(), [](const auto& ev) { CloseHandle(ev); });
         CloseHandle(timer);
         raise_system_error("failed to set waitable timer");
     }
 
     // these are the handles we're going to poll
-    std::vector<HANDLE> wait_handles {timer};
+    std::vector<HANDLE> waitHandles {timer};
 
     // poll all read halves of the pipes
     for (const auto& ev: events)
-        wait_handles.push_back(ev);
+        waitHandles.push_back(ev);
 
     std::vector<std::optional<TestResult>> results(threads.size(), std::nullopt);
 
     for (;;) {
-        DWORD waitResult = WaitForMultipleObjects(wait_handles.size(), wait_handles.data(), false, INFINITE);
+        DWORD waitResult = WaitForMultipleObjects(waitHandles.size(), waitHandles.data(), false, INFINITE);
         if (waitResult == WAIT_FAILED) {
             std::for_each(events.begin(), events.end(), [](const auto& ev) { CloseHandle(ev); });
             CloseHandle(timer);
@@ -140,10 +140,10 @@ TestResult test(int timeout_secs, std::vector<std::function<TestResult()>> closu
         // note that index 0 is the timer
         // and we adjust the handles array as tasks complete
         // so we need an extra step to calculate the index in `closure`-space
-        size_t wait_idx = (size_t)waitResult - WAIT_OBJECT_0;
+        size_t waitIdx = (size_t)waitResult - WAIT_OBJECT_0;
 
         // timed out
-        if (wait_idx == 0) {
+        if (waitIdx == 0) {
             std::cout << "Timed out!\n";
             std::for_each(threads.begin(), threads.end(), [](auto& t) {
                 t.request_stop();
@@ -155,9 +155,9 @@ TestResult test(int timeout_secs, std::vector<std::function<TestResult()>> closu
         }
 
         // find the idx
-        const auto& hEvent = wait_handles[wait_idx];
-        auto event_it  = std::find_if(events.begin(), events.end(), [hEvent](const auto& ev) { return ev == hEvent; });
-        const auto idx = event_it - events.begin();
+        const auto& hEvent = waitHandles[waitIdx];
+        auto eventIt   = std::find_if(events.begin(), events.end(), [hEvent](const auto& ev) { return ev == hEvent; });
+        const auto idx = eventIt - events.begin();
         auto& pipe     = pipes[idx];
         TestResult result = TestResult::Failure;
         char buffer       = 0;
@@ -176,9 +176,9 @@ TestResult test(int timeout_secs, std::vector<std::function<TestResult()>> closu
         results[idx] = result;
 
         // this subprocess is done, remove its pipe from the handles
-        wait_handles.erase(
-            std::remove_if(wait_handles.begin(), wait_handles.end(), [&](const auto& h) { return h == hEvent; }),
-            wait_handles.end());
+        waitHandles.erase(
+            std::remove_if(waitHandles.begin(), waitHandles.end(), [&](const auto& h) { return h == hEvent; }),
+            waitHandles.end());
         auto done = std::all_of(results.begin(), results.end(), [](const auto& result) { return result.has_value(); });
         if (done)
             goto end;  // justification for goto: breaks out of two levels of loop

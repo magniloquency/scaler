@@ -53,11 +53,11 @@ void wait_for_python_ready_sigblock(void** hEvent)
     std::cout << "blocked signal..." << std::endl;
 }
 
-void wait_for_python_ready_sigwait(void* hEvent, int timeout_secs)
+void wait_for_python_ready_sigwait(void* hEvent, int timeoutSecs)
 {
     std::cout << "waiting for python to be ready..." << std::endl;
 
-    timespec ts {.tv_sec = timeout_secs, .tv_nsec = 0};
+    timespec ts {.tv_sec = timeoutSecs, .tv_nsec = 0};
     sigset_t set {};
     siginfo_t sig {};
 
@@ -75,7 +75,7 @@ void wait_for_python_ready_sigwait(void* hEvent, int timeout_secs)
     std::cout << "signal received; python is ready" << std::endl;
 }
 
-TestResult test(int timeout_secs, std::vector<std::function<TestResult()>> closures, bool wait_for_python)
+TestResult test(int timeoutSecs, std::vector<std::function<TestResult()>> closures, bool waitForPython)
 {
     std::vector<Pipe> pipes {};
 
@@ -85,7 +85,7 @@ TestResult test(int timeout_secs, std::vector<std::function<TestResult()>> closu
     std::vector<int> pids {};
     void* hEvent = nullptr;
     for (size_t i = 0; i < closures.size(); i++) {
-        if (wait_for_python && i == 0)
+        if (waitForPython && i == 0)
             wait_for_python_ready_sigblock(&hEvent);
 
         auto pid = fork();
@@ -96,13 +96,13 @@ TestResult test(int timeout_secs, std::vector<std::function<TestResult()>> closu
         }
 
         if (pid == 0) {
-            test_wrapper(closures[i], timeout_secs, std::move(pipes[i].writer), nullptr);
+            test_wrapper(closures[i], timeoutSecs, std::move(pipes[i].writer), nullptr);
             std::exit(EXIT_SUCCESS);
         }
 
         pids.push_back(pid);
 
-        if (wait_for_python && i == 0)
+        if (waitForPython && i == 0)
             wait_for_python_ready_sigwait(&hEvent, 3);
     }
 
@@ -130,7 +130,7 @@ TestResult test(int timeout_secs, std::vector<std::function<TestResult()>> closu
                 .tv_nsec = 0,
             },
         .it_value = {
-            .tv_sec  = timeout_secs,
+            .tv_sec  = timeoutSecs,
             .tv_nsec = 0,
         }};
 
@@ -188,9 +188,9 @@ TestResult test(int timeout_secs, std::vector<std::function<TestResult()>> closu
             if (waitpid(pids[idx], &status, 0) < 0)
                 std::cout << "failed to wait on subprocess[" << idx << "]: " << std::strerror(errno) << std::endl;
 
-            auto exit_status = WEXITSTATUS(status);
-            if (WIFEXITED(status) && exit_status != EXIT_SUCCESS) {
-                std::cout << "subprocess[" << idx << "] exited with status " << exit_status << std::endl;
+            auto exitStatus = WEXITSTATUS(status);
+            if (WIFEXITED(status) && exitStatus != EXIT_SUCCESS) {
+                std::cout << "subprocess[" << idx << "] exited with status " << exitStatus << std::endl;
             } else if (WIFSIGNALED(status)) {
                 std::cout << "subprocess[" << idx << "] killed by signal " << WTERMSIG(status) << std::endl;
             } else {
