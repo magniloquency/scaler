@@ -48,7 +48,7 @@ class Task(Message):
 
     @property
     def metadata(self) -> bytes:
-        return bytes(self._msg.metadata)
+        return self._msg.metadata
 
     @property
     def func_object_id(self) -> Optional[ObjectID]:
@@ -169,11 +169,11 @@ class TaskResult(Message):
 
     @property
     def metadata(self) -> bytes:
-        return bytes(self._msg.metadata)
+        return self._msg.metadata
 
     @property
     def results(self) -> List[bytes]:
-        return [bytes(r) for r in self._msg.results]
+        return self._msg.results
 
     @staticmethod
     def new_msg(
@@ -604,7 +604,7 @@ class StateTask(Message):
 
     @property
     def function_name(self) -> bytes:
-        return bytes(self._msg.functionName)
+        return self._msg.functionName
 
     @property
     def state(self) -> TaskState:
@@ -620,7 +620,7 @@ class StateTask(Message):
 
     @property
     def metadata(self) -> bytes:
-        return bytes(self._msg.metadata)
+        return self._msg.metadata
 
     @staticmethod
     def new_msg(
@@ -698,7 +698,7 @@ class InformationRequest(Message):
 
     @property
     def request(self) -> bytes:
-        return bytes(self._msg.request)
+        return self._msg.request
 
     @staticmethod
     def new_msg(request: bytes) -> "InformationRequest":
@@ -711,7 +711,7 @@ class InformationResponse(Message):
 
     @property
     def response(self) -> bytes:
-        return bytes(self._msg.response)
+        return self._msg.response
 
     @staticmethod
     def new_msg(response: bytes) -> "InformationResponse":

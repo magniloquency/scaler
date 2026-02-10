@@ -157,6 +157,23 @@ requirements for tasks and allocate them to workers supporting these.
 .. literalinclude:: ../../../examples/task_capabilities.py
    :language: python
 
+Scaling Control and Worker Adapter
+----------------------------------
+
+Scaler offers an *experimental* auto-scaling feature based on policies, enabling you to scale workers up or down
+as needed. This is especially useful in containerized environments where billing is based on utility rates or
+to reduce resource usage automatically on a multi-user system.
+
+Available scaling policies include:
+
+* **no**: No automatic scaling (static workers)
+* **vanilla**: Basic task-to-worker ratio scaling
+* **capability**: Capability-aware scaling for heterogeneous workloads (e.g., GPU tasks)
+* **fixed_elastic**: Hybrid scaling with primary and secondary worker adapters
+
+For detailed documentation on scaling policies, including the capability-aware scaling controller,
+see the :doc:`scaling` guide.
+
 Client Disconnect and Shutdown
 ------------------------------
 
