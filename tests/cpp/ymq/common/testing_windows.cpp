@@ -156,9 +156,10 @@ TestResult test(int timeoutSecs, std::vector<std::function<TestResult()>> closur
 
         // find the idx
         const auto& waitHandle = waitHandles[waitIdx];
-        auto eventIt   = std::find_if(events.begin(), events.end(), [waitHandle](const auto& ev) { return ev == waitHandle; });
-        const auto idx = eventIt - events.begin();
-        auto& pipe     = pipes[idx];
+        auto eventIt =
+            std::find_if(events.begin(), events.end(), [waitHandle](const auto& ev) { return ev == waitHandle; });
+        const auto idx    = eventIt - events.begin();
+        auto& pipe        = pipes[idx];
         TestResult result = TestResult::Failure;
         char buffer       = 0;
         try {

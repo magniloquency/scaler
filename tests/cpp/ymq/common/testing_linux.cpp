@@ -152,7 +152,7 @@ TestResult test(int timeoutSecs, std::vector<std::function<TestResult()>> closur
             raise_system_error("failed to poll");
         }
 
-        for (size_t i = 0; i < pfds.size(); ) {
+        for (size_t i = 0; i < pfds.size();) {
             auto& pfd = pfds[i];
             if (pfd.revents == 0) {
                 i++;
