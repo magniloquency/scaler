@@ -27,7 +27,7 @@
 #define pclose _pclose
 #endif
 
-TestResult return_failure_if_false(bool cond, const char* msg, const char* condStr, const char* file, int line)
+TestResult return_failure_if_false(bool cond, const char* condStr, const char* file, int line, const char* msg)
 {
     // Failure: ... (assertion failed) at file:line
     if (!cond) {
@@ -46,12 +46,6 @@ TestResult return_failure_if_false(bool cond, const char* msg, const char* condS
     return TestResult::Success;
 }
 
-// in the case that there's no msg, delegate
-TestResult return_failure_if_false(bool cond, const char* condStr, const char* file, int line)
-{
-    return return_failure_if_false(cond, nullptr, condStr, file, line);
-}
-
 std::wstring discover_python_home(std::string command)
 {
     // leverage the system's command line to get the current python prefix
@@ -62,7 +56,7 @@ std::wstring discover_python_home(std::string command)
     std::array<char, 128> buffer {};
     std::string output {};
 
-    size_t n;
+    size_t n {};
     while ((n = fread(buffer.data(), 1, buffer.size(), pipe)) > 0)
         output.append(buffer.data(), n);
 
@@ -182,8 +176,8 @@ TestResult run_mitm(
     std::vector<std::optional<std::string>> args {
         testCase, mitmIp, std::to_string(mitmPort), remoteIp, std::to_string(remotePort)};
 
-    for (auto arg: extraArgs)
-        args.push_back(arg);
+    for (auto& arg: extraArgs)
+        args.push_back(std::move(arg));
 
     auto result = run_python("tests/cpp/ymq/py_mitm/main.py", args);
 
@@ -199,10 +193,8 @@ void test_wrapper(std::function<TestResult()> fn, int timeoutSecs, PipeWriter pi
         result = fn();
     } catch (const std::exception& e) {
         std::cerr << "Exception: " << e.what() << std::endl;
-        result = TestResult::Failure;
     } catch (...) {
         std::cerr << "Unknown exception" << std::endl;
-        result = TestResult::Failure;
     }
 
     pipeWr.writeAll((char*)&result, sizeof(TestResult));

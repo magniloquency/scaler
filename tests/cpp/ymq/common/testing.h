@@ -10,13 +10,10 @@
 enum class TestResult : char { Success = 1, Failure = 2 };
 
 TestResult return_failure_if_false(
-    bool cond, const char* msg = nullptr, const char* condStr = nullptr, const char* file = nullptr, int line = 0);
-
-// in the case that there's no msg, delegate
-TestResult return_failure_if_false(bool cond, const char* condStr, const char* file, int line);
+    bool cond, const char* condStr, const char* file, int line, const char* msg = nullptr);
 
 #define RETURN_FAILURE_IF_FALSE(cond, ...)                                                                \
-    if (return_failure_if_false((cond), ##__VA_ARGS__, #cond, __FILE__, __LINE__) == TestResult::Failure) \
+    if (return_failure_if_false((cond), #cond, __FILE__, __LINE__, ##__VA_ARGS__) == TestResult::Failure) \
         return TestResult::Failure;
 
 void signal_event(void* hEvent);

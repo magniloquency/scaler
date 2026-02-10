@@ -152,9 +152,12 @@ TestResult test(int timeoutSecs, std::vector<std::function<TestResult()>> closur
             raise_system_error("failed to poll");
         }
 
-        for (auto& pfd: std::vector(pfds)) {
-            if (pfd.revents == 0)
+        for (size_t i = 0; i < pfds.size(); ) {
+            auto& pfd = pfds[i];
+            if (pfd.revents == 0) {
+                i++;
                 continue;
+            }
 
             // timed out
             if (pfd.fd == timerfd) {
@@ -172,11 +175,11 @@ TestResult test(int timeoutSecs, std::vector<std::function<TestResult()>> closur
 
             TestResult result = TestResult::Failure;
             char buffer       = 0;
-            auto n            = read(pfd.fd, &buffer, sizeof(TestResult));
-            if (n == 0) {
+            auto bytesRead    = read(pfd.fd, &buffer, sizeof(TestResult));
+            if (bytesRead == 0) {
                 std::cout << "failed to read from pipe: pipe closed unexpectedly\n";
                 result = TestResult::Failure;
-            } else if (n < 0) {
+            } else if (bytesRead < 0) {
                 std::cout << "failed to read from pipe: " << std::strerror(errno) << std::endl;
                 result = TestResult::Failure;
             } else
@@ -202,8 +205,7 @@ TestResult test(int timeoutSecs, std::vector<std::function<TestResult()>> closur
             results[idx] = result;
 
             // this subprocess is done, remove its pipe from the poll fds
-            pfds.erase(
-                std::remove_if(pfds.begin(), pfds.end(), [&](const auto& p) { return p.fd == pfd.fd; }), pfds.end());
+            pfds.erase(pfds.begin() + i);
 
             auto done =
                 std::all_of(results.begin(), results.end(), [](const auto& result) { return result.has_value(); });

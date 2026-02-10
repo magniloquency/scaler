@@ -155,8 +155,8 @@ TestResult test(int timeoutSecs, std::vector<std::function<TestResult()>> closur
         }
 
         // find the idx
-        const auto& hEvent = waitHandles[waitIdx];
-        auto eventIt   = std::find_if(events.begin(), events.end(), [hEvent](const auto& ev) { return ev == hEvent; });
+        const auto& waitHandle = waitHandles[waitIdx];
+        auto eventIt   = std::find_if(events.begin(), events.end(), [waitHandle](const auto& ev) { return ev == waitHandle; });
         const auto idx = eventIt - events.begin();
         auto& pipe     = pipes[idx];
         TestResult result = TestResult::Failure;
@@ -177,7 +177,7 @@ TestResult test(int timeoutSecs, std::vector<std::function<TestResult()>> closur
 
         // this subprocess is done, remove its pipe from the handles
         waitHandles.erase(
-            std::remove_if(waitHandles.begin(), waitHandles.end(), [&](const auto& h) { return h == hEvent; }),
+            std::remove_if(waitHandles.begin(), waitHandles.end(), [&](const auto& h) { return h == waitHandle; }),
             waitHandles.end());
         auto done = std::all_of(results.begin(), results.end(), [](const auto& result) { return result.has_value(); });
         if (done)
