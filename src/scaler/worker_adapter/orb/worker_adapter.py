@@ -25,6 +25,11 @@ from scaler.worker_adapter.orb.types import ORBTemplate
 logger = logging.getLogger(__name__)
 
 
+# Polling configuration for ORB machine requests
+ORB_POLLING_INTERVAL_SECONDS = 5
+ORB_MAX_POLLING_ATTEMPTS = 60
+
+
 class ORBAdapter:
     _config: ORBWorkerAdapterConfig
     _orb: ORBHelper
@@ -265,8 +270,9 @@ nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address
         logger.info(f"ORB machine request {response.request_id} submitted, polling for instance IDs...")
 
         instance_ids = []
-        # Poll for up to 300 seconds (5 minutes)
-        for _ in range(60):
+        # Poll ORB for instance IDs as the request is processed asynchronously.
+        # We manually poll here because the current ORB helper doesn't support blocking requests.
+        for _ in range(ORB_MAX_POLLING_ATTEMPTS):
             status_response = self._orb.requests.show(response.request_id)
             logger.debug(f"ORB polling response for {response.request_id}: {status_response}")
 
@@ -284,11 +290,12 @@ nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address
                     f"with status '{status_response.status}': {error_msg}"
                 )
 
-            await asyncio.sleep(5)
+            await asyncio.sleep(ORB_POLLING_INTERVAL_SECONDS)
 
         if not instance_ids:
+            timeout_seconds = ORB_MAX_POLLING_ATTEMPTS * ORB_POLLING_INTERVAL_SECONDS
             raise RuntimeError(
-                f"ORB machine request {response.request_id} timed out waiting for instance IDs after 300s."
+                f"ORB machine request {response.request_id} timed out waiting for instance IDs after {timeout_seconds}s."
             )
 
         instance_id = instance_ids[0]
