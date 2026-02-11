@@ -88,6 +88,13 @@ class ORBRequest:
     machines: List[ORBMachine] = field(default_factory=list)
     successful_count: int = 0
     failed_count: int = 0
+    created_at: Optional[datetime] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    error_details: Dict[str, Any] = field(default_factory=dict)
+    provider_data: Dict[str, Any] = field(default_factory=dict)
+    version: int = 0
 
     def get_instance_ids(self) -> List[str]:
         """Extract instance IDs from any available field in the request."""
@@ -114,11 +121,3 @@ class ORBRequest:
             return ids
 
         return []
-
-    created_at: Optional[datetime] = None
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    error_details: Dict[str, Any] = field(default_factory=dict)
-    provider_data: Dict[str, Any] = field(default_factory=dict)
-    version: int = 0
