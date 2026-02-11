@@ -14,7 +14,8 @@ from scaler.worker_adapter.orb.types import ORBMachine, ORBRequest, ORBTemplate
 class ORBHelper:
     """Helper class to interact with the ORB CLI."""
 
-    def _filter_data(self, cls: Any, data: Dict[str, Any]) -> Dict[str, Any]:
+    @staticmethod
+    def _filter_data(cls: Any, data: Dict[str, Any]) -> Dict[str, Any]:
         """Filter data to match dataclass fields."""
         if not hasattr(cls, "__annotations__"):
             return data
@@ -43,7 +44,7 @@ class ORBHelper:
             result = []
             for item in items:
                 snake_item = snakecase_dict(item)
-                filtered_item = self.helper._filter_data(ORBTemplate, snake_item)
+                filtered_item = ORBHelper._filter_data(ORBTemplate, snake_item)
                 result.append(ORBTemplate(**filtered_item))
             return result
 
@@ -61,7 +62,7 @@ class ORBHelper:
                 data = data["templates"][0]
 
             snake_data = snakecase_dict(data)
-            return ORBTemplate(**self.helper._filter_data(ORBTemplate, snake_data))
+            return ORBTemplate(**ORBHelper._filter_data(ORBTemplate, snake_data))
 
         def delete(self, template_id: str) -> Dict[str, Any]:
             """Delete a template by ID."""
@@ -87,7 +88,7 @@ class ORBHelper:
             result = []
             for item in items:
                 snake_item = snakecase_dict(item)
-                filtered_item = self.helper._filter_data(ORBMachine, snake_item)
+                filtered_item = ORBHelper._filter_data(ORBMachine, snake_item)
                 result.append(ORBMachine(**filtered_item))
             return result
 
@@ -98,7 +99,7 @@ class ORBHelper:
                 data = data["machines"][0]
 
             snake_data = snakecase_dict(data)
-            return ORBMachine(**self.helper._filter_data(ORBMachine, snake_data))
+            return ORBMachine(**ORBHelper._filter_data(ORBMachine, snake_data))
 
         def request(
             self, template_id: str, count: int, wait: bool = False, timeout: Optional[int] = None
@@ -116,7 +117,7 @@ class ORBHelper:
                 data = data["requests"][0]
 
             snake_data = snakecase_dict(data)
-            return ORBRequest(**self.helper._filter_data(ORBRequest, snake_data))
+            return ORBRequest(**ORBHelper._filter_data(ORBRequest, snake_data))
 
         def return_machines(self, machine_ids: List[str]) -> ORBRequest:
             """Return (terminate) one or more machines."""
@@ -125,7 +126,7 @@ class ORBHelper:
                 data = data["requests"][0]
 
             snake_data = snakecase_dict(data)
-            return ORBRequest(**self.helper._filter_data(ORBRequest, snake_data))
+            return ORBRequest(**ORBHelper._filter_data(ORBRequest, snake_data))
 
     class Requests:
         """API for managing provisioning requests."""
@@ -147,7 +148,7 @@ class ORBHelper:
             result = []
             for item in items:
                 snake_item = snakecase_dict(item)
-                filtered_item = self.helper._filter_data(ORBRequest, snake_item)
+                filtered_item = ORBHelper._filter_data(ORBRequest, snake_item)
                 result.append(ORBRequest(**filtered_item))
             return result
 
@@ -158,7 +159,7 @@ class ORBHelper:
                 data = data["requests"][0]
 
             snake_data = snakecase_dict(data)
-            return ORBRequest(**self.helper._filter_data(ORBRequest, snake_data))
+            return ORBRequest(**ORBHelper._filter_data(ORBRequest, snake_data))
 
         def cancel(self, request_id: str) -> ORBRequest:
             """Cancel a provisioning request."""
@@ -167,7 +168,7 @@ class ORBHelper:
                 data = data["requests"][0]
 
             snake_data = snakecase_dict(data)
-            return ORBRequest(**self.helper._filter_data(ORBRequest, snake_data))
+            return ORBRequest(**ORBHelper._filter_data(ORBRequest, snake_data))
 
     def __init__(self, config_root_path: str):
         """Initialize the helper.
