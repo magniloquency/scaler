@@ -38,7 +38,7 @@ class ORBWorkerAdapterConfig(ConfigClass):
         metadata=dict(short="-wit", help="set the number of io threads for io backend per worker"),
     )
 
-    orb_config_path: str = dataclasses.field(default="orb", metadata=dict(help="Path to the ORB root directory"))
+    orb_config_path: str = dataclasses.field(default="driver/orb", metadata=dict(help="Path to the ORB root directory"))
 
     instance_type: str = dataclasses.field(default="t2.micro", metadata=dict(help="EC2 instance type"))
     aws_region: Optional[str] = dataclasses.field(
