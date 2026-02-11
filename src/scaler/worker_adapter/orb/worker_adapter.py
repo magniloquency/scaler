@@ -136,7 +136,7 @@ nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address
     --trim-memory-threshold-bytes {worker_config.trim_memory_threshold_bytes} \
     --event-loop {self._config.event_loop} \
     --worker-io-threads {self._config.worker_io_threads} \
-    --no-random-worker-ids"""
+    --deterministic-worker-ids"""
 
         if worker_config.hard_processor_suspend:
             script += " \

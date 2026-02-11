@@ -64,7 +64,7 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
         hard_processor_suspend: bool,
         logging_paths: Tuple[str, ...],
         logging_level: str,
-        no_random_worker_ids: bool = False,
+        deterministic_worker_ids: bool = False,
     ):
         multiprocessing.Process.__init__(self, name="Agent")
 
@@ -77,7 +77,7 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
         self._io_threads = io_threads
         self._task_queue_size = task_queue_size
 
-        if no_random_worker_ids:
+        if deterministic_worker_ids:
             self._ident = WorkerID(name.encode())
         else:
             self._ident = WorkerID.generate_worker_id(name)
