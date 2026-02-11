@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -261,8 +262,6 @@ nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address
             raise RuntimeError(f"ORB machine request failed to return a request ID. Response: {response}")
 
         logger.info(f"ORB machine request {response.request_id} submitted, polling for instance IDs...")
-
-        import asyncio
 
         instance_ids = []
         # Poll for up to 300 seconds (5 minutes)
