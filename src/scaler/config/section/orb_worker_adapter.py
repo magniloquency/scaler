@@ -41,9 +41,7 @@ class ORBWorkerAdapterConfig(ConfigClass):
     orb_config_path: str = dataclasses.field(default="driver/orb", metadata=dict(help="Path to the ORB root directory"))
 
     instance_type: str = dataclasses.field(default="t2.micro", metadata=dict(help="EC2 instance type"))
-    aws_region: Optional[str] = dataclasses.field(
-        default="us-east-1", metadata=dict(help="AWS region (defaults to us-east-1)")
-    )
+    aws_region: Optional[str] = dataclasses.field(default="us-east-1", metadata=dict(help="AWS region"))
     security_group_ids: List[str] = dataclasses.field(
         default_factory=list,
         metadata=dict(
@@ -51,10 +49,7 @@ class ORBWorkerAdapterConfig(ConfigClass):
         ),
     )
     allowed_ip: str = dataclasses.field(
-        default="",
-        metadata=dict(
-            help="IP address to allow in the security group (if created automatically). Defaults to current public IP."
-        ),
+        default="", metadata=dict(help="IP address to allow in the security group (if created automatically)")
     )
 
     def __post_init__(self) -> None:
