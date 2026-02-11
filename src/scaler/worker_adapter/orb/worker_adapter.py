@@ -215,7 +215,7 @@ nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address
         logger.info("Starting cleanup of ORB and AWS resources...")
 
         # 1. Shutdown all active worker groups (terminate instances)
-        if self._worker_groups:
+        if self._worker_groups and self._orb is not None:
             logger.info(f"Terminating {len(self._worker_groups)} worker groups...")
             instance_ids = [wg_id.decode() for wg_id in self._worker_groups.keys()]
             try:
