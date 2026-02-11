@@ -30,6 +30,17 @@ ORB_POLLING_INTERVAL_SECONDS = 5
 ORB_MAX_POLLING_ATTEMPTS = 60
 
 
+def get_orb_worker_name(instance_id: str) -> str:
+    """
+    Returns the deterministic worker name for an ORB instance.
+    If instance_id is the bash variable '${INSTANCE_ID}', it returns a bash-compatible string.
+    """
+    if instance_id == "${INSTANCE_ID}":
+        return "Worker|ORB|${INSTANCE_ID}|${INSTANCE_ID//i-/}"
+    tag = instance_id.replace("i-", "")
+    return f"Worker|ORB|{instance_id}|{tag}"
+
+
 class ORBAdapter:
     _config: ORBWorkerAdapterConfig
     _orb: ORBHelper
@@ -127,8 +138,7 @@ class ORBAdapter:
         # We fetch instance_id once and use it to construct the ID
         script = f"""#!/bin/bash
 INSTANCE_ID=$(ec2-metadata --instance-id --quiet)
-TAG=${{INSTANCE_ID//i-/}}
-WORKER_NAME="Worker|ORB|${{INSTANCE_ID}}|${{TAG}}"
+WORKER_NAME="{get_orb_worker_name('${INSTANCE_ID}')}"
 
 nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address()} \
     --num-of-workers {num_workers} \
@@ -199,7 +209,8 @@ nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address
         logger.info(f"Created security group with ID: {self._created_security_group_id}")
 
         # Allow ingress
-        # TODO: Do the worker processes need to accept incoming connections? If not, we should not open any ports and just rely on outbound connectivity.
+        # TODO: Do the worker processes need to accept incoming connections?
+        # If not, we should not open any ports and just rely on outbound connectivity.
         self._ec2.authorize_security_group_ingress(
             GroupId=self._created_security_group_id,
             IpPermissions=[
@@ -295,16 +306,15 @@ nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address
         if not instance_ids:
             timeout_seconds = ORB_MAX_POLLING_ATTEMPTS * ORB_POLLING_INTERVAL_SECONDS
             raise RuntimeError(
-                f"ORB machine request {response.request_id} timed out waiting for instance IDs after {timeout_seconds}s."
+                f"ORB machine request {response.request_id} timed out"
+                f"waiting for instance IDs after {timeout_seconds}s."
             )
 
         instance_id = instance_ids[0]
         worker_group_id = instance_id.encode()
 
         # Deterministic WorkerID calculation to match the user_data script
-        # Format: Worker|ORB|{instance_id}|{instance_id_without_prefix}
-        tag = instance_id.replace("i-", "")
-        worker_id = WorkerID(f"Worker|ORB|{instance_id}|{tag}".encode())
+        worker_id = WorkerID(get_orb_worker_name(instance_id).encode())
 
         self._worker_groups[worker_group_id] = worker_id
         return worker_group_id
