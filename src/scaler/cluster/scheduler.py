@@ -8,7 +8,7 @@ from scaler.config.section.scheduler import PolicyConfig, SchedulerConfig
 from scaler.config.types.object_storage_server import ObjectStorageAddressConfig
 from scaler.config.types.zmq import ZMQConfig
 from scaler.scheduler.scheduler import Scheduler, scheduler_main
-from scaler.utility.event_loop import register_event_loop
+from scaler.utility.event_loop import register_event_loop, run_task_forever
 from scaler.utility.logging.utility import setup_logger
 
 
@@ -59,11 +59,7 @@ class SchedulerProcess(multiprocessing.get_context("spawn").Process):  # type: i
 
     def run(self) -> None:
         self._loop = asyncio.new_event_loop()
-
-        try:
-            self._loop.run_until_complete(self._run())
-        finally:
-            self._loop.close()
+        run_task_forever(self._loop, self._run())
 
     async def _run(self) -> None:
         self.__initialize()
