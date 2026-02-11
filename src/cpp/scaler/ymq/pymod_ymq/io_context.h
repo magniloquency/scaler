@@ -123,7 +123,7 @@ static PyObject* PyIOContext_createIOSocket(PyIOContext* self, PyObject* args, P
                 OwnedPyObject callback             = std::move(callback_);
                 OwnedPyObject<PyIOSocket> ioSocket = std::move(ioSocket_);
 
-                ioSocket->socket     = socket;
+                ioSocket->socket             = socket;
                 OwnedPyObject callbackResult = PyObject_CallFunctionObjArgs(*callback, *ioSocket, nullptr);
                 if (!callbackResult) {
                     PyErr_WriteUnraisable(*callback);

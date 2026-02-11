@@ -80,8 +80,8 @@ inline OwnedPyObject<> YMQ_GetRaisedException()
 
 inline void completeCallbackWithRaisedException(PyObject* callback)
 {
-    OwnedPyObject exception = YMQ_GetRaisedException();
-    OwnedPyObject callbackResult    = PyObject_CallFunctionObjArgs(callback, *exception, nullptr);
+    OwnedPyObject exception      = YMQ_GetRaisedException();
+    OwnedPyObject callbackResult = PyObject_CallFunctionObjArgs(callback, *exception, nullptr);
     if (!callbackResult) {
         PyErr_WriteUnraisable(callback);
     }
