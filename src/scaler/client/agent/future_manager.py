@@ -12,6 +12,8 @@ from scaler.utility.exceptions import WorkerDiedError
 from scaler.utility.identifiers import ObjectID, TaskID
 from scaler.utility.metadata.profile_result import retrieve_profiling_result_from_task_result
 
+FUTURE_CANCEL_TIMEOUT_SECONDS = 5.0
+
 
 class ClientFutureManager(FutureManager):
     def __init__(self, serializer: Serializer):
@@ -36,7 +38,7 @@ class ClientFutureManager(FutureManager):
         logging.info(f"canceling {len(futures_to_cancel)} task(s)")
         for future in futures_to_cancel:
             try:
-                future.cancel(timeout=5.0)
+                future.cancel(timeout=FUTURE_CANCEL_TIMEOUT_SECONDS)
             except TimeoutError:
                 logging.warning(f"timeout when canceling task {future.task_id.hex()}; force canceling")
                 future.set_canceled()
