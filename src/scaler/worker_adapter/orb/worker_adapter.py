@@ -194,10 +194,11 @@ nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address
         logger.info(f"Created security group with ID: {self._created_security_group_id}")
 
         # Allow ingress
+        # TODO: Do the worker processes need to accept incoming connections? If not, we should not open any ports and just rely on outbound connectivity.
         self._ec2.authorize_security_group_ingress(
             GroupId=self._created_security_group_id,
             IpPermissions=[
-                {"IpProtocol": "tcp", "FromPort": 0, "ToPort": 65535, "IpRanges": [{"CidrIp": f"{ip_address}/32"}]}
+                {"IpProtocol": "tcp", "FromPort": 1024, "ToPort": 65535, "IpRanges": [{"CidrIp": f"{ip_address}/32"}]}
             ],
         )
 
