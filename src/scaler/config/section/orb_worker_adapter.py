@@ -60,7 +60,3 @@ class ORBWorkerAdapterConfig(ConfigClass):
     def __post_init__(self) -> None:
         if self.worker_io_threads <= 0:
             raise ValueError("worker_io_threads must be a positive integer.")
-        if not self.orb_config_path:
-            self.orb_config_path = "orb"
-        if not self.aws_region:
-            self.aws_region = "us-east-1"
