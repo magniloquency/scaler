@@ -62,6 +62,8 @@ static PyObject* PyObjectStorageServerRun(PyObject* self, PyObject* args)
         return res == 0;
     };
 
+    // we have to copy this memory before releasing the GIL
+    // because it's owned by Python
     std::string s_addr(addr);
     std::string s_port = std::to_string(port);
     std::string s_identity(identity);
