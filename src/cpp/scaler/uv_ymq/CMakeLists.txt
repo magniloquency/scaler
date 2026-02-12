@@ -5,6 +5,9 @@ add_library(uv_ymq_objs OBJECT
     address.h
     address.cpp
 
+    binder_socket.h
+    binder_socket.cpp
+
     connect_client.h
     connect_client.cpp
 
@@ -13,4 +16,7 @@ add_library(uv_ymq_objs OBJECT
 
     io_context.h
     io_context.cpp
+
+    message_connection.h
+    message_connection.cpp
 )
