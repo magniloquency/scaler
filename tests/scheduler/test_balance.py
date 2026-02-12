@@ -80,6 +80,5 @@ class TestBalance(unittest.TestCase):
 
         client.disconnect()
 
-        new_cluster.terminate()
-        new_cluster.join()
+        new_cluster.shutdown()
         combo.shutdown()
