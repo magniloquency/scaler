@@ -35,7 +35,8 @@ class PyAsyncObjectStorageConnector(AsyncObjectStorageConnector):
         if not self.is_connected():
             return
 
-        self._writer.close()
+        if not self._writer.is_closing():
+            self._writer.close()
 
     async def connect(self, host: str, port: int):
         self._host = host
@@ -69,7 +70,7 @@ class PyAsyncObjectStorageConnector(AsyncObjectStorageConnector):
         if not self.is_connected():
             return
 
-        if not self._writer.is_closing:
+        if not self._writer.is_closing():
             self._writer.close()
 
     @property
