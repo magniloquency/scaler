@@ -7,7 +7,7 @@ set -x
 
 # Get the directory where the script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSION_FILE="$SCRIPT_DIR/../src/scaler/version.txt"
+VERSION_FILE="$SCRIPT_DIR/../../version.txt"
 
 if [ ! -f "$VERSION_FILE" ]; then
     echo "Error: Version file not found at $VERSION_FILE"

@@ -112,7 +112,7 @@ Orb Template Configuration
 *   ``--subnet-id``: AWS subnet ID where the instances will be launched. If not provided, it attempts to discover the default subnet in the default VPC.
 *   ``--security-group-ids``: Comma-separated list of AWS security group IDs.
 *   ``--allowed-ip``: IP address to allow in the security group (if created automatically). Defaults to the adapter's external IP.
-*   ``--orb-config-path``: Path to the ORB root directory (default: ``driver/orb``).
+*   ``--orb-config-path``: Path to the ORB root directory (default: ``src/scaler/drivers/orb``).
 
 Common Parameters
 ~~~~~~~~~~~~~~~~~
