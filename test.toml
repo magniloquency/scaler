@@ -1,3 +1,0 @@
-[test]
-pos-arg = 'from_toml'
-named-arg = 'from_toml'
