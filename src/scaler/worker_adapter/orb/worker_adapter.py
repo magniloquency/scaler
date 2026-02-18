@@ -188,7 +188,7 @@ class ORBWorkerAdapter:
 
         await self._connector_external.send(
             WorkerAdapterCommandResponse.new_msg(
-                worker_group_id=worker_group_id,
+                worker_group_id=bytes(worker_group_id),
                 command=cmd_res,
                 status=response_status,
                 worker_ids=worker_ids,
