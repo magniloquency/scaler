@@ -3,7 +3,6 @@ from typing import List, Optional
 
 from scaler.config import defaults
 from scaler.config.common.logging import LoggingConfig
-from scaler.config.common.web import WebConfig
 from scaler.config.common.worker import WorkerConfig
 from scaler.config.common.worker_adapter import WorkerAdapterConfig
 from scaler.config.config_class import ConfigClass
@@ -14,7 +13,6 @@ from scaler.utility.event_loop import EventLoopType
 class ORBWorkerAdapterConfig(ConfigClass):
     """Configuration for the ORB worker adapter."""
 
-    web_config: WebConfig
     worker_adapter_config: WorkerAdapterConfig
 
     # ORB Template configuration

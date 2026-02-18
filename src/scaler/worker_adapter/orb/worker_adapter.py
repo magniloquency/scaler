@@ -2,26 +2,35 @@ import asyncio
 import json
 import logging
 import os
+import signal
 import urllib.request
+import uuid
 from dataclasses import asdict
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import boto3
-from aiohttp import web
-from aiohttp.web_request import Request
+import zmq
 
 from scaler.config.section.orb_worker_adapter import ORBWorkerAdapterConfig
+from scaler.io.utility import create_async_connector, create_async_simple_context
+from scaler.io.ymq import ymq
+from scaler.protocol.python.message import (
+    Message,
+    WorkerAdapterCommand,
+    WorkerAdapterCommandResponse,
+    WorkerAdapterCommandType,
+    WorkerAdapterHeartbeat,
+    WorkerAdapterHeartbeatEcho,
+)
+from scaler.utility.event_loop import create_async_loop_routine, register_event_loop, run_task_forever
 from scaler.utility.formatter import camelcase_dict
 from scaler.utility.identifiers import WorkerID
-from scaler.worker_adapter.common import (
-    CapacityExceededError,
-    WorkerGroupID,
-    WorkerGroupNotFoundError,
-    format_capabilities,
-)
+from scaler.utility.logging.utility import setup_logger
+from scaler.worker_adapter.common import WorkerGroupID, format_capabilities
 from scaler.worker_adapter.orb.helper import ORBHelper
 from scaler.worker_adapter.orb.types import ORBTemplate
 
+Status = WorkerAdapterCommandResponse.Status
 logger = logging.getLogger(__name__)
 
 
@@ -41,7 +50,7 @@ def get_orb_worker_name(instance_id: str) -> str:
     return f"Worker|ORB|{instance_id}|{tag}"
 
 
-class ORBAdapter:
+class ORBWorkerAdapter:
     _config: ORBWorkerAdapterConfig
     _orb: ORBHelper
     _worker_groups: Dict[WorkerGroupID, WorkerID]
@@ -52,9 +61,19 @@ class ORBAdapter:
 
     def __init__(self, config: ORBWorkerAdapterConfig):
         self._config = config
+        self._address = config.worker_adapter_config.scheduler_address
+        self._heartbeat_interval_seconds = config.worker_config.heartbeat_interval_seconds
+        self._capabilities = config.worker_config.per_worker_capabilities.capabilities
+        self._max_workers = config.worker_adapter_config.max_workers
+
         self._orb = None
         self._created_security_group_id = None
         self._created_key_name = None
+
+        self._event_loop = config.event_loop
+        self._logging_paths = config.logging_config.paths
+        self._logging_level = config.logging_config.level
+        self._logging_config_file = config.logging_config.config_file
 
         if self._config.subnet_id:
             logger.warning("subnet_id is specified in config but currently has no effect")
@@ -124,6 +143,100 @@ class ORBAdapter:
                 del template_dict["subnet_ids"]
 
             json.dump({"templates": [camelcase_dict(template_dict)]}, f, indent=4)
+
+        self._context = create_async_simple_context()
+        self._name = "worker_adapter_orb"
+        self._ident = f"{self._name}|{uuid.uuid4().bytes.hex()}".encode()
+
+        self._connector_external = create_async_connector(
+            self._context,
+            name=self._name,
+            socket_type=zmq.DEALER,
+            address=self._address,
+            bind_or_connect="connect",
+            callback=self.__on_receive_external,
+            identity=self._ident,
+        )
+
+    async def __on_receive_external(self, message: Message):
+        if isinstance(message, WorkerAdapterCommand):
+            await self._handle_command(message)
+        elif isinstance(message, WorkerAdapterHeartbeatEcho):
+            pass
+        else:
+            logging.warning(f"Received unknown message type: {type(message)}")
+
+    async def _handle_command(self, command: WorkerAdapterCommand):
+        cmd_type = command.command
+        worker_group_id = command.worker_group_id
+        response_status = Status.Success
+        worker_ids: List[bytes] = []
+        capabilities: Dict[str, int] = {}
+
+        cmd_res = WorkerAdapterCommandType.StartWorkerGroup
+        if cmd_type == WorkerAdapterCommandType.StartWorkerGroup:
+            cmd_res = WorkerAdapterCommandType.StartWorkerGroup
+            worker_group_id, response_status = await self.start_worker_group()
+            if response_status == Status.Success:
+                worker_ids = [self._worker_groups[worker_group_id]]
+                capabilities = self._capabilities
+        elif cmd_type == WorkerAdapterCommandType.ShutdownWorkerGroup:
+            cmd_res = WorkerAdapterCommandType.ShutdownWorkerGroup
+            response_status = await self.shutdown_worker_group(worker_group_id)
+        else:
+            raise ValueError("Unknown Command")
+
+        await self._connector_external.send(
+            WorkerAdapterCommandResponse.new_msg(
+                worker_group_id=worker_group_id,
+                command=cmd_res,
+                status=response_status,
+                worker_ids=worker_ids,
+                capabilities=capabilities,
+            )
+        )
+
+    async def __send_heartbeat(self):
+        await self._connector_external.send(
+            WorkerAdapterHeartbeat.new_msg(
+                max_worker_groups=self._max_workers, workers_per_group=1, capabilities=self._capabilities
+            )
+        )
+
+    def run(self) -> None:
+        self._loop = asyncio.new_event_loop()
+        run_task_forever(self._loop, self._run(), cleanup_callback=self._cleanup)
+
+    def __destroy(self):
+        print(f"Worker adapter {self._ident!r} received signal, shutting down")
+        self._task.cancel()
+
+    def __register_signal(self):
+        self._loop.add_signal_handler(signal.SIGINT, self.__destroy)
+        self._loop.add_signal_handler(signal.SIGTERM, self.__destroy)
+
+    async def _run(self) -> None:
+        register_event_loop(self._event_loop)
+        setup_logger(self._logging_paths, self._logging_config_file, self._logging_level)
+        self._task = self._loop.create_task(self.__get_loops())
+        self.__register_signal()
+        await self._task
+
+    async def __get_loops(self):
+        loops = [
+            create_async_loop_routine(self._connector_external.routine, 0),
+            create_async_loop_routine(self.__send_heartbeat, self._heartbeat_interval_seconds),
+        ]
+
+        try:
+            await asyncio.gather(*loops)
+        except asyncio.CancelledError:
+            pass
+        except ymq.YMQException as e:
+            if e.code == ymq.ErrorCode.ConnectorSocketClosedByRemoteEnd:
+                pass
+            else:
+                logging.exception(f"{self._ident!r}: failed with unhandled exception:\n{e}")
 
     def _create_user_data(self) -> str:
         worker_config = self._config.worker_config
@@ -229,6 +342,9 @@ nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address
             return
         self._cleaned_up = True
 
+        if self._connector_external is not None:
+            self._connector_external.destroy()
+
         logger.info("Starting cleanup of ORB and AWS resources...")
 
         # 1. Shutdown all active worker groups (terminate instances)
@@ -259,24 +375,20 @@ nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address
 
         logger.info("Cleanup completed.")
 
-    async def cleanup(self, app):
-        self._cleanup()
-
     def __del__(self):
         self._cleanup()
 
-    async def start_worker_group(self) -> WorkerGroupID:
-        if len(self._worker_groups) >= self._config.worker_adapter_config.max_workers:
-            raise CapacityExceededError(
-                f"Maximum number of instances ({self._config.worker_adapter_config.max_workers}) reached."
-            )
+    async def start_worker_group(self) -> Tuple[WorkerGroupID, Status]:
+        if len(self._worker_groups) >= self._max_workers:
+            return b"", Status.WorkerGroupTooMuch
 
         # Request a machine. Note: wait and timeout flags in ORB CLI are currently ignored by the handler,
         # so we must handle the polling ourselves.
         response = self._orb.machines.request(template_id=self._template_id, count=1)
 
         if not response.request_id:
-            raise RuntimeError(f"ORB machine request failed to return a request ID. Response: {response}")
+            logger.error(f"ORB machine request failed to return a request ID. Response: {response}")
+            return b"", Status.UnknownAction
 
         logger.info(f"ORB machine request {response.request_id} submitted, polling for instance IDs...")
 
@@ -296,19 +408,21 @@ nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address
 
             if status_response.status in ["failed", "cancelled", "timeout"]:
                 error_msg = status_response.status_message or "Unknown failure"
-                raise RuntimeError(
+                logger.error(
                     f"ORB machine request {response.request_id} failed"
                     f"with status '{status_response.status}': {error_msg}"
                 )
+                return b"", Status.UnknownAction
 
             await asyncio.sleep(ORB_POLLING_INTERVAL_SECONDS)
 
         if not instance_ids:
             timeout_seconds = ORB_MAX_POLLING_ATTEMPTS * ORB_POLLING_INTERVAL_SECONDS
-            raise RuntimeError(
+            logger.error(
                 f"ORB machine request {response.request_id} timed out"
                 f"waiting for instance IDs after {timeout_seconds}s."
             )
+            return b"", Status.UnknownAction
 
         instance_id = instance_ids[0]
         worker_group_id = instance_id.encode()
@@ -317,78 +431,18 @@ nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address
         worker_id = WorkerID(get_orb_worker_name(instance_id).encode())
 
         self._worker_groups[worker_group_id] = worker_id
-        return worker_group_id
+        return worker_group_id, Status.Success
 
-    async def shutdown_worker_group(self, worker_group_id: WorkerGroupID):
+    async def shutdown_worker_group(self, worker_group_id: WorkerGroupID) -> Status:
+        if not worker_group_id:
+            return Status.WorkerGroupIDNotSpecified
+
         if worker_group_id not in self._worker_groups:
-            raise WorkerGroupNotFoundError(f"Worker group with ID {worker_group_id.decode()} does not exist.")
+            logger.warning(f"Worker group with ID {bytes(worker_group_id).decode()} does not exist.")
+            return Status.WorkerGroupIDNotFound
 
         instance_id = worker_group_id.decode()
         self._orb.machines.return_machines([instance_id])
 
         del self._worker_groups[worker_group_id]
-
-    async def webhook_handler(self, request: Request):
-        request_json = await request.json()
-
-        if "action" not in request_json:
-            return web.json_response({"error": "No action specified"}, status=web.HTTPBadRequest.status_code)
-
-        action = request_json["action"]
-
-        if action == "get_worker_adapter_info":
-            # Assuming 1 worker per machine for now, similar to Native adapter
-            return web.json_response(
-                {
-                    "max_worker_groups": self._config.worker_adapter_config.max_workers,
-                    "workers_per_group": 1,
-                    "base_capabilities": {},  # TODO: Fill with capabilities if available/relevant
-                },
-                status=web.HTTPOk.status_code,
-            )
-
-        elif action == "start_worker_group":
-            try:
-                worker_group_id = await self.start_worker_group()
-            except CapacityExceededError as e:
-                logger.warning(f"Capacity exceeded when starting worker group: {e}")
-                return web.json_response({"error": str(e)}, status=web.HTTPTooManyRequests.status_code)
-            except Exception as e:
-                logger.exception(f"Unexpected error starting worker group: {e}")
-                return web.json_response({"error": str(e)}, status=web.HTTPInternalServerError.status_code)
-
-            return web.json_response(
-                {
-                    "status": "Worker group started",
-                    "worker_group_id": worker_group_id.decode(),
-                    "worker_ids": [self._worker_groups[worker_group_id].decode()],
-                },
-                status=web.HTTPOk.status_code,
-            )
-
-        elif action == "shutdown_worker_group":
-            if "worker_group_id" not in request_json:
-                return web.json_response(
-                    {"error": "No worker_group_id specified"}, status=web.HTTPBadRequest.status_code
-                )
-
-            worker_group_id = request_json["worker_group_id"].encode()
-            try:
-                await self.shutdown_worker_group(worker_group_id)
-            except WorkerGroupNotFoundError as e:
-                logger.warning(f"Worker group not found for shutdown: {e}")
-                return web.json_response({"error": str(e)}, status=web.HTTPNotFound.status_code)
-            except Exception as e:
-                logger.exception(f"Unexpected error shutting down worker group {worker_group_id.decode()}: {e}")
-                return web.json_response({"error": str(e)}, status=web.HTTPInternalServerError.status_code)
-
-            return web.json_response({"status": "Worker group shutdown"}, status=web.HTTPOk.status_code)
-
-        else:
-            return web.json_response({"error": "Unknown action"}, status=web.HTTPBadRequest.status_code)
-
-    def create_app(self):
-        app = web.Application()
-        app.router.add_post("/", self.webhook_handler)
-        app.on_cleanup.append(self.cleanup)
-        return app
+        return Status.Success
