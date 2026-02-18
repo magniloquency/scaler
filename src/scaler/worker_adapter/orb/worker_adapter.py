@@ -178,7 +178,7 @@ class ORBWorkerAdapter:
             cmd_res = WorkerAdapterCommandType.StartWorkerGroup
             worker_group_id, response_status = await self.start_worker_group()
             if response_status == Status.Success:
-                worker_ids = [self._worker_groups[worker_group_id]]
+                worker_ids = [bytes(self._worker_groups[worker_group_id])]
                 capabilities = self._capabilities
         elif cmd_type == WorkerAdapterCommandType.ShutdownWorkerGroup:
             cmd_res = WorkerAdapterCommandType.ShutdownWorkerGroup
