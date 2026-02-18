@@ -35,26 +35,28 @@ class Cluster(multiprocessing.get_context("spawn").Process):  # type: ignore[mis
         self._logging_config_file = config.logging_config.config_file
         self._logging_level = config.logging_config.level
 
-        self._worker_adapter = FixedNativeWorkerAdapter(
-            FixedNativeWorkerAdapterConfig(
-                preload=config.preload,
-                worker_adapter_config=WorkerAdapterConfig(
-                    scheduler_address=config.scheduler_address,
-                    object_storage_address=config.object_storage_address,
-                    max_workers=len(config.worker_names),
-                ),
-                worker_config=config.worker_config,
-                logging_config=config.logging_config,
-                event_loop=config.event_loop,
-                worker_io_threads=config.worker_io_threads,
-            )
+        self._worker_adapter_config = FixedNativeWorkerAdapterConfig(
+            preload=config.preload,
+            worker_adapter_config=WorkerAdapterConfig(
+                scheduler_address=config.scheduler_address,
+                object_storage_address=config.object_storage_address,
+                max_workers=len(config.worker_names),
+            ),
+            worker_config=config.worker_config,
+            logging_config=config.logging_config,
+            event_loop=config.event_loop,
+            worker_io_threads=config.worker_io_threads,
         )
 
     def run(self):
+        self.__initialize()
         setup_logger(self._logging_paths, self._logging_config_file, self._logging_level)
 
         self._loop = asyncio.new_event_loop()
         run_task_forever(self._loop, self._run())
+
+    def __initialize(self):
+        self._worker_adapter = FixedNativeWorkerAdapter(self._worker_adapter_config)
 
     async def _run(self):
         self._stopped = asyncio.Event()
