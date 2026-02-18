@@ -35,6 +35,8 @@ class Cluster(multiprocessing.get_context("spawn").Process):  # type: ignore[mis
         self._logging_config_file = config.logging_config.config_file
         self._logging_level = config.logging_config.level
 
+        # we create the config here, but create the actual adapter in the run method
+        # to ensure that it's created in the correct process
         self._worker_adapter_config = FixedNativeWorkerAdapterConfig(
             preload=config.preload,
             worker_adapter_config=WorkerAdapterConfig(
@@ -90,6 +92,8 @@ class Cluster(multiprocessing.get_context("spawn").Process):  # type: ignore[mis
             # we're done when either all the workers have exited, or we received a stop signal
             done, pending = await asyncio.wait([stop_task, join_task], return_when=asyncio.FIRST_COMPLETED)
 
+            # the wait call returns as soon as one of the tasks is done
+            # we should cancel the other task to clean it up before the loop closes
             for task in pending:
                 task.cancel()
 
