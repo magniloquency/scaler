@@ -25,9 +25,10 @@ from scaler.protocol.python.message import (
 from scaler.utility.event_loop import create_async_loop_routine, register_event_loop, run_task_forever
 from scaler.utility.identifiers import WorkerID
 from scaler.utility.logging.utility import setup_logger
-from scaler.worker_adapter.common import WorkerGroupID, format_capabilities
-from scaler.worker_adapter.orb.helper import ORBHelper
-from scaler.worker_adapter.orb.types import ORBTemplate
+from scaler.worker_adapter.drivers.common import WorkerGroupID
+from scaler.worker_adapter.drivers.orb_common.helper import ORBHelper
+from scaler.worker_adapter.drivers.orb_common.types import ORBTemplate
+from scaler.worker_adapter.drivers.orb_ec2.worker_setup import create_user_data, get_orb_worker_name
 
 Status = WorkerAdapterCommandResponse.Status
 logger = logging.getLogger(__name__)
@@ -36,17 +37,6 @@ logger = logging.getLogger(__name__)
 # Polling configuration for ORB machine requests
 ORB_POLLING_INTERVAL_SECONDS = 5
 ORB_MAX_POLLING_ATTEMPTS = 60
-
-
-def get_orb_worker_name(instance_id: str) -> str:
-    """
-    Returns the deterministic worker name for an ORB instance.
-    If instance_id is the bash variable '${INSTANCE_ID}', it returns a bash-compatible string.
-    """
-    if instance_id == "${INSTANCE_ID}":
-        return "Worker|ORB|${INSTANCE_ID}|${INSTANCE_ID//i-/}"
-    tag = instance_id.replace("i-", "")
-    return f"Worker|ORB|{instance_id}|{tag}"
 
 
 class ORBWorkerAdapter:
@@ -106,7 +96,12 @@ class ORBWorkerAdapter:
             self._create_key_pair()
             key_name = self._created_key_name
 
-        user_data = self._create_user_data()
+        user_data = create_user_data(
+            worker_config=self._config.worker_config,
+            adapter_config=self._config.worker_adapter_config,
+            event_loop=self._config.event_loop,
+            worker_io_threads=self._config.worker_io_threads,
+        )
         user_data_file_path = os.path.join(self._orb.cwd, "config", "user_data.sh")
         with open(user_data_file_path, "w") as f:
             f.write(user_data)
@@ -236,53 +231,6 @@ class ORBWorkerAdapter:
                 pass
             else:
                 logging.exception(f"{self._ident!r}: failed with unhandled exception:\n{e}")
-
-    def _create_user_data(self) -> str:
-        worker_config = self._config.worker_config
-        adapter_config = self._config.worker_adapter_config
-
-        # We assume 1 worker per machine for ORB
-        # TODO: Add support for multiple workers per machine if needed
-        num_workers = 1
-
-        # Build the command
-        # We construct the full WorkerID here so it's deterministic and matches what the adapter calculates
-        # We fetch instance_id once and use it to construct the ID
-        script = f"""#!/bin/bash
-INSTANCE_ID=$(ec2-metadata --instance-id --quiet)
-WORKER_NAME="{get_orb_worker_name('${INSTANCE_ID}')}"
-
-nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address()} \
-    --num-of-workers {num_workers} \
-    --worker-names "${{WORKER_NAME}}" \
-    --per-worker-task-queue-size {worker_config.per_worker_task_queue_size} \
-    --heartbeat-interval-seconds {worker_config.heartbeat_interval_seconds} \
-    --task-timeout-seconds {worker_config.task_timeout_seconds} \
-    --garbage-collect-interval-seconds {worker_config.garbage_collect_interval_seconds} \
-    --death-timeout-seconds {worker_config.death_timeout_seconds} \
-    --trim-memory-threshold-bytes {worker_config.trim_memory_threshold_bytes} \
-    --event-loop {self._config.event_loop} \
-    --worker-io-threads {self._config.worker_io_threads} \
-    --deterministic-worker-ids"""
-
-        if worker_config.hard_processor_suspend:
-            script += " \
-    --hard-processor-suspend"
-
-        if adapter_config.object_storage_address:
-            script += f" \
-    --object-storage-address {adapter_config.object_storage_address.to_string()}"
-
-        capabilities = worker_config.per_worker_capabilities.capabilities
-        if capabilities:
-            cap_str = format_capabilities(capabilities)
-            if cap_str.strip():
-                script += f" \
-    --per-worker-capabilities {cap_str}"
-
-        script += " > /var/log/opengris-scaler.log 2>&1 &\n"
-
-        return script
 
     def _discover_default_subnet(self) -> str:
         vpcs = self._ec2.describe_vpcs(Filters=[{"Name": "isDefault", "Values": ["true"]}])

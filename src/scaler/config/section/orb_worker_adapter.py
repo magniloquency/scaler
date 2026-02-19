@@ -37,7 +37,7 @@ class ORBWorkerAdapterConfig(ConfigClass):
     )
 
     orb_config_path: str = dataclasses.field(
-        default="src/scaler/drivers/orb", metadata=dict(help="Path to the ORB root directory")
+        default="src/scaler/worker_adapter/drivers/orb_common", metadata=dict(help="Path to the ORB root directory")
     )
 
     instance_type: str = dataclasses.field(default="t2.micro", metadata=dict(help="EC2 instance type"))

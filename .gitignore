@@ -34,6 +34,3 @@ CMakeFiles/
 .vs/
 src/scaler/protocol/capnp/*.c++
 src/scaler/protocol/capnp/*.h
-
-orb/logs/
-orb/metrics/
