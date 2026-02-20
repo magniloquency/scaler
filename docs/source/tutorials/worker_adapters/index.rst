@@ -6,6 +6,26 @@ Worker Adapters are components in Scaler that handle the actual provisioning and
 .. note::
     For more details on how to configure Scaler, see the :doc:`../configuration` section.
 
+.. note::
+    By default, the scheduler starts with the ``no`` scaling policy, meaning no workers are provisioned automatically. A worker adapter will connect to the scheduler but will not receive any scaling commands until a policy that performs scaling is configured. To enable auto-scaling, pass a ``--policy-content`` (``-pc``) flag to the scheduler.
+
+Enabling Auto-Scaling
+---------------------
+
+To enable auto-scaling with a worker adapter, configure the scheduler's scaling policy using the ``--policy-content`` (``-pc``) flag. For example, to use the vanilla scaler:
+
+.. code-block:: bash
+
+    scaler_scheduler tcp://127.0.0.1:8516 -pc "allocate=even_load; scaling=vanilla"
+
+Once the scheduler is running with this policy, start a worker adapter (e.g., the Native adapter):
+
+.. code-block:: bash
+
+    scaler_worker_adapter_native tcp://127.0.0.1:8516 --max-workers 8
+
+The vanilla policy will then automatically scale workers up and down based on the task-to-worker ratio. For a full description of available scaling policies and their parameters, see :doc:`../scaling`.
+
 .. toctree::
    :maxdepth: 1
 
