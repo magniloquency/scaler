@@ -276,6 +276,9 @@ kill %1 %2
 
 # Or kill by name
 pkill -f "scaler.entry_points"
+
+# Exit the container
+exit
 ```
 
 ---

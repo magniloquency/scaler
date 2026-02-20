@@ -40,11 +40,14 @@ from scaler.worker_adapter.aws_hpc.heartbeat_manager import AWSBatchHeartbeatMan
 from scaler.worker_adapter.aws_hpc.task_manager import AWSHPCTaskManager
 
 
-class AWSBatchWorker(multiprocessing.get_context("spawn").Process):
+_SpawnProcess = multiprocessing.get_context("spawn").Process
+
+
+class AWSBatchWorker(_SpawnProcess):  # type: ignore[misc]
     """
     AWS Batch Worker that receives tasks from scheduler stream
     and submits them to AWS Batch via TaskManager.
-    
+
     Follows the same pattern as SymphonyWorker for consistency.
     """
 
@@ -144,9 +147,7 @@ class AWSBatchWorker(multiprocessing.get_context("spawn").Process):
             job_timeout_seconds=self._job_timeout_seconds,
         )
 
-        self._timeout_manager = VanillaTimeoutManager(
-            death_timeout_seconds=self._death_timeout_seconds
-        )
+        self._timeout_manager = VanillaTimeoutManager(death_timeout_seconds=self._death_timeout_seconds)
 
         # Register components
         self._heartbeat_manager.register(
@@ -164,7 +165,6 @@ class AWSBatchWorker(multiprocessing.get_context("spawn").Process):
         self._loop = asyncio.get_event_loop()
         self.__register_signal()
         self._task = self._loop.create_task(self.__get_loops())
-
 
     async def __on_receive_external(self, message: Message):
         """Handle incoming messages from scheduler."""
@@ -205,10 +205,7 @@ class AWSBatchWorker(multiprocessing.get_context("spawn").Process):
     async def __get_loops(self):
         """Run all async loops."""
         if self._object_storage_address is not None:
-            await self._connector_storage.connect(
-                self._object_storage_address.host,
-                self._object_storage_address.port
-            )
+            await self._connector_storage.connect(self._object_storage_address.host, self._object_storage_address.port)
 
         try:
             await asyncio.gather(

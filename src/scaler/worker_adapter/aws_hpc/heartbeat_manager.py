@@ -5,7 +5,7 @@ Sends periodic heartbeats to the scheduler with worker status.
 """
 
 import time
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 import psutil
 
@@ -34,7 +34,7 @@ class AWSBatchHeartbeatManager(Looper, HeartbeatManager):
 
         self._connector_external: Optional[AsyncConnector] = None
         self._connector_storage: Optional[AsyncObjectStorageConnector] = None
-        self._task_manager = None  # AWSHPCTaskManager
+        self._task_manager: Any = None  # AWSHPCTaskManager
         self._timeout_manager: Optional[TimeoutManager] = None
 
         self._start_timestamp_ns = 0
@@ -56,7 +56,7 @@ class AWSBatchHeartbeatManager(Looper, HeartbeatManager):
     async def on_heartbeat_echo(self, heartbeat: WorkerHeartbeatEcho):
         if self._start_timestamp_ns == 0:
             return
-        
+
         self._latency_us = int(((time.time_ns() - self._start_timestamp_ns) / 2) // 1_000)
         self._start_timestamp_ns = 0
         self._timeout_manager.update_last_seen_time()
@@ -86,7 +86,7 @@ class AWSBatchHeartbeatManager(Looper, HeartbeatManager):
             agent_rss = 0
 
         rss_free = psutil.virtual_memory().available
-        
+
         # Get pending job count from task manager
         queued_tasks = self._task_manager.get_queued_size() if self._task_manager else 0
         processing_tasks = len(self._task_manager._processing_task_ids) if self._task_manager else 0
@@ -95,7 +95,7 @@ class AWSBatchHeartbeatManager(Looper, HeartbeatManager):
 
         # Create agent resource (cpu percentage, rss memory)
         agent_resource = Resource.new_msg(cpu=agent_cpu, rss=agent_rss)
-        
+
         # Create processor status for the adapter (simulated as single processor)
         # pid=0 since AWS Batch jobs run remotely, initialized=True means ready
         processor_resource = Resource.new_msg(cpu=0, rss=0)

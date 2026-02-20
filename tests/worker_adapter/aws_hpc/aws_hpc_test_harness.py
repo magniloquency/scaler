@@ -13,7 +13,6 @@ import argparse
 import math
 import sys
 
-import boto3
 from scaler import Client
 
 DEFAULT_TIMEOUT = 300  # 5 minutes (EC2 cold start can take 2-3 min)
@@ -113,7 +112,7 @@ def main():
     print("AWS HPC Worker Adapter Test Harness")
     print("=" * 50)
     print(f"Scheduler: {args.scheduler}")
-    
+
     # Display AWS credentials in effect
     import boto3
     try:

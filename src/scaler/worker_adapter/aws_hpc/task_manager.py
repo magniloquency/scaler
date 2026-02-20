@@ -8,7 +8,7 @@ Follows the same pattern as SymphonyTaskManager for consistency.
 import asyncio
 import logging
 from concurrent.futures import Future
-from typing import Dict, Optional, Set, cast
+from typing import Any, Dict, Optional, Set, cast
 
 import cloudpickle
 from bidict import bidict
@@ -76,8 +76,8 @@ class AWSHPCTaskManager(Looper, TaskManager):
         self._heartbeat_manager: Optional[HeartbeatManager] = None
 
         # AWS clients (initialized lazily)
-        self._batch_client = None
-        self._s3_client = None
+        self._batch_client: Any = None
+        self._s3_client: Any = None
 
     def _initialize_aws_clients(self):
         """Initialize AWS Batch and S3 clients."""

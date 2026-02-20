@@ -5,19 +5,16 @@ Manages the mapping between task IDs and AWS Batch job futures,
 handling job completion and failure callbacks.
 """
 
-import asyncio
 import concurrent.futures
 import logging
 import threading
 from typing import Any, Dict, Optional
 
-import cloudpickle
-
 
 class BatchJobCallback:
     """
     Callback handler for AWS Batch job completions.
-    
+
     Similar to Symphony's SessionCallback but adapted for AWS Batch's
     polling-based job status model.
     """
@@ -31,7 +28,7 @@ class BatchJobCallback:
     def on_job_succeeded(self, batch_job_id: str, result: Any):
         """
         Handle successful job completion.
-        
+
         Args:
             batch_job_id: AWS Batch job ID
             result: Deserialized result from job output
@@ -48,14 +45,14 @@ class BatchJobCallback:
                 return
 
             self._cleanup_job_mapping(task_id, batch_job_id)
-            
+
             if not future.done():
                 future.set_result(result)
 
     def on_job_failed(self, batch_job_id: str, exception: Exception):
         """
         Handle job failure.
-        
+
         Args:
             batch_job_id: AWS Batch job ID
             exception: Exception that caused the failure
@@ -72,14 +69,14 @@ class BatchJobCallback:
                 return
 
             self._cleanup_job_mapping(task_id, batch_job_id)
-            
+
             if not future.done():
                 future.set_exception(exception)
 
     def on_exception(self, exception: Exception):
         """
         Handle global exception affecting all pending tasks.
-        
+
         Args:
             exception: Exception to propagate to all futures
         """
@@ -93,14 +90,14 @@ class BatchJobCallback:
             self._batch_job_id_to_task_id.clear()
 
     def submit_task(
-        self, 
-        task_id: str, 
-        batch_job_id: str, 
+        self,
+        task_id: str,
+        batch_job_id: str,
         future: concurrent.futures.Future
     ):
         """
         Register a task submission for callback tracking.
-        
+
         Args:
             task_id: Scaler task ID
             batch_job_id: AWS Batch job ID
@@ -114,23 +111,23 @@ class BatchJobCallback:
     def cancel_task(self, task_id: str) -> Optional[str]:
         """
         Cancel a task and return its batch job ID for termination.
-        
+
         Args:
             task_id: Scaler task ID to cancel
-            
+
         Returns:
             AWS Batch job ID if found, None otherwise
         """
         with self._callback_lock:
             future = self._task_id_to_future.pop(task_id, None)
             batch_job_id = self._task_id_to_batch_job_id.pop(task_id, None)
-            
+
             if batch_job_id:
                 self._batch_job_id_to_task_id.pop(batch_job_id, None)
-            
+
             if future and not future.done():
                 future.cancel()
-            
+
             return batch_job_id
 
     def get_batch_job_id(self, task_id: str) -> Optional[str]:

@@ -7,7 +7,6 @@ job definition, and S3 bucket required for the Scaler AWS Batch adapter.
 
 import json
 import logging
-import os
 from pathlib import Path
 from typing import Optional
 
@@ -21,7 +20,7 @@ DEFAULT_CONFIG_FILE = ".scaler_aws_batch_config.json"
 class AWSBatchProvisioner:
     """
     Provisions AWS resources for Scaler AWS Batch adapter.
-    
+
     Creates:
         - S3 bucket for task payloads and results
         - IAM role for Batch jobs (with S3 access)
@@ -39,18 +38,18 @@ class AWSBatchProvisioner:
     ):
         self._region = aws_region
         self._prefix = prefix
-        
+
         session_kwargs = {"region_name": aws_region}
         if aws_access_key_id and aws_secret_access_key:
             session_kwargs["aws_access_key_id"] = aws_access_key_id
             session_kwargs["aws_secret_access_key"] = aws_secret_access_key
-        
+
         self._session = boto3.Session(**session_kwargs)
         self._s3 = self._session.client("s3")
         self._batch = self._session.client("batch")
         self._iam = self._session.client("iam")
         self._sts = self._session.client("sts")
-        
+
         self._account_id = self._sts.get_caller_identity()["Account"]
 
     def provision_all(
@@ -64,7 +63,7 @@ class AWSBatchProvisioner:
     ) -> dict:
         """
         Provision all required AWS resources.
-        
+
         Args:
             container_image: Docker image for job definition
             vcpus: vCPUs per job (integer for EC2)
@@ -72,27 +71,27 @@ class AWSBatchProvisioner:
             max_vcpus: Max vCPUs for compute environment
             instance_types: List of EC2 instance types (default: ["default_x86_64"])
             job_timeout_seconds: Max job runtime in seconds (default: 3600 = 1 hour)
-            
+
         Returns:
             dict with resource names/ARNs
         """
         logging.info(f"Provisioning AWS Batch (EC2) resources with prefix '{self._prefix}'...")
-        
+
         if instance_types is None:
             instance_types = ["default_x86_64"]
-        
+
         # 1. S3 bucket
         bucket_name = self.provision_s3_bucket()
-        
+
         # 2. IAM role for jobs
         role_arn = self.provision_iam_role(bucket_name)
-        
+
         # 3. Compute environment (EC2)
         compute_env_arn = self.provision_compute_environment(max_vcpus, instance_types)
-        
+
         # 4. Job queue
         job_queue_arn = self.provision_job_queue(compute_env_arn)
-        
+
         # 5. Job definition
         job_def_arn = self.provision_job_definition(
             container_image=container_image,
@@ -101,11 +100,11 @@ class AWSBatchProvisioner:
             memory_mb=memory_mb,
             job_timeout_seconds=job_timeout_seconds,
         )
-        
+
         # Calculate effective memory for reporting
         memory_multiple = max(1, round(memory_mb / 2048))
         effective_memory = int(memory_multiple * 2048 * 0.9)
-        
+
         result = {
             "aws_region": self._region,
             "aws_account_id": self._account_id,
@@ -124,7 +123,7 @@ class AWSBatchProvisioner:
             "memory_mb": effective_memory,
             "instance_types": instance_types,
         }
-        
+
         logging.info("Provisioning complete!")
         return result
 
@@ -170,7 +169,7 @@ class AWSBatchProvisioner:
     def provision_s3_bucket(self) -> str:
         """Create S3 bucket for task data."""
         bucket_name = f"{self._prefix}-{self._account_id}-{self._region}"
-        
+
         try:
             if self._region == "us-east-1":
                 self._s3.create_bucket(Bucket=bucket_name)
@@ -185,7 +184,7 @@ class AWSBatchProvisioner:
                 logging.info(f"S3 bucket already exists: {bucket_name}")
             else:
                 raise
-        
+
         # Enable lifecycle to clean up old objects
         self._s3.put_bucket_lifecycle_configuration(
             Bucket=bucket_name,
@@ -198,13 +197,13 @@ class AWSBatchProvisioner:
                 }]
             }
         )
-        
+
         return bucket_name
 
     def provision_iam_role(self, bucket_name: str) -> str:
         """Create IAM role for Batch jobs with S3 access and ECS task execution permissions."""
         role_name = f"{self._prefix}-job-role"
-        
+
         trust_policy = {
             "Version": "2012-10-17",
             "Statement": [{
@@ -213,7 +212,7 @@ class AWSBatchProvisioner:
                 "Action": "sts:AssumeRole"
             }]
         }
-        
+
         s3_policy = {
             "Version": "2012-10-17",
             "Statement": [{
@@ -222,7 +221,7 @@ class AWSBatchProvisioner:
                 "Resource": f"arn:aws:s3:::{bucket_name}/scaler-tasks/*"
             }]
         }
-        
+
         try:
             response = self._iam.create_role(
                 RoleName=role_name,
@@ -237,7 +236,7 @@ class AWSBatchProvisioner:
                 logging.info(f"IAM role already exists: {role_name}")
             else:
                 raise
-        
+
         # Attach AWS managed policy for ECS task execution (covers CloudWatch Logs, ECR)
         try:
             self._iam.attach_role_policy(
@@ -247,7 +246,7 @@ class AWSBatchProvisioner:
             logging.info(f"Attached AmazonECSTaskExecutionRolePolicy to {role_name}")
         except ClientError:
             pass  # May already be attached
-        
+
         # Attach S3 policy for task data
         policy_name = f"{self._prefix}-s3-policy"
         try:
@@ -258,15 +257,15 @@ class AWSBatchProvisioner:
             )
         except ClientError:
             pass  # Policy may already exist
-        
+
         return role_arn
 
     def provision_compute_environment(self, max_vcpus: int, instance_types: list) -> str:
         """Create EC2 compute environment (not Fargate for better container reuse)."""
         env_name = f"{self._prefix}-compute"
-        
+
         allocation_strategy = "BEST_FIT_PROGRESSIVE"
-        
+
         try:
             response = self._batch.create_compute_environment(
                 computeEnvironmentName=env_name,
@@ -286,24 +285,24 @@ class AWSBatchProvisioner:
             )
             env_arn = response["computeEnvironmentArn"]
             logging.info(f"Created EC2 compute environment: {env_name} (instance_types={instance_types})")
-            
+
             # Wait for compute environment to be valid
             self._wait_for_compute_environment(env_name)
-            
+
         except ClientError as e:
             if "already exists" in str(e):
                 env_arn = f"arn:aws:batch:{self._region}:{self._account_id}:compute-environment/{env_name}"
                 logging.info(f"Compute environment already exists: {env_name}")
             else:
                 raise
-        
+
         return env_arn
 
     def _get_or_create_instance_profile(self) -> str:
         """Get or create EC2 instance profile for Batch compute environment."""
         profile_name = f"{self._prefix}-instance-profile"
         role_name = f"{self._prefix}-instance-role"
-        
+
         # Trust policy for EC2
         trust_policy = {
             "Version": "2012-10-17",
@@ -313,7 +312,7 @@ class AWSBatchProvisioner:
                 "Action": "sts:AssumeRole"
             }]
         }
-        
+
         # Create role if it doesn't exist
         try:
             self._iam.create_role(
@@ -325,7 +324,7 @@ class AWSBatchProvisioner:
         except ClientError as e:
             if e.response["Error"]["Code"] != "EntityAlreadyExists":
                 raise
-        
+
         # Attach required policies for Batch EC2 instances
         required_policies = [
             "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role",
@@ -335,7 +334,7 @@ class AWSBatchProvisioner:
                 self._iam.attach_role_policy(RoleName=role_name, PolicyArn=policy_arn)
             except ClientError:
                 pass
-        
+
         # Create instance profile if it doesn't exist
         try:
             self._iam.create_instance_profile(InstanceProfileName=profile_name)
@@ -343,7 +342,7 @@ class AWSBatchProvisioner:
         except ClientError as e:
             if e.response["Error"]["Code"] != "EntityAlreadyExists":
                 raise
-        
+
         # Add role to instance profile
         try:
             self._iam.add_role_to_instance_profile(
@@ -353,13 +352,13 @@ class AWSBatchProvisioner:
         except ClientError as e:
             if "LimitExceeded" not in str(e) and "already exists" not in str(e).lower():
                 raise
-        
+
         return f"arn:aws:iam::{self._account_id}:instance-profile/{profile_name}"
 
     def provision_job_queue(self, compute_env_arn: str) -> str:
         """Create job queue."""
         queue_name = f"{self._prefix}-queue"
-        
+
         try:
             response = self._batch.create_job_queue(
                 jobQueueName=queue_name,
@@ -378,7 +377,7 @@ class AWSBatchProvisioner:
                 logging.info(f"Job queue already exists: {queue_name}")
             else:
                 raise
-        
+
         return queue_arn
 
     def provision_job_definition(
@@ -391,17 +390,21 @@ class AWSBatchProvisioner:
     ) -> str:
         """Create job definition for EC2 compute environment."""
         job_def_name = f"{self._prefix}-job"
-        
+
         # Round memory to nearest multiple of 2048MB and use 90%
         memory_multiple = max(1, round(memory_mb / 2048))
         total_memory = memory_multiple * 2048
         effective_memory = int(total_memory * 0.9)
-        
-        logging.info(f"Memory config: requested={memory_mb}MB, multiple={memory_multiple}x2048={total_memory}MB, effective(90%)={effective_memory}MB")
-        
+
+        logging.info(
+            f"Memory config: requested={memory_mb}MB, "
+            f"multiple={memory_multiple}x2048={total_memory}MB, "
+            f"effective(90%)={effective_memory}MB"
+        )
+
         # Set up CloudWatch Logs retention (30 days)
         self._setup_cloudwatch_logs_retention()
-        
+
         response = self._batch.register_job_definition(
             jobDefinitionName=job_def_name,
             type="container",
@@ -432,13 +435,13 @@ class AWSBatchProvisioner:
                 "attemptDurationSeconds": job_timeout_seconds,
             },
         )
-        
+
         job_def_arn = response["jobDefinitionArn"]
         logging.info(f"Registered job definition: {job_def_name} (vcpus={int(vcpus)}, memory={effective_memory}MB)")
-        
+
         # Cleanup old job definition revisions, keep only latest 2
         self._cleanup_old_job_definitions(job_def_name, keep_latest=2)
-        
+
         return job_def_arn
 
     def _cleanup_old_job_definitions(self, job_def_name: str, keep_latest: int = 2):
@@ -448,14 +451,14 @@ class AWSBatchProvisioner:
                 jobDefinitionName=job_def_name,
                 status="ACTIVE"
             )
-            
+
             job_defs = response.get("jobDefinitions", [])
             if len(job_defs) <= keep_latest:
                 return
-            
+
             # Sort by revision (highest first)
             job_defs.sort(key=lambda x: x.get("revision", 0), reverse=True)
-            
+
             # Deregister all but the latest N
             for job_def in job_defs[keep_latest:]:
                 try:
@@ -465,7 +468,7 @@ class AWSBatchProvisioner:
                     logging.info(f"Deregistered old job definition: {job_def['jobDefinitionArn']}")
                 except ClientError as e:
                     logging.warning(f"Failed to deregister {job_def['jobDefinitionArn']}: {e}")
-                    
+
         except ClientError as e:
             logging.warning(f"Failed to cleanup old job definitions: {e}")
 
@@ -473,7 +476,7 @@ class AWSBatchProvisioner:
         """Set CloudWatch Logs retention policy for AWS Batch logs."""
         logs_client = self._session.client("logs")
         log_group_name = "/aws/batch/job"
-        
+
         try:
             # Create log group if it doesn't exist
             try:
@@ -482,7 +485,7 @@ class AWSBatchProvisioner:
             except ClientError as e:
                 if e.response["Error"]["Code"] != "ResourceAlreadyExistsException":
                     raise
-            
+
             # Set retention policy
             logs_client.put_retention_policy(
                 logGroupName=log_group_name,
@@ -536,10 +539,10 @@ class AWSBatchProvisioner:
         """Build Docker image and push to ECR."""
         import base64
         import subprocess
-        
+
         ecr = self._session.client("ecr")
         repo_name = f"{self._prefix}-worker"
-        
+
         # Create ECR repository if it doesn't exist
         try:
             ecr.create_repository(repositoryName=repo_name)
@@ -548,7 +551,7 @@ class AWSBatchProvisioner:
             if e.response["Error"]["Code"] != "RepositoryAlreadyExistsException":
                 raise
             logging.info(f"ECR repository already exists: {repo_name}")
-        
+
         # Set lifecycle policy to keep only 3 latest images
         lifecycle_policy = {
             "rules": [{
@@ -569,32 +572,32 @@ class AWSBatchProvisioner:
                 repositoryName=repo_name,
                 lifecyclePolicyText=json.dumps(lifecycle_policy)
             )
-            logging.info(f"Set ECR lifecycle policy: keep 3 latest images")
+            logging.info("Set ECR lifecycle policy: keep 3 latest images")
         except ClientError as e:
             logging.warning(f"Failed to set lifecycle policy: {e}")
-        
+
         # Get ECR login credentials
         auth = ecr.get_authorization_token()
         token = auth["authorizationData"][0]["authorizationToken"]
         registry = auth["authorizationData"][0]["proxyEndpoint"]
-        
+
         # Decode credentials
         username, password = base64.b64decode(token).decode().split(":")
-        
+
         # Docker login
         login_cmd = f"echo {password} | docker login --username {username} --password-stdin {registry}"
         subprocess.run(login_cmd, shell=True, check=True, capture_output=True)
         logging.info("Logged in to ECR")
-        
+
         # Build image
         image_uri = f"{self._account_id}.dkr.ecr.{self._region}.amazonaws.com/{repo_name}:latest"
         dockerfile_path = Path(__file__).parent / "Dockerfile.batch"
-        
+
         # Build from repo root (Dockerfile expects src/scaler/utility/... paths)
         # Path(__file__) is: /path/to/repo/src/scaler/utility/worker_adapter/aws_hpc/provisioner.py
         # Go up 6 levels: provisioner.py -> aws_hpc -> worker_adapter -> utility -> scaler -> src -> repo_root
         repo_root = Path(__file__).parent.parent.parent.parent.parent.parent
-        
+
         # Build for linux/amd64 (EC2 runs on x86_64)
         build_cmd = [
             "docker", "build",
@@ -605,12 +608,12 @@ class AWSBatchProvisioner:
         ]
         logging.info(f"Building image for linux/amd64: {image_uri}")
         subprocess.run(build_cmd, check=True)
-        
+
         # Push image
-        logging.info(f"Pushing image to ECR...")
+        logging.info("Pushing image to ECR...")
         push_cmd = ["docker", "push", image_uri]
         subprocess.run(push_cmd, check=True)
-        
+
         logging.info(f"Image pushed: {image_uri}")
         return image_uri
 
@@ -618,7 +621,7 @@ class AWSBatchProvisioner:
         """Delete all provisioned resources."""
         import time
         logging.info("Cleaning up AWS resources...")
-        
+
         queue_name = f"{self._prefix}-queue"
         env_name = f"{self._prefix}-compute"
         job_def_name = f"{self._prefix}-job"
@@ -626,12 +629,12 @@ class AWSBatchProvisioner:
         instance_role_name = f"{self._prefix}-instance-role"
         instance_profile_name = f"{self._prefix}-instance-profile"
         bucket_name = f"{self._prefix}-{self._account_id}-{self._region}"
-        
+
         # Disable and delete job queue
         try:
             logging.info(f"Disabling job queue: {queue_name}")
             self._batch.update_job_queue(jobQueue=queue_name, state="DISABLED")
-            
+
             # Wait for queue to be disabled
             for _ in range(30):
                 response = self._batch.describe_job_queues(jobQueues=[queue_name])
@@ -643,25 +646,25 @@ class AWSBatchProvisioner:
                     if state == "DISABLED":
                         break
                 time.sleep(2)
-            
+
             self._batch.delete_job_queue(jobQueue=queue_name)
             logging.info(f"Deleted job queue: {queue_name}")
-            
+
             # Wait for queue deletion
             for _ in range(30):
                 response = self._batch.describe_job_queues(jobQueues=[queue_name])
                 if not response["jobQueues"]:
                     break
                 time.sleep(2)
-                
+
         except ClientError as e:
             logging.warning(f"Failed to delete job queue: {e}")
-        
+
         # Disable and delete compute environment
         try:
             logging.info(f"Disabling compute environment: {env_name}")
             self._batch.update_compute_environment(computeEnvironment=env_name, state="DISABLED")
-            
+
             # Wait for compute env to be disabled
             for _ in range(60):
                 response = self._batch.describe_compute_environments(computeEnvironments=[env_name])
@@ -673,20 +676,20 @@ class AWSBatchProvisioner:
                     if state == "DISABLED":
                         break
                 time.sleep(5)
-            
+
             self._batch.delete_compute_environment(computeEnvironment=env_name)
             logging.info(f"Deleted compute environment: {env_name}")
-            
+
             # Wait for compute env deletion
             for _ in range(60):
                 response = self._batch.describe_compute_environments(computeEnvironments=[env_name])
                 if not response["computeEnvironments"]:
                     break
                 time.sleep(5)
-                
+
         except ClientError as e:
             logging.warning(f"Failed to delete compute environment: {e}")
-        
+
         # Deregister job definitions
         try:
             response = self._batch.describe_job_definitions(jobDefinitionName=job_def_name, status="ACTIVE")
@@ -695,7 +698,7 @@ class AWSBatchProvisioner:
             logging.info(f"Deregistered job definitions: {job_def_name}")
         except ClientError as e:
             logging.warning(f"Failed to deregister job definitions: {e}")
-        
+
         # Delete job IAM role
         try:
             self._iam.detach_role_policy(
@@ -713,7 +716,7 @@ class AWSBatchProvisioner:
             logging.info(f"Deleted IAM role: {role_name}")
         except ClientError as e:
             logging.warning(f"Failed to delete IAM role: {e}")
-        
+
         # Delete instance profile and role
         try:
             self._iam.remove_role_from_instance_profile(
@@ -727,7 +730,7 @@ class AWSBatchProvisioner:
             logging.info(f"Deleted instance profile: {instance_profile_name}")
         except ClientError as e:
             logging.warning(f"Failed to delete instance profile: {e}")
-        
+
         try:
             self._iam.detach_role_policy(
                 RoleName=instance_role_name,
@@ -740,7 +743,7 @@ class AWSBatchProvisioner:
             logging.info(f"Deleted instance role: {instance_role_name}")
         except ClientError as e:
             logging.warning(f"Failed to delete instance role: {e}")
-        
+
         # Delete S3 bucket (must be empty)
         try:
             paginator = self._s3.get_paginator("list_objects_v2")
@@ -751,7 +754,7 @@ class AWSBatchProvisioner:
             logging.info(f"Deleted S3 bucket: {bucket_name}")
         except ClientError as e:
             logging.warning(f"Failed to delete S3 bucket: {e}")
-        
+
         # Delete ECR repository
         ecr_repo_name = f"{self._prefix}-worker"
         try:
@@ -760,31 +763,33 @@ class AWSBatchProvisioner:
             logging.info(f"Deleted ECR repository: {ecr_repo_name}")
         except ClientError as e:
             logging.warning(f"Failed to delete ECR repository: {e}")
-        
+
         logging.info("Cleanup complete!")
 
 
 def main():
     """CLI for provisioning."""
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="Provision AWS Batch resources for Scaler")
     parser.add_argument("action", choices=["provision", "cleanup", "show", "build-image"], help="Action to perform")
     parser.add_argument("--region", default="us-east-1", help="AWS region")
     parser.add_argument("--prefix", default=DEFAULT_PREFIX, help="Resource name prefix")
     parser.add_argument("--image", default=None, help="Container image (default: builds and pushes to ECR)")
     parser.add_argument("--vcpus", type=int, default=1, help="vCPUs per job (integer for EC2)")
-    parser.add_argument("--memory", type=int, default=2048, help="Memory per job (MB, will use 90%% of nearest 2048MB multiple)")
+    parser.add_argument("--memory", type=int, default=2048,
+                        help="Memory per job (MB, will use 90%% of nearest 2048MB multiple)")
     parser.add_argument("--max-vcpus", type=int, default=256, help="Max vCPUs for compute env")
     parser.add_argument("--instance-types", default="default_x86_64", help="Comma-separated instance types")
     parser.add_argument("--job-timeout", type=int, default=60, help="Job timeout in minutes (default: 60 = 1 hour)")
-    parser.add_argument("--config", default="tests/worker_adapter/aws_hpc/.scaler_aws_batch_config.json", help="Config file path")
+    parser.add_argument(
+        "--config", default="tests/worker_adapter/aws_hpc/.scaler_aws_batch_config.json", help="Config file path")
     parser.add_argument("--env-file", default="tests/worker_adapter/aws_hpc/.scaler_aws_hpc.env", help="Env file path")
-    
+
     args = parser.parse_args()
-    
+
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    
+
     if args.action == "show":
         try:
             config = AWSBatchProvisioner.load_config(args.config)
@@ -796,16 +801,16 @@ def main():
             print(f"Error: {e}")
             print("Run 'provision' first to create resources.")
         return
-    
+
     provisioner = AWSBatchProvisioner(aws_region=args.region, prefix=args.prefix)
-    
+
     if args.action == "build-image":
         image_uri = provisioner.build_and_push_image()
         print(f"\nImage URI: {image_uri}")
         print("\nTo use this image, run provision with:")
         print(f"  --image {image_uri}")
         return
-    
+
     if args.action == "provision":
         # If no image specified, build and push to ECR
         if args.image is None:
@@ -813,10 +818,10 @@ def main():
             container_image = provisioner.build_and_push_image()
         else:
             container_image = args.image
-        
+
         # Parse instance types
         instance_types = [t.strip() for t in args.instance_types.split(",")]
-        
+
         result = provisioner.provision_all(
             container_image=container_image,
             vcpus=args.vcpus,
