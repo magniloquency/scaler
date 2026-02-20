@@ -23,7 +23,6 @@ from scaler.protocol.python.message import (
     WorkerAdapterHeartbeatEcho,
 )
 from scaler.utility.event_loop import create_async_loop_routine, register_event_loop, run_task_forever
-from scaler.utility.formatter import camelcase_dict
 from scaler.utility.identifiers import WorkerID
 from scaler.utility.logging.utility import setup_logger
 from scaler.worker_adapter.common import WorkerGroupID, format_capabilities
@@ -135,14 +134,14 @@ class ORBWorkerAdapter:
 
         # Create template in ORB
         # Use the cwd from ORBHelper to place the templates file
-        templates_file_path = os.path.join(self._orb.cwd, "config", "awsprov_templates.json")
+        templates_file_path = os.path.join(self._orb.cwd, "config", "templates.json")
         with open(templates_file_path, "w") as f:
             template_dict = asdict(template)
             # Remove empty list that might overwrite the subnet_id field
             if not template_dict.get("subnet_ids"):
                 del template_dict["subnet_ids"]
 
-            json.dump({"templates": [camelcase_dict(template_dict)]}, f, indent=4)
+            json.dump({"templates": [template_dict]}, f, indent=4)
 
         self._context = create_async_simple_context()
         self._name = "worker_adapter_orb"
