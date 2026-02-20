@@ -7,8 +7,8 @@ from os import path
 from typing import Any, Dict, List, Optional
 
 from scaler.utility.formatter import snakecase_dict
-from scaler.worker_adapter.orb.exception import ORBException
-from scaler.worker_adapter.orb.types import ORBMachine, ORBRequest, ORBTemplate
+from scaler.worker_adapter.drivers.orb_common.exception import ORBException
+from scaler.worker_adapter.drivers.orb_common.types import ORBMachine, ORBRequest, ORBTemplate
 
 
 class ORBHelper:
@@ -178,14 +178,18 @@ class ORBHelper:
         self._temp_dir = tempfile.TemporaryDirectory()
         self._cwd = self._temp_dir.name
 
+        config_src = path.join(config_root_path, "config")
+        config_dst = path.join(self._cwd, "config")
+
         shutil.copytree(
-            config_root_path,
-            self._cwd,
+            config_src,
+            config_dst,
             dirs_exist_ok=True,
             ignore=shutil.ignore_patterns(
                 ".git", ".venv", ".mypy_cache", "build*", "dist", "__pycache__", "metrics", "logs"
             ),
         )
+
         os.makedirs(path.join(self._cwd, "logs"), exist_ok=True)
 
         self.templates = self.Templates(self)
