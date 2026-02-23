@@ -155,8 +155,8 @@ def main():
 
             # Log memory before execution
             try:
-                import resource
-                mem_before = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+                import resource  # type: ignore[import-not-found]
+                mem_before = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss  # type: ignore[attr-defined]
                 logging.info(f"Memory before execution: {mem_before} KB")
             except Exception:
                 pass
