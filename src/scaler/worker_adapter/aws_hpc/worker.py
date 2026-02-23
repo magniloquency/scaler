@@ -43,7 +43,7 @@ from scaler.worker_adapter.aws_hpc.task_manager import AWSHPCTaskManager
 _SpawnProcess = multiprocessing.get_context("spawn").Process
 
 
-class AWSBatchWorker(_SpawnProcess):  # type: ignore[misc]
+class AWSBatchWorker(_SpawnProcess):  # type: ignore[valid-type, misc]
     """
     AWS Batch Worker that receives tasks from scheduler stream
     and submits them to AWS Batch via TaskManager.
