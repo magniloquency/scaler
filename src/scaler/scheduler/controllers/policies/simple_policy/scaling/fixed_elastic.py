@@ -1,145 +1,107 @@
 import logging
-import math
-from typing import Dict, List, Literal, Optional
+from typing import Dict, List
 
-import aiohttp
-from aiohttp import web
-
-from scaler.protocol.python.message import InformationSnapshot
+from scaler.protocol.python.message import (
+    InformationSnapshot,
+    WorkerAdapterCommand,
+    WorkerAdapterCommandType,
+    WorkerAdapterHeartbeat,
+)
 from scaler.protocol.python.status import ScalingManagerStatus
 from scaler.scheduler.controllers.policies.simple_policy.scaling.mixins import ScalingController
-from scaler.scheduler.controllers.policies.simple_policy.scaling.types import WorkerGroupID
-from scaler.utility.identifiers import WorkerID
-
-WorkerAdapterLabel = Literal["primary", "secondary"]
+from scaler.scheduler.controllers.policies.simple_policy.scaling.types import (
+    WorkerGroupCapabilities,
+    WorkerGroupID,
+    WorkerGroupState,
+)
 
 
 class FixedElasticScalingController(ScalingController):
-    def __init__(self, primary_adapter_webhook_url: str, secondary_adapter_webhook_url: str):
-        self._primary_webhook = primary_adapter_webhook_url
-        self._secondary_webhook = secondary_adapter_webhook_url
-        self._primary_group_limit = 1
+    """
+    Scaling controller that identifies adapters by their max_worker_groups:
+    - Primary adapter: max_worker_groups == 1, starts once and never shuts down
+    - Secondary adapter: max_worker_groups > 1, elastic (starts/shuts down based on load)
+
+    Note: this controller is not fully stateless due to ``_primary_started``
+    tracking whether the primary adapter has already been started.
+    """
+
+    def __init__(self):
         self._lower_task_ratio = 1
         self._upper_task_ratio = 10
 
-        self._worker_groups: Dict[WorkerGroupID, List[WorkerID]] = {}
-        self._worker_group_source: Dict[WorkerGroupID, WorkerAdapterLabel] = {}
+        # Track if primary adapter has been scaled
+        self._primary_started: bool = False
 
-    def get_status(self):
-        return ScalingManagerStatus.new_msg(worker_groups=self._worker_groups)
+    def _is_primary_adapter(self, adapter_heartbeat: WorkerAdapterHeartbeat) -> bool:
+        return adapter_heartbeat.max_worker_groups == 1
 
-    async def on_snapshot(self, information_snapshot: InformationSnapshot):
+    def get_scaling_commands(
+        self,
+        information_snapshot: InformationSnapshot,
+        adapter_heartbeat: WorkerAdapterHeartbeat,
+        worker_groups: WorkerGroupState,
+        worker_group_capabilities: WorkerGroupCapabilities,
+    ) -> List[WorkerAdapterCommand]:
         if not information_snapshot.workers:
             if information_snapshot.tasks:
-                await self._start_worker_group()
-            return
+                return self._create_start_commands(worker_groups, adapter_heartbeat)
+            return []
 
         task_ratio = len(information_snapshot.tasks) / len(information_snapshot.workers)
         if task_ratio > self._upper_task_ratio:
-            await self._start_worker_group()
+            return self._create_start_commands(worker_groups, adapter_heartbeat)
         elif task_ratio < self._lower_task_ratio:
-            worker_group_task_counts = {
-                worker_group_id: sum(
-                    information_snapshot.workers[worker_id].queued_tasks
-                    for worker_id in worker_ids
-                    if worker_id in information_snapshot.workers
-                )
-                for worker_group_id, worker_ids in self._worker_groups.items()
-            }
-            if not worker_group_task_counts:
-                logging.warning("No worker groups available to shut down.")
-                return
+            return self._create_shutdown_commands(information_snapshot, worker_groups, adapter_heartbeat)
 
-            # Prefer shutting down secondary adapter groups first
-            secondary_groups = [
-                (group_id, task_count)
-                for group_id, task_count in worker_group_task_counts.items()
-                if self._worker_group_source.get(group_id) == "secondary"
-            ]
-            if secondary_groups:
-                worker_group_id = min(secondary_groups, key=lambda item: item[1])[0]
-            else:
-                worker_group_id = min(worker_group_task_counts, key=worker_group_task_counts.get)
+        return []
 
-            await self._shutdown_worker_group(worker_group_id)
+    def get_status(self, worker_groups: WorkerGroupState) -> ScalingManagerStatus:
+        return ScalingManagerStatus.new_msg(worker_groups=worker_groups)
 
-    async def _start_worker_group(self):
-        # Select adapter: use primary if under limit, otherwise use secondary
-        adapter: Optional[WorkerAdapterLabel] = None
-        webhook = None
+    def _create_start_commands(
+        self, worker_groups: WorkerGroupState, adapter_heartbeat: WorkerAdapterHeartbeat
+    ) -> List[WorkerAdapterCommand]:
+        if self._is_primary_adapter(adapter_heartbeat):
+            # Primary adapter: start once, never again
+            if self._primary_started:
+                return []
+            self._primary_started = True
+        else:
+            # Secondary adapter: use adapter's max_worker_groups
+            if len(worker_groups) >= adapter_heartbeat.max_worker_groups:
+                logging.warning("Secondary adapter capacity reached, cannot start new worker group.")
+                return []
 
-        if self._primary_webhook:
-            primary_count = sum(source == "primary" for source in self._worker_group_source.values())
-            if self._primary_group_limit is None or primary_count < self._primary_group_limit:
-                adapter = "primary"
-                webhook = self._primary_webhook
-            else:
-                logging.debug(f"Primary adapter worker group limit reached ({self._primary_group_limit}).")
+        return [WorkerAdapterCommand.new_msg(worker_group_id=b"", command=WorkerAdapterCommandType.StartWorkerGroup)]
 
-        if adapter is None and self._secondary_webhook:
-            adapter = "secondary"
-            webhook = self._secondary_webhook
+    def _create_shutdown_commands(
+        self,
+        information_snapshot: InformationSnapshot,
+        worker_groups: WorkerGroupState,
+        adapter_heartbeat: WorkerAdapterHeartbeat,
+    ) -> List[WorkerAdapterCommand]:
+        # Primary adapter never shuts down
+        if self._is_primary_adapter(adapter_heartbeat):
+            return []
 
-        if adapter is None:
-            logging.warning("All worker adapters have reached their capacity; cannot start a new worker group.")
-            return
-
-        response, status = await self._make_request(webhook, {"action": "get_worker_adapter_info"})
-        if status != web.HTTPOk.status_code:
-            logging.warning("Failed to get worker adapter info.")
-            return
-
-        if sum(adapter == "secondary" for adapter in self._worker_group_source.values()) >= response.get(
-            "max_worker_groups", math.inf
-        ):
-            return
-
-        response, status = await self._make_request(webhook, {"action": "start_worker_group"})
-        if status == web.HTTPTooManyRequests.status_code:
-            logging.warning(f"{adapter.capitalize()} adapter capacity exceeded, cannot start new worker group.")
-            return
-        if status == web.HTTPInternalServerError.status_code:
-            logging.error(
-                f"{adapter.capitalize()} adapter failed to start worker group:"
-                f" {response.get('error', 'Unknown error')}"
+        worker_group_task_counts: Dict[WorkerGroupID, int] = {}
+        for worker_group_id, worker_ids in worker_groups.items():
+            total_queued = sum(
+                information_snapshot.workers[wid].queued_tasks
+                for wid in worker_ids
+                if wid in information_snapshot.workers
             )
-            return
+            worker_group_task_counts[worker_group_id] = total_queued
 
-        worker_group_id = response["worker_group_id"].encode()
-        self._worker_groups[worker_group_id] = [WorkerID(worker_id.encode()) for worker_id in response["worker_ids"]]
-        self._worker_group_source[worker_group_id] = adapter
-        logging.info(f"Started worker group {worker_group_id.decode()} on {adapter} adapter.")
+        if not worker_group_task_counts:
+            return []
 
-    async def _shutdown_worker_group(self, worker_group_id: WorkerGroupID):
-        if worker_group_id not in self._worker_groups:
-            logging.error(f"Worker group with ID {worker_group_id.decode()} does not exist.")
-            return
+        # Shut down the group with fewest queued tasks
+        worker_group_id = min(worker_group_task_counts, key=worker_group_task_counts.get)
 
-        adapter = self._worker_group_source.get(worker_group_id)
-        if adapter is None:
-            logging.error(f"Worker group {worker_group_id.decode()} has no associated adapter recorded.")
-            return
-
-        webhook = self._primary_webhook if adapter == "primary" else self._secondary_webhook
-        response, status = await self._make_request(
-            webhook, {"action": "shutdown_worker_group", "worker_group_id": worker_group_id.decode()}
-        )
-        if status == web.HTTPNotFound.status_code:
-            logging.error(f"Worker group with ID {worker_group_id.decode()} not found in {adapter} adapter.")
-            return
-        if status == web.HTTPInternalServerError.status_code:
-            logging.error(
-                f"{adapter.capitalize()} adapter failed to shutdown worker group:"
-                f" {response.get('error', 'Unknown error')}"
+        return [
+            WorkerAdapterCommand.new_msg(
+                worker_group_id=worker_group_id, command=WorkerAdapterCommandType.ShutdownWorkerGroup
             )
-            return
-
-        self._worker_groups.pop(worker_group_id)
-        self._worker_group_source.pop(worker_group_id)
-        logging.info(f"Shutdown worker group {worker_group_id.decode()} on {adapter} adapter.")
-
-    @staticmethod
-    async def _make_request(webhook_url: str, payload):
-        async with aiohttp.ClientSession() as session:
-            async with session.post(webhook_url, json=payload) as response:
-                return await response.json(), response.status
+        ]
