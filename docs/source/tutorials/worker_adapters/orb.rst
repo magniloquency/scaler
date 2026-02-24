@@ -31,8 +31,6 @@ Example command:
 
     scaler_worker_adapter_orb tcp://<SCHEDULER_EXTERNAL_IP>:8516 \
         --object-storage-address tcp://<OSS_EXTERNAL_IP>:8517 \
-        --adapter-web-host 0.0.0.0 \
-        --adapter-web-port 8080 \
         --image-id ami-0528819f94f4f5fa5 \
         --instance-type t3.medium \
         --aws-region us-east-1 \
@@ -51,8 +49,6 @@ Equivalent configuration using a TOML file:
 
     [orb_worker_adapter]
     object_storage_address = "tcp://<OSS_EXTERNAL_IP>:8517"
-    adapter_web_host = "0.0.0.0"
-    adapter_web_port = 8080
     image_id = "ami-0528819f94f4f5fa5"
     instance_type = "t3.medium"
     aws_region = "us-east-1"
@@ -61,7 +57,6 @@ Equivalent configuration using a TOML file:
 
 *   ``tcp://<SCHEDULER_EXTERNAL_IP>:8516`` is the address workers will use to connect to the scheduler.
 *   ``tcp://<OSS_EXTERNAL_IP>:8517`` is the address workers will use to connect to the object storage server.
-*   The adapter HTTP server (webhook) will listen on port 8080. The scheduler connects to this.
 *   New workers will be launched using the specified AMI and instance type.
 
 Networking Configuration
