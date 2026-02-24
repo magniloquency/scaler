@@ -64,10 +64,7 @@ class AWSBatchHeartbeatManager(Looper, HeartbeatManager):
         if self._object_storage_address is None:
             address_message = heartbeat.object_storage_address()
             self._object_storage_address = ObjectStorageAddressConfig(address_message.host, address_message.port)
-            await self._connector_storage.connect(
-                self._object_storage_address.host,
-                self._object_storage_address.port
-            )
+            await self._connector_storage.connect(self._object_storage_address.host, self._object_storage_address.port)
 
     def get_object_storage_address(self) -> Optional[ObjectStorageAddressConfig]:
         return self._object_storage_address
@@ -100,11 +97,7 @@ class AWSBatchHeartbeatManager(Looper, HeartbeatManager):
         # pid=0 since AWS Batch jobs run remotely, initialized=True means ready
         processor_resource = Resource.new_msg(cpu=0, rss=0)
         processor_status = ProcessorStatus.new_msg(
-            pid=0,
-            initialized=True,
-            has_task=has_task,
-            suspended=False,
-            resource=processor_resource,
+            pid=0, initialized=True, has_task=has_task, suspended=False, resource=processor_resource
         )
 
         heartbeat = WorkerHeartbeat.new_msg(

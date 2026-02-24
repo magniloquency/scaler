@@ -175,8 +175,7 @@ class AWSBatchProvisioner:
                 self._s3.create_bucket(Bucket=bucket_name)
             else:
                 self._s3.create_bucket(
-                    Bucket=bucket_name,
-                    CreateBucketConfiguration={"LocationConstraint": self._region}
+                    Bucket=bucket_name, CreateBucketConfiguration={"LocationConstraint": self._region}
                 )
             logging.info(f"Created S3 bucket: {bucket_name}")
         except ClientError as e:
@@ -189,13 +188,15 @@ class AWSBatchProvisioner:
         self._s3.put_bucket_lifecycle_configuration(
             Bucket=bucket_name,
             LifecycleConfiguration={
-                "Rules": [{
-                    "ID": "cleanup-old-tasks",
-                    "Status": "Enabled",
-                    "Filter": {"Prefix": "scaler-tasks/"},
-                    "Expiration": {"Days": 1},
-                }]
-            }
+                "Rules": [
+                    {
+                        "ID": "cleanup-old-tasks",
+                        "Status": "Enabled",
+                        "Filter": {"Prefix": "scaler-tasks/"},
+                        "Expiration": {"Days": 1},
+                    }
+                ]
+            },
         )
 
         return bucket_name
@@ -206,20 +207,20 @@ class AWSBatchProvisioner:
 
         trust_policy = {
             "Version": "2012-10-17",
-            "Statement": [{
-                "Effect": "Allow",
-                "Principal": {"Service": "ecs-tasks.amazonaws.com"},
-                "Action": "sts:AssumeRole"
-            }]
+            "Statement": [
+                {"Effect": "Allow", "Principal": {"Service": "ecs-tasks.amazonaws.com"}, "Action": "sts:AssumeRole"}
+            ],
         }
 
         s3_policy = {
             "Version": "2012-10-17",
-            "Statement": [{
-                "Effect": "Allow",
-                "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
-                "Resource": f"arn:aws:s3:::{bucket_name}/scaler-tasks/*"
-            }]
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+                    "Resource": f"arn:aws:s3:::{bucket_name}/scaler-tasks/*",
+                }
+            ],
         }
 
         try:
@@ -240,8 +241,7 @@ class AWSBatchProvisioner:
         # Attach AWS managed policy for ECS task execution (covers CloudWatch Logs, ECR)
         try:
             self._iam.attach_role_policy(
-                RoleName=role_name,
-                PolicyArn="arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy",
+                RoleName=role_name, PolicyArn="arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
             )
             logging.info(f"Attached AmazonECSTaskExecutionRolePolicy to {role_name}")
         except ClientError:
@@ -250,11 +250,7 @@ class AWSBatchProvisioner:
         # Attach S3 policy for task data
         policy_name = f"{self._prefix}-s3-policy"
         try:
-            self._iam.put_role_policy(
-                RoleName=role_name,
-                PolicyName=policy_name,
-                PolicyDocument=json.dumps(s3_policy),
-            )
+            self._iam.put_role_policy(RoleName=role_name, PolicyName=policy_name, PolicyDocument=json.dumps(s3_policy))
         except ClientError:
             pass  # Policy may already exist
 
@@ -306,11 +302,9 @@ class AWSBatchProvisioner:
         # Trust policy for EC2
         trust_policy = {
             "Version": "2012-10-17",
-            "Statement": [{
-                "Effect": "Allow",
-                "Principal": {"Service": "ec2.amazonaws.com"},
-                "Action": "sts:AssumeRole"
-            }]
+            "Statement": [
+                {"Effect": "Allow", "Principal": {"Service": "ec2.amazonaws.com"}, "Action": "sts:AssumeRole"}
+            ],
         }
 
         # Create role if it doesn't exist
@@ -326,9 +320,7 @@ class AWSBatchProvisioner:
                 raise
 
         # Attach required policies for Batch EC2 instances
-        required_policies = [
-            "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role",
-        ]
+        required_policies = ["arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"]
         for policy_arn in required_policies:
             try:
                 self._iam.attach_role_policy(RoleName=role_name, PolicyArn=policy_arn)
@@ -345,10 +337,7 @@ class AWSBatchProvisioner:
 
         # Add role to instance profile
         try:
-            self._iam.add_role_to_instance_profile(
-                InstanceProfileName=profile_name,
-                RoleName=role_name
-            )
+            self._iam.add_role_to_instance_profile(InstanceProfileName=profile_name, RoleName=role_name)
         except ClientError as e:
             if "LimitExceeded" not in str(e) and "already exists" not in str(e).lower():
                 raise
@@ -364,10 +353,7 @@ class AWSBatchProvisioner:
                 jobQueueName=queue_name,
                 state="ENABLED",
                 priority=1,
-                computeEnvironmentOrder=[{
-                    "order": 1,
-                    "computeEnvironment": compute_env_arn,
-                }],
+                computeEnvironmentOrder=[{"order": 1, "computeEnvironment": compute_env_arn}],
             )
             queue_arn = response["jobQueueArn"]
             logging.info(f"Created job queue: {queue_name}")
@@ -381,12 +367,7 @@ class AWSBatchProvisioner:
         return queue_arn
 
     def provision_job_definition(
-        self,
-        container_image: str,
-        role_arn: str,
-        vcpus: int,
-        memory_mb: int,
-        job_timeout_seconds: int,
+        self, container_image: str, role_arn: str, vcpus: int, memory_mb: int, job_timeout_seconds: int
     ) -> str:
         """Create job definition for EC2 compute environment."""
         job_def_name = f"{self._prefix}-job"
@@ -420,20 +401,24 @@ class AWSBatchProvisioner:
             containerProperties={
                 "image": container_image,
                 "command": [
-                    "--task_id", "Ref::task_id",
-                    "--payload", "Ref::payload",
-                    "--compressed", "Ref::compressed",
-                    "--s3_bucket", "Ref::s3_bucket",
-                    "--s3_prefix", "Ref::s3_prefix",
-                    "--s3_key", "Ref::s3_key",
+                    "--task_id",
+                    "Ref::task_id",
+                    "--payload",
+                    "Ref::payload",
+                    "--compressed",
+                    "Ref::compressed",
+                    "--s3_bucket",
+                    "Ref::s3_bucket",
+                    "--s3_prefix",
+                    "Ref::s3_prefix",
+                    "--s3_key",
+                    "Ref::s3_key",
                 ],
                 "jobRoleArn": role_arn,
                 "vcpus": int(vcpus),  # EC2 requires integer vCPUs
                 "memory": effective_memory,  # 90% of multiple of 2048MB
             },
-            timeout={
-                "attemptDurationSeconds": job_timeout_seconds,
-            },
+            timeout={"attemptDurationSeconds": job_timeout_seconds},
         )
 
         job_def_arn = response["jobDefinitionArn"]
@@ -447,10 +432,7 @@ class AWSBatchProvisioner:
     def _cleanup_old_job_definitions(self, job_def_name: str, keep_latest: int = 2):
         """Deregister old job definition revisions, keeping only the latest N."""
         try:
-            response = self._batch.describe_job_definitions(
-                jobDefinitionName=job_def_name,
-                status="ACTIVE"
-            )
+            response = self._batch.describe_job_definitions(jobDefinitionName=job_def_name, status="ACTIVE")
 
             job_defs = response.get("jobDefinitions", [])
             if len(job_defs) <= keep_latest:
@@ -462,9 +444,7 @@ class AWSBatchProvisioner:
             # Deregister all but the latest N
             for job_def in job_defs[keep_latest:]:
                 try:
-                    self._batch.deregister_job_definition(
-                        jobDefinition=job_def["jobDefinitionArn"]
-                    )
+                    self._batch.deregister_job_definition(jobDefinition=job_def["jobDefinitionArn"])
                     logging.info(f"Deregistered old job definition: {job_def['jobDefinitionArn']}")
                 except ClientError as e:
                     logging.warning(f"Failed to deregister {job_def['jobDefinitionArn']}: {e}")
@@ -487,10 +467,7 @@ class AWSBatchProvisioner:
                     raise
 
             # Set retention policy
-            logs_client.put_retention_policy(
-                logGroupName=log_group_name,
-                retentionInDays=retention_days
-            )
+            logs_client.put_retention_policy(logGroupName=log_group_name, retentionInDays=retention_days)
             logging.info(f"Set CloudWatch Logs retention: {retention_days} days for {log_group_name}")
         except ClientError as e:
             logging.warning(f"Failed to set CloudWatch Logs retention: {e}")
@@ -498,28 +475,23 @@ class AWSBatchProvisioner:
     def _get_default_subnets(self) -> list:
         """Get default VPC subnets."""
         ec2 = self._session.client("ec2")
-        response = ec2.describe_subnets(
-            Filters=[{"Name": "default-for-az", "Values": ["true"]}]
-        )
+        response = ec2.describe_subnets(Filters=[{"Name": "default-for-az", "Values": ["true"]}])
         return [s["SubnetId"] for s in response["Subnets"]]
 
     def _get_default_security_group(self) -> list:
         """Get default security group."""
         ec2 = self._session.client("ec2")
-        response = ec2.describe_security_groups(
-            Filters=[{"Name": "group-name", "Values": ["default"]}]
-        )
+        response = ec2.describe_security_groups(Filters=[{"Name": "group-name", "Values": ["default"]}])
         return [response["SecurityGroups"][0]["GroupId"]]
 
     def _wait_for_compute_environment(self, env_name: str, timeout: int = 300):
         """Wait for compute environment to become VALID."""
         import time
+
         start = time.time()
         logging.info(f"Waiting for compute environment {env_name} to become VALID (timeout: {timeout}s)...")
         while time.time() - start < timeout:
-            response = self._batch.describe_compute_environments(
-                computeEnvironments=[env_name]
-            )
+            response = self._batch.describe_compute_environments(computeEnvironments=[env_name])
             if not response["computeEnvironments"]:
                 logging.warning(f"Compute environment {env_name} not found, waiting...")
                 time.sleep(5)
@@ -554,24 +526,17 @@ class AWSBatchProvisioner:
 
         # Set lifecycle policy to keep only 3 latest images
         lifecycle_policy = {
-            "rules": [{
-                "rulePriority": 1,
-                "description": "Keep only 3 latest images",
-                "selection": {
-                    "tagStatus": "any",
-                    "countType": "imageCountMoreThan",
-                    "countNumber": 3
-                },
-                "action": {
-                    "type": "expire"
+            "rules": [
+                {
+                    "rulePriority": 1,
+                    "description": "Keep only 3 latest images",
+                    "selection": {"tagStatus": "any", "countType": "imageCountMoreThan", "countNumber": 3},
+                    "action": {"type": "expire"},
                 }
-            }]
+            ]
         }
         try:
-            ecr.put_lifecycle_policy(
-                repositoryName=repo_name,
-                lifecyclePolicyText=json.dumps(lifecycle_policy)
-            )
+            ecr.put_lifecycle_policy(repositoryName=repo_name, lifecyclePolicyText=json.dumps(lifecycle_policy))
             logging.info("Set ECR lifecycle policy: keep 3 latest images")
         except ClientError as e:
             logging.warning(f"Failed to set lifecycle policy: {e}")
@@ -600,11 +565,15 @@ class AWSBatchProvisioner:
 
         # Build for linux/amd64 (EC2 runs on x86_64)
         build_cmd = [
-            "docker", "build",
-            "--platform", "linux/amd64",
-            "-f", str(dockerfile_path),
-            "-t", image_uri,
-            str(repo_root)  # Use repo root, not src/
+            "docker",
+            "build",
+            "--platform",
+            "linux/amd64",
+            "-f",
+            str(dockerfile_path),
+            "-t",
+            image_uri,
+            str(repo_root),  # Use repo root, not src/
         ]
         logging.info(f"Building image for linux/amd64: {image_uri}")
         subprocess.run(build_cmd, check=True)
@@ -620,6 +589,7 @@ class AWSBatchProvisioner:
     def cleanup(self):
         """Delete all provisioned resources."""
         import time
+
         logging.info("Cleaning up AWS resources...")
 
         queue_name = f"{self._prefix}-queue"
@@ -702,8 +672,7 @@ class AWSBatchProvisioner:
         # Delete job IAM role
         try:
             self._iam.detach_role_policy(
-                RoleName=role_name,
-                PolicyArn="arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+                RoleName=role_name, PolicyArn="arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
             )
         except ClientError:
             pass
@@ -720,8 +689,7 @@ class AWSBatchProvisioner:
         # Delete instance profile and role
         try:
             self._iam.remove_role_from_instance_profile(
-                InstanceProfileName=instance_profile_name,
-                RoleName=instance_role_name
+                InstanceProfileName=instance_profile_name, RoleName=instance_role_name
             )
         except ClientError:
             pass
@@ -734,7 +702,7 @@ class AWSBatchProvisioner:
         try:
             self._iam.detach_role_policy(
                 RoleName=instance_role_name,
-                PolicyArn="arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
+                PolicyArn="arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role",
             )
         except ClientError:
             pass
@@ -777,13 +745,15 @@ def main():
     parser.add_argument("--prefix", default=DEFAULT_PREFIX, help="Resource name prefix")
     parser.add_argument("--image", default=None, help="Container image (default: builds and pushes to ECR)")
     parser.add_argument("--vcpus", type=int, default=1, help="vCPUs per job (integer for EC2)")
-    parser.add_argument("--memory", type=int, default=2048,
-                        help="Memory per job (MB, will use 90%% of nearest 2048MB multiple)")
+    parser.add_argument(
+        "--memory", type=int, default=2048, help="Memory per job (MB, will use 90%% of nearest 2048MB multiple)"
+    )
     parser.add_argument("--max-vcpus", type=int, default=256, help="Max vCPUs for compute env")
     parser.add_argument("--instance-types", default="default_x86_64", help="Comma-separated instance types")
     parser.add_argument("--job-timeout", type=int, default=60, help="Job timeout in minutes (default: 60 = 1 hour)")
     parser.add_argument(
-        "--config", default="tests/worker_adapter/aws_hpc/.scaler_aws_batch_config.json", help="Config file path")
+        "--config", default="tests/worker_adapter/aws_hpc/.scaler_aws_batch_config.json", help="Config file path"
+    )
     parser.add_argument("--env-file", default="tests/worker_adapter/aws_hpc/.scaler_aws_hpc.env", help="Env file path")
 
     args = parser.parse_args()

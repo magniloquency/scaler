@@ -323,18 +323,14 @@ class AWSHPCTaskManager(Looper, TaskManager):
         import base64
         import gzip
         import re
+
         from botocore.exceptions import ClientError
 
         task_id_hex = task.task_id.hex()
-        func_name = getattr(function, '__name__', 'unknown')
+        func_name = getattr(function, "__name__", "unknown")
 
         # Create payload with embedded function and arguments
-        task_data = {
-            "task_id": task_id_hex,
-            "source": task.source.hex(),
-            "function": function,
-            "arguments": arguments,
-        }
+        task_data = {"task_id": task_id_hex, "source": task.source.hex(), "function": function, "arguments": arguments}
 
         payload = cloudpickle.dumps(task_data)
         payload_size = len(payload)
@@ -347,7 +343,7 @@ class AWSHPCTaskManager(Looper, TaskManager):
             logging.debug(f"Compressed payload: {payload_size} -> {len(payload)} bytes")
 
         # Create job name
-        safe_func_name = re.sub(r'[^a-zA-Z0-9_-]', '_', func_name)[:50]
+        safe_func_name = re.sub(r"[^a-zA-Z0-9_-]", "_", func_name)[:50]
         job_name = f"{safe_func_name}-{task_id_hex[:12]}"
 
         # Determine if we need S3 or can use inline
@@ -428,7 +424,7 @@ class AWSHPCTaskManager(Looper, TaskManager):
                         result_bytes = response["Body"].read()
 
                         # Check if compressed
-                        if len(result_bytes) >= 2 and result_bytes[0:2] == b'\x1f\x8b':
+                        if len(result_bytes) >= 2 and result_bytes[0:2] == b"\x1f\x8b":
                             result_bytes = gzip.decompress(result_bytes)
 
                         result = cloudpickle.loads(result_bytes)
@@ -469,6 +465,7 @@ class AWSHPCTaskManager(Looper, TaskManager):
         """Fetch CloudWatch logs for a failed job."""
         try:
             import boto3
+
             logs_client = boto3.client("logs", region_name=self._aws_region)
 
             log_group = "/aws/batch/job"
@@ -495,10 +492,7 @@ class AWSHPCTaskManager(Looper, TaskManager):
 
             try:
                 response = logs_client.get_log_events(
-                    logGroupName=log_group,
-                    logStreamName=log_stream,
-                    limit=100,
-                    startFromHead=True
+                    logGroupName=log_group, logStreamName=log_stream, limit=100, startFromHead=True
                 )
 
                 events = response.get("events", [])

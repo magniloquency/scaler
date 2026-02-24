@@ -89,12 +89,7 @@ class BatchJobCallback:
             self._task_id_to_batch_job_id.clear()
             self._batch_job_id_to_task_id.clear()
 
-    def submit_task(
-        self,
-        task_id: str,
-        batch_job_id: str,
-        future: concurrent.futures.Future
-    ):
+    def submit_task(self, task_id: str, batch_job_id: str, future: concurrent.futures.Future):
         """
         Register a task submission for callback tracking.
 

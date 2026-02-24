@@ -93,12 +93,7 @@ def run_compute_test(client: Client, timeout: int) -> bool:
         return False
 
 
-TESTS = {
-    "sqrt": run_sqrt_test,
-    "simple": run_simple_test,
-    "map": run_map_test,
-    "compute": run_compute_test,
-}
+TESTS = {"sqrt": run_sqrt_test, "simple": run_simple_test, "map": run_map_test, "compute": run_compute_test}
 
 
 def main():
@@ -115,8 +110,9 @@ def main():
 
     # Display AWS credentials in effect
     import boto3
+
     try:
-        sts = boto3.client('sts')
+        sts = boto3.client("sts")
         identity = sts.get_caller_identity()
         print(f"AWS Account: {identity['Account']}")
         print(f"AWS User/Role: {identity['Arn']}")

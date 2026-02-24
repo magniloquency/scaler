@@ -39,7 +39,6 @@ from scaler.worker.agent.timeout_manager import VanillaTimeoutManager
 from scaler.worker_adapter.aws_hpc.heartbeat_manager import AWSBatchHeartbeatManager
 from scaler.worker_adapter.aws_hpc.task_manager import AWSHPCTaskManager
 
-
 _SpawnProcess = multiprocessing.get_context("spawn").Process
 
 
