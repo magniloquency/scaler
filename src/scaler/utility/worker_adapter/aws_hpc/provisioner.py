@@ -504,6 +504,10 @@ class AWSBatchProvisioner:
             if status == "INVALID":
                 status_reason = response["computeEnvironments"][0].get("statusReason", "Unknown")
                 raise RuntimeError(f"Compute environment {env_name} is INVALID: {status_reason}")
+
+            if status not in ("CREATING", "UPDATING"):
+                raise RuntimeError(f"Compute environment {env_name} has unknown status: {status}")
+
             time.sleep(10)
         raise TimeoutError(f"Compute environment {env_name} did not become VALID within {timeout}s")
 
@@ -615,6 +619,8 @@ class AWSBatchProvisioner:
                     state = response["jobQueues"][0]["state"]
                     if state == "DISABLED":
                         break
+                elif status not in ("CREATING", "UPDATING", "INVALID"):
+                    raise RuntimeError(f"Job queue {queue_name} has unknown status: {status}")
                 time.sleep(2)
 
             self._batch.delete_job_queue(jobQueue=queue_name)
@@ -645,6 +651,8 @@ class AWSBatchProvisioner:
                     state = response["computeEnvironments"][0]["state"]
                     if state == "DISABLED":
                         break
+                elif status not in ("CREATING", "UPDATING", "INVALID"):
+                    raise RuntimeError(f"Compute environment {env_name} has unknown status: {status}")
                 time.sleep(5)
 
             self._batch.delete_compute_environment(computeEnvironment=env_name)
