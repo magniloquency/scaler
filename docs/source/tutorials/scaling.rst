@@ -74,7 +74,8 @@ This policy is straightforward and works well for homogeneous workloads where al
 .. code:: bash
 
     scaler_scheduler tcp://127.0.0.1:8516 \
-        --policy-content "allocate=even_load; scaling=vanilla"
+        --policy-content "allocate=even_load; scaling=vanilla" \
+        --adapter-webhook-urls "http://localhost:8080/webhook"
 
 
 Capability Scaling (``capability``)
@@ -109,7 +110,8 @@ The capability scaling controller is designed for heterogeneous workloads where 
 .. code:: bash
 
     scaler_scheduler tcp://127.0.0.1:8516 \
-        --policy-content "allocate=capability; scaling=capability"
+        --policy-content "allocate=capability; scaling=capability" \
+        --adapter-webhook-urls "http://localhost:8080/webhook"
 
 **Example Scenario:**
 
@@ -152,7 +154,8 @@ This is useful for scenarios where you have a fixed pool of dedicated resources 
 .. code:: bash
 
     scaler_scheduler tcp://127.0.0.1:8516 \
-        --policy-content "allocate=even_load; scaling=fixed_elastic"
+        --policy-content "allocate=even_load; scaling=fixed_elastic" \
+        --adapter-webhook-urls "http://localhost:8080/primary" "http://localhost:8081/secondary"
 
 **Behavior:**
 
