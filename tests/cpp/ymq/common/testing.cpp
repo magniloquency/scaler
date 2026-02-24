@@ -27,7 +27,7 @@
 #define pclose _pclose
 #endif
 
-TestResult return_failure_if_false(bool cond, const char* condStr, const char* file, int line, const char* msg)
+TestResult returnFailureIfFalse(bool cond, const char* condStr, const char* file, int line, const char* msg)
 {
     // Failure: ... (assertion failed) at file:line
     if (!cond) {
@@ -46,7 +46,7 @@ TestResult return_failure_if_false(bool cond, const char* condStr, const char* f
     return TestResult::Success;
 }
 
-std::wstring discover_python_home(std::string command)
+std::wstring discoverPythonHome(std::string command)
 {
     // leverage the system's command line to get the current python prefix
     FILE* pipe = popen(std::format("{} -c \"import sys; print(sys.prefix)\"", command).c_str(), "r");
@@ -73,12 +73,12 @@ std::wstring discover_python_home(std::string command)
     return std::wstring(output.begin(), output.end());
 }
 
-void ensure_python_initialized()
+void ensurePythonInitialized()
 {
     if (Py_IsInitialized())
         return;
 
-    ensure_python_home();
+    ensurePythonHome();
     Py_Initialize();
 
     // add the cwd to the path
@@ -103,7 +103,7 @@ void ensure_python_initialized()
     PyEval_SaveThread();
 }
 
-void maybe_finalize_python()
+void maybeFinalizePython()
 {
     PyGILState_STATE gState = PyGILState_Ensure();
     if (!Py_IsInitialized())
@@ -115,11 +115,11 @@ void maybe_finalize_python()
     (void)gState;
 }
 
-TestResult run_python(const char* path, std::vector<std::optional<std::string>> argv)
+TestResult runPython(const char* path, std::vector<std::optional<std::string>> argv)
 {
     PyGILState_STATE gState = PyGILState_Ensure();
 
-    auto pidStr = std::to_string(get_listener_pid());
+    auto pidStr = std::to_string(getListenerPid());
     argv.insert(argv.begin(), pidStr.c_str());
     argv.insert(argv.begin(), "mitm");
 
@@ -161,7 +161,7 @@ exception:
     return TestResult::Failure;
 }
 
-TestResult run_mitm(
+TestResult runMitm(
     std::string testCase,
     std::string mitmIp,
     uint16_t mitmPort,
@@ -170,7 +170,7 @@ TestResult run_mitm(
     std::vector<std::string> extraArgs)
 {
     auto cwd = std::filesystem::current_path();
-    chdir_to_project_root();
+    chdirToProjectRoot();
 
     // we build the args for the user to make calling the function more convenient
     std::vector<std::optional<std::string>> args {
@@ -179,14 +179,14 @@ TestResult run_mitm(
     for (auto& arg: extraArgs)
         args.push_back(std::move(arg));
 
-    auto result = run_python("tests/cpp/ymq/py_mitm/main.py", args);
+    auto result = runPython("tests/cpp/ymq/py_mitm/main.py", args);
 
     // change back to the original working directory
     std::filesystem::current_path(cwd);
     return result;
 }
 
-void test_wrapper(std::function<TestResult()> fn, int timeoutSecs, PipeWriter pipeWr, void* hEvent)
+void testWrapper(std::function<TestResult()> fn, int timeoutSecs, PipeWriter pipeWr, void* hEvent)
 {
     TestResult result = TestResult::Failure;
     try {
@@ -199,5 +199,5 @@ void test_wrapper(std::function<TestResult()> fn, int timeoutSecs, PipeWriter pi
 
     pipeWr.writeAll((char*)&result, sizeof(TestResult));
 
-    signal_event(hEvent);
+    signalEvent(hEvent);
 }

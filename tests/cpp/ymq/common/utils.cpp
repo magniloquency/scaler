@@ -5,7 +5,7 @@
 
 // change the current working directory to the project root
 // this is important for finding the python mitm script
-void chdir_to_project_root()
+void chdirToProjectRoot()
 {
     auto cwd = std::filesystem::current_path();
 
@@ -19,7 +19,7 @@ void chdir_to_project_root()
     }
 }
 
-unsigned short random_port(unsigned short minPort, unsigned short maxPort)
+unsigned short randomPort(unsigned short minPort, unsigned short maxPort)
 {
     static thread_local std::mt19937_64 rng(std::random_device {}());
     std::uniform_int_distribution<unsigned int> dist(minPort, maxPort);

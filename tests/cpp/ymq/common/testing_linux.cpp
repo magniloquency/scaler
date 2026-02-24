@@ -22,38 +22,38 @@
 #include "tests/cpp/ymq/common/utils.h"
 #include "tests/cpp/ymq/pipe/pipe.h"
 
-void ensure_python_home()
+void ensurePythonHome()
 {
     // no-op
 }
 
-void signal_event(void* hEvent)
+void signalEvent(void* hEvent)
 {
     // no-op
 }
 
-int get_listener_pid()
+int getListenerPid()
 {
     return getppid();
 }
 
-void wait_for_python_ready_sigblock(void** hEvent)
+void waitForPythonReadySigblock(void** hEvent)
 {
     sigset_t set {};
 
     if (sigemptyset(&set) < 0)
-        raise_system_error("failed to create empty signal set");
+        raiseSystemError("failed to create empty signal set");
 
     if (sigaddset(&set, SIGUSR1) < 0)
-        raise_system_error("failed to add sigusr1 to the signal set");
+        raiseSystemError("failed to add sigusr1 to the signal set");
 
     if (sigprocmask(SIG_BLOCK, &set, nullptr) < 0)
-        raise_system_error("failed to mask sigusr1");
+        raiseSystemError("failed to mask sigusr1");
 
     std::cout << "blocked signal..." << std::endl;
 }
 
-void wait_for_python_ready_sigwait(void* hEvent, int timeoutSecs)
+void waitForPythonReadySigwait(void* hEvent, int timeoutSecs)
 {
     std::cout << "waiting for python to be ready..." << std::endl;
 
@@ -62,13 +62,13 @@ void wait_for_python_ready_sigwait(void* hEvent, int timeoutSecs)
     siginfo_t sig {};
 
     if (sigemptyset(&set) < 0)
-        raise_system_error("failed to create empty signal set");
+        raiseSystemError("failed to create empty signal set");
 
     if (sigaddset(&set, SIGUSR1) < 0)
-        raise_system_error("failed to add sigusr1 to the signal set");
+        raiseSystemError("failed to add sigusr1 to the signal set");
 
     if (sigtimedwait(&set, &sig, &ts) < 0)
-        raise_system_error("failed to wait on sigusr1");
+        raiseSystemError("failed to wait on sigusr1");
 
     sigprocmask(SIG_UNBLOCK, &set, nullptr);
 
@@ -86,24 +86,24 @@ TestResult test(int timeoutSecs, std::vector<std::function<TestResult()>> closur
     void* hEvent = nullptr;
     for (size_t i = 0; i < closures.size(); i++) {
         if (waitForPython && i == 0)
-            wait_for_python_ready_sigblock(&hEvent);
+            waitForPythonReadySigblock(&hEvent);
 
         auto pid = fork();
         if (pid < 0) {
             std::for_each(pids.begin(), pids.end(), [](const auto& pid) { kill(pid, SIGKILL); });
 
-            raise_system_error("failed to fork");
+            raiseSystemError("failed to fork");
         }
 
         if (pid == 0) {
-            test_wrapper(closures[i], timeoutSecs, std::move(pipes[i].writer), nullptr);
+            testWrapper(closures[i], timeoutSecs, std::move(pipes[i].writer), nullptr);
             std::exit(EXIT_SUCCESS);
         }
 
         pids.push_back(pid);
 
         if (waitForPython && i == 0)
-            wait_for_python_ready_sigwait(&hEvent, 3);
+            waitForPythonReadySigwait(&hEvent, 3);
     }
 
     std::vector<pollfd> pfds {};
@@ -112,7 +112,7 @@ TestResult test(int timeoutSecs, std::vector<std::function<TestResult()>> closur
     if (timerfd < 0) {
         std::for_each(pids.begin(), pids.end(), [](const auto& pid) { kill(pid, SIGKILL); });
 
-        raise_system_error("failed to create timerfd");
+        raiseSystemError("failed to create timerfd");
     }
 
     pfds.push_back({.fd = timerfd, .events = POLL_IN, .revents = 0});
@@ -138,7 +138,7 @@ TestResult test(int timeoutSecs, std::vector<std::function<TestResult()>> closur
         std::for_each(pids.begin(), pids.end(), [](const auto& pid) { kill(pid, SIGKILL); });
         close(timerfd);
 
-        raise_system_error("failed to set timerfd");
+        raiseSystemError("failed to set timerfd");
     }
 
     std::vector<std::optional<TestResult>> results(pids.size(), std::nullopt);
@@ -149,7 +149,7 @@ TestResult test(int timeoutSecs, std::vector<std::function<TestResult()>> closur
             std::for_each(pids.begin(), pids.end(), [](const auto& pid) { kill(pid, SIGKILL); });
             close(timerfd);
 
-            raise_system_error("failed to poll");
+            raiseSystemError("failed to poll");
         }
 
         for (size_t i = 0; i < pfds.size();) {

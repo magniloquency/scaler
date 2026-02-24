@@ -27,23 +27,23 @@
 const LONGLONG nsPerSecond = 1'000'000'000LL;
 const LONGLONG nsPerUnit   = 100LL;  // 1 unit = 100 nanoseconds
 
-void ensure_python_home()
+void ensurePythonHome()
 {
-    auto pythonHome = discover_python_home("python");
+    auto pythonHome = discoverPythonHome("python");
     Py_SetPythonHome(pythonHome.c_str());
 }
 
-int get_listener_pid()
+int getListenerPid()
 {
     return GetCurrentProcessId();
 }
 
-void signal_event(void* hEvent)
+void signalEvent(void* hEvent)
 {
     SetEvent((HANDLE)hEvent);
 }
 
-void wait_for_python_ready_sigblock(void** hEvent)
+void waitForPythonReadySigblock(void** hEvent)
 {
     *hEvent = CreateEvent(
         NULL,                     // default security attributes
@@ -51,19 +51,19 @@ void wait_for_python_ready_sigblock(void** hEvent)
         false,                    // initial state is nonsignaled
         "Global\\PythonSignal");  // name of the event
     if (*hEvent == NULL)
-        raise_system_error("failed to create event");
+        raiseSystemError("failed to create event");
 
     std::cout << "blocked signal..." << std::endl;
 }
 
-void wait_for_python_ready_sigwait(void* hEvent, int timeoutSecs)
+void waitForPythonReadySigwait(void* hEvent, int timeoutSecs)
 {
     std::cout << "waiting for python to be ready..." << std::endl;
 
     DWORD waitResult = WaitForSingleObject(hEvent, timeoutSecs * 1000);
 
     if (waitResult != WAIT_OBJECT_0) {
-        raise_system_error("failed to wait on event");
+        raiseSystemError("failed to wait on event");
     }
 
     CloseHandle(hEvent);
@@ -88,25 +88,25 @@ TestResult test(int timeoutSecs, std::vector<std::function<TestResult()>> closur
             false,     // initial state is nonsignaled
             nullptr);  // unnamed event
         if (!hEvent)
-            raise_system_error("failed to create event");
+            raiseSystemError("failed to create event");
         events.push_back(hEvent);
     }
 
     for (size_t i = 0; i < closures.size(); i++) {
         HANDLE hEvent = nullptr;
         if (waitForPython && i == 0)
-            wait_for_python_ready_sigblock(&hEvent);
+            waitForPythonReadySigblock(&hEvent);
 
-        threads.emplace_back(test_wrapper, closures[i], timeoutSecs, std::move(pipes[i].writer), events[i]);
+        threads.emplace_back(testWrapper, closures[i], timeoutSecs, std::move(pipes[i].writer), events[i]);
 
         if (waitForPython && i == 0)
-            wait_for_python_ready_sigwait(hEvent, 3);
+            waitForPythonReadySigwait(hEvent, 3);
     }
 
     HANDLE timer = CreateWaitableTimer(nullptr, true, nullptr);
     if (!timer) {
         std::for_each(events.begin(), events.end(), [](const auto& ev) { CloseHandle(ev); });
-        raise_system_error("failed to create waitable timer");
+        raiseSystemError("failed to create waitable timer");
     }
 
     LARGE_INTEGER expiresIn = {0};
@@ -116,7 +116,7 @@ TestResult test(int timeoutSecs, std::vector<std::function<TestResult()>> closur
     if (!SetWaitableTimer(timer, &expiresIn, 0, nullptr, nullptr, false)) {
         std::for_each(events.begin(), events.end(), [](const auto& ev) { CloseHandle(ev); });
         CloseHandle(timer);
-        raise_system_error("failed to set waitable timer");
+        raiseSystemError("failed to set waitable timer");
     }
 
     // these are the handles we're going to poll
@@ -133,7 +133,7 @@ TestResult test(int timeoutSecs, std::vector<std::function<TestResult()>> closur
         if (waitResult == WAIT_FAILED) {
             std::for_each(events.begin(), events.end(), [](const auto& ev) { CloseHandle(ev); });
             CloseHandle(timer);
-            raise_system_error("failed to wait on handles");
+            raiseSystemError("failed to wait on handles");
         }
 
         // the idx of the handle in the handles array
