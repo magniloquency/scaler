@@ -9,6 +9,7 @@ This is a standalone script that doesn't depend on the full scaler package.
 It only needs: cloudpickle, boto3
 """
 
+import argparse
 import base64
 import gzip
 import logging
@@ -44,34 +45,49 @@ def setup_logging():
 
 def parse_args() -> dict:
     """Parse command line arguments from job parameters."""
-    args = {}
-    i = 1
-    while i < len(sys.argv):
-        if sys.argv[i].startswith("--") and i + 1 < len(sys.argv):
-            key = sys.argv[i][2:]  # Remove --
-            args[key] = sys.argv[i + 1]
-            i += 2
-        else:
-            i += 1
+    parser = argparse.ArgumentParser(description="AWS Batch Job Runner for Scaler")
+    parser.add_argument("--task_id", default="unknown", help="Task ID")
+    parser.add_argument("--s3_bucket", default=None, help="S3 bucket for results")
+    parser.add_argument("--s3_prefix", default="scaler-tasks", help="S3 prefix for results")
+    parser.add_argument("--compressed", default="0", help="Whether payload is compressed ('0' or '1')")
+    parser.add_argument("--payload", default=None, help="Inline base64-encoded payload")
+    parser.add_argument("--s3_key", default=None, help="S3 key for payload")
+
+    args = vars(parser.parse_args())
+
+    # Map of "none" handling: if value is "none", use this value instead
+    none_mapping = {
+        "task_id": "unknown",
+        "s3_bucket": None,
+        "s3_prefix": "scaler-tasks",
+        "payload": None,
+        "s3_key": None,
+    }
+
+    for key, fallback in none_mapping.items():
+        val = args.get(key)
+        if isinstance(val, str) and val.lower() == "none":
+            args[key] = fallback
+
     return args
 
 
 def get_payload(args: dict) -> bytes:
     """Fetch task payload from job parameters or S3."""
     compressed = args.get("compressed", "0") == "1"
-    payload_b64 = args.get("payload", "")
-    s3_key = args.get("s3_key", "")
-    s3_bucket = args.get("s3_bucket", "")
+    payload_b64 = args.get("payload")
+    s3_key = args.get("s3_key")
+    s3_bucket = args.get("s3_bucket")
 
     # Try inline payload from job parameters
-    if payload_b64 and payload_b64 != "none":
+    if payload_b64:
         payload = base64.b64decode(payload_b64)
         if compressed:
             payload = gzip.decompress(payload)
         return payload
 
     # Fall back to S3
-    if not s3_bucket or not s3_key or s3_key == "none":
+    if not s3_bucket or not s3_key:
         raise ValueError("No payload: need --payload or --s3_key")
 
     s3_client = boto3.client("s3")
@@ -114,7 +130,7 @@ def main():
 
     args = parse_args()
     task_id = args.get("task_id", "unknown")
-    s3_bucket = args.get("s3_bucket", "")
+    s3_bucket = args.get("s3_bucket")
     s3_prefix = args.get("s3_prefix", "scaler-tasks")
     job_id = os.environ.get("AWS_BATCH_JOB_ID", task_id)
 
