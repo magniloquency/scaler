@@ -42,11 +42,6 @@ Upon startup, the Fixed Native worker adapter spawns the number of workers speci
 
 If a worker process terminates, the adapter does not automatically restart it (in the current implementation).
 
-Integration with Cluster Classes
---------------------------------
-
-The Fixed Native worker adapter is the underlying component used by the high-level ``Cluster`` and ``SchedulerClusterCombo`` classes. When you use ``SchedulerClusterCombo(n_workers=N)``, Scaler starts a ``Cluster`` process, which in turn uses a ``FixedNativeWorkerAdapter`` to spawn and manage ``N`` local worker subprocesses.
-
 Supported Parameters
 --------------------
 
