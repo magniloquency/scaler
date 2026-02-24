@@ -26,14 +26,7 @@ Once the scheduler is running with this policy, start a worker adapter (e.g., th
 
 The vanilla policy will then automatically scale workers up and down based on the task-to-worker ratio. For a full description of available scaling policies and their parameters, see :doc:`../scaling`.
 
-.. toctree::
-   :maxdepth: 1
-
-   native
-   fixed_native
-   common_parameters
-
-Adapter Overviews
+Adapters Overview
 -----------------
 
 Scaler provides several worker adapters to support different execution environments.
@@ -52,3 +45,10 @@ Common Parameters
 ~~~~~~~~~~~~~~~~~
 
 All worker adapters share a set of :doc:`common configuration parameters <common_parameters>` for networking, worker behavior, and logging.
+
+.. toctree::
+    :hidden:
+
+    native
+    fixed_native
+    common_parameters

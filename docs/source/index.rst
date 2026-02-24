@@ -28,6 +28,9 @@ Content
    tutorials/features
    tutorials/scaling
    tutorials/worker_adapters/index
+   tutorials/worker_adapters/native
+   tutorials/worker_adapters/fixed_native
+   tutorials/worker_adapters/common_parameters
    tutorials/compatibility/ray
    tutorials/configuration
    tutorials/examples
