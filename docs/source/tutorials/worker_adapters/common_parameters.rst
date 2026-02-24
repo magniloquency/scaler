@@ -13,14 +13,6 @@ Worker Adapter Common Configuration
 *   ``--max-workers`` (``-mw``): Maximum number of workers that can be started (default: ``CPU_COUNT - 1``). Set to ``-1`` for no limit.
 *   ``--object-storage-address`` (``-osa``): Address of the object storage server (e.g., ``tcp://127.0.0.1:8517``).
 
-Web Configuration
------------------
-
-Each worker adapter runs an internal HTTP server that the scheduler uses to send scaling requests.
-
-*   ``--adapter-web-host`` (Required): Host address for the worker adapter HTTP server (e.g., ``0.0.0.0``).
-*   ``--adapter-web-port`` (``-p``, Required): Port for the worker adapter HTTP server.
-
 Worker Configuration (Passed to Workers)
 ----------------------------------------
 

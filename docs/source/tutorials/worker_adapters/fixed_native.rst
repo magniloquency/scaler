@@ -13,8 +13,6 @@ Example command:
 .. code-block:: bash
 
     scaler_worker_adapter_fixed_native tcp://<SCHEDULER_IP>:8516 \
-        --adapter-web-host 0.0.0.0 \
-        --adapter-web-port 8080 \
         --max-workers 8 \
         --logging-level INFO \
         --task-timeout-seconds 60
@@ -30,14 +28,11 @@ Equivalent configuration using a TOML file:
     # config.toml
 
     [fixed_native_worker_adapter]
-    adapter_web_host = "0.0.0.0"
-    adapter_web_port = 8080
     max_workers = 8
     logging_level = "INFO"
     task_timeout_seconds = 60
 
 *   ``tcp://<SCHEDULER_IP>:8516`` is the address workers will use to connect to the scheduler.
-*   The adapter HTTP server (webhook) will listen on port 8080.
 *   The adapter will immediately spawn 8 worker subprocesses at startup and maintain them.
 
 How it Works
