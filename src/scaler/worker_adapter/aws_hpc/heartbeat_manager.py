@@ -27,7 +27,7 @@ class AWSBatchHeartbeatManager(Looper, HeartbeatManager):
         object_storage_address: Optional[ObjectStorageAddressConfig],
         capabilities: Dict[str, int],
         task_queue_size: int,
-    ):
+    ) -> None:
         self._capabilities = capabilities
         self._task_queue_size = task_queue_size
         self._agent_process = psutil.Process()
@@ -45,15 +45,15 @@ class AWSBatchHeartbeatManager(Looper, HeartbeatManager):
         self,
         connector_external: AsyncConnector,
         connector_storage: AsyncObjectStorageConnector,
-        worker_task_manager,  # AWSHPCTaskManager
+        worker_task_manager: Any,  # AWSHPCTaskManager
         timeout_manager: TimeoutManager,
-    ):
+    ) -> None:
         self._connector_external = connector_external
         self._connector_storage = connector_storage
         self._task_manager = worker_task_manager
         self._timeout_manager = timeout_manager
 
-    async def on_heartbeat_echo(self, heartbeat: WorkerHeartbeatEcho):
+    async def on_heartbeat_echo(self, heartbeat: WorkerHeartbeatEcho) -> None:
         if self._start_timestamp_ns == 0:
             return
 
@@ -69,7 +69,7 @@ class AWSBatchHeartbeatManager(Looper, HeartbeatManager):
     def get_object_storage_address(self) -> Optional[ObjectStorageAddressConfig]:
         return self._object_storage_address
 
-    async def routine(self):
+    async def routine(self) -> None:
         if self._start_timestamp_ns != 0:
             return
 

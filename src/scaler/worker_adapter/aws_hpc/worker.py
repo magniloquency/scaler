@@ -68,7 +68,7 @@ class AWSBatchWorker(_SpawnProcess):  # type: ignore[valid-type, misc]
         io_threads: int = 2,
         event_loop: str = "builtin",
         job_timeout_seconds: int = 3600,
-    ):
+    ) -> None:
         multiprocessing.Process.__init__(self, name="AWSBatchWorker")
 
         self._event_loop = event_loop
@@ -111,7 +111,7 @@ class AWSBatchWorker(_SpawnProcess):  # type: ignore[valid-type, misc]
         self.__initialize()
         self.__run_forever()
 
-    def __initialize(self):
+    def __initialize(self) -> None:
         setup_logger()
         register_event_loop(self._event_loop)
 
@@ -165,7 +165,7 @@ class AWSBatchWorker(_SpawnProcess):  # type: ignore[valid-type, misc]
         self.__register_signal()
         self._task = self._loop.create_task(self.__get_loops())
 
-    async def __on_receive_external(self, message: Message):
+    async def __on_receive_external(self, message: Message) -> None:
         """Handle incoming messages from scheduler."""
         if not self._heartbeat_received and not isinstance(message, WorkerHeartbeatEcho):
             self._backoff_message_queue.append(message)
@@ -201,7 +201,7 @@ class AWSBatchWorker(_SpawnProcess):  # type: ignore[valid-type, misc]
 
         raise TypeError(f"Unknown {message=}")
 
-    async def __get_loops(self):
+    async def __get_loops(self) -> None:
         """Run all async loops."""
         if self._object_storage_address is not None:
             await self._connector_storage.connect(self._object_storage_address.host, self._object_storage_address.port)
@@ -226,11 +226,11 @@ class AWSBatchWorker(_SpawnProcess):  # type: ignore[valid-type, misc]
         self._connector_external.destroy()
         logging.info(f"{self.identity!r}: quit")
 
-    def __run_forever(self):
+    def __run_forever(self) -> None:
         self._loop.run_until_complete(self._task)
 
-    def __register_signal(self):
+    def __register_signal(self) -> None:
         self._loop.add_signal_handler(signal.SIGINT, self.__destroy)
 
-    def __destroy(self):
+    def __destroy(self) -> None:
         self._task.cancel()

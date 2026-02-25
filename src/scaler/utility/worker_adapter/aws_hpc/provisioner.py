@@ -444,7 +444,9 @@ class AWSBatchProvisioner:
 
         return job_def_arn
 
-    def _cleanup_old_job_definitions(self, job_def_name: str, keep_latest: int = JOB_DEFINITION_REVISIONS_TO_KEEP) -> None:
+    def _cleanup_old_job_definitions(
+        self, job_def_name: str, keep_latest: int = JOB_DEFINITION_REVISIONS_TO_KEEP
+    ) -> None:
         """Deregister old job definition revisions, keeping only the latest N."""
         try:
             response = self._batch.describe_job_definitions(jobDefinitionName=job_def_name, status="ACTIVE")

@@ -8,7 +8,7 @@ Follows the same pattern as SymphonyTaskManager for consistency.
 import asyncio
 import logging
 from concurrent.futures import Future
-from typing import Any, Dict, Optional, Set, cast
+from typing import Any, Dict, List, Optional, Set, cast
 
 import cloudpickle
 from bidict import bidict
@@ -40,7 +40,7 @@ class AWSHPCTaskManager(Looper, TaskManager):
         s3_bucket: str,
         s3_prefix: str = "scaler-tasks",
         job_timeout_seconds: int = 3600,
-    ):
+    ) -> None:
         if isinstance(base_concurrency, int) and base_concurrency <= 0:
             raise ValueError(f"base_concurrency must be a positive integer, got {base_concurrency}")
 
@@ -79,7 +79,7 @@ class AWSHPCTaskManager(Looper, TaskManager):
         self._batch_client: Any = None
         self._s3_client: Any = None
 
-    def _initialize_aws_clients(self):
+    def _initialize_aws_clients(self) -> None:
         """Initialize AWS Batch and S3 clients."""
         import boto3
 
@@ -93,18 +93,18 @@ class AWSHPCTaskManager(Looper, TaskManager):
         connector_external: AsyncConnector,
         connector_storage: AsyncObjectStorageConnector,
         heartbeat_manager: HeartbeatManager,
-    ):
+    ) -> None:
         """Register required components."""
         self._connector_external = connector_external
         self._connector_storage = connector_storage
         self._heartbeat_manager = heartbeat_manager
         self._initialize_aws_clients()
 
-    async def routine(self):
+    async def routine(self) -> None:
         """Task manager routine - AWS HPC has two main loops like Symphony."""
         pass
 
-    async def on_object_instruction(self, instruction: ObjectInstruction):
+    async def on_object_instruction(self, instruction: ObjectInstruction) -> None:
         """Handle object lifecycle instructions."""
         if instruction.instruction_type == ObjectInstruction.ObjectInstructionType.Delete:
             for object_id in instruction.object_metadata.object_ids:
@@ -113,7 +113,7 @@ class AWSHPCTaskManager(Looper, TaskManager):
 
         logging.error(f"worker received unknown object instruction type {instruction=}")
 
-    async def on_task_new(self, task: Task):
+    async def on_task_new(self, task: Task) -> None:
         """
         Handle new task submission.
         Uses priority queue like Symphony for task ordering.
@@ -138,7 +138,7 @@ class AWSHPCTaskManager(Looper, TaskManager):
         self._queued_task_id_queue.put_nowait((-task_priority, task.task_id))
         self._queued_task_ids.add(task.task_id)
 
-    async def on_cancel_task(self, task_cancel: TaskCancel):
+    async def on_cancel_task(self, task_cancel: TaskCancel) -> None:
         """Handle task cancellation requests."""
         task_queued = task_cancel.task_id in self._queued_task_ids
         task_processing = task_cancel.task_id in self._processing_task_ids
@@ -183,7 +183,7 @@ class AWSHPCTaskManager(Looper, TaskManager):
         )
         await self._connector_external.send(result)
 
-    async def on_task_result(self, result: TaskResult):
+    async def on_task_result(self, result: TaskResult) -> None:
         """Handle task result processing."""
         if result.task_id in self._queued_task_ids:
             self._queued_task_ids.remove(result.task_id)
@@ -197,15 +197,15 @@ class AWSHPCTaskManager(Looper, TaskManager):
 
         await self._connector_external.send(result)
 
-    def get_queued_size(self):
+    def get_queued_size(self) -> int:
         """Get number of queued tasks."""
         return self._queued_task_id_queue.qsize()
 
-    def can_accept_task(self):
+    def can_accept_task(self) -> bool:
         """Check if more tasks can be accepted."""
         return not self._executor_semaphore.locked()
 
-    async def resolve_tasks(self):
+    async def resolve_tasks(self) -> None:
         """Resolve completed task futures and handle results."""
         if not self._task_id_to_future:
             await asyncio.sleep(0.1)  # Small sleep to avoid CPU spin when idle
@@ -266,7 +266,7 @@ class AWSHPCTaskManager(Looper, TaskManager):
             self._task_id_to_task.pop(task_id)
             self._task_id_to_batch_job_id.pop(task_id, None)
 
-    async def process_task(self):
+    async def process_task(self) -> None:
         """Process next queued task."""
         await self._executor_semaphore.acquire()
 
@@ -318,7 +318,7 @@ class AWSHPCTaskManager(Looper, TaskManager):
 
         return asyncio.wrap_future(future)
 
-    async def _submit_batch_job(self, task: Task, function, arguments) -> str:
+    async def _submit_batch_job(self, task: Task, function: Any, arguments: List[Any]) -> str:
         """Submit task as AWS Batch job."""
         import base64
         import gzip
@@ -399,7 +399,7 @@ class AWSHPCTaskManager(Looper, TaskManager):
 
         return response["jobId"]
 
-    async def _monitor_batch_job(self, job_id: str, future: Future, task_id: TaskID):
+    async def _monitor_batch_job(self, job_id: str, future: Future, task_id: TaskID) -> None:
         """Monitor AWS Batch job and resolve future when complete."""
         import gzip
 
@@ -453,7 +453,7 @@ class AWSHPCTaskManager(Looper, TaskManager):
             except Exception as e:
                 logging.exception(f"Error monitoring job {job_id}: {e}")
 
-    async def _cancel_batch_job(self, job_id: str):
+    async def _cancel_batch_job(self, job_id: str) -> None:
         """Cancel an AWS Batch job."""
         try:
             self._batch_client.terminate_job(jobId=job_id, reason="Canceled by Scaler")
