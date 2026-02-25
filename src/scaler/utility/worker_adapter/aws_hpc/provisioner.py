@@ -8,7 +8,7 @@ job definition, and S3 bucket required for the Scaler AWS Batch adapter.
 import json
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Dict, List, Optional
 
 import boto3
 from botocore.exceptions import ClientError
@@ -77,9 +77,9 @@ class AWSBatchProvisioner:
         vcpus: int = 1,
         memory_mb: int = 2048,
         max_vcpus: int = 256,
-        instance_types: list = None,
+        instance_types: Optional[List[str]] = None,
         job_timeout_seconds: int = 3600,
-    ) -> dict:
+    ) -> Dict[str, object]:
         """
         Provision all required AWS resources.
 
@@ -147,7 +147,7 @@ class AWSBatchProvisioner:
         return result
 
     @staticmethod
-    def save_config(config: dict, config_file: str = DEFAULT_CONFIG_FILE):
+    def save_config(config: Dict[str, object], config_file: str = DEFAULT_CONFIG_FILE) -> None:
         """Save provisioned config to file."""
         path = Path(config_file)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -156,7 +156,7 @@ class AWSBatchProvisioner:
         logging.info(f"Config saved to {path.absolute()}")
 
     @staticmethod
-    def load_config(config_file: str = DEFAULT_CONFIG_FILE) -> dict:
+    def load_config(config_file: str = DEFAULT_CONFIG_FILE) -> Dict[str, object]:
         """Load provisioned config from file."""
         path = Path(config_file)
         if not path.exists():
@@ -165,7 +165,7 @@ class AWSBatchProvisioner:
             return json.load(f)
 
     @staticmethod
-    def print_export_commands(config: dict):
+    def print_export_commands(config: Dict[str, object]) -> None:
         """Print shell export commands for config values."""
         print(f"export SCALER_AWS_REGION=\"{config['aws_region']}\"")
         print(f"export SCALER_S3_BUCKET=\"{config['s3_bucket']}\"")
@@ -173,7 +173,7 @@ class AWSBatchProvisioner:
         print(f"export SCALER_JOB_DEFINITION=\"{config['job_definition_name']}\"")
 
     @staticmethod
-    def save_env_file(config: dict, env_file: str = ".scaler_aws_hpc.env"):
+    def save_env_file(config: Dict[str, object], env_file: str = ".scaler_aws_hpc.env") -> None:
         """Save config as sourceable shell env file."""
         path = Path(env_file)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -273,7 +273,7 @@ class AWSBatchProvisioner:
 
         return role_arn
 
-    def provision_compute_environment(self, max_vcpus: int, instance_types: list) -> str:
+    def provision_compute_environment(self, max_vcpus: int, instance_types: List[str]) -> str:
         """Create EC2 compute environment (not Fargate for better container reuse)."""
         env_name = f"{self._prefix}-compute"
 
@@ -444,7 +444,7 @@ class AWSBatchProvisioner:
 
         return job_def_arn
 
-    def _cleanup_old_job_definitions(self, job_def_name: str, keep_latest: int = JOB_DEFINITION_REVISIONS_TO_KEEP):
+    def _cleanup_old_job_definitions(self, job_def_name: str, keep_latest: int = JOB_DEFINITION_REVISIONS_TO_KEEP) -> None:
         """Deregister old job definition revisions, keeping only the latest N."""
         try:
             response = self._batch.describe_job_definitions(jobDefinitionName=job_def_name, status="ACTIVE")
@@ -467,7 +467,7 @@ class AWSBatchProvisioner:
         except ClientError as e:
             logging.warning(f"Failed to cleanup old job definitions: {e}")
 
-    def _setup_cloudwatch_logs_retention(self, retention_days: int = CLOUDWATCH_RETENTION_DAYS):
+    def _setup_cloudwatch_logs_retention(self, retention_days: int = CLOUDWATCH_RETENTION_DAYS) -> None:
         """Set CloudWatch Logs retention policy for AWS Batch logs."""
         logs_client = self._session.client("logs")
         log_group_name = CLOUDWATCH_LOG_GROUP
@@ -487,19 +487,19 @@ class AWSBatchProvisioner:
         except ClientError as e:
             logging.warning(f"Failed to set CloudWatch Logs retention: {e}")
 
-    def _get_default_subnets(self) -> list:
+    def _get_default_subnets(self) -> List[str]:
         """Get default VPC subnets."""
         ec2 = self._session.client("ec2")
         response = ec2.describe_subnets(Filters=[{"Name": "default-for-az", "Values": ["true"]}])
         return [s["SubnetId"] for s in response["Subnets"]]
 
-    def _get_default_security_group(self) -> list:
+    def _get_default_security_group(self) -> List[str]:
         """Get default security group."""
         ec2 = self._session.client("ec2")
         response = ec2.describe_security_groups(Filters=[{"Name": "group-name", "Values": ["default"]}])
         return [response["SecurityGroups"][0]["GroupId"]]
 
-    def _wait_for_compute_environment(self, env_name: str, timeout: int = COMPUTE_ENV_WAIT_TIMEOUT_SECONDS):
+    def _wait_for_compute_environment(self, env_name: str, timeout: int = COMPUTE_ENV_WAIT_TIMEOUT_SECONDS) -> None:
         """Wait for compute environment to become VALID."""
         import time
 
@@ -609,7 +609,7 @@ class AWSBatchProvisioner:
         logging.info(f"Image pushed: {image_uri}")
         return image_uri
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         """Delete all provisioned resources."""
         import time
 
@@ -757,7 +757,7 @@ class AWSBatchProvisioner:
         logging.info("Cleanup complete!")
 
 
-def main():
+def main() -> None:
     """CLI for provisioning."""
     import argparse
 
