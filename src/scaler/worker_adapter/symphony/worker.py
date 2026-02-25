@@ -5,16 +5,21 @@ import signal
 from collections import deque
 from typing import Dict, Optional
 
-import zmq
+import zmq.asyncio
 
+from scaler.config.types.network_backend import NetworkBackend
 from scaler.config.types.object_storage_server import ObjectStorageAddressConfig
 from scaler.config.types.zmq import ZMQConfig
-from scaler.io.async_connector import ZMQAsyncConnector
 from scaler.io.mixins import AsyncConnector, AsyncObjectStorageConnector
-from scaler.io.utility import create_async_object_storage_connector
+from scaler.io.utility import (
+    create_async_connector,
+    create_async_object_storage_connector,
+    get_scaler_network_backend_from_env,
+)
 from scaler.protocol.python.message import (
     ClientDisconnect,
     DisconnectRequest,
+    DisconnectResponse,
     ObjectInstruction,
     Task,
     TaskCancel,
@@ -87,7 +92,7 @@ class SymphonyWorker(multiprocessing.get_context("spawn").Process):  # type: ign
 
     def run(self) -> None:
         self._loop = asyncio.new_event_loop()
-        run_task_forever(self._loop, self._run())
+        run_task_forever(self._loop, self._run(), cleanup_callback=self._cleanup)
 
     async def _run(self) -> None:
         self.__initialize()
@@ -96,13 +101,17 @@ class SymphonyWorker(multiprocessing.get_context("spawn").Process):  # type: ign
         self.__register_signal()
         await self._task
 
+    def _cleanup(self):
+        if self._connector_storage is not None:
+            self._connector_storage.destroy()
+
     def __initialize(self):
         setup_logger()
         register_event_loop(self._event_loop)
 
         self._context = zmq.asyncio.Context()
-        self._connector_external = ZMQAsyncConnector(
-            context=self._context,
+        self._connector_external = create_async_connector(
+            self._context,
             name=self.name,
             socket_type=zmq.DEALER,
             address=self._address,
@@ -169,6 +178,11 @@ class SymphonyWorker(multiprocessing.get_context("spawn").Process):  # type: ign
             logging.error(f"Worker received invalid ClientDisconnect type, ignoring {message=}")
             return
 
+        if isinstance(message, DisconnectResponse):
+            logging.error("Worker initiated DisconnectRequest got replied")
+            self._task.cancel()
+            return
+
         raise TypeError(f"Unknown {message=}")
 
     async def __get_loops(self):
@@ -192,14 +206,23 @@ class SymphonyWorker(multiprocessing.get_context("spawn").Process):  # type: ign
         except Exception as e:
             logging.exception(f"{self.identity!r}: failed with unhandled exception:\n{e}")
 
-        await self._connector_external.send(DisconnectRequest.new_msg(self.identity))
+        if get_scaler_network_backend_from_env() == NetworkBackend.tcp_zmq:
+            await self._connector_external.send(DisconnectRequest.new_msg(self.identity))
 
         self._connector_external.destroy()
         logging.info(f"{self.identity!r}: quit")
 
     def __register_signal(self):
-        self._loop.add_signal_handler(signal.SIGINT, self.__destroy)
-        self._loop.add_signal_handler(signal.SIGTERM, self.__destroy)
+        backend = get_scaler_network_backend_from_env()
+        if backend == NetworkBackend.tcp_zmq:
+            self._loop.add_signal_handler(signal.SIGINT, self.__destroy)
+            self._loop.add_signal_handler(signal.SIGTERM, self.__destroy)
+        elif backend == NetworkBackend.ymq:
+            self._loop.add_signal_handler(signal.SIGINT, lambda: asyncio.ensure_future(self.__graceful_shutdown()))
+            self._loop.add_signal_handler(signal.SIGTERM, lambda: asyncio.ensure_future(self.__graceful_shutdown()))
+
+    async def __graceful_shutdown(self):
+        await self._connector_external.send(DisconnectRequest.new_msg(self.identity))
 
     def __destroy(self):
         self._task.cancel()
