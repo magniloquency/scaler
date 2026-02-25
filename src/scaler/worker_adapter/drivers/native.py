@@ -7,7 +7,7 @@ from typing import Dict, Tuple
 
 import zmq
 
-from scaler.config.section.symphony_worker_adapter import SymphonyWorkerConfig
+from scaler.config.section.native_worker_adapter import NativeWorkerAdapterConfig
 from scaler.io.utility import create_async_connector, create_async_simple_context
 from scaler.io.ymq import ymq
 from scaler.protocol.python.message import (
@@ -21,36 +21,40 @@ from scaler.protocol.python.message import (
 from scaler.utility.event_loop import create_async_loop_routine, register_event_loop, run_task_forever
 from scaler.utility.identifiers import WorkerID
 from scaler.utility.logging.utility import setup_logger
-from scaler.worker_adapter.common import WorkerGroupID
-from scaler.worker_adapter.symphony.worker import SymphonyWorker
+from scaler.worker.worker import Worker
+from scaler.worker_adapter.drivers.common import WorkerGroupID
 
 Status = WorkerAdapterCommandResponse.Status
 
 
-class SymphonyWorkerAdapter:
-    def __init__(self, config: SymphonyWorkerConfig):
+class NativeWorkerAdapter:
+    def __init__(self, config: NativeWorkerAdapterConfig):
         self._address = config.worker_adapter_config.scheduler_address
         self._object_storage_address = config.worker_adapter_config.object_storage_address
-        self._service_name = config.service_name
-        self._max_workers = config.worker_adapter_config.max_workers
         self._capabilities = config.worker_config.per_worker_capabilities.capabilities
         self._io_threads = config.worker_io_threads
         self._task_queue_size = config.worker_config.per_worker_task_queue_size
+        self._max_workers = config.worker_adapter_config.max_workers
         self._heartbeat_interval_seconds = config.worker_config.heartbeat_interval_seconds
+        self._task_timeout_seconds = config.worker_config.task_timeout_seconds
         self._death_timeout_seconds = config.worker_config.death_timeout_seconds
+        self._garbage_collect_interval_seconds = config.worker_config.garbage_collect_interval_seconds
+        self._trim_memory_threshold_bytes = config.worker_config.trim_memory_threshold_bytes
+        self._hard_processor_suspend = config.worker_config.hard_processor_suspend
         self._event_loop = config.event_loop
         self._logging_paths = config.logging_config.paths
         self._logging_level = config.logging_config.level
         self._logging_config_file = config.logging_config.config_file
+        self._preload = config.preload
         self._workers_per_group = 1
 
         self._context = create_async_simple_context()
-        self._name = "worker_adapter_symphony"
-        self._ident = f"{self._name}|{uuid.uuid4().bytes.hex()}".encode()
+        self._name = "worker_adapter_native"
 
+        self._ident = f"{self._name}|{uuid.uuid4().bytes.hex()}".encode()
         self._connector_external = create_async_connector(
             self._context,
-            name="worker_adapter_symphony",
+            name="worker_adapter_native",
             socket_type=zmq.DEALER,
             address=self._address,
             bind_or_connect="connect",
@@ -59,10 +63,10 @@ class SymphonyWorkerAdapter:
         )
 
         """
-        Although a worker group can contain multiple workers, in this Symphony adapter implementation,
-        there will be only one worker group which contains one Symphony worker.
+        Although a worker group can contain multiple workers, in this native adapter implementation,
+        each worker group will only contain one worker.
         """
-        self._worker_groups: Dict[WorkerGroupID, Dict[WorkerID, SymphonyWorker]] = {}
+        self._worker_groups: Dict[WorkerGroupID, Dict[WorkerID, Worker]] = {}
 
     async def __on_receive_external(self, message: Message):
         if isinstance(message, WorkerAdapterCommand):
@@ -72,7 +76,7 @@ class SymphonyWorkerAdapter:
             pass
 
         else:
-            logging.warning(f"Received unknown message type: {type(message)}")
+            print(f"Received unknown message type: {type(message)}")
 
     async def _handle_command(self, command: WorkerAdapterCommand):
         cmd_type = command.command
@@ -101,23 +105,29 @@ class SymphonyWorkerAdapter:
         if num_of_workers >= self._max_workers != -1:
             return b"", Status.WorkerGroupTooMuch
 
-        worker = SymphonyWorker(
-            name=f"SYM|{uuid.uuid4().hex}",
+        worker = Worker(
+            name=f"NAT|{uuid.uuid4().hex}",
             address=self._address,
             object_storage_address=self._object_storage_address,
-            service_name=self._service_name,
-            base_concurrency=self._max_workers,
+            preload=self._preload,
             capabilities=self._capabilities,
             io_threads=self._io_threads,
             task_queue_size=self._task_queue_size,
             heartbeat_interval_seconds=self._heartbeat_interval_seconds,
+            task_timeout_seconds=self._task_timeout_seconds,
             death_timeout_seconds=self._death_timeout_seconds,
+            garbage_collect_interval_seconds=self._garbage_collect_interval_seconds,
+            trim_memory_threshold_bytes=self._trim_memory_threshold_bytes,
+            hard_processor_suspend=self._hard_processor_suspend,
             event_loop=self._event_loop,
+            logging_paths=self._logging_paths,
+            logging_level=self._logging_level,
         )
 
         worker.start()
-        worker_group_id = f"symphony-{uuid.uuid4().hex}".encode()
+        worker_group_id = f"native-{uuid.uuid4().hex}".encode()
         self._worker_groups[worker_group_id] = {worker.identity: worker}
+        print(f"Start worker group, {self._ident!r}")
         return worker_group_id, Status.Success
 
     async def shutdown_worker_group(self, worker_group_id: WorkerGroupID) -> Status:
@@ -154,6 +164,7 @@ class SymphonyWorkerAdapter:
     async def _run(self) -> None:
         register_event_loop(self._event_loop)
         setup_logger(self._logging_paths, self._logging_config_file, self._logging_level)
+
         self._task = self._loop.create_task(self.__get_loops())
         self.__register_signal()
         await self._task

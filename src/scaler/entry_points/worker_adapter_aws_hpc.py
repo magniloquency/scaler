@@ -15,7 +15,7 @@ from scaler.utility.logging.utility import setup_logger
 
 
 def _create_batch_worker(config: AWSBatchWorkerAdapterConfig) -> multiprocessing.Process:
-    from scaler.worker_adapter.aws_hpc.worker import AWSBatchWorker
+    from scaler.worker_adapter.drivers.aws_hpc.worker import AWSBatchWorker
 
     logging.info(f"  Job Queue: {config.job_queue}")
     logging.info(f"  Job Definition: {config.job_definition}")
