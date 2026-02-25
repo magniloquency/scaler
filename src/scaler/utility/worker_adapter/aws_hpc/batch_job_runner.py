@@ -21,6 +21,8 @@ import traceback
 import boto3
 import cloudpickle
 
+COMPRESSION_THRESHOLD_BYTES: int = 4096
+
 
 def signal_handler(signum, frame):
     """Handle signals to log before crash."""
@@ -110,7 +112,7 @@ def store_result(result: bytes, s3_bucket: str, s3_prefix: str, job_id: str):
     """Store result to S3."""
     # Compress if beneficial
     compressed = False
-    if len(result) > 4096:
+    if len(result) > COMPRESSION_THRESHOLD_BYTES:
         result = gzip.compress(result)
         compressed = True
 
