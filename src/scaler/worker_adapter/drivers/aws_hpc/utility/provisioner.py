@@ -585,7 +585,7 @@ class AWSBatchProvisioner:
 
         # Build from repo root (Dockerfile expects src/scaler/worker_adapter/drivers/... paths)
         # Path(__file__) is: /path/to/repo/src/scaler/worker_adapter/drivers/aws_hpc/utility/provisioner.py
-        # Go up 6 levels: provisioner.py -> utility -> aws_hpc -> drivers -> worker_adapter -> scaler -> src -> repo_root
+        # Go up 6 levels: utility -> aws_hpc -> drivers -> worker_adapter -> scaler -> src -> repo_root
         repo_root = Path(__file__).parent.parent.parent.parent.parent.parent
 
         # Build for linux/amd64 (EC2 runs on x86_64)

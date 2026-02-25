@@ -8,7 +8,7 @@ handling job completion and failure callbacks.
 import concurrent.futures
 import logging
 import threading
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 
 class BatchJobCallback:
