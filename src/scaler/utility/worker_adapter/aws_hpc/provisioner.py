@@ -16,6 +16,25 @@ from botocore.exceptions import ClientError
 DEFAULT_PREFIX = "scaler-batch"
 DEFAULT_CONFIG_FILE = ".scaler_aws_batch_config.json"
 
+S3_TASK_PREFIX = "scaler-tasks"
+S3_LIFECYCLE_EXPIRATION_DAYS = 1
+
+MEMORY_BASE_MB = 2048
+MEMORY_UTILIZATION_FACTOR = 0.9
+
+ALLOCATION_STRATEGY = "BEST_FIT_PROGRESSIVE"
+
+CLOUDWATCH_LOG_GROUP = "/aws/batch/job"
+CLOUDWATCH_RETENTION_DAYS = 30
+
+COMPUTE_ENV_WAIT_TIMEOUT_SECONDS = 300
+
+ECR_IMAGES_TO_KEEP = 3
+JOB_DEFINITION_REVISIONS_TO_KEEP = 2
+
+IAM_POLICY_ECS_TASK_EXECUTION = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+IAM_POLICY_EC2_CONTAINER_SERVICE = "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
+
 
 class AWSBatchProvisioner:
     """
@@ -102,8 +121,8 @@ class AWSBatchProvisioner:
         )
 
         # Calculate effective memory for reporting
-        memory_multiple = max(1, round(memory_mb / 2048))
-        effective_memory = int(memory_multiple * 2048 * 0.9)
+        memory_multiple = max(1, round(memory_mb / MEMORY_BASE_MB))
+        effective_memory = int(memory_multiple * MEMORY_BASE_MB * MEMORY_UTILIZATION_FACTOR)
 
         result = {
             "aws_region": self._region,
@@ -111,7 +130,7 @@ class AWSBatchProvisioner:
             "prefix": self._prefix,
             "compute_type": "EC2",
             "s3_bucket": bucket_name,
-            "s3_prefix": "scaler-tasks",
+            "s3_prefix": S3_TASK_PREFIX,
             "iam_role_arn": role_arn,
             "compute_environment_arn": compute_env_arn,
             "job_queue_arn": job_queue_arn,
@@ -192,8 +211,8 @@ class AWSBatchProvisioner:
                     {
                         "ID": "cleanup-old-tasks",
                         "Status": "Enabled",
-                        "Filter": {"Prefix": "scaler-tasks/"},
-                        "Expiration": {"Days": 1},
+                        "Filter": {"Prefix": f"{S3_TASK_PREFIX}/"},
+                        "Expiration": {"Days": S3_LIFECYCLE_EXPIRATION_DAYS},
                     }
                 ]
             },
@@ -218,7 +237,7 @@ class AWSBatchProvisioner:
                 {
                     "Effect": "Allow",
                     "Action": ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
-                    "Resource": f"arn:aws:s3:::{bucket_name}/scaler-tasks/*",
+                    "Resource": f"arn:aws:s3:::{bucket_name}/{S3_TASK_PREFIX}/*",
                 }
             ],
         }
@@ -240,9 +259,7 @@ class AWSBatchProvisioner:
 
         # Attach AWS managed policy for ECS task execution (covers CloudWatch Logs, ECR)
         try:
-            self._iam.attach_role_policy(
-                RoleName=role_name, PolicyArn="arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-            )
+            self._iam.attach_role_policy(RoleName=role_name, PolicyArn=IAM_POLICY_ECS_TASK_EXECUTION)
             logging.info(f"Attached AmazonECSTaskExecutionRolePolicy to {role_name}")
         except ClientError:
             pass  # May already be attached
@@ -260,8 +277,6 @@ class AWSBatchProvisioner:
         """Create EC2 compute environment (not Fargate for better container reuse)."""
         env_name = f"{self._prefix}-compute"
 
-        allocation_strategy = "BEST_FIT_PROGRESSIVE"
-
         try:
             response = self._batch.create_compute_environment(
                 computeEnvironmentName=env_name,
@@ -269,7 +284,7 @@ class AWSBatchProvisioner:
                 state="ENABLED",
                 computeResources={
                     "type": "EC2",  # Use EC2 instead of Fargate for container reuse
-                    "allocationStrategy": allocation_strategy,
+                    "allocationStrategy": ALLOCATION_STRATEGY,
                     "minvCpus": 0,
                     "maxvCpus": max_vcpus,
                     "desiredvCpus": 0,
@@ -320,7 +335,7 @@ class AWSBatchProvisioner:
                 raise
 
         # Attach required policies for Batch EC2 instances
-        required_policies = ["arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"]
+        required_policies = [IAM_POLICY_EC2_CONTAINER_SERVICE]
         for policy_arn in required_policies:
             try:
                 self._iam.attach_role_policy(RoleName=role_name, PolicyArn=policy_arn)
@@ -372,15 +387,15 @@ class AWSBatchProvisioner:
         """Create job definition for EC2 compute environment."""
         job_def_name = f"{self._prefix}-job"
 
-        # Round memory to nearest multiple of 2048MB and use 90%
-        memory_multiple = max(1, round(memory_mb / 2048))
-        total_memory = memory_multiple * 2048
-        effective_memory = int(total_memory * 0.9)
+        # Round memory to nearest multiple of MEMORY_BASE_MB and use MEMORY_UTILIZATION_FACTOR
+        memory_multiple = max(1, round(memory_mb / MEMORY_BASE_MB))
+        total_memory = memory_multiple * MEMORY_BASE_MB
+        effective_memory = int(total_memory * MEMORY_UTILIZATION_FACTOR)
 
         logging.info(
             f"Memory config: requested={memory_mb}MB, "
-            f"multiple={memory_multiple}x2048={total_memory}MB, "
-            f"effective(90%)={effective_memory}MB"
+            f"multiple={memory_multiple}x{MEMORY_BASE_MB}={total_memory}MB, "
+            f"effective({int(MEMORY_UTILIZATION_FACTOR * 100)}%)={effective_memory}MB"
         )
 
         # Set up CloudWatch Logs retention (30 days)
@@ -424,12 +439,12 @@ class AWSBatchProvisioner:
         job_def_arn = response["jobDefinitionArn"]
         logging.info(f"Registered job definition: {job_def_name} (vcpus={int(vcpus)}, memory={effective_memory}MB)")
 
-        # Cleanup old job definition revisions, keep only latest 2
-        self._cleanup_old_job_definitions(job_def_name, keep_latest=2)
+        # Cleanup old job definition revisions, keep only latest N
+        self._cleanup_old_job_definitions(job_def_name, keep_latest=JOB_DEFINITION_REVISIONS_TO_KEEP)
 
         return job_def_arn
 
-    def _cleanup_old_job_definitions(self, job_def_name: str, keep_latest: int = 2):
+    def _cleanup_old_job_definitions(self, job_def_name: str, keep_latest: int = JOB_DEFINITION_REVISIONS_TO_KEEP):
         """Deregister old job definition revisions, keeping only the latest N."""
         try:
             response = self._batch.describe_job_definitions(jobDefinitionName=job_def_name, status="ACTIVE")
@@ -452,10 +467,10 @@ class AWSBatchProvisioner:
         except ClientError as e:
             logging.warning(f"Failed to cleanup old job definitions: {e}")
 
-    def _setup_cloudwatch_logs_retention(self, retention_days: int = 30):
+    def _setup_cloudwatch_logs_retention(self, retention_days: int = CLOUDWATCH_RETENTION_DAYS):
         """Set CloudWatch Logs retention policy for AWS Batch logs."""
         logs_client = self._session.client("logs")
-        log_group_name = "/aws/batch/job"
+        log_group_name = CLOUDWATCH_LOG_GROUP
 
         try:
             # Create log group if it doesn't exist
@@ -484,7 +499,7 @@ class AWSBatchProvisioner:
         response = ec2.describe_security_groups(Filters=[{"Name": "group-name", "Values": ["default"]}])
         return [response["SecurityGroups"][0]["GroupId"]]
 
-    def _wait_for_compute_environment(self, env_name: str, timeout: int = 300):
+    def _wait_for_compute_environment(self, env_name: str, timeout: int = COMPUTE_ENV_WAIT_TIMEOUT_SECONDS):
         """Wait for compute environment to become VALID."""
         import time
 
@@ -528,20 +543,24 @@ class AWSBatchProvisioner:
                 raise
             logging.info(f"ECR repository already exists: {repo_name}")
 
-        # Set lifecycle policy to keep only 3 latest images
+        # Set lifecycle policy to keep only ECR_IMAGES_TO_KEEP latest images
         lifecycle_policy = {
             "rules": [
                 {
                     "rulePriority": 1,
-                    "description": "Keep only 3 latest images",
-                    "selection": {"tagStatus": "any", "countType": "imageCountMoreThan", "countNumber": 3},
+                    "description": f"Keep only {ECR_IMAGES_TO_KEEP} latest images",
+                    "selection": {
+                        "tagStatus": "any",
+                        "countType": "imageCountMoreThan",
+                        "countNumber": ECR_IMAGES_TO_KEEP,
+                    },
                     "action": {"type": "expire"},
                 }
             ]
         }
         try:
             ecr.put_lifecycle_policy(repositoryName=repo_name, lifecyclePolicyText=json.dumps(lifecycle_policy))
-            logging.info("Set ECR lifecycle policy: keep 3 latest images")
+            logging.info(f"Set ECR lifecycle policy: keep {ECR_IMAGES_TO_KEEP} latest images")
         except ClientError as e:
             logging.warning(f"Failed to set lifecycle policy: {e}")
 
@@ -679,9 +698,7 @@ class AWSBatchProvisioner:
 
         # Delete job IAM role
         try:
-            self._iam.detach_role_policy(
-                RoleName=role_name, PolicyArn="arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-            )
+            self._iam.detach_role_policy(RoleName=role_name, PolicyArn=IAM_POLICY_ECS_TASK_EXECUTION)
         except ClientError:
             pass
         try:
@@ -708,10 +725,7 @@ class AWSBatchProvisioner:
             logging.warning(f"Failed to delete instance profile: {e}")
 
         try:
-            self._iam.detach_role_policy(
-                RoleName=instance_role_name,
-                PolicyArn="arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role",
-            )
+            self._iam.detach_role_policy(RoleName=instance_role_name, PolicyArn=IAM_POLICY_EC2_CONTAINER_SERVICE)
         except ClientError:
             pass
         try:
