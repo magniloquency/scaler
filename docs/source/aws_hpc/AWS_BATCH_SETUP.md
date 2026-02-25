@@ -80,7 +80,7 @@ python3 -m venv .venv-provision
 .venv-provision/bin/pip install boto3
 
 # Provision all resources (builds image automatically)
-.venv-provision/bin/python src/scaler/utility/worker_adapter/aws_hpc/provisioner.py provision \
+.venv-provision/bin/python src/scaler/worker_adapter/drivers/aws_hpc/utility/provisioner.py provision \
     --region us-east-1 \
     --prefix scaler-batch \
     --vcpus 1 \
@@ -306,7 +306,7 @@ When done, clean up AWS resources (run on host where you have AWS credentials):
 
 ```bash
 # On host machine (where you have AWS credentials)
-.venv-provision/bin/python src/scaler/utility/worker_adapter/aws_hpc/provisioner.py cleanup \
+.venv-provision/bin/python src/scaler/worker_adapter/drivers/aws_hpc/utility/provisioner.py cleanup \
     --region us-east-1 \
     --prefix scaler-batch
 ```
