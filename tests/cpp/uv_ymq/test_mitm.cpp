@@ -185,12 +185,7 @@ TEST_F(UVYMQMitmTest, PassthroughRaw)
 }
 
 // this test uses the mitm to test the reconnect logic of uv_ymq by sending RST packets
-#ifdef _WIN32
-// See https://github.com/finos/opengris-scaler/issues/576
-TEST_F(UVYMQMitmTest, DISABLED_Reconnect)
-#else
 TEST_F(UVYMQMitmTest, Reconnect)
-#endif
 {
 #ifdef __linux__
     auto mitm_ip   = "192.0.2.4";
