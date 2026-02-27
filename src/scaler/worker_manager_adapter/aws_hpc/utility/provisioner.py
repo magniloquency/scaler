@@ -583,10 +583,10 @@ class AWSBatchProvisioner:
         image_uri = f"{self._account_id}.dkr.ecr.{self._region}.amazonaws.com/{repo_name}:latest"
         dockerfile_path = Path(__file__).parent / "Dockerfile.batch"
 
-        # Build from repo root (Dockerfile expects src/scaler/worker_adapter/drivers/... paths)
-        # Path(__file__) is: /path/to/repo/src/scaler/worker_adapter/drivers/aws_hpc/utility/provisioner.py
-        # Go up 6 levels: utility -> aws_hpc -> drivers -> worker_adapter -> scaler -> src -> repo_root
-        repo_root = Path(__file__).parent.parent.parent.parent.parent.parent
+        # Build from repo root (Dockerfile expects src/scaler/worker_manager_adapter/... paths)
+        # Path(__file__) is: /path/to/repo/src/scaler/worker_manager_adapter/aws_hpc/utility/provisioner.py
+        # Go up 5 levels: utility -> aws_hpc -> worker_manager_adapter -> scaler -> src -> repo_root
+        repo_root = Path(__file__).parent.parent.parent.parent.parent
 
         # Build for linux/amd64 (EC2 runs on x86_64)
         build_cmd = [
@@ -776,9 +776,13 @@ def main() -> None:
     parser.add_argument("--instance-types", default="default_x86_64", help="Comma-separated instance types")
     parser.add_argument("--job-timeout", type=int, default=60, help="Job timeout in minutes (default: 60 = 1 hour)")
     parser.add_argument(
-        "--config", default="tests/worker_adapter/aws_hpc/.scaler_aws_batch_config.json", help="Config file path"
+        "--config",
+        default="tests/worker_manager_adapter/aws_hpc/.scaler_aws_batch_config.json",
+        help="Config file path",
     )
-    parser.add_argument("--env-file", default="tests/worker_adapter/aws_hpc/.scaler_aws_hpc.env", help="Env file path")
+    parser.add_argument(
+        "--env-file", default="tests/worker_manager_adapter/aws_hpc/.scaler_aws_hpc.env", help="Env file path"
+    )
 
     args = parser.parse_args()
 

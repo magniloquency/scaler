@@ -19,9 +19,9 @@ Components:
     - batch_job_runner: Script running inside AWS Batch containers
 """
 
-from scaler.worker_adapter.drivers.aws_hpc.callback import BatchJobCallback
-from scaler.worker_adapter.drivers.aws_hpc.heartbeat_manager import AWSBatchHeartbeatManager
-from scaler.worker_adapter.drivers.aws_hpc.task_manager import AWSHPCTaskManager
-from scaler.worker_adapter.drivers.aws_hpc.worker import AWSBatchWorker
+from scaler.worker_manager_adapter.aws_hpc.callback import BatchJobCallback
+from scaler.worker_manager_adapter.aws_hpc.heartbeat_manager import AWSBatchHeartbeatManager
+from scaler.worker_manager_adapter.aws_hpc.task_manager import AWSHPCTaskManager
+from scaler.worker_manager_adapter.aws_hpc.worker import AWSBatchWorker
 
 __all__ = ["AWSBatchWorker", "AWSHPCTaskManager", "AWSBatchHeartbeatManager", "BatchJobCallback"]

@@ -41,8 +41,8 @@ from scaler.utility.exceptions import ClientShutdownException
 from scaler.utility.identifiers import WorkerID
 from scaler.utility.logging.utility import setup_logger
 from scaler.worker.agent.timeout_manager import VanillaTimeoutManager
-from scaler.worker_adapter.drivers.aws_hpc.heartbeat_manager import AWSBatchHeartbeatManager
-from scaler.worker_adapter.drivers.aws_hpc.task_manager import AWSHPCTaskManager
+from scaler.worker_manager_adapter.aws_hpc.heartbeat_manager import AWSBatchHeartbeatManager
+from scaler.worker_manager_adapter.aws_hpc.task_manager import AWSHPCTaskManager
 
 _SpawnProcess = multiprocessing.get_context("spawn").Process
 
