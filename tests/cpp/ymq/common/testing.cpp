@@ -179,6 +179,15 @@ exception:
     return TestResult::Failure;
 }
 
+MitmIPs getMitmIPs()
+{
+#ifdef __linux__
+    return {"192.0.2.4", "192.0.2.3"};
+#else
+    return {"127.0.0.1", "127.0.0.1"};
+#endif
+}
+
 TestResult runMitm(
     std::string testCase,
     std::string mitmIp,
