@@ -51,8 +51,8 @@ class Scheduler:
 
         if config.scheduler_address.type != ZMQType.tcp:
             raise TypeError(
-                f"{self.__class__.__name__}: scheduler address must be tcp type: \
-                    {config.scheduler_address.to_address()}"
+                f"{self.__class__.__name__}: scheduler address must be tcp type: "
+                f"{config.scheduler_address.to_address()}"
             )
 
         if config.object_storage_address is None:
