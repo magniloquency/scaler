@@ -4,7 +4,7 @@ AWS HPC Worker Adapter
 The AWS HPC worker adapter offloads task execution to AWS Batch, running each task as a containerized job on managed EC2 compute. This adapter is particularly useful for bursting workloads to the cloud or running tasks that require specific hardware (e.g., GPUs, high memory) not available locally. It currently supports the AWS Batch backend.
 
 .. seealso::
-    For a comprehensive, step-by-step walkthrough of setting up AWS infrastructure, building Docker images, and troubleshooting, see the :doc:`AWS Batch Setup Guide <../../aws_hpc/aws_batch_setup>`.
+    For a comprehensive, step-by-step walkthrough of setting up AWS infrastructure, building Docker images, and troubleshooting, see the :doc:`AWS Batch Setup Guide <setup>`.
 
 Prerequisites
 -------------
@@ -72,7 +72,7 @@ For development and testing, Scaler includes a provisioning utility that can bui
         --region us-east-1 \
         --prefix my-scaler-test
 
-For detailed step-by-step instructions on provisioning, container setup, and testing, please refer to the :doc:`AWS Batch Setup Guide <../../aws_hpc/aws_batch_setup>`.
+For detailed step-by-step instructions on provisioning, container setup, and testing, please refer to the :doc:`AWS Batch Setup Guide <setup>`.
 
 How it Works
 ------------
@@ -86,7 +86,7 @@ Supported Parameters
 --------------------
 
 .. note::
-    For more details on how to configure Scaler, see the :doc:`../configuration` section.
+    For more details on how to configure Scaler, see the :doc:`../../configuration` section.
 
 The AWS HPC worker adapter supports the following specific configuration parameters.
 
@@ -106,7 +106,7 @@ AWS HPC Configuration
 Common Parameters
 ~~~~~~~~~~~~~~~~~
 
-For a full list of common parameters including networking, worker behavior, and logging, see :doc:`common_parameters`.
+For a full list of common parameters including networking, worker behavior, and logging, see :doc:`../common_parameters`.
 
 Setup Guide
 -----------
@@ -114,11 +114,11 @@ Setup Guide
 .. important::
     Setting up AWS infrastructure and ensuring correct container configuration is critical for the AWS HPC adapter to function correctly. 
 
-For a comprehensive walkthrough of setting up AWS infrastructure, building Docker images, and troubleshooting, please refer to our detailed :doc:`AWS Batch Setup Guide <../../aws_hpc/aws_batch_setup>`.
+For a comprehensive walkthrough of setting up AWS infrastructure, building Docker images, and troubleshooting, please refer to our detailed :doc:`AWS Batch Setup Guide <setup>`.
 
 .. toctree::
     :maxdepth: 1
     :hidden:
 
-    ../../aws_hpc/aws_batch_setup
+    setup
 
