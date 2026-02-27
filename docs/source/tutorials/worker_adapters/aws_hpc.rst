@@ -15,6 +15,7 @@ To use the AWS HPC worker adapter, you need:
 *   The ``boto3`` Python library installed in your Scaler environment.
 *   **Docker** installed (if you need to build and push the worker container image).
 *   Provisioned AWS resources:
+
     *   An **S3 Bucket** for storing task data and results.
     *   An **AWS Batch Compute Environment** and **Job Queue**.
     *   An **AWS Batch Job Definition** pointing to a container image that includes Scaler and its dependencies.
@@ -113,7 +114,7 @@ Setup Guide
 .. important::
     Setting up AWS infrastructure and ensuring correct container configuration is critical for the AWS HPC adapter to function correctly. 
 
-For a comprehensive walkthrough of setting up AWS infrastructure, building Docker images, and troubleshooting, please refer to our detailed **:doc:`AWS Batch Setup Guide <../../aws_hpc/aws_batch_setup>`**.
+For a comprehensive walkthrough of setting up AWS infrastructure, building Docker images, and troubleshooting, please refer to our detailed :doc:`AWS Batch Setup Guide <../../aws_hpc/aws_batch_setup>`.
 
 .. toctree::
     :maxdepth: 1
