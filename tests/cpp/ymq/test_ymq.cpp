@@ -670,7 +670,7 @@ TEST_P(CcYmqTestSuiteParametrized, TestClientSendBigMessageToServer)
 TEST(CcYmqTestSuite, TestMitmPassthrough)
 {
     auto [mitm_ip, remote_ip] = getMitmIPs();
-    auto mitm_port            = randomPort();
+    auto mitm_port            = 23575;
     auto remote_port          = 23571;
 
     // the Python program must be the first and only the first function passed to test()
@@ -690,7 +690,7 @@ TEST(CcYmqTestSuite, TestMitmPassthrough)
 TEST(CcYmqTestSuite, TestMitmPassthroughRaw)
 {
     auto [mitm_ip, remote_ip] = getMitmIPs();
-    auto mitm_port            = randomPort();
+    auto mitm_port            = 23576;
     auto remote_port          = 23574;
 
     // the Python program must be the first and only the first function passed to test()
@@ -709,7 +709,7 @@ TEST(CcYmqTestSuite, TestMitmPassthroughRaw)
 TEST(CcYmqTestSuite, TestMitmReconnect)
 {
     auto [mitm_ip, remote_ip] = getMitmIPs();
-    auto mitm_port            = randomPort();
+    auto mitm_port            = 23577;
     auto remote_port          = 23572;
 
     auto result = test(
@@ -726,7 +726,7 @@ TEST(CcYmqTestSuite, TestMitmReconnect)
 TEST(CcYmqTestSuite, TestMitmRandomlyDropPackets)
 {
     auto [mitm_ip, remote_ip] = getMitmIPs();
-    auto mitm_port            = randomPort();
+    auto mitm_port            = 23578;
     auto remote_port          = 23573;
 
     auto result = test(
