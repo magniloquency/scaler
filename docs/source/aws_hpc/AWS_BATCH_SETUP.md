@@ -80,7 +80,7 @@ python3 -m venv .venv-provision
 .venv-provision/bin/pip install boto3
 
 # Provision all resources (builds image automatically)
-.venv-provision/bin/python src/scaler/worker_adapter/drivers/aws_hpc/utility/provisioner.py provision \
+.venv-provision/bin/python src/scaler/worker_manager_adapter/aws_hpc/utility/provisioner.py provision \
     --region us-east-1 \
     --prefix scaler-batch \
     --vcpus 1 \
@@ -93,7 +93,7 @@ This creates:
 - IAM roles for Batch jobs and EC2 instances
 - EC2 compute environment
 - Job queue and job definition
-- `tests/worker_adapter/aws_hpc/.scaler_aws_hpc.env` file with configuration
+- `tests/worker_manager_adapter/aws_hpc/.scaler_aws_hpc.env` file with configuration
 - `.scaler_aws_batch_config.json` file with full resource details (used for cleanup)
 
 **Memory Configuration:**
@@ -102,11 +102,11 @@ For example, `--memory 4000` → 4096MB total → 3686MB effective.
 
 ### Using Existing Infrastructure
 
-If you already have AWS Batch resources (created via CloudFormation, CDK, Terraform, etc.), skip the provisioner and create `tests/worker_adapter/aws_hpc/.scaler_aws_hpc.env` manually:
+If you already have AWS Batch resources (created via CloudFormation, CDK, Terraform, etc.), skip the provisioner and create `tests/worker_manager_adapter/aws_hpc/.scaler_aws_hpc.env` manually:
 
 ```bash
-mkdir -p tests/worker_adapter/aws_hpc
-cat > tests/worker_adapter/aws_hpc/.scaler_aws_hpc.env << 'EOF'
+mkdir -p tests/worker_manager_adapter/aws_hpc
+cat > tests/worker_manager_adapter/aws_hpc/.scaler_aws_hpc.env << 'EOF'
 export SCALER_AWS_REGION="us-east-1"
 export SCALER_S3_BUCKET="your-existing-bucket"
 export SCALER_JOB_QUEUE="your-existing-queue"
@@ -197,7 +197,7 @@ main()
 sleep 2
 
 # Load AWS config from provisioning
-source tests/worker_adapter/aws_hpc/.scaler_aws_hpc.env
+source tests/worker_manager_adapter/aws_hpc/.scaler_aws_hpc.env
 
 # Start AWS Batch worker in background (default job timeout: 60 minutes)
 python -m scaler.entry_points.worker_adapter_aws_hpc \
@@ -224,7 +224,7 @@ You should see log output indicating both are running.
 Same terminal inside the container:
 
 ```bash
-python tests/worker_adapter/aws_hpc/aws_hpc_test_harness.py \
+python tests/worker_manager_adapter/aws_hpc/aws_hpc_test_harness.py \
     --scheduler tcp://127.0.0.1:2345 \
     --test all
 ```
@@ -306,7 +306,7 @@ When done, clean up AWS resources (run on host where you have AWS credentials):
 
 ```bash
 # On host machine (where you have AWS credentials)
-.venv-provision/bin/python src/scaler/worker_adapter/drivers/aws_hpc/utility/provisioner.py cleanup \
+.venv-provision/bin/python src/scaler/worker_manager_adapter/aws_hpc/utility/provisioner.py cleanup \
     --region us-east-1 \
     --prefix scaler-batch
 ```
