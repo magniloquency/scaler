@@ -1,12 +1,13 @@
 import argparse
 import dataclasses
-from typing import Optional
+import warnings
+from typing import List, Optional
 
 from scaler.config import defaults
 from scaler.config.common.logging import LoggingConfig
 from scaler.config.common.worker import WorkerConfig
 from scaler.config.common.worker_adapter import WorkerAdapterConfig
-from scaler.config.config_class import ConfigClass
+from scaler.config.config_class import ConfigClass, UnderscoreTomlConfigParser, is_config_class
 from scaler.utility.event_loop import EventLoopType
 
 
@@ -29,7 +30,7 @@ class FixedNativeWorkerAdapterConfig(ConfigClass):
     @classmethod
     def configure_parser(cls, parser) -> None:
         super().configure_parser(parser)
-        parser.add_argument("--num-of-workers", dest="max_workers", type=int, help=argparse.SUPPRESS)
+        parser.add_argument("-n", "--num-of-workers", dest="max_workers", type=int, help=argparse.SUPPRESS)
 
     def __post_init__(self) -> None:
         if self.worker_io_threads <= 0:
