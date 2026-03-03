@@ -6,10 +6,8 @@ from scaler.utility.logging.utility import setup_logger
 from scaler.worker_manager_adapter.baremetal.fixed_native import FixedNativeWorkerAdapter
 
 
-def main():
-    fixed_native_adapter_config = FixedNativeWorkerAdapterConfig.parse(
-        "Scaler Fixed Native Worker Adapter", "fixed_native_worker_adapter"
-    )
+def main(section: str = "fixed_native_worker_adapter"):
+    fixed_native_adapter_config = FixedNativeWorkerAdapterConfig.parse("Scaler Fixed Native Worker Adapter", section)
 
     register_event_loop(fixed_native_adapter_config.event_loop)
 
