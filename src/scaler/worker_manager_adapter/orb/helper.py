@@ -7,8 +7,8 @@ from os import path
 from typing import Any, Dict, List, Optional
 
 from scaler.utility.formatter import snakecase_dict
-from scaler.worker_adapter.orb.exception import ORBException
-from scaler.worker_adapter.orb.types import ORBMachine, ORBRequest, ORBTemplate
+from scaler.worker_manager_adapter.orb.exception import ORBException
+from scaler.worker_manager_adapter.orb.types import ORBMachine, ORBRequest, ORBTemplate
 
 
 class ORBHelper:

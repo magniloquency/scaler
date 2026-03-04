@@ -12,6 +12,7 @@ import boto3
 import zmq
 
 from scaler.config.section.orb_worker_adapter import ORBWorkerAdapterConfig
+from scaler.io.mixins import AsyncConnector
 from scaler.io.utility import create_async_connector, create_async_simple_context
 from scaler.io.ymq import ymq
 from scaler.protocol.python.message import (
@@ -25,9 +26,9 @@ from scaler.protocol.python.message import (
 from scaler.utility.event_loop import create_async_loop_routine, register_event_loop, run_task_forever
 from scaler.utility.identifiers import WorkerID
 from scaler.utility.logging.utility import setup_logger
-from scaler.worker_adapter.common import WorkerGroupID, format_capabilities
-from scaler.worker_adapter.orb.helper import ORBHelper
-from scaler.worker_adapter.orb.types import ORBTemplate
+from scaler.worker_manager_adapter.common import WorkerGroupID, format_capabilities
+from scaler.worker_manager_adapter.orb.helper import ORBHelper
+from scaler.worker_manager_adapter.orb.types import ORBTemplate
 
 Status = WorkerAdapterCommandResponse.Status
 logger = logging.getLogger(__name__)
@@ -51,7 +52,7 @@ def get_orb_worker_name(instance_id: str) -> str:
 
 class ORBWorkerAdapter:
     _config: ORBWorkerAdapterConfig
-    _orb: ORBHelper
+    _orb: Optional[ORBHelper]
     _worker_groups: Dict[WorkerGroupID, WorkerID]
     _template_id: str
     _created_security_group_id: Optional[str]
@@ -64,32 +65,37 @@ class ORBWorkerAdapter:
         self._heartbeat_interval_seconds = config.worker_config.heartbeat_interval_seconds
         self._capabilities = config.worker_config.per_worker_capabilities.capabilities
         self._max_workers = config.worker_adapter_config.max_workers
-
-        self._orb = None
-        self._created_security_group_id = None
-        self._created_key_name = None
+        self._workers_per_group = 1
 
         self._event_loop = config.event_loop
         self._logging_paths = config.logging_config.paths
         self._logging_level = config.logging_config.level
         self._logging_config_file = config.logging_config.config_file
 
+        source_orb_root = os.path.abspath(config.orb_config_path)
+        if not os.path.isdir(source_orb_root):
+            raise NotADirectoryError(f"orb_config_path must be a directory: {source_orb_root}")
+
+        self._orb: Optional[ORBHelper] = None
+        self._ec2: Optional[Any] = None
+        self._context = None
+        self._connector_external: Optional[AsyncConnector] = None
+        self._created_security_group_id: Optional[str] = None
+        self._created_key_name: Optional[str] = None
+        self._cleaned_up = False
+        self._worker_groups: Dict[WorkerGroupID, WorkerID] = {}
+
+    def __initialize(self):
         if self._config.subnet_id:
             logger.warning("subnet_id is specified in config but currently has no effect")
 
         if self._config.security_group_ids:
             logger.warning("security_group_ids are specified in config but currently have no effect")
 
-        # Setup temporary execution environment for ORB via ORBHelper
-        source_orb_root = os.path.abspath(config.orb_config_path)
-        if not os.path.isdir(source_orb_root):
-            raise NotADirectoryError(f"orb_config_path must be a directory: {source_orb_root}")
-
+        source_orb_root = os.path.abspath(self._config.orb_config_path)
         self._orb = ORBHelper(config_root_path=source_orb_root)
 
-        self._worker_groups = {}
         self._ec2 = boto3.client("ec2", region_name=self._config.aws_region)
-        self._cleaned_up = False
 
         if not self._config.subnet_id:
             self._config.subnet_id = self._discover_default_subnet()
@@ -185,6 +191,7 @@ class ORBWorkerAdapter:
         else:
             raise ValueError("Unknown Command")
 
+        assert self._connector_external is not None
         await self._connector_external.send(
             WorkerAdapterCommandResponse.new_msg(
                 worker_group_id=bytes(worker_group_id),
@@ -196,9 +203,12 @@ class ORBWorkerAdapter:
         )
 
     async def __send_heartbeat(self):
+        assert self._connector_external is not None
         await self._connector_external.send(
             WorkerAdapterHeartbeat.new_msg(
-                max_worker_groups=self._max_workers, workers_per_group=1, capabilities=self._capabilities
+                max_worker_groups=self._max_workers,
+                workers_per_group=self._workers_per_group,
+                capabilities=self._capabilities,
             )
         )
 
@@ -217,11 +227,13 @@ class ORBWorkerAdapter:
     async def _run(self) -> None:
         register_event_loop(self._event_loop)
         setup_logger(self._logging_paths, self._logging_config_file, self._logging_level)
+        self.__initialize()
         self._task = self._loop.create_task(self.__get_loops())
         self.__register_signal()
         await self._task
 
     async def __get_loops(self):
+        assert self._connector_external is not None
         loops = [
             create_async_loop_routine(self._connector_external.routine, 0),
             create_async_loop_routine(self.__send_heartbeat, self._heartbeat_interval_seconds),
@@ -378,7 +390,7 @@ nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address
         self._cleanup()
 
     async def start_worker_group(self) -> Tuple[WorkerGroupID, Status]:
-        if len(self._worker_groups) >= self._max_workers:
+        if len(self._worker_groups) >= self._max_workers != -1:
             return b"", Status.WorkerGroupTooMuch
 
         # Request a machine. Note: wait and timeout flags in ORB CLI are currently ignored by the handler,
