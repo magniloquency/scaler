@@ -23,13 +23,13 @@ Before using the ORB worker adapter, ensure the following requirements are met o
 Getting Started
 ---------------
 
-To start the ORB worker adapter, use the ``scaler_worker_adapter_orb`` command.
+To start the ORB worker adapter, use the ``scaler_worker_manager_orb`` command.
 
 Example command:
 
 .. code-block:: bash
 
-    scaler_worker_adapter_orb tcp://<SCHEDULER_EXTERNAL_IP>:8516 \
+    scaler_worker_manager_orb tcp://<SCHEDULER_EXTERNAL_IP>:8516 \
         --object-storage-address tcp://<OSS_EXTERNAL_IP>:8517 \
         --image-id ami-0528819f94f4f5fa5 \
         --instance-type t3.medium \
@@ -41,7 +41,7 @@ Equivalent configuration using a TOML file:
 
 .. code-block:: bash
 
-    scaler_worker_adapter_orb tcp://<SCHEDULER_EXTERNAL_IP>:8516 --config config.toml
+    scaler_worker_manager_orb tcp://<SCHEDULER_EXTERNAL_IP>:8516 --config config.toml
 
 .. code-block:: toml
 

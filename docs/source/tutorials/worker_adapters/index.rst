@@ -26,15 +26,7 @@ Once the scheduler is running with this policy, start a worker adapter (e.g., th
 
 The vanilla policy will then automatically scale workers up and down based on the task-to-worker ratio. For a full description of available scaling policies and their parameters, see :doc:`../scaling`.
 
-.. toctree::
-   :maxdepth: 1
-
-   native
-   fixed_native
-   orb
-   common_parameters
-
-Adapter Overviews
+Adapters Overview
 -----------------
 
 Scaler provides several worker adapters to support different execution environments.
@@ -49,6 +41,11 @@ Fixed Native
 
 The :doc:`Fixed Native <fixed_native>` worker adapter spawns a static number of worker subprocesses at startup and does not support dynamic scaling. It is the underlying component used by the high-level ``Cluster`` and ``SchedulerClusterCombo`` classes.
 
+AWS HPC
+~~~~~~~
+
+The :doc:`AWS HPC <aws_hpc/index>` worker adapter allows Scaler to offload task execution to cloud environments, currently supporting AWS Batch. It is ideal for bursting workloads to the cloud or utilizing specific hardware not available locally.
+
 ORB (AWS EC2)
 ~~~~~~~~~~~~~
 
@@ -58,3 +55,12 @@ Common Parameters
 ~~~~~~~~~~~~~~~~~
 
 All worker adapters share a set of :doc:`common configuration parameters <common_parameters>` for networking, worker behavior, and logging.
+
+.. toctree::
+    :hidden:
+
+    native
+    fixed_native
+    orb
+    aws_hpc/index
+    common_parameters
