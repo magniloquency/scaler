@@ -188,7 +188,7 @@ class ORBHelper:
         if path.isfile(config_json_path):
             with open(config_json_path) as f:
                 config_data = json.load(f)
-            for provider in config_data.get("providers", []):
+            for provider in config_data.get("provider", {}).get("providers", []):
                 if "config" in provider:
                     provider["config"]["region"] = region
             with open(config_json_path, "w") as f:

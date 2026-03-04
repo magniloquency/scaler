@@ -120,6 +120,7 @@ class ORBWorkerAdapter:
             provider_name="aws-default",
             image_id=self._config.image_id,
             vm_type=self._config.instance_type,
+            instance_types={self._config.instance_type: 1},
             subnet_id=self._subnet_id,
             security_group_ids=security_group_ids,
             key_name=key_name,
