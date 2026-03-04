@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -47,7 +47,6 @@ class ORBTemplate:
 
 @dataclass
 class ORBMachine:
-    name: Optional[str] = None
     machine_id: str = ""
     instance_id: str = ""
     template_id: str = ""
@@ -98,7 +97,11 @@ class ORBRequest:
     version: int = 0
 
     def __post_init__(self):
-        self.machines = [ORBMachine(**m) if isinstance(m, dict) else m for m in self.machines]
+        _machine_fields = {f.name for f in fields(ORBMachine)}
+        self.machines = [
+            ORBMachine(**{k: v for k, v in m.items() if k in _machine_fields}) if isinstance(m, dict) else m
+            for m in self.machines
+        ]
 
     def get_instance_ids(self) -> List[str]:
         """Extract instance IDs from any available field in the request."""
