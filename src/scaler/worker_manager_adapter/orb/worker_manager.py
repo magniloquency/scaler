@@ -121,7 +121,7 @@ class ORBWorkerAdapter:
             image_id=self._config.image_id,
             vm_type=self._config.instance_type,
             instance_types={self._config.instance_type: 1},
-            subnet_id=self._subnet_id,
+            subnet_ids=[self._subnet_id],
             security_group_ids=security_group_ids,
             key_name=key_name,
             user_data_script=user_data_file_path,
@@ -140,10 +140,6 @@ class ORBWorkerAdapter:
         templates_file_path = os.path.join(self._orb.cwd, "config", "templates.json")
         with open(templates_file_path, "w") as f:
             template_dict = asdict(template)
-            # Remove empty list that might overwrite the subnet_id field
-            if not template_dict.get("subnet_ids"):
-                del template_dict["subnet_ids"]
-
             json.dump({"templates": [template_dict]}, f, indent=4)
 
         self._context = create_async_simple_context()
