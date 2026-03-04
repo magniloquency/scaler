@@ -47,6 +47,7 @@ class ORBTemplate:
 
 @dataclass
 class ORBMachine:
+    name: Optional[str] = None
     machine_id: str = ""
     instance_id: str = ""
     template_id: str = ""
