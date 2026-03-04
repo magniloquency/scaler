@@ -6,7 +6,7 @@ import tempfile
 from os import path
 from typing import Any, Dict, List, Optional
 
-from scaler.utility.formatter import snakecase_dict
+from scaler.utility.dict_utils import snakecase_dict
 from scaler.worker_manager_adapter.orb.exception import ORBException
 from scaler.worker_manager_adapter.orb.types import ORBMachine, ORBRequest, ORBTemplate
 
@@ -170,23 +170,29 @@ class ORBHelper:
             snake_data = snakecase_dict(data)
             return ORBRequest(**ORBHelper._filter_data(ORBRequest, snake_data))
 
-    def __init__(self, config_root_path: str):
+    def __init__(self, config_root_path: str, region: str = "us-east-1"):
         """Initialize the helper.
 
-        :param config_root_path: The root directory containing ORB configuration to copy to a temp dir.
+        :param config_root_path: The root directory containing an ORB 'config/' subdirectory.
+        :param region: AWS region to inject into ORB config.
         """
         self._temp_dir = tempfile.TemporaryDirectory()
         self._cwd = self._temp_dir.name
 
-        shutil.copytree(
-            config_root_path,
-            self._cwd,
-            dirs_exist_ok=True,
-            ignore=shutil.ignore_patterns(
-                ".git", ".venv", ".mypy_cache", "build*", "dist", "__pycache__", "metrics", "logs"
-            ),
-        )
+        source_config_dir = path.join(config_root_path, "config")
+        dest_config_dir = path.join(self._cwd, "config")
+        shutil.copytree(source_config_dir, dest_config_dir)
         os.makedirs(path.join(self._cwd, "logs"), exist_ok=True)
+
+        config_json_path = path.join(self._cwd, "config", "config.json")
+        if path.isfile(config_json_path):
+            with open(config_json_path) as f:
+                config_data = json.load(f)
+            for provider in config_data.get("providers", []):
+                if "config" in provider:
+                    provider["config"]["region"] = region
+            with open(config_json_path, "w") as f:
+                json.dump(config_data, f, indent=4)
 
         self.templates = self.Templates(self)
         self.machines = self.Machines(self)
@@ -213,11 +219,12 @@ class ORBHelper:
 
         try:
             result = subprocess.run(cmd, check=True, capture_output=True, text=True, cwd=self._cwd, env=env)
+            stdout = result.stdout
 
-            if not result.stdout.strip():
+            if not stdout.strip():
                 return {}
 
-            data = json.loads(result.stdout)
+            data = json.loads(stdout)
 
             if isinstance(data, dict) and "error" in data:
                 raise ORBException(data)
@@ -230,4 +237,4 @@ class ORBHelper:
                 error_msg += f"\nSTDERR:\n{e.stderr}"
             raise RuntimeError(error_msg) from e
         except json.JSONDecodeError as e:
-            raise RuntimeError(f"Failed to parse ORB command output as JSON: {e}\nOutput: {result.stdout}") from e
+            raise RuntimeError(f"Failed to parse ORB command output as JSON: {e}\nOutput: {stdout}") from e

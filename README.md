@@ -250,7 +250,7 @@ The following table maps each Scaler command to its corresponding section name i
 | `scaler_worker_adapter_native`       | `[native_worker_adapter]`       |
 | `scaler_worker_adapter_fixed_native` | `[fixed_native_worker_adapter]` |
 | `scaler_worker_adapter_symphony`     | `[symphony_worker_adapter]`     |
-| `scaler_worker_adapter_orb`          | `[orb_worker_adapter]`          |
+| `scaler_worker_manager_orb`          | `[orb_worker_adapter]`          |
 | `scaler_worker_adapter_ecs`          | `[ecs_worker_adapter]`          |
 
 ### Practical Scenarios & Examples
@@ -473,7 +473,7 @@ a base task that calls a nested task that calls another nested task, then the de
 A Scaler scheduler can interface with ORB (Open Resource Broker) to dynamically provision and manage workers on AWS EC2 instances.
 
 ```bash
-$ scaler_worker_adapter_orb tcp://127.0.0.1:2345 --image-id ami-0528819f94f4f5fa5
+$ scaler_worker_manager_orb tcp://127.0.0.1:2345 --image-id ami-0528819f94f4f5fa5
 ```
 
 This will start an ORB worker adapter that connects to the Scaler scheduler at `tcp://127.0.0.1:2345`. The scheduler can then request new workers from this adapter, which will be launched as EC2 instances.

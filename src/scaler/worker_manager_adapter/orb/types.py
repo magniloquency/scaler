@@ -96,6 +96,9 @@ class ORBRequest:
     provider_data: Dict[str, Any] = field(default_factory=dict)
     version: int = 0
 
+    def __post_init__(self):
+        self.machines = [ORBMachine(**m) if isinstance(m, dict) else m for m in self.machines]
+
     def get_instance_ids(self) -> List[str]:
         """Extract instance IDs from any available field in the request."""
         # 1. Try explicit instance_ids
@@ -108,16 +111,6 @@ class ORBRequest:
 
         # 3. Try nested machines list
         if self.machines:
-            ids = []
-            for m in self.machines:
-                if isinstance(m, ORBMachine):
-                    id_val = m.instance_id or m.machine_id
-                elif isinstance(m, dict):
-                    id_val = m.get("instance_id") or m.get("machine_id") or m.get("instanceId") or m.get("machineId")
-                else:
-                    continue
-                if id_val:
-                    ids.append(id_val)
-            return ids
+            return [m.instance_id or m.machine_id for m in self.machines if m.instance_id or m.machine_id]
 
         return []

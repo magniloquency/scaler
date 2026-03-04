@@ -1,4 +1,5 @@
 import dataclasses
+import pathlib
 from typing import List, Optional
 
 from scaler.config import defaults
@@ -7,6 +8,8 @@ from scaler.config.common.worker import WorkerConfig
 from scaler.config.common.worker_adapter import WorkerAdapterConfig
 from scaler.config.config_class import ConfigClass
 from scaler.utility.event_loop import EventLoopType
+
+_DEFAULT_ORB_CONFIG_PATH = str(pathlib.Path(__file__).parent.parent.parent / "worker_manager_adapter" / "orb")
 
 
 @dataclasses.dataclass
@@ -37,7 +40,7 @@ class ORBWorkerAdapterConfig(ConfigClass):
     )
 
     orb_config_path: str = dataclasses.field(
-        default="src/scaler/drivers/orb", metadata=dict(help="Path to the ORB root directory")
+        default=_DEFAULT_ORB_CONFIG_PATH, metadata=dict(help="Path to the ORB root directory")
     )
 
     instance_type: str = dataclasses.field(default="t2.micro", metadata=dict(help="EC2 instance type"))
@@ -47,9 +50,6 @@ class ORBWorkerAdapterConfig(ConfigClass):
         metadata=dict(
             type=lambda s: [x for x in s.split(",") if x], help="Comma-separated list of AWS security group IDs"
         ),
-    )
-    allowed_ip: str = dataclasses.field(
-        default="", metadata=dict(help="IP address to allow in the security group (if created automatically)")
     )
 
     def __post_init__(self) -> None:

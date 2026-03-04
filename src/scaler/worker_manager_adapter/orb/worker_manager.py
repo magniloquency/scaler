@@ -3,7 +3,7 @@ import json
 import logging
 import os
 import signal
-import urllib.request
+import time
 import uuid
 from dataclasses import asdict
 from typing import Any, Dict, List, Optional, Tuple
@@ -84,21 +84,17 @@ class ORBWorkerAdapter:
         self._created_key_name: Optional[str] = None
         self._cleaned_up = False
         self._worker_groups: Dict[WorkerGroupID, WorkerID] = {}
+        self._ident: bytes = b"worker_adapter_orb|uninitialized"
+        self._subnet_id: Optional[str] = None
 
     def __initialize(self):
-        if self._config.subnet_id:
-            logger.warning("subnet_id is specified in config but currently has no effect")
-
-        if self._config.security_group_ids:
-            logger.warning("security_group_ids are specified in config but currently have no effect")
-
         source_orb_root = os.path.abspath(self._config.orb_config_path)
-        self._orb = ORBHelper(config_root_path=source_orb_root)
+        region = self._config.aws_region or "us-east-1"
+        self._orb = ORBHelper(config_root_path=source_orb_root, region=region)
 
-        self._ec2 = boto3.client("ec2", region_name=self._config.aws_region)
+        self._ec2 = boto3.client("ec2", region_name=region)
 
-        if not self._config.subnet_id:
-            self._config.subnet_id = self._discover_default_subnet()
+        self._subnet_id = self._config.subnet_id or self._discover_default_subnet()
 
         self._template_id = os.urandom(8).hex()
 
@@ -124,7 +120,7 @@ class ORBWorkerAdapter:
             provider_name="aws-default",
             image_id=self._config.image_id,
             vm_type=self._config.instance_type,
-            subnet_id=self._config.subnet_id,
+            subnet_id=self._subnet_id,
             security_group_ids=security_group_ids,
             key_name=key_name,
             user_data_script=user_data_file_path,
@@ -311,18 +307,11 @@ nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address
         return subnet_id
 
     def _create_security_group(self):
-        # Determine IP to allow
-        if self._config.allowed_ip:
-            ip_address = self._config.allowed_ip
-        else:
-            with urllib.request.urlopen("https://checkip.amazonaws.com") as response:
-                ip_address = response.read().decode("utf-8").strip()
-
         # Get VPC ID from Subnet
-        subnet_response = self._ec2.describe_subnets(SubnetIds=[self._config.subnet_id])
+        subnet_response = self._ec2.describe_subnets(SubnetIds=[self._subnet_id])
         vpc_id = subnet_response["Subnets"][0]["VpcId"]
 
-        # Create Security Group
+        # Create Security Group (outbound-only — workers connect out to scheduler via ZMQ)
         group_name = f"opengris-orb-sg-{self._template_id}"
         sg_response = self._ec2.create_security_group(
             Description="Temporary security group created for OpenGRIS ORB worker adapter",
@@ -331,16 +320,6 @@ nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address
         )
         self._created_security_group_id = sg_response["GroupId"]
         logger.info(f"Created security group with ID: {self._created_security_group_id}")
-
-        # Allow ingress
-        # TODO: Do the worker processes need to accept incoming connections?
-        # If not, we should not open any ports and just rely on outbound connectivity.
-        self._ec2.authorize_security_group_ingress(
-            GroupId=self._created_security_group_id,
-            IpPermissions=[
-                {"IpProtocol": "tcp", "FromPort": 1024, "ToPort": 65535, "IpRanges": [{"CidrIp": f"{ip_address}/32"}]}
-            ],
-        )
 
     def _create_key_pair(self):
         key_name = f"opengris-orb-key-{self._template_id}"
@@ -389,6 +368,29 @@ nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address
     def __del__(self):
         self._cleanup()
 
+    def _poll_for_instance_id(self, request_id: str) -> Optional[str]:
+        for _ in range(ORB_MAX_POLLING_ATTEMPTS):
+            status_response = self._orb.requests.show(request_id)
+            logger.debug(f"ORB polling response for {request_id}: {status_response}")
+
+            instance_ids = status_response.get_instance_ids()
+            if instance_ids:
+                logger.info(f"ORB request {request_id} fulfilled with instance IDs: {instance_ids}")
+                return instance_ids[0]
+
+            if status_response.status in ["failed", "cancelled", "timeout"]:
+                error_msg = status_response.status_message or "Unknown failure"
+                logger.error(
+                    f"ORB machine request {request_id} failed with status '{status_response.status}': {error_msg}"
+                )
+                return None
+
+            time.sleep(ORB_POLLING_INTERVAL_SECONDS)
+
+        timeout_seconds = ORB_MAX_POLLING_ATTEMPTS * ORB_POLLING_INTERVAL_SECONDS
+        logger.error(f"ORB machine request {request_id} timed out waiting for instance IDs after {timeout_seconds}s.")
+        return None
+
     async def start_worker_group(self) -> Tuple[WorkerGroupID, Status]:
         if len(self._worker_groups) >= self._max_workers != -1:
             return b"", Status.WorkerGroupTooMuch
@@ -403,39 +405,10 @@ nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address
 
         logger.info(f"ORB machine request {response.request_id} submitted, polling for instance IDs...")
 
-        instance_ids = []
-        # Poll ORB for instance IDs as the request is processed asynchronously.
-        # We manually poll here because the current ORB helper doesn't support blocking requests.
-        for _ in range(ORB_MAX_POLLING_ATTEMPTS):
-            status_response = self._orb.requests.show(response.request_id)
-            logger.debug(f"ORB polling response for {response.request_id}: {status_response}")
-
-            # Try to get instance IDs from multiple possible fields in the response using helper
-            instance_ids = status_response.get_instance_ids()
-
-            if instance_ids:
-                logger.info(f"ORB request {response.request_id} fulfilled with instance IDs: {instance_ids}")
-                break
-
-            if status_response.status in ["failed", "cancelled", "timeout"]:
-                error_msg = status_response.status_message or "Unknown failure"
-                logger.error(
-                    f"ORB machine request {response.request_id} failed"
-                    f"with status '{status_response.status}': {error_msg}"
-                )
-                return b"", Status.UnknownAction
-
-            await asyncio.sleep(ORB_POLLING_INTERVAL_SECONDS)
-
-        if not instance_ids:
-            timeout_seconds = ORB_MAX_POLLING_ATTEMPTS * ORB_POLLING_INTERVAL_SECONDS
-            logger.error(
-                f"ORB machine request {response.request_id} timed out"
-                f"waiting for instance IDs after {timeout_seconds}s."
-            )
+        instance_id = await self._loop.run_in_executor(None, lambda: self._poll_for_instance_id(response.request_id))
+        if not instance_id:
             return b"", Status.UnknownAction
 
-        instance_id = instance_ids[0]
         worker_group_id = instance_id.encode()
 
         # Deterministic WorkerID calculation to match the user_data script
