@@ -295,6 +295,7 @@ Remove the `scaler_worker_adapter_fixed_native` / `[fixed_native_worker_adapter]
 | `docs/source/tutorials/worker_adapters/index.rst` | Remove Fixed Native section and toctree entry; update Native description |
 | `docs/source/tutorials/configuration.rst` | Remove `fixed_native` row from CLI-to-TOML table |
 | `README.md` | Remove `fixed_native` row from TOML section names table |
+| `examples/task_capabilities.py` | Replace stale `Cluster`/`ClusterConfig` with `NativeWorkerAdapter`/`NativeWorkerAdapterConfig`; access config via `cluster._worker_adapter`; subprocess pattern |
 | `src/scaler/worker_manager_adapter/baremetal/fixed_native.py` | **Delete** |
 | `src/scaler/config/section/fixed_native_worker_adapter.py` | **Delete** |
 | `src/scaler/entry_points/worker_manager_baremetal_fixed_native.py` | **Delete** |
@@ -324,14 +325,14 @@ grep -r "fixed_native\|Fixed Native" docs/ README.md
 cd docs/ && make html
 
 # Formatting
-isort --check src/ tests/
-black --check src/ tests/
+isort --check src/ tests/ examples/
+black --check src/ tests/ examples/
 
 # Linting
-pflake8 src/ tests/
+pflake8 src/ tests/ examples/
 
 # Type checking
-mypy src/ tests/
+mypy src/ tests/ examples/
 
 # Run affected tests
 python -m unittest \
