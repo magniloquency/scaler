@@ -1,7 +1,7 @@
 Native Worker Adapter
 =====================
 
-The Native worker adapter allows Scaler to dynamically provision workers as local subprocesses on the same machine where the adapter is running. This is the simplest way to scale Scaler workloads across multiple CPU cores on a single machine or a group of machines.
+The Native worker adapter provisions workers as local subprocesses on the same machine where the adapter is running. It supports both dynamic auto-scaling (default) and fixed-pool mode, where a set number of workers are pre-spawned at startup.
 
 Getting Started
 ---------------
@@ -33,16 +33,24 @@ Equivalent configuration using a TOML file:
     task_timeout_seconds = 60
 
 *   ``tcp://<SCHEDULER_IP>:8516`` is the address workers will use to connect to the scheduler.
-*   The adapter can spawn up to 4 worker subprocesses.
+*   The adapter can spawn up to 4 worker subprocesses in dynamic mode.
+
+To use fixed-pool mode, set ``--mode fixed`` and specify the exact number of workers:
+
+.. code-block:: toml
+
+    # config.toml
+
+    [native_worker_adapter]
+    mode = "fixed"
+    max_workers = 8
 
 How it Works
 ------------
 
-When the scheduler determines that more capacity is needed, it sends a request to the Native worker adapter. The adapter then spawns a new worker process using the same Python interpreter and environment that started the adapter.
+**Dynamic mode** (default): when the scheduler determines that more capacity is needed, it sends a request to the Native worker adapter. The adapter then spawns a new worker process using the same Python interpreter and environment that started the adapter. Each worker group managed by the Native adapter contains exactly one worker process.
 
-Each worker group managed by the Native adapter contains exactly one worker process.
-
-Unlike the Fixed Native worker adapter, which spawns a static number of workers at startup, the Native worker adapter is designed to be used with Scaler's auto-scaling features to dynamically grow and shrink the local worker pool based on demand.
+**Fixed mode**: all workers are pre-spawned at startup. The adapter advertises zero capacity to the scheduler so it never receives dynamic scale commands. When all pre-spawned workers have exited, the adapter itself exits.
 
 Supported Parameters
 --------------------
@@ -55,7 +63,10 @@ The Native worker adapter supports the following specific configuration paramete
 Native Configuration
 ~~~~~~~~~~~~~~~~~~~~
 
-*   ``--max-workers`` (``-mw``): Maximum number of worker subprocesses that can be started. Set to ``-1`` for no limit (default: ``-1``).
+*   ``--mode``: Operating mode. ``dynamic`` (default) enables auto-scaling driven by the scheduler.
+    ``fixed`` pre-spawns ``--max-workers`` workers at startup and does not support dynamic scaling.
+    In fixed mode ``--max-workers`` must be a positive integer.
+*   ``--max-workers`` (``-mw``): In dynamic mode, the maximum number of worker subprocesses that can be started (``-1`` = unlimited, default: ``-1``). In fixed mode, the exact number of workers spawned at startup (must be ≥ 1).
 *   ``--preload``: Python module or script to preload in each worker process before it starts accepting tasks.
 *   ``--worker-io-threads`` (``-wit``): Number of IO threads for the IO backend per worker (default: ``1``).
 

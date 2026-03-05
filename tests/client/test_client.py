@@ -10,13 +10,13 @@ from scaler import Client, SchedulerClusterCombo
 from scaler.config.common.logging import LoggingConfig
 from scaler.config.common.worker import WorkerConfig
 from scaler.config.common.worker_adapter import WorkerAdapterConfig
-from scaler.config.section.fixed_native_worker_adapter import FixedNativeWorkerAdapterConfig
+from scaler.config.section.native_worker_adapter import NativeWorkerAdapterConfig, NativeWorkerAdapterMode
 from scaler.config.types.worker import WorkerCapabilities
 from scaler.utility.exceptions import MissingObjects, ProcessorDiedError
 from scaler.utility.logging.scoped_logger import ScopedLogger
 from scaler.utility.logging.utility import setup_logger
 from scaler.worker.preload import PreloadSpecError, _parse_preload_spec, execute_preload
-from scaler.worker_manager_adapter.baremetal.fixed_native import FixedNativeWorkerAdapter
+from scaler.worker_manager_adapter.baremetal.native import NativeWorkerAdapter
 from tests.utility.utility import logging_test_name
 
 
@@ -360,9 +360,11 @@ class TestClientPreload(unittest.TestCase):
         self.combo.shutdown()
 
     def _create_preload_cluster(self, preload: str, logging_paths: tuple = ("/dev/stdout",)):
+        import multiprocessing
+
         base_adapter = self.combo._worker_adapter
-        preload_adapter = FixedNativeWorkerAdapter(
-            FixedNativeWorkerAdapterConfig(
+        preload_adapter = NativeWorkerAdapter(
+            NativeWorkerAdapterConfig(
                 worker_adapter_config=WorkerAdapterConfig(
                     scheduler_address=self.combo._address,
                     object_storage_address=self.combo._object_storage_address,
@@ -371,6 +373,7 @@ class TestClientPreload(unittest.TestCase):
                 preload=preload,
                 event_loop=base_adapter._event_loop,
                 worker_io_threads=base_adapter._io_threads,
+                mode=NativeWorkerAdapterMode.FIXED,
                 worker_config=WorkerConfig(
                     per_worker_capabilities=WorkerCapabilities({}),
                     per_worker_task_queue_size=base_adapter._task_queue_size,
@@ -388,15 +391,15 @@ class TestClientPreload(unittest.TestCase):
                 ),
             )
         )
-        return preload_adapter
+        return multiprocessing.Process(target=preload_adapter.run)
 
     def test_preload_success(self):
-        preload_cluster = self._create_preload_cluster(
+        preload_process = self._create_preload_cluster(
             preload="tests.utility.utility:setup_global_value('test_preload_value')"
         )
 
         try:
-            preload_cluster.start()
+            preload_process.start()
             time.sleep(2)
 
             with Client(self.combo.get_address()) as client:
@@ -407,7 +410,8 @@ class TestClientPreload(unittest.TestCase):
                 # Verify the preloaded value is accessible
                 self.assertEqual(result, "test_preload_value")
         finally:
-            preload_cluster.shutdown()
+            preload_process.terminate()
+            preload_process.join()
 
     def test_preload_failure(self):
         # For checking if the failure was logged, Processor will create log_path-{pid}
@@ -417,12 +421,12 @@ class TestClientPreload(unittest.TestCase):
         log_basename = os.path.basename(log_path)
 
         try:
-            preload_cluster = self._create_preload_cluster(
+            preload_process = self._create_preload_cluster(
                 preload="tests.utility.utility:failing_preload()", logging_paths=(log_path,)
             )
 
             try:
-                preload_cluster.start()
+                preload_process.start()
                 time.sleep(10)
 
                 # Find processor log files by looking for files with PID suffixes
@@ -438,7 +442,8 @@ class TestClientPreload(unittest.TestCase):
 
                 # If we reach here without any other exceptions, the test is successful
             finally:
-                preload_cluster.shutdown()
+                preload_process.terminate()
+                preload_process.join()
         finally:
             # Clean up log files
             try:
