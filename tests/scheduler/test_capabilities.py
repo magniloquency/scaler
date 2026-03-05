@@ -6,7 +6,7 @@ from scaler import Client, SchedulerClusterCombo
 from scaler.config.common.logging import LoggingConfig
 from scaler.config.common.worker import WorkerConfig
 from scaler.config.common.worker_adapter import WorkerAdapterConfig
-from scaler.config.section.native_worker_adapter import NativeWorkerAdapterConfig, NativeWorkerAdapterMode
+from scaler.config.section.native_worker_adapter import NativeWorkerAdapterConfig, NativeWorkerManagerMode
 from scaler.config.section.scheduler import PolicyConfig
 from scaler.config.types.worker import WorkerCapabilities
 from scaler.utility.logging.utility import setup_logger
@@ -50,7 +50,7 @@ class TestCapabilities(unittest.TestCase):
                     preload=None,
                     event_loop=base_adapter._event_loop,
                     worker_io_threads=1,
-                    mode=NativeWorkerAdapterMode.FIXED,
+                    mode=NativeWorkerManagerMode.FIXED,
                     worker_config=WorkerConfig(
                         per_worker_capabilities=WorkerCapabilities({"gpu": -1}),
                         per_worker_task_queue_size=base_adapter._task_queue_size,
@@ -98,7 +98,7 @@ class TestCapabilities(unittest.TestCase):
                     preload=None,
                     event_loop=base_adapter._event_loop,
                     worker_io_threads=1,
-                    mode=NativeWorkerAdapterMode.FIXED,
+                    mode=NativeWorkerManagerMode.FIXED,
                     worker_config=WorkerConfig(
                         per_worker_capabilities=WorkerCapabilities({"gpu": -1}),
                         per_worker_task_queue_size=base_adapter._task_queue_size,

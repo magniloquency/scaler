@@ -8,14 +8,14 @@
 ## Context
 
 `FixedNativeWorkerAdapter` was based on an old version of `NativeWorkerAdapter` and has diverged. Rather than
-maintaining two separate adapters, we merge FIXED mode into `NativeWorkerAdapter` via a `NativeWorkerAdapterMode`
+maintaining two separate adapters, we merge FIXED mode into `NativeWorkerAdapter` via a `NativeWorkerManagerMode`
 enum. This simplifies the codebase and keeps both modes in one place.
 
 ## Enum
 
-Add `NativeWorkerAdapterMode` enum to `native_worker_adapter.py`:
+Add `NativeWorkerManagerMode` enum to `native_worker_adapter.py`:
 ```python
-class NativeWorkerAdapterMode(enum.Enum):
+class NativeWorkerManagerMode(enum.Enum):
     DYNAMIC = "dynamic"
     FIXED = "fixed"
 ```
@@ -25,8 +25,8 @@ class NativeWorkerAdapterMode(enum.Enum):
 **File:** `src/scaler/config/section/native_worker_adapter.py`
 
 - Import `argparse`, `enum`
-- Add `NativeWorkerAdapterMode` enum (see above)
-- Add field: `mode: NativeWorkerAdapterMode = dataclasses.field(default=NativeWorkerAdapterMode.DYNAMIC, metadata=dict(...))`
+- Add `NativeWorkerManagerMode` enum (see above)
+- Add field: `mode: NativeWorkerManagerMode = dataclasses.field(default=NativeWorkerManagerMode.DYNAMIC, metadata=dict(...))`
 - Add `configure_parser` with `-n`/`--num-of-workers` alias (from `FixedNativeWorkerAdapterConfig`):
   ```python
   @classmethod
@@ -34,7 +34,7 @@ class NativeWorkerAdapterMode(enum.Enum):
       super().configure_parser(parser)
       parser.add_argument("-n", "--num-of-workers", dest="max_workers", type=int, help=argparse.SUPPRESS)
   ```
-- In `__post_init__`: add `if self.mode == NativeWorkerAdapterMode.FIXED and self.worker_adapter_config.max_workers < 0: raise ValueError(...)` — the threshold is `< 0` rather than `< 1` to allow `max_workers=0`, which `SchedulerClusterCombo(n_workers=0)` relies on (several tests create a combo with zero workers and then manually attach adapters)
+- In `__post_init__`: add `if self.mode == NativeWorkerManagerMode.FIXED and self.worker_adapter_config.max_workers < 0: raise ValueError(...)` — the threshold is `< 0` rather than `< 1` to allow `max_workers=0`, which `SchedulerClusterCombo(n_workers=0)` relies on (several tests create a combo with zero workers and then manually attach adapters)
 
 ## Step 2 — Update `NativeWorkerAdapter`
 
@@ -58,12 +58,12 @@ Changes:
 def __init__(self, config):
     ...
     self._mode = config.mode
-    if self._mode == NativeWorkerAdapterMode.FIXED:
+    if self._mode == NativeWorkerManagerMode.FIXED:
         self._worker_prefix = "FIX"
-    elif self._mode == NativeWorkerAdapterMode.DYNAMIC:
+    elif self._mode == NativeWorkerManagerMode.DYNAMIC:
         self._worker_prefix = "NAT"
     else:
-        raise ValueError(f"Unknown NativeWorkerAdapterMode: {self._mode!r}")
+        raise ValueError(f"Unknown NativeWorkerManagerMode: {self._mode!r}")
     self._worker_groups: Dict[WorkerGroupID, Dict[WorkerID, Worker]] = {}
     # ZMQ setup removed from here — moved to _setup_zmq()
 
@@ -78,7 +78,7 @@ def _spawn_initial_workers(self) -> None:
         self._worker_groups[group_id] = {worker.identity: worker}
 
 def run(self) -> None:
-    if self._mode == NativeWorkerAdapterMode.FIXED:
+    if self._mode == NativeWorkerManagerMode.FIXED:
         self._spawn_initial_workers()
     self._setup_zmq()
     self._loop = asyncio.new_event_loop()
@@ -90,24 +90,24 @@ def _setup_zmq(self) -> None:
 def _cleanup(self) -> None:
     if self._connector_external is not None:
         self._connector_external.destroy()
-    if self._mode == NativeWorkerAdapterMode.FIXED:
+    if self._mode == NativeWorkerManagerMode.FIXED:
         for group in self._worker_groups.values():
             for worker in group.values():
                 worker.terminate()
                 worker.join()
 
 async def start_worker_group(self) -> Tuple[WorkerGroupID, Status]:
-    if self._mode == NativeWorkerAdapterMode.FIXED:
+    if self._mode == NativeWorkerManagerMode.FIXED:
         return b"", Status.WorkerGroupTooMuch
     # ... existing DYNAMIC logic unchanged
 
 async def shutdown_worker_group(self, worker_group_id: WorkerGroupID) -> Status:
-    if self._mode == NativeWorkerAdapterMode.FIXED:
+    if self._mode == NativeWorkerManagerMode.FIXED:
         return Status.WorkerGroupIDNotFound
     # ... existing DYNAMIC logic unchanged
 
 async def __send_heartbeat(self) -> None:
-    max_worker_groups = 0 if self._mode == NativeWorkerAdapterMode.FIXED else self._max_workers
+    max_worker_groups = 0 if self._mode == NativeWorkerManagerMode.FIXED else self._max_workers
     await self._connector_external.send(
         WorkerAdapterHeartbeat.new_msg(
             max_worker_groups=max_worker_groups,
@@ -129,7 +129,7 @@ async def __get_loops(self) -> None:
         create_async_loop_routine(self._connector_external.routine, 0),
         create_async_loop_routine(self.__send_heartbeat, self._heartbeat_interval_seconds),
     ]
-    if self._mode == NativeWorkerAdapterMode.FIXED:
+    if self._mode == NativeWorkerManagerMode.FIXED:
         loops.append(self._monitor_workers())
     # ... rest unchanged
 ```
@@ -145,13 +145,13 @@ Currently imports from the deleted entry point. Replace with a direct call to th
 ```python
 import dataclasses
 
-from scaler.config.section.native_worker_adapter import NativeWorkerAdapterConfig, NativeWorkerAdapterMode
+from scaler.config.section.native_worker_adapter import NativeWorkerAdapterConfig, NativeWorkerManagerMode
 from scaler.worker_manager_adapter.baremetal.native import NativeWorkerAdapter
 
 
 def main() -> None:
     config = NativeWorkerAdapterConfig.parse("Scaler Cluster", "cluster")
-    config = dataclasses.replace(config, mode=NativeWorkerAdapterMode.FIXED)
+    config = dataclasses.replace(config, mode=NativeWorkerManagerMode.FIXED)
     NativeWorkerAdapter(config).run()
 
 
@@ -170,7 +170,7 @@ Also remove the corresponding `console_scripts` entry from `setup.cfg`/`pyprojec
 
 **File:** `src/scaler/cluster/combo.py`
 
-Replace `FixedNativeWorkerAdapter`/`FixedNativeWorkerAdapterConfig` with `NativeWorkerAdapter`/`NativeWorkerAdapterConfig`/`NativeWorkerAdapterMode`. Spawn the adapter as a subprocess since `run()` now blocks in the event loop.
+Replace `FixedNativeWorkerAdapter`/`FixedNativeWorkerAdapterConfig` with `NativeWorkerAdapter`/`NativeWorkerAdapterConfig`/`NativeWorkerManagerMode`. Spawn the adapter as a subprocess since `run()` now blocks in the event loop.
 
 Do **not** pass `daemon=True` to `multiprocessing.Process` — Python forbids daemon processes from spawning child processes, and since the adapter subprocess calls `_spawn_initial_workers()` which calls `worker.start()`, using `daemon=True` raises `AssertionError: daemonic processes are not allowed to have children`. This is safe because `shutdown()` explicitly calls `terminate()` + `join()`.
 

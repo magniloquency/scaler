@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional, Tuple
 
 import zmq
 
-from scaler.config.section.native_worker_adapter import NativeWorkerAdapterConfig, NativeWorkerAdapterMode
+from scaler.config.section.native_worker_adapter import NativeWorkerAdapterConfig, NativeWorkerManagerMode
 from scaler.io.mixins import AsyncConnector
 from scaler.io.utility import create_async_connector, create_async_simple_context
 from scaler.io.ymq import ymq
@@ -50,12 +50,12 @@ class NativeWorkerAdapter:
         self._workers_per_group = 1
         self._mode = config.mode
 
-        if self._mode == NativeWorkerAdapterMode.FIXED:
+        if self._mode == NativeWorkerManagerMode.FIXED:
             self._worker_prefix = "FIX"
-        elif self._mode == NativeWorkerAdapterMode.DYNAMIC:
+        elif self._mode == NativeWorkerManagerMode.DYNAMIC:
             self._worker_prefix = "NAT"
         else:
-            raise ValueError(f"Unknown NativeWorkerAdapterMode: {self._mode!r}")
+            raise ValueError(f"Unknown NativeWorkerManagerMode: {self._mode!r}")
 
         """
         Although a worker group can contain multiple workers, in this native adapter implementation,
@@ -142,7 +142,7 @@ class NativeWorkerAdapter:
         return
 
     async def start_worker_group(self) -> Tuple[WorkerGroupID, Status]:
-        if self._mode == NativeWorkerAdapterMode.FIXED:
+        if self._mode == NativeWorkerManagerMode.FIXED:
             return b"", Status.WorkerGroupTooMuch
 
         num_of_workers = sum(len(workers) for workers in self._worker_groups.values())
@@ -157,7 +157,7 @@ class NativeWorkerAdapter:
         return worker_group_id, Status.Success
 
     async def shutdown_worker_group(self, worker_group_id: WorkerGroupID) -> Status:
-        if self._mode == NativeWorkerAdapterMode.FIXED:
+        if self._mode == NativeWorkerManagerMode.FIXED:
             return Status.WorkerGroupIDNotFound
 
         if not worker_group_id:
@@ -175,7 +175,7 @@ class NativeWorkerAdapter:
         return Status.Success
 
     def run(self) -> None:
-        if self._mode == NativeWorkerAdapterMode.FIXED:
+        if self._mode == NativeWorkerManagerMode.FIXED:
             self._spawn_initial_workers()
         self._setup_zmq()
         self._loop = asyncio.new_event_loop()
@@ -184,7 +184,7 @@ class NativeWorkerAdapter:
     def _cleanup(self) -> None:
         if self._connector_external is not None:
             self._connector_external.destroy()
-        if self._mode == NativeWorkerAdapterMode.FIXED:
+        if self._mode == NativeWorkerManagerMode.FIXED:
             for group in self._worker_groups.values():
                 for worker in group.values():
                     worker.terminate()
@@ -207,7 +207,7 @@ class NativeWorkerAdapter:
         await self._task
 
     async def __send_heartbeat(self) -> None:
-        max_worker_groups = 0 if self._mode == NativeWorkerAdapterMode.FIXED else self._max_workers
+        max_worker_groups = 0 if self._mode == NativeWorkerManagerMode.FIXED else self._max_workers
         await self._connector_external.send(
             WorkerAdapterHeartbeat.new_msg(
                 max_worker_groups=max_worker_groups,
@@ -232,7 +232,7 @@ class NativeWorkerAdapter:
             create_async_loop_routine(self.__send_heartbeat, self._heartbeat_interval_seconds),
         ]
 
-        if self._mode == NativeWorkerAdapterMode.FIXED:
+        if self._mode == NativeWorkerManagerMode.FIXED:
             loops.append(self._monitor_workers())
 
         try:

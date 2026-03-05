@@ -1,12 +1,12 @@
 import dataclasses
 
-from scaler.config.section.native_worker_adapter import NativeWorkerAdapterConfig, NativeWorkerAdapterMode
+from scaler.config.section.native_worker_adapter import NativeWorkerAdapterConfig, NativeWorkerManagerMode
 from scaler.worker_manager_adapter.baremetal.native import NativeWorkerAdapter
 
 
 def main() -> None:
     config = NativeWorkerAdapterConfig.parse("Scaler Cluster", "cluster")
-    config = dataclasses.replace(config, mode=NativeWorkerAdapterMode.FIXED)
+    config = dataclasses.replace(config, mode=NativeWorkerManagerMode.FIXED)
     NativeWorkerAdapter(config).run()
 
 

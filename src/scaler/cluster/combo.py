@@ -25,7 +25,7 @@ from scaler.config.defaults import (
     DEFAULT_WORKER_DEATH_TIMEOUT,
     DEFAULT_WORKER_TIMEOUT_SECONDS,
 )
-from scaler.config.section.native_worker_adapter import NativeWorkerAdapterConfig, NativeWorkerAdapterMode
+from scaler.config.section.native_worker_adapter import NativeWorkerAdapterConfig, NativeWorkerManagerMode
 from scaler.config.section.scheduler import PolicyConfig
 from scaler.config.types.object_storage_server import ObjectStorageAddressConfig
 from scaler.config.types.worker import WorkerCapabilities
@@ -100,7 +100,7 @@ class SchedulerClusterCombo:
                 preload=None,
                 event_loop=event_loop,
                 worker_io_threads=worker_io_threads,
-                mode=NativeWorkerAdapterMode.FIXED,
+                mode=NativeWorkerManagerMode.FIXED,
                 worker_config=WorkerConfig(
                     per_worker_capabilities=WorkerCapabilities(per_worker_capabilities or {}),
                     per_worker_task_queue_size=per_worker_task_queue_size,

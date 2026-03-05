@@ -17,7 +17,7 @@ from scaler.config.defaults import (
     DEFAULT_TASK_TIMEOUT_SECONDS,
     DEFAULT_TRIM_MEMORY_THRESHOLD_BYTES,
 )
-from scaler.config.section.native_worker_adapter import NativeWorkerAdapterConfig, NativeWorkerAdapterMode
+from scaler.config.section.native_worker_adapter import NativeWorkerAdapterConfig, NativeWorkerManagerMode
 from scaler.config.types.worker import WorkerCapabilities
 from scaler.config.types.zmq import ZMQConfig
 from scaler.utility.logging.utility import setup_logger
@@ -46,7 +46,7 @@ class TestDeathTimeout(unittest.TestCase):
                 preload=None,
                 event_loop="builtin",
                 worker_io_threads=DEFAULT_IO_THREADS,
-                mode=NativeWorkerAdapterMode.FIXED,
+                mode=NativeWorkerManagerMode.FIXED,
                 worker_config=WorkerConfig(
                     per_worker_capabilities=WorkerCapabilities({}),
                     per_worker_task_queue_size=DEFAULT_PER_WORKER_QUEUE_SIZE,
