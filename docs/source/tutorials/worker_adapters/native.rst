@@ -50,7 +50,7 @@ How it Works
 
 **Dynamic mode** (default): when the scheduler determines that more capacity is needed, it sends a request to the Native worker adapter. The adapter then spawns a new worker process using the same Python interpreter and environment that started the adapter. Each worker group managed by the Native adapter contains exactly one worker process.
 
-**Fixed mode**: all workers are pre-spawned at startup. The adapter advertises zero capacity to the scheduler so it never receives dynamic scale commands. When all pre-spawned workers have exited, the adapter itself exits.
+**Fixed mode**: all workers are pre-spawned at startup. The adapter runs a simple synchronous loop with no event loop or scheduler connector — it spawns the workers and waits for them to finish. Workers connect directly to the scheduler themselves. When all pre-spawned workers have exited, the adapter itself exits.
 
 Supported Parameters
 --------------------
