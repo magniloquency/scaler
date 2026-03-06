@@ -25,7 +25,7 @@ from scaler.config.defaults import (
     DEFAULT_WORKER_DEATH_TIMEOUT,
     DEFAULT_WORKER_TIMEOUT_SECONDS,
 )
-from scaler.config.section.native_worker_adapter import NativeWorkerAdapterConfig, NativeWorkerManagerMode
+from scaler.config.section.native_worker_adapter import NativeWorkerManagerConfig, NativeWorkerManagerMode
 from scaler.config.section.scheduler import PolicyConfig
 from scaler.config.types.object_storage_server import ObjectStorageAddressConfig
 from scaler.config.types.worker import WorkerCapabilities
@@ -91,7 +91,7 @@ class SchedulerClusterCombo:
         self._object_storage.wait_until_ready()  # object storage should be ready before starting the cluster
 
         self._worker_adapter = NativeWorkerAdapter(
-            NativeWorkerAdapterConfig(
+            NativeWorkerManagerConfig(
                 worker_adapter_config=WorkerAdapterConfig(
                     scheduler_address=self._address,
                     object_storage_address=self._object_storage_address,

@@ -17,7 +17,7 @@ class NativeWorkerManagerMode(enum.Enum):
 
 
 @dataclasses.dataclass
-class NativeWorkerAdapterConfig(ConfigClass):
+class NativeWorkerManagerConfig(ConfigClass):
     worker_adapter_config: WorkerAdapterConfig
     preload: Optional[str] = None
     worker_config: WorkerConfig = dataclasses.field(default_factory=WorkerConfig)
@@ -38,6 +38,11 @@ class NativeWorkerAdapterConfig(ConfigClass):
             type=NativeWorkerManagerMode,
             help="operating mode: 'dynamic' for auto-scaling driven by scheduler, 'fixed' for pre-spawned workers",
         ),
+    )
+
+    worker_type: Optional[str] = dataclasses.field(
+        default=None,
+        metadata=dict(help="worker type prefix used in worker IDs; defaults to 'FIX' or 'NAT' based on mode"),
     )
 
     @classmethod

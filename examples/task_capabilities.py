@@ -12,7 +12,7 @@ from scaler.cluster.combo import SchedulerClusterCombo
 from scaler.config.common.logging import LoggingConfig
 from scaler.config.common.worker import WorkerConfig
 from scaler.config.common.worker_adapter import WorkerAdapterConfig
-from scaler.config.section.native_worker_adapter import NativeWorkerAdapterConfig, NativeWorkerManagerMode
+from scaler.config.section.native_worker_adapter import NativeWorkerManagerConfig, NativeWorkerManagerMode
 from scaler.config.section.scheduler import PolicyConfig
 from scaler.config.types.worker import WorkerCapabilities
 from scaler.worker_manager_adapter.baremetal.native import NativeWorkerAdapter
@@ -41,7 +41,7 @@ def main():
     # Adds an additional worker with GPU support
     base_adapter = cluster._worker_adapter
     gpu_adapter = NativeWorkerAdapter(
-        NativeWorkerAdapterConfig(
+        NativeWorkerManagerConfig(
             worker_adapter_config=WorkerAdapterConfig(
                 scheduler_address=base_adapter._address,
                 object_storage_address=base_adapter._object_storage_address,

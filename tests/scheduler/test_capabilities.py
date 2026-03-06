@@ -6,7 +6,7 @@ from scaler import Client, SchedulerClusterCombo
 from scaler.config.common.logging import LoggingConfig
 from scaler.config.common.worker import WorkerConfig
 from scaler.config.common.worker_adapter import WorkerAdapterConfig
-from scaler.config.section.native_worker_adapter import NativeWorkerAdapterConfig, NativeWorkerManagerMode
+from scaler.config.section.native_worker_adapter import NativeWorkerManagerConfig, NativeWorkerManagerMode
 from scaler.config.section.scheduler import PolicyConfig
 from scaler.config.types.worker import WorkerCapabilities
 from scaler.utility.logging.utility import setup_logger
@@ -43,7 +43,7 @@ class TestCapabilities(unittest.TestCase):
 
             # Connects a worker that can handle the task
             gpu_adapter = NativeWorkerAdapter(
-                NativeWorkerAdapterConfig(
+                NativeWorkerManagerConfig(
                     worker_adapter_config=WorkerAdapterConfig(
                         scheduler_address=base_adapter._address, object_storage_address=None, max_workers=1
                     ),
@@ -91,7 +91,7 @@ class TestCapabilities(unittest.TestCase):
 
             # Connect a worker that can handle the task
             gpu_adapter = NativeWorkerAdapter(
-                NativeWorkerAdapterConfig(
+                NativeWorkerManagerConfig(
                     worker_adapter_config=WorkerAdapterConfig(
                         scheduler_address=base_adapter._address, object_storage_address=None, max_workers=1
                     ),

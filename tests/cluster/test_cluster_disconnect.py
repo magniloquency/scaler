@@ -8,7 +8,7 @@ from scaler.config.common.logging import LoggingConfig
 from scaler.config.common.worker import WorkerConfig
 from scaler.config.common.worker_adapter import WorkerAdapterConfig
 from scaler.config.defaults import DEFAULT_LOGGING_PATHS
-from scaler.config.section.native_worker_adapter import NativeWorkerAdapterConfig, NativeWorkerManagerMode
+from scaler.config.section.native_worker_adapter import NativeWorkerManagerConfig, NativeWorkerManagerMode
 from scaler.config.types.worker import WorkerCapabilities
 from scaler.utility.logging.utility import setup_logger
 from scaler.worker_manager_adapter.baremetal.native import NativeWorkerAdapter
@@ -34,7 +34,7 @@ class TestClusterDisconnect(unittest.TestCase):
     def test_cluster_disconnect(self):
         base_adapter = self.combo._worker_adapter
         dying_adapter = NativeWorkerAdapter(
-            NativeWorkerAdapterConfig(
+            NativeWorkerManagerConfig(
                 worker_adapter_config=WorkerAdapterConfig(
                     scheduler_address=self.combo._address,
                     object_storage_address=self.combo._object_storage_address,

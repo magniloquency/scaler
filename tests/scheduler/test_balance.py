@@ -8,7 +8,7 @@ from scaler.config.common.logging import LoggingConfig
 from scaler.config.common.worker import WorkerConfig
 from scaler.config.common.worker_adapter import WorkerAdapterConfig
 from scaler.config.defaults import DEFAULT_LOAD_BALANCE_SECONDS
-from scaler.config.section.native_worker_adapter import NativeWorkerAdapterConfig, NativeWorkerManagerMode
+from scaler.config.section.native_worker_adapter import NativeWorkerManagerConfig, NativeWorkerManagerMode
 from scaler.config.types.worker import WorkerCapabilities
 from scaler.utility.logging.utility import setup_logger
 from scaler.utility.network_util import get_available_tcp_port
@@ -51,7 +51,7 @@ class TestBalance(unittest.TestCase):
 
         base_adapter = combo._worker_adapter
         new_adapter = NativeWorkerAdapter(
-            NativeWorkerAdapterConfig(
+            NativeWorkerManagerConfig(
                 worker_adapter_config=WorkerAdapterConfig(
                     scheduler_address=base_adapter._address, object_storage_address=None, max_workers=N_WORKERS - 1
                 ),

@@ -5,6 +5,8 @@
 | Author | @magniloquency |
 | Pull Request | #583 |
 
+**Status**: Implemented, superceded by [amendment 1](amendment-1.md)
+
 ## Context
 
 `FixedNativeWorkerAdapter` was based on an old version of `NativeWorkerAdapter` and has diverged. Rather than

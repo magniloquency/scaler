@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional, Tuple
 
 import zmq
 
-from scaler.config.section.native_worker_adapter import NativeWorkerAdapterConfig, NativeWorkerManagerMode
+from scaler.config.section.native_worker_adapter import NativeWorkerManagerConfig, NativeWorkerManagerMode
 from scaler.io.mixins import AsyncConnector
 from scaler.io.utility import create_async_connector, create_async_simple_context
 from scaler.io.ymq import ymq
@@ -29,7 +29,7 @@ Status = WorkerAdapterCommandResponse.Status
 
 
 class NativeWorkerAdapter:
-    def __init__(self, config: NativeWorkerAdapterConfig):
+    def __init__(self, config: NativeWorkerManagerConfig):
         self._address = config.worker_adapter_config.scheduler_address
         self._object_storage_address = config.worker_adapter_config.object_storage_address
         self._capabilities = config.worker_config.per_worker_capabilities.capabilities
@@ -50,12 +50,14 @@ class NativeWorkerAdapter:
         self._workers_per_group = 1
         self._mode = config.mode
 
-        if self._mode == NativeWorkerManagerMode.FIXED:
+        if config.worker_type is not None:
+            self._worker_prefix = config.worker_type
+        elif self._mode == NativeWorkerManagerMode.FIXED:
             self._worker_prefix = "FIX"
         elif self._mode == NativeWorkerManagerMode.DYNAMIC:
             self._worker_prefix = "NAT"
         else:
-            raise ValueError(f"Unknown NativeWorkerManagerMode: {self._mode!r}")
+            raise ValueError(f"worker_type is not set and mode is unrecognised: {self._mode!r}")
 
         """
         Although a worker group can contain multiple workers, in this native adapter implementation,
@@ -142,9 +144,6 @@ class NativeWorkerAdapter:
         return
 
     async def start_worker_group(self) -> Tuple[WorkerGroupID, Status]:
-        if self._mode == NativeWorkerManagerMode.FIXED:
-            return b"", Status.WorkerGroupTooMuch
-
         num_of_workers = sum(len(workers) for workers in self._worker_groups.values())
         if num_of_workers >= self._max_workers != -1:
             return b"", Status.WorkerGroupTooMuch
@@ -157,9 +156,6 @@ class NativeWorkerAdapter:
         return worker_group_id, Status.Success
 
     async def shutdown_worker_group(self, worker_group_id: WorkerGroupID) -> Status:
-        if self._mode == NativeWorkerManagerMode.FIXED:
-            return Status.WorkerGroupIDNotFound
-
         if not worker_group_id:
             return Status.WorkerGroupIDNotSpecified
 
@@ -176,19 +172,24 @@ class NativeWorkerAdapter:
 
     def run(self) -> None:
         if self._mode == NativeWorkerManagerMode.FIXED:
-            self._spawn_initial_workers()
+            self._run_fixed()
+            return
+
+        # DYNAMIC mode
         self._setup_zmq()
         self._loop = asyncio.new_event_loop()
         run_task_forever(self._loop, self._run(), cleanup_callback=self._cleanup)
 
+    def _run_fixed(self) -> None:
+        setup_logger(self._logging_paths, self._logging_config_file, self._logging_level)
+        self._spawn_initial_workers()
+        for group in self._worker_groups.values():
+            for worker in group.values():
+                worker.join()
+
     def _cleanup(self) -> None:
         if self._connector_external is not None:
             self._connector_external.destroy()
-        if self._mode == NativeWorkerManagerMode.FIXED:
-            for group in self._worker_groups.values():
-                for worker in group.values():
-                    worker.terminate()
-                    worker.join()
 
     def __destroy(self):
         print(f"Worker adapter {self._ident!r} received signal, shutting down")
@@ -207,33 +208,19 @@ class NativeWorkerAdapter:
         await self._task
 
     async def __send_heartbeat(self) -> None:
-        max_worker_groups = 0 if self._mode == NativeWorkerManagerMode.FIXED else self._max_workers
         await self._connector_external.send(
             WorkerAdapterHeartbeat.new_msg(
-                max_worker_groups=max_worker_groups,
+                max_worker_groups=self._max_workers,
                 workers_per_group=self._workers_per_group,
                 capabilities=self._capabilities,
             )
         )
-
-    async def _monitor_workers(self) -> None:
-        """FIXED mode only: cancel the event loop when all pre-spawned workers have exited."""
-        while True:
-            await asyncio.sleep(1)
-            if self._worker_groups and all(
-                not w.is_alive() for group in self._worker_groups.values() for w in group.values()
-            ):
-                self.__destroy()
-                return
 
     async def __get_loops(self) -> None:
         loops = [
             create_async_loop_routine(self._connector_external.routine, 0),
             create_async_loop_routine(self.__send_heartbeat, self._heartbeat_interval_seconds),
         ]
-
-        if self._mode == NativeWorkerManagerMode.FIXED:
-            loops.append(self._monitor_workers())
 
         try:
             await asyncio.gather(*loops)
