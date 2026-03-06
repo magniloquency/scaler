@@ -193,10 +193,8 @@ The following table maps each Scaler command to its corresponding section name i
      - ``[webui]``
    * - ``scaler_top``
      - ``[top]``
-   * - ``scaler_worker_adapter_native``
-     - ``[native_worker_adapter]``
-   * - ``scaler_worker_adapter_fixed_native``
-     - ``[fixed_native_worker_adapter]``
+   * - ``scaler_worker_manager_baremetal_native``
+     - ``[native_worker_manager]``
    * - ``scaler_worker_adapter_symphony``
      - ``[symphony_worker_adapter]``
    * - ``scaler_worker_adapter_ecs``

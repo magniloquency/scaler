@@ -218,6 +218,7 @@ class ECSWorkerAdapter:
 
         command = (
             f"scaler_cluster {self._address.to_address()} "
+            f"--worker-type ECS "
             f"--max-workers {self._ecs_task_cpu} "
             f"--per-worker-task-queue-size {self._per_worker_task_queue_size} "
             f"--heartbeat-interval-seconds {self._heartbeat_interval_seconds} "
