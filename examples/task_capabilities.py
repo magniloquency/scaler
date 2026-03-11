@@ -42,9 +42,7 @@ def main():
     gpu_adapter = FixedNativeWorkerAdapter(
         FixedNativeWorkerAdapterConfig(
             worker_adapter_config=WorkerAdapterConfig(
-                scheduler_address=base_adapter._address,
-                object_storage_address=None,
-                max_workers=1,
+                scheduler_address=base_adapter._address, object_storage_address=None, max_workers=1
             ),
             preload=None,
             event_loop=base_adapter._event_loop,
