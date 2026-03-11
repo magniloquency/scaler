@@ -5,11 +5,11 @@ from scaler import Client, SchedulerClusterCombo
 from scaler.config.common.logging import LoggingConfig
 from scaler.config.common.worker import WorkerConfig
 from scaler.config.common.worker_adapter import WorkerAdapterConfig
-from scaler.config.section.fixed_native_worker_adapter import FixedNativeWorkerAdapterConfig
+from scaler.config.section.fixed_native_worker_manager import FixedNativeWorkerManagerConfig
 from scaler.config.section.scheduler import PolicyConfig
 from scaler.config.types.worker import WorkerCapabilities
 from scaler.utility.logging.utility import setup_logger
-from scaler.worker_manager_adapter.baremetal.fixed_native import FixedNativeWorkerAdapter
+from scaler.worker_manager_adapter.baremetal.fixed_native import FixedNativeWorkerManager
 from tests.utility.utility import logging_test_name
 
 
@@ -41,9 +41,9 @@ class TestCapabilities(unittest.TestCase):
                 future.result(timeout=1)
 
             # Connects a worker that can handle the task
-            gpu_adapter = FixedNativeWorkerAdapter(
-                FixedNativeWorkerAdapterConfig(
-                    worker_adapter_config=WorkerAdapterConfig(
+            gpu_adapter = FixedNativeWorkerManager(
+                FixedNativeWorkerManagerConfig(
+                    worker_manager_config=WorkerAdapterConfig(
                         scheduler_address=base_adapter._address, object_storage_address=None, max_workers=1
                     ),
                     preload=None,
@@ -86,9 +86,9 @@ class TestCapabilities(unittest.TestCase):
                 future.result(timeout=1)
 
             # Connect a worker that can handle the task
-            gpu_adapter = FixedNativeWorkerAdapter(
-                FixedNativeWorkerAdapterConfig(
-                    worker_adapter_config=WorkerAdapterConfig(
+            gpu_adapter = FixedNativeWorkerManager(
+                FixedNativeWorkerManagerConfig(
+                    worker_manager_config=WorkerAdapterConfig(
                         scheduler_address=base_adapter._address, object_storage_address=None, max_workers=1
                     ),
                     preload=None,

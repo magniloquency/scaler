@@ -10,13 +10,13 @@ from scaler import Client, SchedulerClusterCombo
 from scaler.config.common.logging import LoggingConfig
 from scaler.config.common.worker import WorkerConfig
 from scaler.config.common.worker_adapter import WorkerAdapterConfig
-from scaler.config.section.fixed_native_worker_adapter import FixedNativeWorkerAdapterConfig
+from scaler.config.section.fixed_native_worker_manager import FixedNativeWorkerManagerConfig
 from scaler.config.types.worker import WorkerCapabilities
 from scaler.utility.exceptions import MissingObjects, ProcessorDiedError
 from scaler.utility.logging.scoped_logger import ScopedLogger
 from scaler.utility.logging.utility import setup_logger
 from scaler.worker.preload import PreloadSpecError, _parse_preload_spec, execute_preload
-from scaler.worker_manager_adapter.baremetal.fixed_native import FixedNativeWorkerAdapter
+from scaler.worker_manager_adapter.baremetal.fixed_native import FixedNativeWorkerManager
 from tests.utility.utility import logging_test_name
 
 
@@ -361,9 +361,9 @@ class TestClientPreload(unittest.TestCase):
 
     def _create_preload_cluster(self, preload: str, logging_paths: tuple = ("/dev/stdout",)):
         base_adapter = self.combo._worker_adapter
-        preload_adapter = FixedNativeWorkerAdapter(
-            FixedNativeWorkerAdapterConfig(
-                worker_adapter_config=WorkerAdapterConfig(
+        preload_adapter = FixedNativeWorkerManager(
+            FixedNativeWorkerManagerConfig(
+                worker_manager_config=WorkerAdapterConfig(
                     scheduler_address=self.combo._address,
                     object_storage_address=self.combo._object_storage_address,
                     max_workers=1,

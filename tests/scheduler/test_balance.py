@@ -7,11 +7,11 @@ from scaler.config.common.logging import LoggingConfig
 from scaler.config.common.worker import WorkerConfig
 from scaler.config.common.worker_adapter import WorkerAdapterConfig
 from scaler.config.defaults import DEFAULT_LOAD_BALANCE_SECONDS
-from scaler.config.section.fixed_native_worker_adapter import FixedNativeWorkerAdapterConfig
+from scaler.config.section.fixed_native_worker_manager import FixedNativeWorkerManagerConfig
 from scaler.config.types.worker import WorkerCapabilities
 from scaler.utility.logging.utility import setup_logger
 from scaler.utility.network_util import get_available_tcp_port
-from scaler.worker_manager_adapter.baremetal.fixed_native import FixedNativeWorkerAdapter
+from scaler.worker_manager_adapter.baremetal.fixed_native import FixedNativeWorkerManager
 from tests.utility.utility import logging_test_name
 
 
@@ -49,9 +49,9 @@ class TestBalance(unittest.TestCase):
         time.sleep(3)
 
         base_adapter = combo._worker_adapter
-        new_adapter = FixedNativeWorkerAdapter(
-            FixedNativeWorkerAdapterConfig(
-                worker_adapter_config=WorkerAdapterConfig(
+        new_adapter = FixedNativeWorkerManager(
+            FixedNativeWorkerManagerConfig(
+                worker_manager_config=WorkerAdapterConfig(
                     scheduler_address=base_adapter._address, object_storage_address=None, max_workers=N_WORKERS - 1
                 ),
                 preload=None,
