@@ -89,7 +89,7 @@ class SchedulerClusterCombo:
         self._object_storage.start()
         self._object_storage.wait_until_ready()  # object storage should be ready before starting the cluster
 
-        self._worker_adapter = FixedNativeWorkerManager(
+        self._worker_manager = FixedNativeWorkerManager(
             FixedNativeWorkerManagerConfig(
                 worker_manager_config=WorkerManagerConfig(
                     scheduler_address=self._address,
@@ -132,7 +132,7 @@ class SchedulerClusterCombo:
             policy=scaler_policy,
         )
 
-        self._worker_adapter.start()
+        self._worker_manager.start()
         self._scheduler.start()
         logging.info(f"{self.__get_prefix()} started")
 
@@ -144,7 +144,7 @@ class SchedulerClusterCombo:
         self._shutdown_called = True
 
         logging.info(f"{self.__get_prefix()} shutdown")
-        self._worker_adapter.shutdown()
+        self._worker_manager.shutdown()
         self._scheduler.terminate()
         self._scheduler.join()
 

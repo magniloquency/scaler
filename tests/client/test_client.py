@@ -360,8 +360,8 @@ class TestClientPreload(unittest.TestCase):
         self.combo.shutdown()
 
     def _create_preload_cluster(self, preload: str, logging_paths: tuple = ("/dev/stdout",)):
-        base_adapter = self.combo._worker_adapter
-        preload_adapter = FixedNativeWorkerManager(
+        base_manager = self.combo._worker_manager
+        preload_manager = FixedNativeWorkerManager(
             FixedNativeWorkerManagerConfig(
                 worker_manager_config=WorkerManagerConfig(
                     scheduler_address=self.combo._address,
@@ -369,26 +369,26 @@ class TestClientPreload(unittest.TestCase):
                     max_workers=1,
                 ),
                 preload=preload,
-                event_loop=base_adapter._event_loop,
-                worker_io_threads=base_adapter._io_threads,
+                event_loop=base_manager._event_loop,
+                worker_io_threads=base_manager._io_threads,
                 worker_config=WorkerConfig(
                     per_worker_capabilities=WorkerCapabilities({}),
-                    per_worker_task_queue_size=base_adapter._task_queue_size,
-                    heartbeat_interval_seconds=base_adapter._heartbeat_interval_seconds,
-                    task_timeout_seconds=base_adapter._task_timeout_seconds,
-                    death_timeout_seconds=base_adapter._death_timeout_seconds,
-                    garbage_collect_interval_seconds=base_adapter._garbage_collect_interval_seconds,
-                    trim_memory_threshold_bytes=base_adapter._trim_memory_threshold_bytes,
-                    hard_processor_suspend=base_adapter._hard_processor_suspend,
+                    per_worker_task_queue_size=base_manager._task_queue_size,
+                    heartbeat_interval_seconds=base_manager._heartbeat_interval_seconds,
+                    task_timeout_seconds=base_manager._task_timeout_seconds,
+                    death_timeout_seconds=base_manager._death_timeout_seconds,
+                    garbage_collect_interval_seconds=base_manager._garbage_collect_interval_seconds,
+                    trim_memory_threshold_bytes=base_manager._trim_memory_threshold_bytes,
+                    hard_processor_suspend=base_manager._hard_processor_suspend,
                 ),
                 logging_config=LoggingConfig(
                     paths=logging_paths,
-                    level=base_adapter._logging_level,
-                    config_file=base_adapter._logging_config_file,
+                    level=base_manager._logging_level,
+                    config_file=base_manager._logging_config_file,
                 ),
             )
         )
-        return preload_adapter
+        return preload_manager
 
     def test_preload_success(self):
         preload_cluster = self._create_preload_cluster(

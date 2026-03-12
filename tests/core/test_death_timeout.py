@@ -21,7 +21,7 @@ from scaler.config.types.worker import WorkerCapabilities
 from scaler.config.types.zmq import ZMQConfig
 from scaler.utility.logging.utility import setup_logger
 from scaler.utility.network_util import get_available_tcp_port
-from scaler.worker_manager_adapter.baremetal.fixed_native import FixedNativeWorkerManager
+from scaler.worker_manager_manager.baremetal.fixed_native import FixedNativeWorkerManager
 from tests.utility.utility import logging_test_name
 
 # This is a manual test because it can loop infinitely if it fails
@@ -35,7 +35,7 @@ class TestDeathTimeout(unittest.TestCase):
     def test_no_scheduler(self):
         logging.info("test with no scheduler")
         # Test 1: Spinning up a cluster with no scheduler. Death timeout should apply
-        adapter = FixedNativeWorkerManager(
+        manager = FixedNativeWorkerManager(
             FixedNativeWorkerManagerConfig(
                 worker_manager_config=WorkerManagerConfig(
                     scheduler_address=ZMQConfig.from_string(f"tcp://127.0.0.1:{get_available_tcp_port()}"),
@@ -60,8 +60,8 @@ class TestDeathTimeout(unittest.TestCase):
                 ),
             )
         )
-        adapter.start()
-        adapter.join()
+        manager.start()
+        manager.join()
 
     def test_shutdown(self):
         logging.info("test with explicitly shutdown")

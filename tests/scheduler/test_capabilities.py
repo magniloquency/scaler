@@ -29,7 +29,7 @@ class TestCapabilities(unittest.TestCase):
         self.combo.shutdown()
 
     def test_capabilities(self):
-        base_adapter = self.combo._worker_adapter
+        base_manager = self.combo._worker_manager
 
         with Client(self.address) as client:
             client.submit(round, 3.14).result()  # Ensures the cluster is ready
@@ -41,39 +41,39 @@ class TestCapabilities(unittest.TestCase):
                 future.result(timeout=1)
 
             # Connects a worker that can handle the task
-            gpu_adapter = FixedNativeWorkerManager(
+            gpu_manager = FixedNativeWorkerManager(
                 FixedNativeWorkerManagerConfig(
                     worker_manager_config=WorkerManagerConfig(
-                        scheduler_address=base_adapter._address, object_storage_address=None, max_workers=1
+                        scheduler_address=base_manager._address, object_storage_address=None, max_workers=1
                     ),
                     preload=None,
-                    event_loop=base_adapter._event_loop,
+                    event_loop=base_manager._event_loop,
                     worker_io_threads=1,
                     worker_config=WorkerConfig(
                         per_worker_capabilities=WorkerCapabilities({"gpu": -1}),
-                        per_worker_task_queue_size=base_adapter._task_queue_size,
-                        heartbeat_interval_seconds=base_adapter._heartbeat_interval_seconds,
-                        task_timeout_seconds=base_adapter._task_timeout_seconds,
-                        death_timeout_seconds=base_adapter._death_timeout_seconds,
-                        garbage_collect_interval_seconds=base_adapter._garbage_collect_interval_seconds,
-                        trim_memory_threshold_bytes=base_adapter._trim_memory_threshold_bytes,
-                        hard_processor_suspend=base_adapter._hard_processor_suspend,
+                        per_worker_task_queue_size=base_manager._task_queue_size,
+                        heartbeat_interval_seconds=base_manager._heartbeat_interval_seconds,
+                        task_timeout_seconds=base_manager._task_timeout_seconds,
+                        death_timeout_seconds=base_manager._death_timeout_seconds,
+                        garbage_collect_interval_seconds=base_manager._garbage_collect_interval_seconds,
+                        trim_memory_threshold_bytes=base_manager._trim_memory_threshold_bytes,
+                        hard_processor_suspend=base_manager._hard_processor_suspend,
                     ),
                     logging_config=LoggingConfig(
-                        paths=base_adapter._logging_paths,
-                        level=base_adapter._logging_level,
-                        config_file=base_adapter._logging_config_file,
+                        paths=base_manager._logging_paths,
+                        level=base_manager._logging_level,
+                        config_file=base_manager._logging_config_file,
                     ),
                 )
             )
-            gpu_adapter.start()
+            gpu_manager.start()
 
             self.assertEqual(future.result(), 3.0)
 
-            gpu_adapter.shutdown()
+            gpu_manager.shutdown()
 
     def test_graph_capabilities(self):
-        base_adapter = self.combo._worker_adapter
+        base_manager = self.combo._worker_manager
 
         with Client(self.address) as client:
             client.submit(round, 3.14).result()  # Ensures the cluster is ready
@@ -86,33 +86,33 @@ class TestCapabilities(unittest.TestCase):
                 future.result(timeout=1)
 
             # Connect a worker that can handle the task
-            gpu_adapter = FixedNativeWorkerManager(
+            gpu_manager = FixedNativeWorkerManager(
                 FixedNativeWorkerManagerConfig(
                     worker_manager_config=WorkerManagerConfig(
-                        scheduler_address=base_adapter._address, object_storage_address=None, max_workers=1
+                        scheduler_address=base_manager._address, object_storage_address=None, max_workers=1
                     ),
                     preload=None,
-                    event_loop=base_adapter._event_loop,
+                    event_loop=base_manager._event_loop,
                     worker_io_threads=1,
                     worker_config=WorkerConfig(
                         per_worker_capabilities=WorkerCapabilities({"gpu": -1}),
-                        per_worker_task_queue_size=base_adapter._task_queue_size,
-                        heartbeat_interval_seconds=base_adapter._heartbeat_interval_seconds,
-                        task_timeout_seconds=base_adapter._task_timeout_seconds,
-                        death_timeout_seconds=base_adapter._death_timeout_seconds,
-                        garbage_collect_interval_seconds=base_adapter._garbage_collect_interval_seconds,
-                        trim_memory_threshold_bytes=base_adapter._trim_memory_threshold_bytes,
-                        hard_processor_suspend=base_adapter._hard_processor_suspend,
+                        per_worker_task_queue_size=base_manager._task_queue_size,
+                        heartbeat_interval_seconds=base_manager._heartbeat_interval_seconds,
+                        task_timeout_seconds=base_manager._task_timeout_seconds,
+                        death_timeout_seconds=base_manager._death_timeout_seconds,
+                        garbage_collect_interval_seconds=base_manager._garbage_collect_interval_seconds,
+                        trim_memory_threshold_bytes=base_manager._trim_memory_threshold_bytes,
+                        hard_processor_suspend=base_manager._hard_processor_suspend,
                     ),
                     logging_config=LoggingConfig(
-                        paths=base_adapter._logging_paths,
-                        level=base_adapter._logging_level,
-                        config_file=base_adapter._logging_config_file,
+                        paths=base_manager._logging_paths,
+                        level=base_manager._logging_level,
+                        config_file=base_manager._logging_config_file,
                     ),
                 )
             )
-            gpu_adapter.start()
+            gpu_manager.start()
 
             self.assertEqual(future.result(), 8)
 
-            gpu_adapter.shutdown()
+            gpu_manager.shutdown()
