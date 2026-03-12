@@ -5,7 +5,7 @@ import unittest
 from scaler import Client, SchedulerClusterCombo
 from scaler.config.common.logging import LoggingConfig
 from scaler.config.common.worker import WorkerConfig
-from scaler.config.common.worker_adapter import WorkerAdapterConfig
+from scaler.config.common.worker_manager import WorkerManagerConfig
 from scaler.config.defaults import (
     DEFAULT_GARBAGE_COLLECT_INTERVAL_SECONDS,
     DEFAULT_HEARTBEAT_INTERVAL_SECONDS,
@@ -37,7 +37,7 @@ class TestDeathTimeout(unittest.TestCase):
         # Test 1: Spinning up a cluster with no scheduler. Death timeout should apply
         adapter = FixedNativeWorkerManager(
             FixedNativeWorkerManagerConfig(
-                worker_manager_config=WorkerAdapterConfig(
+                worker_manager_config=WorkerManagerConfig(
                     scheduler_address=ZMQConfig.from_string(f"tcp://127.0.0.1:{get_available_tcp_port()}"),
                     object_storage_address=None,
                     max_workers=2,

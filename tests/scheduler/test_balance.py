@@ -5,7 +5,7 @@ import unittest
 from scaler import Client, SchedulerClusterCombo
 from scaler.config.common.logging import LoggingConfig
 from scaler.config.common.worker import WorkerConfig
-from scaler.config.common.worker_adapter import WorkerAdapterConfig
+from scaler.config.common.worker_manager import WorkerManagerConfig
 from scaler.config.defaults import DEFAULT_LOAD_BALANCE_SECONDS
 from scaler.config.section.fixed_native_worker_manager import FixedNativeWorkerManagerConfig
 from scaler.config.types.worker import WorkerCapabilities
@@ -51,7 +51,7 @@ class TestBalance(unittest.TestCase):
         base_adapter = combo._worker_adapter
         new_adapter = FixedNativeWorkerManager(
             FixedNativeWorkerManagerConfig(
-                worker_manager_config=WorkerAdapterConfig(
+                worker_manager_config=WorkerManagerConfig(
                     scheduler_address=base_adapter._address, object_storage_address=None, max_workers=N_WORKERS - 1
                 ),
                 preload=None,

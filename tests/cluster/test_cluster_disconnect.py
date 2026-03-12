@@ -5,7 +5,7 @@ from concurrent.futures import CancelledError
 from scaler import Client, SchedulerClusterCombo
 from scaler.config.common.logging import LoggingConfig
 from scaler.config.common.worker import WorkerConfig
-from scaler.config.common.worker_adapter import WorkerAdapterConfig
+from scaler.config.common.worker_manager import WorkerManagerConfig
 from scaler.config.defaults import DEFAULT_LOGGING_PATHS
 from scaler.config.section.fixed_native_worker_manager import FixedNativeWorkerManagerConfig
 from scaler.config.types.worker import WorkerCapabilities
@@ -34,7 +34,7 @@ class TestClusterDisconnect(unittest.TestCase):
         base_adapter = self.combo._worker_adapter
         dying_adapter = FixedNativeWorkerManager(
             FixedNativeWorkerManagerConfig(
-                worker_manager_config=WorkerAdapterConfig(
+                worker_manager_config=WorkerManagerConfig(
                     scheduler_address=self.combo._address,
                     object_storage_address=self.combo._object_storage_address,
                     max_workers=1,

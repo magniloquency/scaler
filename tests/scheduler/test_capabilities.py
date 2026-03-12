@@ -4,7 +4,7 @@ from concurrent.futures import TimeoutError
 from scaler import Client, SchedulerClusterCombo
 from scaler.config.common.logging import LoggingConfig
 from scaler.config.common.worker import WorkerConfig
-from scaler.config.common.worker_adapter import WorkerAdapterConfig
+from scaler.config.common.worker_manager import WorkerManagerConfig
 from scaler.config.section.fixed_native_worker_manager import FixedNativeWorkerManagerConfig
 from scaler.config.section.scheduler import PolicyConfig
 from scaler.config.types.worker import WorkerCapabilities
@@ -43,7 +43,7 @@ class TestCapabilities(unittest.TestCase):
             # Connects a worker that can handle the task
             gpu_adapter = FixedNativeWorkerManager(
                 FixedNativeWorkerManagerConfig(
-                    worker_manager_config=WorkerAdapterConfig(
+                    worker_manager_config=WorkerManagerConfig(
                         scheduler_address=base_adapter._address, object_storage_address=None, max_workers=1
                     ),
                     preload=None,
@@ -88,7 +88,7 @@ class TestCapabilities(unittest.TestCase):
             # Connect a worker that can handle the task
             gpu_adapter = FixedNativeWorkerManager(
                 FixedNativeWorkerManagerConfig(
-                    worker_manager_config=WorkerAdapterConfig(
+                    worker_manager_config=WorkerManagerConfig(
                         scheduler_address=base_adapter._address, object_storage_address=None, max_workers=1
                     ),
                     preload=None,
