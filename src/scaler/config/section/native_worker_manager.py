@@ -46,7 +46,7 @@ class NativeWorkerManagerConfig(ConfigClass):
     )
 
     @classmethod
-    def configure_parser(cls, parser) -> None:
+    def configure_parser(cls, parser: argparse.ArgumentParser) -> None:
         super().configure_parser(parser)
         parser.add_argument("-n", "--num-of-workers", dest="max_workers", type=int, help=argparse.SUPPRESS)
 

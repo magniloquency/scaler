@@ -30,7 +30,7 @@ Status = WorkerManagerCommandResponse.Status
 
 @dataclass
 class WorkerGroupInfo:
-    task_arn: str
+    task_arn: str  # sufficient to identify the group for stop_task(); no worker ID tracking needed
 
 
 class ECSWorkerManager:

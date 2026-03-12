@@ -71,6 +71,7 @@ class NativeWorkerManager:
         # This keeps the object picklable so callers can do Process(target=adapter.run).start().
         self._context: Optional[Any] = None
         self._connector_external: Optional[AsyncConnector] = None
+        self._ident: Optional[bytes] = None
 
     def _setup_zmq(self) -> None:
         self._name = "worker_manager_native"
@@ -185,7 +186,19 @@ class NativeWorkerManager:
 
     def _run_fixed(self) -> None:
         setup_logger(self._logging_paths, self._logging_config_file, self._logging_level)
+        register_event_loop(self._event_loop)
         self._spawn_initial_workers()
+
+        def _on_signal(sig: int, frame: object) -> None:
+            logging.info("NativeWorkerManager (FIXED): received signal %d, terminating workers", sig)
+            for group in self._worker_groups.values():
+                for worker in group.values():
+                    if worker.is_alive():
+                        worker.terminate()
+
+        signal.signal(signal.SIGTERM, _on_signal)
+        signal.signal(signal.SIGINT, _on_signal)
+
         for group in self._worker_groups.values():
             for worker in group.values():
                 worker.join()

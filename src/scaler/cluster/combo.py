@@ -136,8 +136,8 @@ class SchedulerClusterCombo:
             policy=scaler_policy,
         )
 
-        self._worker_manager_process.start()
         self._scheduler.start()
+        self._worker_manager_process.start()
         logging.info(f"{self.__get_prefix()} started")
 
     def __del__(self):
