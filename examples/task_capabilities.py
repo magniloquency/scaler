@@ -10,7 +10,7 @@ from scaler import Client
 from scaler.cluster.combo import SchedulerClusterCombo
 from scaler.config.common.logging import LoggingConfig
 from scaler.config.common.worker import WorkerConfig
-from scaler.config.common.worker_adapter import WorkerAdapterConfig
+from scaler.config.common.worker_manager import WorkerManagerConfig
 from scaler.config.section.fixed_native_worker_manager import FixedNativeWorkerManagerConfig
 from scaler.config.section.scheduler import PolicyConfig
 from scaler.config.types.worker import WorkerCapabilities
@@ -41,7 +41,7 @@ def main():
     base_manager = cluster._worker_manager
     gpu_manager = FixedNativeWorkerManager(
         FixedNativeWorkerManagerConfig(
-            worker_manager_config=WorkerAdapterConfig(
+            worker_manager_config=WorkerManagerConfig(
                 scheduler_address=base_manager._address, object_storage_address=None, max_workers=1
             ),
             preload=None,
