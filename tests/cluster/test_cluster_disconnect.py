@@ -6,12 +6,12 @@ from concurrent.futures import CancelledError
 from scaler import Client, SchedulerClusterCombo
 from scaler.config.common.logging import LoggingConfig
 from scaler.config.common.worker import WorkerConfig
-from scaler.config.common.worker_adapter import WorkerAdapterConfig
+from scaler.config.common.worker_manager import WorkerManagerConfig
 from scaler.config.defaults import DEFAULT_LOGGING_PATHS
-from scaler.config.section.native_worker_adapter import NativeWorkerManagerConfig, NativeWorkerManagerMode
+from scaler.config.section.native_worker_manager import NativeWorkerManagerConfig, NativeWorkerManagerMode
 from scaler.config.types.worker import WorkerCapabilities
 from scaler.utility.logging.utility import setup_logger
-from scaler.worker_manager_adapter.baremetal.native import NativeWorkerAdapter
+from scaler.worker_manager_adapter.baremetal.native import NativeWorkerManager
 from tests.utility.utility import logging_test_name
 
 
@@ -32,36 +32,36 @@ class TestClusterDisconnect(unittest.TestCase):
         pass
 
     def test_cluster_disconnect(self):
-        base_adapter = self.combo._worker_adapter
-        dying_adapter = NativeWorkerAdapter(
+        base_manager = self.combo._worker_manager
+        dying_manager = NativeWorkerManager(
             NativeWorkerManagerConfig(
-                worker_adapter_config=WorkerAdapterConfig(
+                worker_manager_config=WorkerManagerConfig(
                     scheduler_address=self.combo._address,
                     object_storage_address=self.combo._object_storage_address,
                     max_workers=1,
                 ),
                 preload=None,
-                event_loop=base_adapter._event_loop,
-                worker_io_threads=base_adapter._io_threads,
+                event_loop=base_manager._event_loop,
+                worker_io_threads=base_manager._io_threads,
                 mode=NativeWorkerManagerMode.FIXED,
                 worker_config=WorkerConfig(
                     per_worker_capabilities=WorkerCapabilities({}),
-                    per_worker_task_queue_size=base_adapter._task_queue_size,
-                    heartbeat_interval_seconds=base_adapter._heartbeat_interval_seconds,
-                    task_timeout_seconds=base_adapter._task_timeout_seconds,
-                    death_timeout_seconds=base_adapter._death_timeout_seconds,
-                    garbage_collect_interval_seconds=base_adapter._garbage_collect_interval_seconds,
-                    trim_memory_threshold_bytes=base_adapter._trim_memory_threshold_bytes,
-                    hard_processor_suspend=base_adapter._hard_processor_suspend,
+                    per_worker_task_queue_size=base_manager._task_queue_size,
+                    heartbeat_interval_seconds=base_manager._heartbeat_interval_seconds,
+                    task_timeout_seconds=base_manager._task_timeout_seconds,
+                    death_timeout_seconds=base_manager._death_timeout_seconds,
+                    garbage_collect_interval_seconds=base_manager._garbage_collect_interval_seconds,
+                    trim_memory_threshold_bytes=base_manager._trim_memory_threshold_bytes,
+                    hard_processor_suspend=base_manager._hard_processor_suspend,
                 ),
                 logging_config=LoggingConfig(
                     paths=DEFAULT_LOGGING_PATHS,
-                    level=base_adapter._logging_level,
-                    config_file=base_adapter._logging_config_file,
+                    level=base_manager._logging_level,
+                    config_file=base_manager._logging_config_file,
                 ),
             )
         )
-        dying_process = multiprocessing.Process(target=dying_adapter.run)
+        dying_process = multiprocessing.Process(target=dying_manager.run)
         dying_process.start()
 
         client = Client(self.address)

@@ -6,7 +6,7 @@ from scaler.cluster.object_storage_server import ObjectStorageServerProcess
 from scaler.cluster.scheduler import SchedulerProcess
 from scaler.config.common.logging import LoggingConfig
 from scaler.config.common.worker import WorkerConfig
-from scaler.config.common.worker_adapter import WorkerAdapterConfig
+from scaler.config.common.worker_manager import WorkerManagerConfig
 from scaler.config.defaults import (
     DEFAULT_CLIENT_TIMEOUT_SECONDS,
     DEFAULT_GARBAGE_COLLECT_INTERVAL_SECONDS,
@@ -25,13 +25,13 @@ from scaler.config.defaults import (
     DEFAULT_WORKER_DEATH_TIMEOUT,
     DEFAULT_WORKER_TIMEOUT_SECONDS,
 )
-from scaler.config.section.native_worker_adapter import NativeWorkerManagerConfig, NativeWorkerManagerMode
+from scaler.config.section.native_worker_manager import NativeWorkerManagerConfig, NativeWorkerManagerMode
 from scaler.config.section.scheduler import PolicyConfig
 from scaler.config.types.object_storage_server import ObjectStorageAddressConfig
 from scaler.config.types.worker import WorkerCapabilities
 from scaler.config.types.zmq import ZMQConfig
 from scaler.utility.network_util import get_available_tcp_port
-from scaler.worker_manager_adapter.baremetal.native import NativeWorkerAdapter
+from scaler.worker_manager_adapter.baremetal.native import NativeWorkerManager
 
 
 class SchedulerClusterCombo:
@@ -90,9 +90,9 @@ class SchedulerClusterCombo:
         self._object_storage.start()
         self._object_storage.wait_until_ready()  # object storage should be ready before starting the cluster
 
-        self._worker_adapter = NativeWorkerAdapter(
+        self._worker_manager = NativeWorkerManager(
             NativeWorkerManagerConfig(
-                worker_adapter_config=WorkerAdapterConfig(
+                worker_manager_config=WorkerManagerConfig(
                     scheduler_address=self._address,
                     object_storage_address=self._object_storage_address,
                     max_workers=n_workers,
@@ -115,7 +115,7 @@ class SchedulerClusterCombo:
             )
         )
 
-        self._worker_adapter_process = multiprocessing.Process(target=self._worker_adapter.run)
+        self._worker_manager_process = multiprocessing.Process(target=self._worker_manager.run)
 
         self._scheduler = SchedulerProcess(
             address=self._address,
@@ -136,7 +136,7 @@ class SchedulerClusterCombo:
             policy=scaler_policy,
         )
 
-        self._worker_adapter_process.start()
+        self._worker_manager_process.start()
         self._scheduler.start()
         logging.info(f"{self.__get_prefix()} started")
 
@@ -148,9 +148,9 @@ class SchedulerClusterCombo:
         self._shutdown_called = True
 
         logging.info(f"{self.__get_prefix()} shutdown")
-        if self._worker_adapter_process.is_alive():
-            self._worker_adapter_process.terminate()
-        self._worker_adapter_process.join()
+        if self._worker_manager_process.is_alive():
+            self._worker_manager_process.terminate()
+        self._worker_manager_process.join()
 
         self._scheduler.terminate()
         self._scheduler.join()

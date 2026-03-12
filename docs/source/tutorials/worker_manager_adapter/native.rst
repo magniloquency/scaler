@@ -1,12 +1,12 @@
-Native Worker Adapter
+Native Worker Manager
 =====================
 
-The Native worker adapter provisions workers as local subprocesses on the same machine where the adapter is running. It supports both dynamic auto-scaling (default) and fixed-pool mode, where a set number of workers are pre-spawned at startup.
+The Native worker manager provisions workers as local subprocesses on the same machine where the manager is running. It supports both dynamic auto-scaling (default) and fixed-pool mode, where a set number of workers are pre-spawned at startup.
 
 Getting Started
 ---------------
 
-To start the Native worker adapter, use the ``scaler_worker_manager_baremetal_native`` command.
+To start the Native worker manager, use the ``scaler_worker_manager_baremetal_native`` command.
 
 Example command:
 
@@ -33,7 +33,7 @@ Equivalent configuration using a TOML file:
     task_timeout_seconds = 60
 
 *   ``tcp://<SCHEDULER_IP>:8516`` is the address workers will use to connect to the scheduler.
-*   The adapter can spawn up to 4 worker subprocesses in dynamic mode.
+*   The manager can spawn up to 4 worker subprocesses in dynamic mode.
 
 To use fixed-pool mode, set ``--mode fixed`` and specify the exact number of workers:
 
@@ -48,9 +48,9 @@ To use fixed-pool mode, set ``--mode fixed`` and specify the exact number of wor
 How it Works
 ------------
 
-**Dynamic mode** (default): when the scheduler determines that more capacity is needed, it sends a request to the Native worker adapter. The adapter then spawns a new worker process using the same Python interpreter and environment that started the adapter. Each worker group managed by the Native adapter contains exactly one worker process.
+**Dynamic mode** (default): when the scheduler determines that more capacity is needed, it sends a request to the Native worker manager. The manager then spawns a new worker process using the same Python interpreter and environment that started the manager. Each worker group managed by the Native manager contains exactly one worker process.
 
-**Fixed mode**: all workers are pre-spawned at startup. The adapter runs a simple synchronous loop with no event loop or scheduler connector — it spawns the workers and waits for them to finish. Workers connect directly to the scheduler themselves. When all pre-spawned workers have exited, the adapter itself exits.
+**Fixed mode**: all workers are pre-spawned at startup. The manager runs a simple synchronous loop with no event loop or scheduler connector — it spawns the workers and waits for them to finish. Workers connect directly to the scheduler themselves. When all pre-spawned workers have exited, the manager itself exits.
 
 Supported Parameters
 --------------------
@@ -58,7 +58,7 @@ Supported Parameters
 .. note::
     For more details on how to configure Scaler, see the :doc:`../configuration` section.
 
-The Native worker adapter supports the following specific configuration parameters in addition to the common worker adapter parameters.
+The Native worker manager supports the following specific configuration parameters in addition to the common worker manager parameters.
 
 Native Configuration
 ~~~~~~~~~~~~~~~~~~~~

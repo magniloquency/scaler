@@ -6,7 +6,7 @@ import unittest
 from scaler import Client, SchedulerClusterCombo
 from scaler.config.common.logging import LoggingConfig
 from scaler.config.common.worker import WorkerConfig
-from scaler.config.common.worker_adapter import WorkerAdapterConfig
+from scaler.config.common.worker_manager import WorkerManagerConfig
 from scaler.config.defaults import (
     DEFAULT_GARBAGE_COLLECT_INTERVAL_SECONDS,
     DEFAULT_HEARTBEAT_INTERVAL_SECONDS,
@@ -17,12 +17,12 @@ from scaler.config.defaults import (
     DEFAULT_TASK_TIMEOUT_SECONDS,
     DEFAULT_TRIM_MEMORY_THRESHOLD_BYTES,
 )
-from scaler.config.section.native_worker_adapter import NativeWorkerManagerConfig, NativeWorkerManagerMode
+from scaler.config.section.native_worker_manager import NativeWorkerManagerConfig, NativeWorkerManagerMode
 from scaler.config.types.worker import WorkerCapabilities
 from scaler.config.types.zmq import ZMQConfig
 from scaler.utility.logging.utility import setup_logger
 from scaler.utility.network_util import get_available_tcp_port
-from scaler.worker_manager_adapter.baremetal.native import NativeWorkerAdapter
+from scaler.worker_manager_adapter.baremetal.native import NativeWorkerManager
 from tests.utility.utility import logging_test_name
 
 # This is a manual test because it can loop infinitely if it fails
@@ -36,9 +36,9 @@ class TestDeathTimeout(unittest.TestCase):
     def test_no_scheduler(self):
         logging.info("test with no scheduler")
         # Test 1: Spinning up a cluster with no scheduler. Death timeout should apply
-        adapter = NativeWorkerAdapter(
+        manager = NativeWorkerManager(
             NativeWorkerManagerConfig(
-                worker_adapter_config=WorkerAdapterConfig(
+                worker_manager_config=WorkerManagerConfig(
                     scheduler_address=ZMQConfig.from_string(f"tcp://127.0.0.1:{get_available_tcp_port()}"),
                     object_storage_address=None,
                     max_workers=2,
@@ -62,7 +62,7 @@ class TestDeathTimeout(unittest.TestCase):
                 ),
             )
         )
-        process = multiprocessing.Process(target=adapter.run)
+        process = multiprocessing.Process(target=manager.run)
         process.start()
         process.join()
 
