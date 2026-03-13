@@ -1,7 +1,9 @@
 import asyncio
+import json
 import logging
 import os
 import signal
+import tempfile
 import uuid
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -69,6 +71,7 @@ class ORBWorkerAdapter:
         self._logging_config_file = config.logging_config.config_file
 
         self._sdk: Optional[ORBClient] = None
+        self._config_temp_dir: Optional[tempfile.TemporaryDirectory] = None
         self._ec2: Optional[Any] = None
         self._context = None
         self._connector_external: Optional[AsyncConnector] = None
@@ -94,7 +97,11 @@ class ORBWorkerAdapter:
 
     async def __initialize(self):
         region = self._config.aws_region or "us-east-1"
-        self._sdk = ORBClient(app_config=self._build_app_config())
+        self._config_temp_dir = tempfile.TemporaryDirectory()
+        config_file = os.path.join(self._config_temp_dir.name, "config.json")
+        with open(config_file, "w") as f:
+            json.dump(self._build_app_config(), f)
+        self._sdk = ORBClient(config_path=config_file)
         await self._sdk.initialize()
 
         self._ec2 = boto3.client("ec2", region_name=region)
@@ -346,6 +353,10 @@ nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address
             except Exception as e:
                 logger.warning(f"SDK cleanup failed: {e}")
             self._sdk = None
+
+        if self._config_temp_dir is not None:
+            self._config_temp_dir.cleanup()
+            self._config_temp_dir = None
 
         if self._created_security_group_id is not None:
             try:
