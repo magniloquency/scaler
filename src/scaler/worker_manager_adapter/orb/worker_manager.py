@@ -82,7 +82,7 @@ class ORBWorkerAdapter:
         self._ident: bytes = b"worker_manager_orb|uninitialized"
         self._subnet_id: Optional[str] = None
 
-    def _build_app_config(self) -> dict:
+    def _build_app_config(self, data_dir: str) -> dict:
         region = self._config.aws_region or "us-east-1"
         return {
             "version": "2.0.0",
@@ -92,15 +92,20 @@ class ORBWorkerAdapter:
                     {"name": "aws-default", "type": "aws", "enabled": True, "priority": 1, "config": {"region": region}}
                 ],
             },
-            "storage": {"strategy": "sql", "sql_strategy": {"type": "sqlite", "name": ":memory:"}},
+            "storage": {
+                "strategy": "json",
+                "json_strategy": {"storage_type": "single_file", "base_path": data_dir},
+            },
         }
 
     async def __initialize(self):
         region = self._config.aws_region or "us-east-1"
         self._config_temp_dir = tempfile.TemporaryDirectory()
+        data_dir = os.path.join(self._config_temp_dir.name, "data")
+        os.makedirs(data_dir, exist_ok=True)
         config_file = os.path.join(self._config_temp_dir.name, "config.json")
         with open(config_file, "w") as f:
-            json.dump(self._build_app_config(), f)
+            json.dump(self._build_app_config(data_dir), f)
         # ORB_CONFIG_DIR is read by get_config_location() when ConfigurationManager()
         # is instantiated with no args inside create_container(). Setting it here
         # ensures the singleton picks up our config before any file-path arg would
