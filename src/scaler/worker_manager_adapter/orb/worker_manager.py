@@ -101,7 +101,12 @@ class ORBWorkerAdapter:
         config_file = os.path.join(self._config_temp_dir.name, "config.json")
         with open(config_file, "w") as f:
             json.dump(self._build_app_config(), f)
-        self._sdk = ORBClient(config_path=config_file)
+        # ORB_CONFIG_DIR is read by get_config_location() when ConfigurationManager()
+        # is instantiated with no args inside create_container(). Setting it here
+        # ensures the singleton picks up our config before any file-path arg would
+        # take effect (which is applied too late — after the singleton is already built).
+        os.environ["ORB_CONFIG_DIR"] = self._config_temp_dir.name
+        self._sdk = ORBClient()
         await self._sdk.initialize()
 
         self._ec2 = boto3.client("ec2", region_name=region)
@@ -357,6 +362,7 @@ nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address
         if self._config_temp_dir is not None:
             self._config_temp_dir.cleanup()
             self._config_temp_dir = None
+            os.environ.pop("ORB_CONFIG_DIR", None)
 
         if self._created_security_group_id is not None:
             try:
