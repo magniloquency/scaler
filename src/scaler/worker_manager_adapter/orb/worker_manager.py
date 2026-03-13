@@ -17,11 +17,11 @@ from scaler.io.utility import create_async_connector, create_async_simple_contex
 from scaler.io.ymq import ymq
 from scaler.protocol.python.message import (
     Message,
-    WorkerAdapterCommand,
-    WorkerAdapterCommandResponse,
-    WorkerAdapterCommandType,
-    WorkerAdapterHeartbeat,
-    WorkerAdapterHeartbeatEcho,
+    WorkerManagerCommand,
+    WorkerManagerCommandResponse,
+    WorkerManagerCommandType,
+    WorkerManagerHeartbeat,
+    WorkerManagerHeartbeatEcho,
 )
 from scaler.utility.event_loop import create_async_loop_routine, register_event_loop, run_task_forever
 from scaler.utility.identifiers import WorkerID
@@ -30,7 +30,7 @@ from scaler.worker_manager_adapter.common import WorkerGroupID, format_capabilit
 from scaler.worker_manager_adapter.orb.helper import ORBHelper
 from scaler.worker_manager_adapter.orb.types import ORBTemplate
 
-Status = WorkerAdapterCommandResponse.Status
+Status = WorkerManagerCommandResponse.Status
 logger = logging.getLogger(__name__)
 
 
@@ -84,7 +84,7 @@ class ORBWorkerAdapter:
         self._created_key_name: Optional[str] = None
         self._cleaned_up = False
         self._worker_groups: Dict[WorkerGroupID, WorkerID] = {}
-        self._ident: bytes = b"worker_adapter_orb|uninitialized"
+        self._ident: bytes = b"worker_manager_orb|uninitialized"
         self._subnet_id: Optional[str] = None
 
     def __initialize(self):
@@ -143,7 +143,7 @@ class ORBWorkerAdapter:
             json.dump({"templates": [template_dict]}, f, indent=4)
 
         self._context = create_async_simple_context()
-        self._name = "worker_adapter_orb"
+        self._name = "worker_manager_orb"
         self._ident = f"{self._name}|{uuid.uuid4().bytes.hex()}".encode()
 
         self._connector_external = create_async_connector(
@@ -157,36 +157,36 @@ class ORBWorkerAdapter:
         )
 
     async def __on_receive_external(self, message: Message):
-        if isinstance(message, WorkerAdapterCommand):
+        if isinstance(message, WorkerManagerCommand):
             await self._handle_command(message)
-        elif isinstance(message, WorkerAdapterHeartbeatEcho):
+        elif isinstance(message, WorkerManagerHeartbeatEcho):
             pass
         else:
             logging.warning(f"Received unknown message type: {type(message)}")
 
-    async def _handle_command(self, command: WorkerAdapterCommand):
+    async def _handle_command(self, command: WorkerManagerCommand):
         cmd_type = command.command
         worker_group_id = command.worker_group_id
         response_status = Status.Success
         worker_ids: List[bytes] = []
         capabilities: Dict[str, int] = {}
 
-        cmd_res = WorkerAdapterCommandType.StartWorkerGroup
-        if cmd_type == WorkerAdapterCommandType.StartWorkerGroup:
-            cmd_res = WorkerAdapterCommandType.StartWorkerGroup
+        cmd_res = WorkerManagerCommandType.StartWorkerGroup
+        if cmd_type == WorkerManagerCommandType.StartWorkerGroup:
+            cmd_res = WorkerManagerCommandType.StartWorkerGroup
             worker_group_id, response_status = await self.start_worker_group()
             if response_status == Status.Success:
                 worker_ids = [bytes(self._worker_groups[worker_group_id])]
                 capabilities = self._capabilities
-        elif cmd_type == WorkerAdapterCommandType.ShutdownWorkerGroup:
-            cmd_res = WorkerAdapterCommandType.ShutdownWorkerGroup
+        elif cmd_type == WorkerManagerCommandType.ShutdownWorkerGroup:
+            cmd_res = WorkerManagerCommandType.ShutdownWorkerGroup
             response_status = await self.shutdown_worker_group(worker_group_id)
         else:
             raise ValueError("Unknown Command")
 
         assert self._connector_external is not None
         await self._connector_external.send(
-            WorkerAdapterCommandResponse.new_msg(
+            WorkerManagerCommandResponse.new_msg(
                 worker_group_id=bytes(worker_group_id),
                 command=cmd_res,
                 status=response_status,
@@ -198,10 +198,11 @@ class ORBWorkerAdapter:
     async def __send_heartbeat(self):
         assert self._connector_external is not None
         await self._connector_external.send(
-            WorkerAdapterHeartbeat.new_msg(
+            WorkerManagerHeartbeat.new_msg(
                 max_worker_groups=self._max_workers,
                 workers_per_group=self._workers_per_group,
                 capabilities=self._capabilities,
+                worker_manager_id=self._ident,
             )
         )
 
@@ -250,16 +251,16 @@ class ORBWorkerAdapter:
         # TODO: Add support for multiple workers per machine if needed
         num_workers = 1
 
-        # Build the command
-        # We construct the full WorkerID here so it's deterministic and matches what the adapter calculates
-        # We fetch instance_id once and use it to construct the ID
+        # Build the command.
+        # NOTE: The worker IDs reported to the scheduler in StartWorkerGroup responses are computed
+        # deterministically from the EC2 instance ID, but the workers launched here will self-report
+        # different random IDs (Worker|ORB|<uuid>|<uuid>). Since workers connect to the scheduler
+        # independently in fixed mode, the scheduler won't notice this mismatch and tasks will still
+        # be processed correctly. Worker group membership tracking in the scheduler will be inaccurate.
         script = f"""#!/bin/bash
-INSTANCE_ID=$(ec2-metadata --instance-id --quiet)
-WORKER_NAME="{get_orb_worker_name('${INSTANCE_ID}')}"
-
 nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address()} \
     --num-of-workers {num_workers} \
-    --worker-names "${{WORKER_NAME}}" \
+    --worker-type ORB \
     --per-worker-task-queue-size {worker_config.per_worker_task_queue_size} \
     --heartbeat-interval-seconds {worker_config.heartbeat_interval_seconds} \
     --task-timeout-seconds {worker_config.task_timeout_seconds} \
@@ -267,8 +268,7 @@ nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address
     --death-timeout-seconds {worker_config.death_timeout_seconds} \
     --trim-memory-threshold-bytes {worker_config.trim_memory_threshold_bytes} \
     --event-loop {self._config.event_loop} \
-    --worker-io-threads {self._config.worker_io_threads} \
-    --deterministic-worker-ids"""
+    --worker-io-threads {self._config.worker_io_threads}"""
 
         if worker_config.hard_processor_suspend:
             script += " \
