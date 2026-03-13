@@ -98,8 +98,28 @@ class ORBWorkerAdapter:
             },
         }
 
+    @staticmethod
+    def _patch_orb_template_repository() -> None:
+        """Monkey-patch ORB bug: TemplateRepositoryImpl.get_by_id calls template_id.value
+        but template_handlers.py passes command.template_id as a plain str.
+        Patch accepts both str and TemplateId value objects without modifying ORB files.
+        """
+        from orb.infrastructure.storage.repositories.template_repository import TemplateRepositoryImpl
+
+        original_get_by_id = TemplateRepositoryImpl.get_by_id
+
+        def _get_by_id(self, template_id):
+            if not hasattr(template_id, "value"):
+                class _StrId:
+                    value = str(template_id)
+                template_id = _StrId()
+            return original_get_by_id(self, template_id)
+
+        TemplateRepositoryImpl.get_by_id = _get_by_id
+
     async def __initialize(self):
         region = self._config.aws_region or "us-east-1"
+        self._patch_orb_template_repository()
         self._config_temp_dir = tempfile.TemporaryDirectory()
         data_dir = os.path.join(self._config_temp_dir.name, "data")
         os.makedirs(data_dir, exist_ok=True)
