@@ -4,7 +4,7 @@ from typing import List, Optional
 from scaler.config import defaults
 from scaler.config.common.logging import LoggingConfig
 from scaler.config.common.worker import WorkerConfig
-from scaler.config.common.worker_adapter import WorkerAdapterConfig
+from scaler.config.common.worker_manager import WorkerManagerConfig
 from scaler.config.config_class import ConfigClass
 from scaler.utility.event_loop import EventLoopType
 
@@ -13,7 +13,7 @@ from scaler.utility.event_loop import EventLoopType
 class ORBWorkerAdapterConfig(ConfigClass):
     """Configuration for the ORB worker adapter."""
 
-    worker_adapter_config: WorkerAdapterConfig
+    worker_manager_config: WorkerManagerConfig
 
     # ORB Template configuration
     image_id: str = dataclasses.field(metadata=dict(help="AMI ID for the worker instances", required=True))

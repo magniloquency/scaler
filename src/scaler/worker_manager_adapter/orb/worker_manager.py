@@ -57,10 +57,10 @@ class ORBWorkerAdapter:
 
     def __init__(self, config: ORBWorkerAdapterConfig):
         self._config = config
-        self._address = config.worker_adapter_config.scheduler_address
+        self._address = config.worker_manager_config.scheduler_address
         self._heartbeat_interval_seconds = config.worker_config.heartbeat_interval_seconds
         self._capabilities = config.worker_config.per_worker_capabilities.capabilities
-        self._max_workers = config.worker_adapter_config.max_workers
+        self._max_workers = config.worker_manager_config.max_workers
         self._workers_per_group = 1
 
         self._event_loop = config.event_loop
@@ -119,7 +119,7 @@ class ORBWorkerAdapter:
             provider_api="RunInstances",
             instance_type=self._config.instance_type,
             configuration={
-                "max_instances": self._config.worker_adapter_config.max_workers,
+                "max_instances": self._config.worker_manager_config.max_workers,
                 "provider_name": "aws-default",
                 "machine_types": {self._config.instance_type: 1},
                 "subnet_ids": [self._subnet_id],
@@ -240,7 +240,7 @@ class ORBWorkerAdapter:
 
     def _create_user_data(self) -> str:
         worker_config = self._config.worker_config
-        adapter_config = self._config.worker_adapter_config
+        adapter_config = self._config.worker_manager_config
 
         # We assume 1 worker per machine for ORB
         # TODO: Add support for multiple workers per machine if needed
