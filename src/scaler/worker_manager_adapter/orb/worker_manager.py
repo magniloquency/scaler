@@ -131,6 +131,10 @@ class ORBWorkerAdapter:
             provider_api="RunInstances",
             instance_type=self._config.instance_type,
             configuration={
+                "template_id": self._template_id,
+                "image_id": self._config.image_id,
+                "provider_api": "RunInstances",
+                "instance_type": self._config.instance_type,
                 "max_instances": self._config.worker_manager_config.max_workers,
                 "provider_name": "aws-default",
                 "machine_types": {self._config.instance_type: 1},
