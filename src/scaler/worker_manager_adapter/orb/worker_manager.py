@@ -1,15 +1,13 @@
 import asyncio
-import json
 import logging
 import os
 import signal
-import time
 import uuid
-from dataclasses import asdict
 from typing import Any, Dict, List, Optional, Tuple
 
 import boto3
 import zmq
+from orb import ORBClient
 
 from scaler.config.section.orb_worker_adapter import ORBWorkerAdapterConfig
 from scaler.io.mixins import AsyncConnector
@@ -27,8 +25,6 @@ from scaler.utility.event_loop import create_async_loop_routine, register_event_
 from scaler.utility.identifiers import WorkerID
 from scaler.utility.logging.utility import setup_logger
 from scaler.worker_manager_adapter.common import WorkerGroupID, format_capabilities
-from scaler.worker_manager_adapter.orb.helper import ORBHelper
-from scaler.worker_manager_adapter.orb.types import ORBTemplate
 
 Status = WorkerManagerCommandResponse.Status
 logger = logging.getLogger(__name__)
@@ -52,7 +48,7 @@ def get_orb_worker_name(instance_id: str) -> str:
 
 class ORBWorkerAdapter:
     _config: ORBWorkerAdapterConfig
-    _orb: Optional[ORBHelper]
+    _sdk: Optional[ORBClient]
     _worker_groups: Dict[WorkerGroupID, WorkerID]
     _template_id: str
     _created_security_group_id: Optional[str]
@@ -72,11 +68,7 @@ class ORBWorkerAdapter:
         self._logging_level = config.logging_config.level
         self._logging_config_file = config.logging_config.config_file
 
-        source_orb_root = os.path.abspath(config.orb_config_path)
-        if not os.path.isdir(source_orb_root):
-            raise NotADirectoryError(f"orb_config_path must be a directory: {source_orb_root}")
-
-        self._orb: Optional[ORBHelper] = None
+        self._sdk: Optional[ORBClient] = None
         self._ec2: Optional[Any] = None
         self._context = None
         self._connector_external: Optional[AsyncConnector] = None
@@ -87,15 +79,26 @@ class ORBWorkerAdapter:
         self._ident: bytes = b"worker_manager_orb|uninitialized"
         self._subnet_id: Optional[str] = None
 
-    def __initialize(self):
-        source_orb_root = os.path.abspath(self._config.orb_config_path)
+    def _build_app_config(self) -> dict:
         region = self._config.aws_region or "us-east-1"
-        self._orb = ORBHelper(config_root_path=source_orb_root, region=region)
+        return {
+            "version": "2.0.0",
+            "provider": {
+                "selection_policy": "FIRST_AVAILABLE",
+                "providers": [
+                    {"name": "aws-default", "type": "aws", "enabled": True, "priority": 1, "config": {"region": region}}
+                ],
+            },
+            "storage": {"strategy": "sql", "sql_strategy": {"type": "sqlite", "name": ":memory:"}},
+        }
+
+    async def __initialize(self):
+        region = self._config.aws_region or "us-east-1"
+        self._sdk = ORBClient(app_config=self._build_app_config())
+        await self._sdk.initialize()
 
         self._ec2 = boto3.client("ec2", region_name=region)
-
         self._subnet_id = self._config.subnet_id or self._discover_default_subnet()
-
         self._template_id = os.urandom(8).hex()
 
         security_group_ids = self._config.security_group_ids
@@ -109,38 +112,30 @@ class ORBWorkerAdapter:
             key_name = self._created_key_name
 
         user_data = self._create_user_data()
-        user_data_file_path = os.path.join(self._orb.cwd, "config", "user_data.sh")
-        with open(user_data_file_path, "w") as f:
-            f.write(user_data)
 
-        template = ORBTemplate(
+        await self._sdk.create_template(
             template_id=self._template_id,
-            max_number=self._config.worker_adapter_config.max_workers,
-            provider_api="RunInstances",
-            provider_name="aws-default",
             image_id=self._config.image_id,
-            vm_type=self._config.instance_type,
-            instance_types={self._config.instance_type: 1},
-            subnet_ids=[self._subnet_id],
-            security_group_ids=security_group_ids,
-            key_name=key_name,
-            user_data_script=user_data_file_path,
-            metadata={
-                "attributes": {
-                    "type": ["String", "X86_64"],
-                    "ncpus": ["Numeric", "1"],
-                    "nram": ["Numeric", "1024"],
-                    "ncores": ["Numeric", "1"],
-                }
+            provider_api="RunInstances",
+            instance_type=self._config.instance_type,
+            configuration={
+                "max_instances": self._config.worker_adapter_config.max_workers,
+                "provider_name": "aws-default",
+                "machine_types": {self._config.instance_type: 1},
+                "subnet_ids": [self._subnet_id],
+                "security_group_ids": security_group_ids,
+                "key_name": key_name,
+                "user_data": user_data,
+                "metadata": {
+                    "attributes": {
+                        "type": ["String", "X86_64"],
+                        "ncpus": ["Numeric", "1"],
+                        "nram": ["Numeric", "1024"],
+                        "ncores": ["Numeric", "1"],
+                    }
+                },
             },
         )
-
-        # Create template in ORB
-        # Use the cwd from ORBHelper to place the templates file
-        templates_file_path = os.path.join(self._orb.cwd, "config", "templates.json")
-        with open(templates_file_path, "w") as f:
-            template_dict = asdict(template)
-            json.dump({"templates": [template_dict]}, f, indent=4)
 
         self._context = create_async_simple_context()
         self._name = "worker_manager_orb"
@@ -221,7 +216,7 @@ class ORBWorkerAdapter:
     async def _run(self) -> None:
         register_event_loop(self._event_loop)
         setup_logger(self._logging_paths, self._logging_config_file, self._logging_level)
-        self.__initialize()
+        await self.__initialize()
         self._task = self._loop.create_task(self.__get_loops())
         self.__register_signal()
         await self._task
@@ -335,16 +330,22 @@ nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address
         logger.info("Starting cleanup of ORB and AWS resources...")
 
         # 1. Shutdown all active worker groups (terminate instances)
-        if self._worker_groups and self._orb is not None:
+        if self._worker_groups and self._sdk is not None:
             logger.info(f"Terminating {len(self._worker_groups)} worker groups...")
             instance_ids = [wg_id.decode() for wg_id in self._worker_groups.keys()]
             try:
-                # Use ORB to return (terminate) the machines
-                self._orb.machines.return_machines(instance_ids)
+                self._loop.run_until_complete(self._sdk.create_return_request(machine_ids=instance_ids))
                 logger.info(f"Successfully requested termination of instances: {instance_ids}")
             except Exception as e:
                 logger.warning(f"Failed to terminate instances during cleanup: {e}")
             self._worker_groups.clear()
+
+        if self._sdk is not None:
+            try:
+                self._loop.run_until_complete(self._sdk.cleanup())
+            except Exception as e:
+                logger.warning(f"SDK cleanup failed: {e}")
+            self._sdk = None
 
         if self._created_security_group_id is not None:
             try:
@@ -365,24 +366,23 @@ nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address
     def __del__(self):
         self._cleanup()
 
-    def _poll_for_instance_id(self, request_id: str) -> Optional[str]:
+    async def _poll_for_instance_id(self, request_id: str) -> Optional[str]:
         for _ in range(ORB_MAX_POLLING_ATTEMPTS):
-            status_response = self._orb.requests.show(request_id)
-            logger.debug(f"ORB polling response for {request_id}: {status_response}")
+            response = await self._sdk.get_request(request_id=request_id)
+            logger.debug(f"ORB polling response for {request_id}: {response}")
 
-            instance_ids = status_response.get_instance_ids()
+            instance_ids = response.get("machine_ids") or []
             if instance_ids:
                 logger.info(f"ORB request {request_id} fulfilled with instance IDs: {instance_ids}")
                 return instance_ids[0]
 
-            if status_response.status in ["failed", "cancelled", "timeout"]:
-                error_msg = status_response.status_message or "Unknown failure"
-                logger.error(
-                    f"ORB machine request {request_id} failed with status '{status_response.status}': {error_msg}"
-                )
+            status = response.get("status", "")
+            if status in ("failed", "cancelled", "timeout"):
+                error_msg = response.get("status_message") or response.get("message") or "Unknown failure"
+                logger.error(f"ORB machine request {request_id} failed with status '{status}': {error_msg}")
                 return None
 
-            time.sleep(ORB_POLLING_INTERVAL_SECONDS)
+            await asyncio.sleep(ORB_POLLING_INTERVAL_SECONDS)
 
         timeout_seconds = ORB_MAX_POLLING_ATTEMPTS * ORB_POLLING_INTERVAL_SECONDS
         logger.error(f"ORB machine request {request_id} timed out waiting for instance IDs after {timeout_seconds}s.")
@@ -392,17 +392,16 @@ nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address
         if len(self._worker_groups) >= self._max_workers != -1:
             return b"", Status.WorkerGroupTooMuch
 
-        # Request a machine. Note: wait and timeout flags in ORB CLI are currently ignored by the handler,
-        # so we must handle the polling ourselves.
-        response = self._orb.machines.request(template_id=self._template_id, count=1)
+        response = await self._sdk.create_request(template_id=self._template_id, count=1)
+        request_id = (response or {}).get("created_request_id")
 
-        if not response.request_id:
+        if not request_id:
             logger.error(f"ORB machine request failed to return a request ID. Response: {response}")
             return b"", Status.UnknownAction
 
-        logger.info(f"ORB machine request {response.request_id} submitted, polling for instance IDs...")
+        logger.info(f"ORB machine request {request_id} submitted, polling for instance IDs...")
 
-        instance_id = await self._loop.run_in_executor(None, lambda: self._poll_for_instance_id(response.request_id))
+        instance_id = await self._poll_for_instance_id(request_id)
         if not instance_id:
             return b"", Status.UnknownAction
 
@@ -423,7 +422,7 @@ nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address
             return Status.WorkerGroupIDNotFound
 
         instance_id = worker_group_id.decode()
-        self._orb.machines.return_machines([instance_id])
+        await self._sdk.create_return_request(machine_ids=[instance_id])
 
         del self._worker_groups[worker_group_id]
         return Status.Success

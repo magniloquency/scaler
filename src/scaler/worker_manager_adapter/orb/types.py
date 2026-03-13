@@ -4,48 +4,6 @@ from typing import Any, Dict, List, Optional
 
 
 @dataclass
-class ORBTemplate:
-    template_id: str
-    name: Optional[str] = None
-    description: Optional[str] = None
-    vm_type: Optional[str] = None
-    image_id: Optional[str] = None
-    max_number: int = 1
-    subnet_id: Optional[str] = None
-    subnet_ids: List[str] = field(default_factory=list)
-    security_group_ids: List[str] = field(default_factory=list)
-    price_type: str = "ondemand"
-    allocation_strategy: str = "lowest_price"
-    max_price: Optional[float] = None
-    instance_types: Dict[str, int] = field(default_factory=dict)
-    primary_instance_type: Optional[str] = None
-    network_zones: List[str] = field(default_factory=list)
-    public_ip_assignment: Optional[bool] = None
-    root_volume_size: Optional[int] = None
-    root_volume_type: Optional[str] = None
-    root_volume_iops: Optional[int] = None
-    root_volume_throughput: Optional[int] = None
-    storage_encryption: Optional[bool] = None
-    encryption_key: Optional[str] = None
-    key_pair_name: Optional[str] = None
-    user_data_script: Optional[str] = None
-    instance_profile: Optional[str] = None
-    monitoring_enabled: Optional[bool] = None
-    tags: Dict[str, Any] = field(default_factory=dict)
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    launch_template_spec: Optional[Dict[str, Any]] = None
-    provider_api_spec: Optional[Dict[str, Any]] = None
-    provider_type: Optional[str] = None
-    provider_name: Optional[str] = None
-    provider_api: Optional[str] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-    is_active: bool = True
-    vm_types: Dict[str, Any] = field(default_factory=dict)
-    key_name: Optional[str] = None
-
-
-@dataclass
 class ORBMachine:
     machine_id: str = ""
     instance_id: str = ""
