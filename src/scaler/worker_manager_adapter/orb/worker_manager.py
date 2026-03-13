@@ -100,9 +100,10 @@ class ORBWorkerAdapter:
 
     @staticmethod
     def _patch_orb_template_repository() -> None:
-        """Monkey-patch ORB bug: TemplateRepositoryImpl.get_by_id calls template_id.value
-        but template_handlers.py passes command.template_id as a plain str.
-        Patch accepts both str and TemplateId value objects without modifying ORB files.
+        """Monkey-patch two API mismatches in ORB 1.2.2's TemplateRepositoryImpl:
+        - get_by_id: handler passes command.template_id (str) but method calls .value on it
+        - add: handler calls uow.templates.add() but repository only has save()
+        Both are broken in the installed release without modifying ORB files.
         """
         from orb.infrastructure.storage.repositories.template_repository import TemplateRepositoryImpl
 
@@ -116,6 +117,9 @@ class ORBWorkerAdapter:
             return original_get_by_id(self, template_id)
 
         TemplateRepositoryImpl.get_by_id = _get_by_id
+
+        if not hasattr(TemplateRepositoryImpl, "add"):
+            TemplateRepositoryImpl.add = TemplateRepositoryImpl.save
 
     async def __initialize(self):
         region = self._config.aws_region or "us-east-1"
