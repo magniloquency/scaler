@@ -254,19 +254,16 @@ class ORBWorkerAdapter:
         worker_config = self._config.worker_config
         adapter_config = self._config.worker_manager_config
 
-        # We assume 1 worker per machine for ORB
-        # TODO: Add support for multiple workers per machine if needed
-        num_workers = 1
-
         # Build the command.
         # NOTE: The worker IDs reported to the scheduler in StartWorkers responses are computed
         # deterministically from the EC2 instance ID, but the workers launched here will self-report
         # different random IDs (Worker|ORB|<uuid>|<uuid>). Since workers connect to the scheduler
         # independently in fixed mode, the scheduler won't notice this mismatch and tasks will still
         # be processed correctly. Worker membership tracking in the scheduler will be inaccurate.
+        # NOTE: --num-of-workers is not passed; scaler_cluster defaults to cpu_count - 1 workers,
+        # where cpu_count is determined by the machine type configured by the user.
         script = f"""#!/bin/bash
 nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address()} \
-    --num-of-workers {num_workers} \
     --worker-type ORB \
     --per-worker-task-queue-size {worker_config.per_worker_task_queue_size} \
     --heartbeat-interval-seconds {worker_config.heartbeat_interval_seconds} \
