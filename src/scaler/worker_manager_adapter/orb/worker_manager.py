@@ -12,7 +12,7 @@ from orb import ORBClient as orb
 from scaler.config.section.orb_worker_adapter import ORBWorkerAdapterConfig
 from scaler.io.mixins import AsyncConnector
 from scaler.io.utility import create_async_connector, create_async_simple_context
-from scaler.io.ymq import ymq
+from scaler.io import ymq
 from scaler.protocol.python.message import (
     Message,
     WorkerManagerCommand,
