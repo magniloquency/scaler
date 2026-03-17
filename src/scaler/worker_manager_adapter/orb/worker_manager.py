@@ -254,12 +254,6 @@ class ORBWorkerAdapter:
         worker_config = self._config.worker_config
         adapter_config = self._config.worker_manager_config
 
-        # Build the command.
-        # NOTE: The worker IDs reported to the scheduler in StartWorkers responses are computed
-        # deterministically from the EC2 instance ID, but the workers launched here will self-report
-        # different random IDs (Worker|ORB|<uuid>|<uuid>). Since workers connect to the scheduler
-        # independently in fixed mode, the scheduler won't notice this mismatch and tasks will still
-        # be processed correctly. Worker membership tracking in the scheduler will be inaccurate.
         # NOTE: --num-of-workers is not passed; scaler_cluster defaults to cpu_count - 1 workers,
         # where cpu_count is determined by the machine type configured by the user.
         script = f"""#!/bin/bash
