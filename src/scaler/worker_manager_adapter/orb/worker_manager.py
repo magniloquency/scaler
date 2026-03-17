@@ -111,29 +111,24 @@ class ORBWorkerAdapter:
 
         await self._sdk.create_template(
             template_id=self._template_id,
+            name=f"opengris-orb-{self._template_id}",
             image_id=self._config.image_id,
             provider_api="RunInstances",
             instance_type=self._config.instance_type,
-            configuration={
-                "template_id": self._template_id,
-                "image_id": self._config.image_id,
-                "provider_api": "RunInstances",
-                "instance_type": self._config.instance_type,
-                "max_instances": self._config.worker_manager_config.max_task_concurrency,
-                "provider_name": "aws-default",
-                "machine_types": {self._config.instance_type: 1},
-                "subnet_ids": [self._subnet_id],
-                "security_group_ids": security_group_ids,
-                "key_name": key_name,
-                "user_data": user_data,
-                "metadata": {
-                    "attributes": {
-                        "type": ["String", "X86_64"],
-                        "ncpus": ["Numeric", "1"],
-                        "nram": ["Numeric", "1024"],
-                        "ncores": ["Numeric", "1"],
-                    }
-                },
+            max_instances=self._config.worker_manager_config.max_task_concurrency,
+            provider_name="aws-default",
+            machine_types={self._config.instance_type: 1},
+            subnet_ids=[self._subnet_id],
+            security_group_ids=security_group_ids,
+            key_name=key_name,
+            user_data=user_data,
+            metadata={
+                "attributes": {
+                    "type": ["String", "X86_64"],
+                    "ncpus": ["Numeric", "1"],
+                    "nram": ["Numeric", "1024"],
+                    "ncores": ["Numeric", "1"],
+                }
             },
         )
 
