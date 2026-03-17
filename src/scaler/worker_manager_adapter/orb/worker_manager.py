@@ -24,7 +24,7 @@ from scaler.protocol.python.message import (
 from scaler.utility.event_loop import create_async_loop_routine, register_event_loop, run_task_forever
 from scaler.utility.identifiers import WorkerID
 from scaler.utility.logging.utility import setup_logger
-from scaler.worker_manager_adapter.common import WorkerGroupID, format_capabilities
+from scaler.worker_manager_adapter.common import format_capabilities
 
 Status = WorkerManagerCommandResponse.Status
 logger = logging.getLogger(__name__)
@@ -49,7 +49,7 @@ def get_orb_worker_name(instance_id: str) -> str:
 class ORBWorkerAdapter:
     _config: ORBWorkerAdapterConfig
     _sdk: Optional[Any]
-    _worker_groups: Dict[WorkerGroupID, WorkerID]
+    _worker_groups: Dict[WorkerID, str]
     _template_id: str
     _created_security_group_id: Optional[str]
     _created_key_name: Optional[str]
@@ -60,8 +60,7 @@ class ORBWorkerAdapter:
         self._address = config.worker_manager_config.scheduler_address
         self._heartbeat_interval_seconds = config.worker_config.heartbeat_interval_seconds
         self._capabilities = config.worker_config.per_worker_capabilities.capabilities
-        self._max_workers = config.worker_manager_config.max_workers
-        self._workers_per_group = 1
+        self._max_task_concurrency = config.worker_manager_config.max_task_concurrency
 
         self._event_loop = config.event_loop
         self._logging_paths = config.logging_config.paths
@@ -75,7 +74,7 @@ class ORBWorkerAdapter:
         self._created_security_group_id: Optional[str] = None
         self._created_key_name: Optional[str] = None
         self._cleaned_up = False
-        self._worker_groups: Dict[WorkerGroupID, WorkerID] = {}
+        self._worker_groups: Dict[WorkerID, str] = {}
         self._ident: bytes = b"worker_manager_orb|uninitialized"
         self._subnet_id: Optional[str] = None
 
@@ -120,7 +119,7 @@ class ORBWorkerAdapter:
                 "image_id": self._config.image_id,
                 "provider_api": "RunInstances",
                 "instance_type": self._config.instance_type,
-                "max_instances": self._config.worker_manager_config.max_workers,
+                "max_instances": self._config.worker_manager_config.max_task_concurrency,
                 "provider_name": "aws-default",
                 "machine_types": {self._config.instance_type: 1},
                 "subnet_ids": [self._subnet_id],
@@ -156,7 +155,7 @@ class ORBWorkerAdapter:
         """Return all active instances to ORB before the SDK context exits."""
         if not self._worker_groups or self._sdk is None:
             return
-        instance_ids = [wg_id.decode() for wg_id in self._worker_groups.keys()]
+        instance_ids = list(self._worker_groups.values())
         logger.info(f"Terminating {len(instance_ids)} worker group(s)...")
         try:
             await self._sdk.create_return_request(machine_ids=instance_ids)
@@ -175,32 +174,23 @@ class ORBWorkerAdapter:
 
     async def _handle_command(self, command: WorkerManagerCommand):
         cmd_type = command.command
-        worker_group_id = command.worker_group_id
         response_status = Status.Success
         worker_ids: List[bytes] = []
         capabilities: Dict[str, int] = {}
 
-        cmd_res = WorkerManagerCommandType.StartWorkerGroup
-        if cmd_type == WorkerManagerCommandType.StartWorkerGroup:
-            cmd_res = WorkerManagerCommandType.StartWorkerGroup
-            worker_group_id, response_status = await self.start_worker_group()
+        if cmd_type == WorkerManagerCommandType.StartWorkers:
+            worker_ids, response_status = await self.start_worker()
             if response_status == Status.Success:
-                worker_ids = [bytes(self._worker_groups[worker_group_id])]
                 capabilities = self._capabilities
-        elif cmd_type == WorkerManagerCommandType.ShutdownWorkerGroup:
-            cmd_res = WorkerManagerCommandType.ShutdownWorkerGroup
-            response_status = await self.shutdown_worker_group(worker_group_id)
+        elif cmd_type == WorkerManagerCommandType.ShutdownWorkers:
+            worker_ids, response_status = await self.shutdown_workers(list(command.worker_ids))
         else:
             raise ValueError("Unknown Command")
 
         assert self._connector_external is not None
         await self._connector_external.send(
             WorkerManagerCommandResponse.new_msg(
-                worker_group_id=bytes(worker_group_id),
-                command=cmd_res,
-                status=response_status,
-                worker_ids=worker_ids,
-                capabilities=capabilities,
+                command=cmd_type, status=response_status, worker_ids=worker_ids, capabilities=capabilities
             )
         )
 
@@ -208,8 +198,7 @@ class ORBWorkerAdapter:
         assert self._connector_external is not None
         await self._connector_external.send(
             WorkerManagerHeartbeat.new_msg(
-                max_worker_groups=self._max_workers,
-                workers_per_group=self._workers_per_group,
+                max_task_concurrency=self._max_task_concurrency,
                 capabilities=self._capabilities,
                 worker_manager_id=self._ident,
             )
@@ -271,11 +260,11 @@ class ORBWorkerAdapter:
         num_workers = 1
 
         # Build the command.
-        # NOTE: The worker IDs reported to the scheduler in StartWorkerGroup responses are computed
+        # NOTE: The worker IDs reported to the scheduler in StartWorkers responses are computed
         # deterministically from the EC2 instance ID, but the workers launched here will self-report
         # different random IDs (Worker|ORB|<uuid>|<uuid>). Since workers connect to the scheduler
         # independently in fixed mode, the scheduler won't notice this mismatch and tasks will still
-        # be processed correctly. Worker group membership tracking in the scheduler will be inaccurate.
+        # be processed correctly. Worker membership tracking in the scheduler will be inaccurate.
         script = f"""#!/bin/bash
 nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address()} \
     --num-of-workers {num_workers} \
@@ -372,9 +361,9 @@ nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address
     def __del__(self):
         self._cleanup()
 
-    async def start_worker_group(self) -> Tuple[WorkerGroupID, Status]:
-        if len(self._worker_groups) >= self._max_workers != -1:
-            return b"", Status.WorkerGroupTooMuch
+    async def start_worker(self) -> Tuple[List[bytes], Status]:
+        if len(self._worker_groups) >= self._max_task_concurrency != -1:
+            return [], Status.TooManyWorkers
 
         response = await self._sdk.create_request(template_id=self._template_id, count=1)
         request_id = (
@@ -385,48 +374,51 @@ nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address
 
         if not request_id:
             logger.error(f"ORB machine request failed to return a request ID. Response: {response}")
-            return b"", Status.UnknownAction
+            return [], Status.UnknownAction
 
         logger.info(f"ORB machine request {request_id} submitted, waiting for instance IDs...")
 
         timeout = float(ORB_MAX_POLLING_ATTEMPTS * ORB_POLLING_INTERVAL_SECONDS)
         try:
             final = await self._sdk.wait_for_request(
-                request_id,
-                timeout=timeout,
-                poll_interval=float(ORB_POLLING_INTERVAL_SECONDS),
+                request_id, timeout=timeout, poll_interval=float(ORB_POLLING_INTERVAL_SECONDS)
             )
         except TimeoutError:
             logger.error(f"ORB machine request {request_id} timed out after {timeout:.0f}s.")
-            return b"", Status.UnknownAction
+            return [], Status.UnknownAction
 
         machines = final.get("machines", []) if isinstance(final, dict) else []
         instance_id = next(
-            (m.get("machine_id") or m.get("id") for m in machines if m.get("machine_id") or m.get("id")),
-            None,
+            (m.get("machine_id") or m.get("id") for m in machines if m.get("machine_id") or m.get("id")), None
         )
 
         if not instance_id:
             status = final.get("status", "") if isinstance(final, dict) else ""
             logger.error(f"ORB request {request_id} completed with status '{status}' but no instance ID found.")
-            return b"", Status.UnknownAction
+            return [], Status.UnknownAction
 
         logger.info(f"ORB request {request_id} fulfilled with instance ID: {instance_id}")
-        worker_group_id = instance_id.encode()
         worker_id = WorkerID(get_orb_worker_name(instance_id).encode())
-        self._worker_groups[worker_group_id] = worker_id
-        return worker_group_id, Status.Success
+        self._worker_groups[worker_id] = instance_id
+        return [bytes(worker_id)], Status.Success
 
-    async def shutdown_worker_group(self, worker_group_id: WorkerGroupID) -> Status:
-        if not worker_group_id:
-            return Status.WorkerGroupIDNotSpecified
+    async def shutdown_workers(self, worker_ids: List[bytes]) -> Tuple[List[bytes], Status]:
+        if not worker_ids:
+            return [], Status.WorkerNotFound
 
-        if worker_group_id not in self._worker_groups:
-            logger.warning(f"Worker group with ID {bytes(worker_group_id).decode()} does not exist.")
-            return Status.WorkerGroupIDNotFound
+        instance_ids = []
+        affected_worker_ids = []
+        for wid_bytes in worker_ids:
+            worker_id = WorkerID(wid_bytes)
+            if worker_id not in self._worker_groups:
+                logger.warning(f"Worker with ID {wid_bytes!r} does not exist.")
+                return [], Status.WorkerNotFound
+            instance_ids.append(self._worker_groups[worker_id])
+            affected_worker_ids.append(wid_bytes)
 
-        instance_id = worker_group_id.decode()
-        await self._sdk.create_return_request(machine_ids=[instance_id])
+        await self._sdk.create_return_request(machine_ids=instance_ids)
 
-        del self._worker_groups[worker_group_id]
-        return Status.Success
+        for wid_bytes in affected_worker_ids:
+            del self._worker_groups[WorkerID(wid_bytes)]
+
+        return affected_worker_ids, Status.Success
