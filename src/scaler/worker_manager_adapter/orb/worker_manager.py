@@ -49,7 +49,7 @@ def get_orb_worker_name(instance_id: str) -> str:
 class ORBWorkerAdapter:
     _config: ORBWorkerAdapterConfig
     _sdk: Optional[Any]
-    _worker_groups: Dict[WorkerID, str]
+    _workers: Dict[WorkerID, str]
     _template_id: str
     _created_security_group_id: Optional[str]
     _created_key_name: Optional[str]
@@ -74,7 +74,7 @@ class ORBWorkerAdapter:
         self._created_security_group_id: Optional[str] = None
         self._created_key_name: Optional[str] = None
         self._cleaned_up = False
-        self._worker_groups: Dict[WorkerID, str] = {}
+        self._workers: Dict[WorkerID, str] = {}
         self._ident: bytes = b"worker_manager_orb|uninitialized"
         self._subnet_id: Optional[str] = None
 
@@ -152,16 +152,16 @@ class ORBWorkerAdapter:
 
     async def __terminate_all_workers(self) -> None:
         """Return all active instances to ORB before the SDK context exits."""
-        if not self._worker_groups or self._sdk is None:
+        if not self._workers or self._sdk is None:
             return
-        instance_ids = list(self._worker_groups.values())
+        instance_ids = list(self._workers.values())
         logger.info(f"Terminating {len(instance_ids)} worker group(s)...")
         try:
             await self._sdk.create_return_request(machine_ids=instance_ids)
             logger.info(f"Successfully requested termination of instances: {instance_ids}")
         except Exception as e:
             logger.warning(f"Failed to terminate instances during cleanup: {e}")
-        self._worker_groups.clear()
+        self._workers.clear()
 
     async def __on_receive_external(self, message: Message):
         if isinstance(message, WorkerManagerCommand):
@@ -361,7 +361,7 @@ nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address
         self._cleanup()
 
     async def start_worker(self) -> Tuple[List[bytes], Status]:
-        if len(self._worker_groups) >= self._max_task_concurrency != -1:
+        if len(self._workers) >= self._max_task_concurrency != -1:
             return [], Status.TooManyWorkers
 
         response = await self._sdk.create_request(template_id=self._template_id, count=1)
@@ -398,7 +398,7 @@ nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address
 
         logger.info(f"ORB request {request_id} fulfilled with instance ID: {instance_id}")
         worker_id = WorkerID(get_orb_worker_name(instance_id).encode())
-        self._worker_groups[worker_id] = instance_id
+        self._workers[worker_id] = instance_id
         return [bytes(worker_id)], Status.Success
 
     async def shutdown_workers(self, worker_ids: List[bytes]) -> Tuple[List[bytes], Status]:
@@ -409,15 +409,15 @@ nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address
         affected_worker_ids = []
         for wid_bytes in worker_ids:
             worker_id = WorkerID(wid_bytes)
-            if worker_id not in self._worker_groups:
+            if worker_id not in self._workers:
                 logger.warning(f"Worker with ID {wid_bytes!r} does not exist.")
                 return [], Status.WorkerNotFound
-            instance_ids.append(self._worker_groups[worker_id])
+            instance_ids.append(self._workers[worker_id])
             affected_worker_ids.append(wid_bytes)
 
         await self._sdk.create_return_request(machine_ids=instance_ids)
 
         for wid_bytes in affected_worker_ids:
-            del self._worker_groups[WorkerID(wid_bytes)]
+            del self._workers[WorkerID(wid_bytes)]
 
         return affected_worker_ids, Status.Success
