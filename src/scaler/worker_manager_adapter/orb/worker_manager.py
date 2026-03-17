@@ -109,7 +109,7 @@ class ORBWorkerAdapter:
 
         user_data = self._create_user_data()
 
-        await self._sdk.create_template(
+        create_result = await self._sdk.create_template(
             template_id=self._template_id,
             name=f"opengris-orb-{self._template_id}",
             image_id=self._config.image_id,
@@ -131,6 +131,10 @@ class ORBWorkerAdapter:
                 }
             },
         )
+        logger.info(f"create_template result: {create_result}")
+
+        validate_result = await self._sdk.validate_template(template_id=self._template_id)
+        logger.info(f"validate_template result: {validate_result}")
 
         self._context = create_async_simple_context()
         self._name = "worker_manager_orb"
