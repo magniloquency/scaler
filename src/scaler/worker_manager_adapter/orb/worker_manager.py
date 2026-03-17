@@ -122,14 +122,6 @@ class ORBWorkerAdapter:
             security_group_ids=security_group_ids,
             key_name=key_name,
             user_data=user_data,
-            metadata={
-                "attributes": {
-                    "type": ["String", "X86_64"],
-                    "ncpus": ["Numeric", "1"],
-                    "nram": ["Numeric", "1024"],
-                    "ncores": ["Numeric", "1"],
-                }
-            },
         )
         logger.info(f"create_template result: {create_result}")
 
