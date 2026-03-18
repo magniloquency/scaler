@@ -6,13 +6,13 @@ The Native worker manager provisions workers as local subprocesses on the same m
 Getting Started
 ---------------
 
-To start the Native worker manager, use the ``scaler_worker_manager_baremetal_native`` command.
+To start the Native worker manager, use the ``scaler_worker_manager native`` command.
 
 Example command:
 
 .. code-block:: bash
 
-    scaler_worker_manager_baremetal_native tcp://<SCHEDULER_IP>:8516 \
+    scaler_worker_manager native tcp://<SCHEDULER_IP>:8516 \
         --max-task-concurrency 4 \
         --logging-level INFO \
         --task-timeout-seconds 60
@@ -21,7 +21,7 @@ Equivalent configuration using a TOML file:
 
 .. code-block:: bash
 
-    scaler_worker_manager_baremetal_native tcp://<SCHEDULER_IP>:8516 --config config.toml
+    scaler_worker_manager native tcp://<SCHEDULER_IP>:8516 --config config.toml
 
 .. code-block:: toml
 

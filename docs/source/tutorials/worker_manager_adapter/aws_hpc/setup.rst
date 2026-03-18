@@ -276,7 +276,7 @@ All commands in the **same terminal** inside the container:
     source tests/worker_manager_adapter/aws_hpc/.scaler_aws_hpc.env
 
     # Start AWS Batch worker in background (default job timeout: 60 minutes)
-    python -m scaler.entry_points.worker_manager_aws_hpc_batch \
+    scaler_worker_manager hpc \
         tcp://127.0.0.1:2345 \
         --job-queue $SCALER_JOB_QUEUE \
         --job-definition $SCALER_JOB_DEFINITION \
@@ -286,7 +286,7 @@ All commands in the **same terminal** inside the container:
         --logging-level INFO &
 
     # To override job timeout (e.g., 10 minutes):
-    # python -m scaler.entry_points.worker_manager_aws_hpc_batch \
+    # scaler_worker_manager hpc \
     #     tcp://127.0.0.1:2345 \
     #     ... \
     #     --job-timeout-minutes 10 &
@@ -460,7 +460,7 @@ Provisioner Options
 | ``--job-timeout``    | 60             | Job timeout in minutes (default: 1 hour, overridden by worker at runtime)|
 +----------------------+----------------+--------------------------------------------------------------------------+
 
-AWS HPC Batch Options (``worker_manager_aws_hpc_batch``)
+AWS HPC Batch Options (``scaler_worker_manager hpc``)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 +------------------------------------+----------------+-------------------------------------------------------------------+

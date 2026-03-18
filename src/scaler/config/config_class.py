@@ -1,15 +1,10 @@
+import argparse
 import dataclasses
 import enum
+import os
+import sys
 import typing
-from typing import Any, Dict, List, Optional, OrderedDict, Type, TypeVar
-
-from configargparse import (
-    ArgParser,
-    ArgumentDefaultsHelpFormatter,
-    ArgumentTypeError,
-    ConfigFileParser,
-    TomlConfigParser,
-)
+from typing import Any, Dict, List, Optional, Type, TypeVar
 
 from scaler.config.mixins import ConfigType
 
@@ -52,11 +47,12 @@ class ConfigClass:
 
     ## Environment Variables
 
-    Any parameter can be configured to read from an environment variable by adding `env="NAME"` to the field metadata.
+    Any parameter can be configured to read from an environment variable by adding `env_var="NAME"` to the field
+    metadata.
 
     ```python
     # can be set as --my-field on the command line or in a config file, or using the environment variable `NAME`
-    my_field: int = dataclasses.field(metadata=dict(env="NAME"))
+    my_field: int = dataclasses.field(metadata=dict(env_var="NAME"))
     ```
 
     ## Precedence
@@ -122,6 +118,18 @@ class ConfigClass:
     field_one: int = dataclasses.field(metadata=dict(positional=True))
     field_two: int = dataclasses.field(metadata=dict(positional=True))
     ```
+
+    ## Sub-commands
+
+    A field with `subcommand="<toml_section>"` in its metadata declares a sub-command:
+    - **Field name** -> CLI sub-command name
+    - **`subcommand` value** -> TOML section to read when this sub-command is active
+    - **Field type** -> `Optional[SomeConfigClass]` with `default=None`
+
+    ## Section Fields
+
+    A field with `section="<toml_section>"` in its metadata is populated from the TOML file only
+    (no CLI argument). The field type may be `Optional[SomeConfigClass]` or `List[SomeConfigClass]`.
 
     ## Composition
 
@@ -192,49 +200,43 @@ class ConfigClass:
     """
 
     @classmethod
-    def configure_parser(cls: type, parser: ArgParser):
-        fields = dataclasses.fields(cls)
+    def configure_parser(cls: type, parser: argparse.ArgumentParser) -> None:
+        for field in dataclasses.fields(cls):  # type: ignore[arg-type]
+            if "subcommand" in field.metadata or "section" in field.metadata:
+                continue  # handled by parse()
 
-        for field in fields:
             if is_config_class(field.type):
                 field.type.configure_parser(parser)  # type: ignore[union-attr]
                 continue
 
-            kwargs = dict(field.metadata)
+            # Strip keys that argparse doesn't understand
+            kwargs = {
+                k: v
+                for k, v in field.metadata.items()
+                if k not in ("env_var", "positional", "long", "short", "name", "subcommand", "section")
+            }
 
-            # usually command line options use hyphens instead of underscores
-
-            if kwargs.pop("positional", False):
-                args = [kwargs.pop("name", field.name)]
+            if field.metadata.get("positional", False):
+                args = [field.metadata.get("name", field.name)]
             else:
-                long_name = kwargs.pop("long", f"--{field.name.replace('_', '-')}")
-                if "short" in kwargs:
-                    args = [long_name, kwargs.pop("short")]
-                else:
-                    args = [long_name]
-
-                # this sets the key given back when args are parsed
+                long_name = field.metadata.get("long", f"--{field.name.replace('_', '-')}")
+                args = [long_name, field.metadata["short"]] if "short" in field.metadata else [long_name]
                 kwargs["dest"] = field.name
 
             if "default" in kwargs:
                 raise TypeError("'default' cannot be provided in field metadata")
 
-            if field.default != dataclasses.MISSING:
+            if field.default is not dataclasses.MISSING:
                 kwargs["default"] = field.default
 
-            if field.default_factory != dataclasses.MISSING:
+            if field.default_factory is not dataclasses.MISSING:  # type: ignore[misc]
                 kwargs["default"] = field.default_factory()
 
-            # when store true or store false is set, setting the type raises a type error
+            # when store_true or store_false is set, setting the type raises a type error
             if kwargs.get("action") not in ("store_true", "store_false"):
-
                 # sometimes the user will set the type manually
-                # this is required for types such as `Option[T]`, where they cannt be directly constructed from a string
                 if "type" not in kwargs:
-                    opts = get_type_args(field.type)
-
-                    # set all of the options, except where already set
-                    for key, value in opts.items():
+                    for key, value in get_type_args(field.type).items():
                         if key not in kwargs:
                             kwargs[key] = value
 
@@ -242,73 +244,293 @@ class ConfigClass:
 
     @classmethod
     def parse(cls: Type[T], program_name: str, section: str) -> T:
-        parser = ArgParser(
-            program_name,
-            formatter_class=ArgumentDefaultsHelpFormatter,
-            config_file_parser_class=UnderscoreTomlConfigParser.with_sections([section]),
-        )
+        subcommand_fields = [
+            field for field in dataclasses.fields(cls) if "subcommand" in field.metadata  # type: ignore[arg-type]
+        ]
 
-        parser.add_argument("--config", "-c", is_config_file=True, help="Path to the TOML configuration file.")
+        if subcommand_fields:
+            # Root parser: routes to sub-commands.
+            parser = argparse.ArgumentParser(prog=program_name, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+            parser.add_argument("--config", "-c", metavar="FILE", help="Path to the TOML configuration file.")
+
+            # Pre-scan for --config before building the subparser tree so TOML
+            # defaults can be injected into each subparser during construction.
+            config_path = _find_config_arg(sys.argv)
+            toml_data = _load_toml(config_path) if config_path else {}
+
+            _build_subparser_tree(cls, parser, parent_cls=cls, sections=[section], dest="_sub", toml_data=toml_data)
+
+            kwargs = vars(parser.parse_args())
+            kwargs.pop("config", None)
+
+            return _reconstruct_recursive(cls, kwargs, dest="_sub")
+
+        # Normal path.
+        parser = argparse.ArgumentParser(prog=program_name, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+        parser.add_argument("--config", "-c", metavar="FILE", help="Path to the TOML configuration file.")
         cls.configure_parser(parser)
 
+        # Pass 1: locate --config without failing on unrecognised args.
+        config_path_str: Optional[str] = vars(parser.parse_known_args()[0]).get("config")
+
+        # Load TOML and inject section values as defaults (below CLI, above hardcoded).
+        toml_data: Dict[str, Any] = {}  # type: ignore[no-redef]
+        if config_path_str:
+            toml_data = _load_toml(config_path_str)
+            toml_defs = _toml_section_defaults(toml_data.get(section, {}), cls)
+            if toml_defs:
+                parser.set_defaults(**toml_defs)
+
+        # Env-var defaults override TOML but are overridden by CLI.
+        env_defs = _env_defaults(cls)
+        if env_defs:
+            parser.set_defaults(**env_defs)
+
+        # Pass 2: full parse — CLI wins.
         kwargs = vars(parser.parse_args())
+        kwargs.pop("config", None)
 
-        # remove this from the args
-        kwargs.pop("config")
+        # Populate section= fields from the raw TOML (not from parsed args).
+        section_fields = [f for f in dataclasses.fields(cls) if "section" in f.metadata]  # type: ignore[arg-type]
+        full_toml = toml_data if section_fields else None
 
-        # we need to manually handle any ConfigClass fields
-        for field in dataclasses.fields(cls):  # type: ignore[arg-type]
-            if is_config_class(field.type):
-
-                # steal arguments for the config class
-                inner_kwargs = {}
-                for f in dataclasses.fields(field.type):  # type: ignore[arg-type]
-                    if f.name in kwargs:
-                        inner_kwargs[f.name] = kwargs.pop(f.name)
-
-                # instantiate and update the args
-                kwargs[field.name] = field.type(**inner_kwargs)  # type: ignore[operator]
-
-        return cls(**kwargs)
+        return _reconstruct_config(cls, kwargs, full_toml)
 
 
-class UnderscoreTomlConfigParser(ConfigFileParser):
-    """A TOML config parser that converts underscores to hyphens in key names."""
+# ---------------------------------------------------------------------------
+# Module-level helpers: TOML loading and default injection
+# ---------------------------------------------------------------------------
 
-    _sections: Optional[List[str]] = None
 
-    def __init__(self):
-        self._parser = TomlConfigParser(sections=self._sections)
+def _find_config_arg(argv: List[str]) -> Optional[str]:
+    """Pre-scan argv for --config/-c without invoking the full parser."""
+    for i, arg in enumerate(argv):
+        if arg in ("--config", "-c") and i + 1 < len(argv):
+            return argv[i + 1]
+        if arg.startswith("--config="):
+            return arg.split("=", 1)[1]
+    return None
 
-    @classmethod
-    def with_sections(cls, sections: List[str]) -> type:
-        """Return a subclass with the given sections baked in."""
-        return type(cls.__name__, (cls,), {"_sections": sections})
 
-    def parse(self, stream) -> OrderedDict[str, Any]:
-        return OrderedDict((k.replace("_", "-"), v) for k, v in self._parser.parse(stream).items())
+def _load_toml(config_path: str) -> Dict[str, Any]:
+    """Parse a TOML file and return its full contents as a dict."""
+    try:
+        import tomllib  # type: ignore[import]  # Python 3.11+
+    except ImportError:
+        import tomli as tomllib  # type: ignore[no-redef]
+    with open(config_path) as f:
+        return tomllib.loads(f.read())
 
-    def get_syntax_description(self) -> str:
-        return self._parser.get_syntax_description()
+
+def _toml_section_defaults(section_data: Dict[str, Any], cls: type) -> Dict[str, Any]:
+    """Flatten a raw TOML section dict into argparse-compatible defaults.
+
+    Normalises keys so that both 'my-field' and 'my_field' map to 'my_field'.
+    Only returns keys that correspond to actual fields on cls (and its nested
+    ConfigClass fields), so unrelated TOML keys are silently ignored.
+    """
+    field_names: set = set()
+    for f in dataclasses.fields(cls):  # type: ignore[arg-type]
+        if is_config_class(f.type):
+            for ff in dataclasses.fields(f.type):  # type: ignore[arg-type]
+                field_names.add(ff.name)
+        elif "subcommand" not in f.metadata and "section" not in f.metadata:
+            field_names.add(f.name)
+
+    return {key.replace("-", "_"): value for key, value in section_data.items() if key.replace("-", "_") in field_names}
+
+
+def _env_defaults(cls: type) -> Dict[str, Any]:
+    """Collect env-var values for fields that declare env_var= metadata.
+
+    Applies the same type coercion that argparse would use for CLI values,
+    so the value stored as a default is already the correct Python type.
+    """
+    result: Dict[str, Any] = {}
+    for field in dataclasses.fields(cls):  # type: ignore[arg-type]
+        if is_config_class(field.type):
+            result.update(_env_defaults(field.type))  # type: ignore[arg-type]
+            continue
+        env_name = field.metadata.get("env_var")
+        if env_name and env_name in os.environ:
+            raw = os.environ[env_name]
+            type_func = field.metadata.get("type") or get_type_args(field.type).get("type")
+            result[field.name] = type_func(raw) if type_func else raw
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Module-level helpers: reconstruction from TOML / parsed-args dicts
+# ---------------------------------------------------------------------------
+
+
+def _reconstruct_from_toml(config_cls: Type[T], data: Dict[str, Any]) -> T:
+    """Build a ConfigClass instance from a raw TOML section dict."""
+    result_kwargs: Dict[str, Any] = {}
+    for field in dataclasses.fields(config_cls):  # type: ignore[arg-type]
+        if field.name not in data:
+            continue
+        if is_config_class(field.type):
+            result_kwargs[field.name] = _reconstruct_from_toml(field.type, data[field.name])  # type: ignore[arg-type]
+        else:
+            result_kwargs[field.name] = data[field.name]
+    return config_cls(**result_kwargs)
+
+
+def _reconstruct_config(config_cls: Type[T], kwargs: Dict[str, Any], toml_data: Optional[Dict[str, Any]] = None) -> T:
+    """Build a ConfigClass instance from a flat parsed-args dict.
+
+    Pops only the fields belonging to config_cls from kwargs.
+    Any remaining entries in kwargs are left for the caller.
+
+    toml_data is the full parsed TOML dict; required when config_cls has
+    fields with section= metadata.
+    """
+    result_kwargs: Dict[str, Any] = {}
+    for field in dataclasses.fields(config_cls):  # type: ignore[arg-type]
+        if "section" in field.metadata:
+            section_name = field.metadata["section"]
+            raw = (toml_data or {}).get(section_name)
+            inner_cls = (
+                get_list_type(field.type)
+                if is_list(field.type)
+                else get_optional_type(field.type) if is_optional(field.type) else field.type
+            )
+            if raw is None:
+                result_kwargs[field.name] = [] if is_list(field.type) else None
+            elif isinstance(raw, dict):
+                instance = _reconstruct_from_toml(inner_cls, raw)  # type: ignore[arg-type]
+                result_kwargs[field.name] = [instance] if is_list(field.type) else instance
+            else:  # list of dicts — TOML [[array of tables]]
+                result_kwargs[field.name] = [
+                    _reconstruct_from_toml(inner_cls, item)  # type: ignore[arg-type]
+                    for item in raw
+                ]
+        elif is_config_class(field.type):
+            inner_kwargs: Dict[str, Any] = {}
+            for f in dataclasses.fields(field.type):  # type: ignore[arg-type]
+                if f.name in kwargs:
+                    inner_kwargs[f.name] = kwargs.pop(f.name)
+            result_kwargs[field.name] = field.type(**inner_kwargs)  # type: ignore[operator]
+        elif field.name in kwargs:
+            result_kwargs[field.name] = kwargs.pop(field.name)
+    return config_cls(**result_kwargs)
+
+
+# ---------------------------------------------------------------------------
+# Module-level helpers: subparser tree construction and recursive reconstruction
+# ---------------------------------------------------------------------------
+
+
+def _build_subparser_tree(
+    cls: type,
+    parser: argparse.ArgumentParser,
+    parent_cls: type,
+    sections: List[str],
+    dest: str,
+    toml_data: Dict[str, Any],
+) -> None:
+    """Recursively add subparsers to *parser* for every subcommand field in *cls*.
+
+    Args:
+        cls:        The config class whose subcommand fields are being registered.
+        parser:     The (sub)parser to attach the new subparsers to.
+        parent_cls: The config class that owns *parser*; its non-subcommand fields
+                    are registered on each subparser so they are available at every level.
+        sections:   Accumulated TOML section names from all ancestor levels.
+        dest:       Unique argparse dest name for this level's chosen subcommand.
+        toml_data:  Full parsed TOML dict loaded from --config (may be empty).
+    """
+    subcommand_fields = [f for f in dataclasses.fields(cls) if "subcommand" in f.metadata]  # type: ignore[arg-type]
+    if not subcommand_fields:
+        return
+
+    subparsers = parser.add_subparsers(dest=dest, required=True)
+
+    for field in subcommand_fields:
+        sub_section = field.metadata["subcommand"]
+        config_cls = get_optional_type(field.type) if is_optional(field.type) else field.type
+        level_sections = [s for s in sections + [sub_section] if s]
+
+        subparser = subparsers.add_parser(field.name, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+        subparser.add_argument("--config", "-c", metavar="FILE", help="Path to the TOML configuration file.")
+        parent_cls.configure_parser(subparser)  # type: ignore[attr-defined]  # parent-level fields
+        config_cls.configure_parser(subparser)  # type: ignore[union-attr]  # this sub-command's own fields
+
+        # Inject TOML defaults: merge all ancestor sections + this sub-command's section.
+        combined: Dict[str, Any] = {}
+        for s in level_sections:
+            combined.update(toml_data.get(s, {}))
+        toml_defs = _toml_section_defaults(combined, config_cls)  # type: ignore[arg-type]
+        if toml_defs:
+            subparser.set_defaults(**toml_defs)
+
+        # Env-var defaults override TOML.
+        env_defs = _env_defaults(config_cls)  # type: ignore[arg-type]
+        if env_defs:
+            subparser.set_defaults(**env_defs)
+
+        _build_subparser_tree(
+            config_cls,  # type: ignore[arg-type]
+            subparser,
+            config_cls,  # type: ignore[arg-type]
+            sections=level_sections,
+            dest=f"{dest}_{field.name}",
+            toml_data=toml_data,
+        )
+
+
+def _reconstruct_recursive(cls: Type[T], kwargs: Dict[str, Any], dest: str) -> T:
+    """Recursively reconstruct a ConfigClass from a flat parsed-args dict."""
+    subcommand_fields = [f for f in dataclasses.fields(cls) if "subcommand" in f.metadata]  # type: ignore[arg-type]
+
+    if not subcommand_fields:
+        return _reconstruct_config(cls, kwargs)
+
+    subcommand = kwargs.pop(dest)
+    sub_field = next(f for f in subcommand_fields if f.name == subcommand)
+    config_cls = get_optional_type(sub_field.type) if is_optional(sub_field.type) else sub_field.type
+
+    selected_config = _reconstruct_recursive(config_cls, kwargs, f"{dest}_{subcommand}")  # type: ignore[arg-type]
+
+    wrapper_kwargs: Dict[str, Any] = {f.name: None for f in subcommand_fields}
+    wrapper_kwargs[subcommand] = selected_config
+
+    for field in dataclasses.fields(cls):  # type: ignore[arg-type]
+        if "subcommand" in field.metadata:
+            continue
+        if is_config_class(field.type):
+            inner_kwargs: Dict[str, Any] = {}
+            for f in dataclasses.fields(field.type):  # type: ignore[arg-type]
+                if f.name in kwargs:
+                    inner_kwargs[f.name] = kwargs.pop(f.name)
+            wrapper_kwargs[field.name] = field.type(**inner_kwargs)  # type: ignore[operator]
+        elif field.name in kwargs:
+            wrapper_kwargs[field.name] = kwargs.pop(field.name)
+
+    return cls(**wrapper_kwargs)
+
+
+# ---------------------------------------------------------------------------
+# Type-parsing helpers
+# ---------------------------------------------------------------------------
 
 
 def parse_bool(s: str) -> bool:
     """parse a bool from a conventional string representation"""
-
     lower = s.lower()
     if lower == "true":
         return True
     if lower == "false":
         return False
-
-    raise ArgumentTypeError(f"'{s}' is not a valid bool")
+    raise argparse.ArgumentTypeError(f"'{s}' is not a valid bool")
 
 
 def parse_enum(s: str, enumm: Type[enum.Enum]) -> Any:
     try:
         return enumm[s]
     except KeyError as e:
-        raise ArgumentTypeError(f"'{s}' is not a valid {enumm.__name__}") from e
+        raise argparse.ArgumentTypeError(f"'{s}' is not a valid {enumm.__name__}") from e
 
 
 def is_optional(ty: Any) -> bool:

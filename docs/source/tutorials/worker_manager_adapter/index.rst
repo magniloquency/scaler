@@ -22,7 +22,7 @@ Once the scheduler is running with this policy, start a worker manager (e.g., th
 
 .. code-block:: bash
 
-    scaler_worker_manager_baremetal_native tcp://127.0.0.1:8516 --max-task-concurrency 8
+    scaler_worker_manager native tcp://127.0.0.1:8516 --max-task-concurrency 8
 
 The vanilla policy will then automatically scale workers up and down based on the task-to-worker ratio. For a full description of available scaling policies and their parameters, see :doc:`../scaling`.
 
@@ -43,14 +43,28 @@ AWS HPC
 
 The :doc:`AWS HPC <aws_hpc/index>` worker manager allows Scaler to offload task execution to cloud environments, currently supporting AWS Batch. It is ideal for bursting workloads to the cloud or utilizing specific hardware not available locally.
 
+ORB (AWS EC2)
+~~~~~~~~~~~~~
+
+The :doc:`ORB <orb>` worker adapter allows Scaler to dynamically provision workers on AWS EC2 instances. This is ideal for scaling workloads that require significant cloud compute resources or specialized hardware like GPUs.
+
 Common Parameters
 ~~~~~~~~~~~~~~~~~
 
 All worker managers share a set of :doc:`common configuration parameters <common_parameters>` for networking, worker behavior, and logging.
 
+Unified Entry Points
+~~~~~~~~~~~~~~~~~~~~
+
+The :doc:`scaler_worker_manager <worker_manager>` command provides a single entry point for all worker manager
+adapters. The :doc:`scaler_aio <aio>` command boots the full stack from a single TOML config file.
+
 .. toctree::
     :hidden:
 
     native
+    orb
     aws_hpc/index
     common_parameters
+    worker_manager
+    aio

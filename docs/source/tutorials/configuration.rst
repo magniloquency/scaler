@@ -78,14 +78,14 @@ For the list of available settings, use the CLI command:
 
 .. code:: bash
 
-    scaler_cluster -h
+    scaler_worker_manager native --help
 
 **Preload Hook**
 
 Workers can execute an optional initialization function before processing tasks using the ``--preload`` option. This enables workers to:
 
 * Set up environments on demand
-* Preload data, libraries, or models  
+* Preload data, libraries, or models
 * Initialize connections or state
 
 The preload specification follows the format ``module.path:function(args, kwargs)`` where:
@@ -97,10 +97,10 @@ The preload specification follows the format ``module.path:function(args, kwargs
 .. code:: bash
 
     # Simple function call with no arguments
-    scaler_cluster tcp://127.0.0.1:8516 --preload "mypackage.init:setup"
-    
+    scaler_worker_manager native tcp://127.0.0.1:8516 --preload "mypackage.init:setup"
+
     # Function call with arguments
-    scaler_cluster tcp://127.0.0.1:8516 --preload "mypackage.init:configure('production', debug=False)"
+    scaler_worker_manager native tcp://127.0.0.1:8516 --preload "mypackage.init:configure('production', debug=False)"
 
 The preload function is executed once per processor during initialization, before any tasks are processed. If the preload function fails, the error is logged and the processor will terminate.
 
@@ -127,7 +127,7 @@ This can be set using the CLI:
 
 .. code:: bash
 
-    scaler_cluster -n 10 tcp://127.0.0.1:8516 -dts 300
+    scaler_worker_manager native --mode fixed --max-task-concurrency 10 tcp://127.0.0.1:8516 -dts 300
 
 Or through the programmatic API:
 
@@ -185,22 +185,22 @@ The following table maps each Scaler command to its corresponding section name i
      - TOML Section Name
    * - ``scaler_scheduler``
      - ``[scheduler]``
-   * - ``scaler_cluster``
-     - ``[cluster]``
    * - ``scaler_object_storage_server``
      - ``[object_storage_server]``
    * - ``scaler_ui``
      - ``[webui]``
    * - ``scaler_top``
      - ``[top]``
-   * - ``scaler_worker_manager_baremetal_native``
+   * - ``scaler_worker_manager native``
      - ``[native_worker_manager]``
-   * - ``scaler_worker_manager_symphony``
+   * - ``scaler_worker_manager symphony``
      - ``[symphony_worker_manager]``
-   * - ``scaler_worker_manager_aws_raw_ecs``
+   * - ``scaler_worker_manager ecs``
      - ``[ecs_worker_manager]``
-   * - ``python -m scaler.entry_points.worker_manager_aws_hpc_batch``
+   * - ``scaler_worker_manager hpc``
      - ``[aws_hpc_worker_manager]``
+   * - ``scaler_worker_manager orb``
+     - ``[orb_worker_adapter]``
 
 
 Practical Scenarios & Examples
@@ -224,7 +224,8 @@ Here is an example of a single ``example_config.toml`` file that configures mult
     policy_engine_type = "simple"
     policy_content = "allocate=even_load; scaling=no"
 
-    [cluster]
+    [native_worker_manager]
+    mode = "fixed"
     max_task_concurrency = 8
     per_worker_capabilities = "linux,cpu=8"
     task_timeout_seconds = 600
@@ -241,7 +242,7 @@ With this single file, starting your entire stack is simple and consistent:
 
     scaler_object_storage_server tcp://127.0.0.1:6379 --config example_config.toml &
     scaler_scheduler tcp://127.0.0.1:6378 --config example_config.toml &
-    scaler_cluster tcp://127.0.0.1:6378 --config example_config.toml &
+    scaler_worker_manager native tcp://127.0.0.1:6378 --config example_config.toml &
     scaler_ui tcp://127.0.0.1:6380 --config example_config.toml &
 
 
@@ -251,10 +252,10 @@ You can override any value from the TOML file by providing it as a command-line 
 
 .. code-block:: bash
 
-    # The --max-task-concurrency flag will take precedence over the [cluster] section
-    scaler_cluster tcp://127.0.0.1:6378 --config example_config.toml --max-task-concurrency 12
+    # The --max-task-concurrency flag will take precedence over the [native_worker_manager] section
+    scaler_worker_manager native tcp://127.0.0.1:6378 --config example_config.toml --max-task-concurrency 12
 
-The cluster will start with **12 workers**, but all other settings (like ``task_timeout_seconds``) will still be loaded from the ``[cluster]`` section of ``example_config.toml``.
+The cluster will start with **12 workers**, but all other settings (like ``task_timeout_seconds``) will still be loaded from the ``[native_worker_manager]`` section of ``example_config.toml``.
 
 
 **Scenario 3: Waterfall Scaling Configuration**
@@ -276,10 +277,10 @@ To use the ``waterfall_v1`` policy engine for priority-based scaling across mult
     2, ECS, 50
     """
 
-    [native_worker_adapter]
+    [native_worker_manager]
     max_task_concurrency = 8
 
-    [ecs_worker_adapter]
+    [ecs_worker_manager]
     max_task_concurrency = 50
 
 Then start the scheduler and worker adapters:
@@ -287,7 +288,7 @@ Then start the scheduler and worker adapters:
 .. code-block:: bash
 
     scaler_scheduler tcp://127.0.0.1:8516 --config waterfall_config.toml &
-    scaler_worker_adapter_native tcp://127.0.0.1:8516 --config waterfall_config.toml &
-    scaler_worker_adapter_ecs tcp://127.0.0.1:8516 --config waterfall_config.toml &
+    scaler_worker_manager native tcp://127.0.0.1:8516 --config waterfall_config.toml &
+    scaler_worker_manager ecs tcp://127.0.0.1:8516 --config waterfall_config.toml &
 
 Local ``NAT`` workers will scale up first. When they reach capacity, ``ECS`` workers will begin scaling. On scale-down, ECS workers drain before local workers.
