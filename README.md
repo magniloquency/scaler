@@ -268,8 +268,8 @@ policy_content = "allocate=even_load; scaling=no"
 mode = "fixed"
 max_task_concurrency = 8
 worker_manager_id = "my-manager"
-# Worker capabilities are set via dotted keys. Each worker manager has its own
-# worker_config, so different managers (on different machines) can advertise
+# Each worker manager has its own worker_config,
+# so different managers (on different machines) can advertise
 # different capabilities to the scheduler.
 worker_config.per_worker_capabilities = "linux,cpu=8"
 worker_config.task_timeout_seconds = 600
