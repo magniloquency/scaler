@@ -40,11 +40,10 @@ class TestDeathTimeout(unittest.TestCase):
             NativeWorkerManagerConfig(
                 worker_manager_config=WorkerManagerConfig(
                     scheduler_address=ZMQConfig.from_string(f"tcp://127.0.0.1:{get_available_tcp_port()}"),
+                    worker_manager_id="test_manager",
                     object_storage_address=None,
                     max_task_concurrency=2,
                 ),
-                worker_manager_id="test_manager",
-                preload=None,
                 mode=NativeWorkerManagerMode.FIXED,
             ),
             WorkerConfig(

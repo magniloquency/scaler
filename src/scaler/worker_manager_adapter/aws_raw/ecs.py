@@ -40,7 +40,7 @@ class ECSWorkerManager:
         self._address = config.worker_manager_config.scheduler_address
         self._object_storage_address = config.worker_manager_config.object_storage_address
         self._capabilities = worker_config.per_worker_capabilities.capabilities
-        self._worker_manager_id = config.worker_manager_id.encode()
+        self._worker_manager_id = config.worker_manager_config.worker_manager_id.encode()
         self._io_threads = worker_config.io_threads
         self._per_worker_task_queue_size = worker_config.per_worker_task_queue_size
         self._max_instances = config.worker_manager_config.max_task_concurrency
@@ -50,7 +50,7 @@ class ECSWorkerManager:
         self._garbage_collect_interval_seconds = worker_config.garbage_collect_interval_seconds
         self._trim_memory_threshold_bytes = worker_config.trim_memory_threshold_bytes
         self._hard_processor_suspend = worker_config.hard_processor_suspend
-        self._preload = config.preload
+        self._preload = config.worker_manager_config.preload
         self._event_loop = worker_config.event_loop
 
         self._aws_access_key_id = config.aws_access_key_id

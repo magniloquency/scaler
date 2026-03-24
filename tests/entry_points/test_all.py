@@ -215,8 +215,10 @@ class TestRunWorkerManager(unittest.TestCase):
         from scaler.config.section.native_worker_manager import NativeWorkerManagerConfig
         from scaler.config.types.zmq import ZMQConfig
 
-        wmc = WorkerManagerConfig(scheduler_address=ZMQConfig.from_string("tcp://localhost:6378"))
-        return NativeWorkerManagerConfig(worker_manager_config=wmc, worker_manager_id="wm-test")
+        wmc = WorkerManagerConfig(
+            scheduler_address=ZMQConfig.from_string("tcp://localhost:6378"), worker_manager_id="wm-test"
+        )
+        return NativeWorkerManagerConfig(worker_manager_config=wmc)
 
     def test_register_event_loop_called_with_worker_config_event_loop(self) -> None:
         from scaler.config.common.logging import LoggingConfig

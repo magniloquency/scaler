@@ -32,7 +32,7 @@ class AWSHPCWorkerManager:
             io_threads=self._worker_config.io_threads,
             event_loop=self._worker_config.event_loop,
             job_timeout_seconds=config.job_timeout_minutes * 60,
-            worker_manager_id=config.worker_manager_id.encode(),
+            worker_manager_id=config.worker_manager_config.worker_manager_id.encode(),
         )
         worker.start()
         worker.join()

@@ -54,11 +54,10 @@ class TestBalance(unittest.TestCase):
             NativeWorkerManagerConfig(
                 worker_manager_config=WorkerManagerConfig(
                     scheduler_address=base_manager._address,
+                    worker_manager_id="test_manager",
                     object_storage_address=None,
                     max_task_concurrency=N_WORKERS - 1,
                 ),
-                worker_manager_id="test_manager",
-                preload=None,
                 mode=NativeWorkerManagerMode.FIXED,
             ),
             WorkerConfig(

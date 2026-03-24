@@ -10,14 +10,6 @@ class ECSWorkerManagerConfig(ConfigClass):
     _tag: ClassVar[str] = "aws_raw_ecs"
 
     worker_manager_config: WorkerManagerConfig
-    worker_manager_id: str = dataclasses.field(
-        metadata=dict(short="-wmi", help="worker manager ID to identify this manager")
-    )
-
-    preload: Optional[str] = dataclasses.field(
-        default=None,
-        metadata=dict(help="preload function spec executed on worker init, e.g. 'pkg.mod:func(arg1, kw=val)'"),
-    )
 
     # AWS / ECS specific configuration
     aws_access_key_id: Optional[str] = dataclasses.field(
@@ -52,8 +44,6 @@ class ECSWorkerManagerConfig(ConfigClass):
     ecs_task_memory: int = dataclasses.field(default=30, metadata=dict(help="Task memory in GB for Fargate"))
 
     def __post_init__(self):
-        if not self.worker_manager_id:
-            raise ValueError("worker_manager_id cannot be an empty string.")
         if self.ecs_task_cpu <= 0:
             raise ValueError("ecs_task_cpu must be a positive integer.")
         if self.ecs_task_memory <= 0:
