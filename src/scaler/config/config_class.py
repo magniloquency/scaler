@@ -46,6 +46,20 @@ class ConfigClass:
     my-field = 10
     ```
 
+    When a field has an explicit `long` name that differs from the field name,
+    the TOML key must use the long name (without `--`):
+    ```python
+    @dataclasses.dataclass
+    class MyConfig(ConfigClass):
+        level: str = dataclasses.field(default="INFO", metadata=dict(long="--logging-level"))
+    ```
+
+    ```
+    [my_section]
+    logging_level = "DEBUG"   # correct — matches long name --logging-level
+    level = "DEBUG"           # will NOT be recognised
+    ```
+
     ## Environment Variables
 
     Any parameter can be configured to read from an environment variable by adding `env_var="NAME"` to the field
