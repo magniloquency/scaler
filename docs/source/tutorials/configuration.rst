@@ -97,10 +97,10 @@ The preload specification follows the format ``module.path:function(args, kwargs
 .. code:: bash
 
     # Simple function call with no arguments
-    scaler_worker_manager baremetal_native tcp://127.0.0.1:8516 --preload "mypackage.init:setup"
+    scaler_worker_manager baremetal_native --worker-manager-id my-manager tcp://127.0.0.1:8516 --preload "mypackage.init:setup"
 
     # Function call with arguments
-    scaler_worker_manager baremetal_native tcp://127.0.0.1:8516 --preload "mypackage.init:configure('production', debug=False)"
+    scaler_worker_manager baremetal_native --worker-manager-id my-manager tcp://127.0.0.1:8516 --preload "mypackage.init:configure('production', debug=False)"
 
 The preload function is executed once per processor during initialization, before any tasks are processed. If the preload function fails, the error is logged and the processor will terminate.
 
@@ -127,7 +127,7 @@ This can be set using the CLI:
 
 .. code:: bash
 
-    scaler_worker_manager baremetal_native --mode fixed --max-task-concurrency 10 tcp://127.0.0.1:8516 -dts 300
+    scaler_worker_manager baremetal_native --worker-manager-id my-manager --mode fixed --max-task-concurrency 10 tcp://127.0.0.1:8516 -dts 300
 
 Or through the programmatic API:
 
@@ -226,6 +226,9 @@ Here is an example of a single ``example_config.toml`` file that configures mult
     [baremetal_native]
     mode = "fixed"
     max_task_concurrency = 8
+    worker_manager_id = "my-manager"
+
+    [worker]
     per_worker_capabilities = "linux,cpu=8"
     task_timeout_seconds = 600
 
@@ -254,7 +257,7 @@ You can override any value from the TOML file by providing it as a command-line 
     # The --max-task-concurrency flag will take precedence over the [baremetal_native] section
     scaler_worker_manager baremetal_native tcp://127.0.0.1:6378 --config example_config.toml --max-task-concurrency 12
 
-The cluster will start with **12 workers**, but all other settings (like ``task_timeout_seconds``) will still be loaded from the ``[baremetal_native]`` section of ``example_config.toml``.
+The cluster will start with **12 workers**, but all other settings (like ``task_timeout_seconds``) will still be loaded from the ``[baremetal_native]`` and ``[worker]`` sections of ``example_config.toml``.
 
 
 **Scenario 3: Waterfall Scaling Configuration**
@@ -278,9 +281,11 @@ To use the ``waterfall_v1`` policy engine for priority-based scaling across mult
 
     [baremetal_native]
     max_task_concurrency = 8
+    worker_manager_id = "native-manager"
 
     [aws_raw_ecs]
     max_task_concurrency = 50
+    worker_manager_id = "ecs-manager"
 
 Then start the scheduler and worker adapters:
 
