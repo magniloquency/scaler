@@ -215,11 +215,6 @@ class TestScalerAllConfigShape(unittest.TestCase):
         config = self._parse(self._native_base(logging_paths=["/tmp/wm.log"]))
         self.assertIn("/tmp/wm.log", config.worker_managers[0].logging_config.paths)
 
-    def test_logging_level_field_name(self) -> None:
-        """level (field name) should also be accepted as an alias."""
-        config = self._parse(self._native_base(level="DEBUG"))
-        self.assertEqual(config.worker_managers[0].logging_config.level, "DEBUG")
-
     def test_worker_config_per_worker_capabilities(self) -> None:
         config = self._parse(self._native_base(per_worker_capabilities="linux,cpu=4"))
         caps = config.worker_managers[0].worker_config.per_worker_capabilities

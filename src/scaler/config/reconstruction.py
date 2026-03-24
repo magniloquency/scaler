@@ -50,12 +50,12 @@ def _from_toml(config_cls: Type[T], data: Dict[str, Any]) -> T:
       these are converted to underscores before matching against dataclass
       field names.
 
-    * Long-name aliases: when a field has an explicit ``long`` name that
+    * Long-name lookup: when a field has an explicit ``long`` name that
       differs from the field name (e.g. ``long="--logging-level"`` for a
-      field named ``level``), both the field name (``level``) and the
-      normalised long name (``logging_level``) are accepted.  This keeps the
-      TOML keys consistent between the ``scaler`` and ``scaler_worker_manager``
-      entry points, which use different internal parsing paths.
+      field named ``level``), only the normalised long name (``logging_level``)
+      is accepted as a TOML key — not the field name.  This matches the
+      behaviour of ``_toml_section_defaults`` so both entry points accept
+      identical TOML keys.
 
     * Flat vs. nested layout: if a field's type is itself a ConfigClass, two
       TOML layouts are supported:
@@ -87,17 +87,16 @@ def _from_toml(config_cls: Type[T], data: Dict[str, Any]) -> T:
                 # Flat layout: let the composed class pick its own fields from parent data
                 result_kwargs[field.name] = _from_toml(field.type, normalized)  # type: ignore[arg-type]
         else:
-            # Resolve the value: prefer the field name, fall back to the normalised
-            # long name (e.g. "logging_level" for a field named "level").
+            # Look up using the long name (e.g. "logging_level" for a field with
+            # long="--logging-level"), falling back to the field name when no explicit
+            # long name is set.  This mirrors _toml_section_defaults, which only
+            # accepts the long CLI name as a TOML key.
             long_key = field.metadata.get("long", f"--{field.name.replace('_', '-')}").lstrip("-").replace("-", "_")
-            if field.name in normalized:
-                value = normalized[field.name]
-            elif long_key != field.name and long_key in normalized:
-                value = normalized[long_key]
-            else:
+            if long_key not in normalized:
                 # Field not present in this TOML section — leave it out so the
                 # dataclass default is used when config_cls(**result_kwargs) is called.
                 continue
+            value = normalized[long_key]
             # Apply type conversion using the same precedence as _from_args: explicit
             # metadata type first, then the type derived from the field's annotation.
             if isinstance(value, str):
