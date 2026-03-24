@@ -176,7 +176,16 @@ def _from_args(config_cls: Type[T], kwargs: Dict[str, Any], toml_data: Optional[
             # mutable kwargs so the nested class pops its own fields out.
             result_kwargs[field.name] = _from_args(field.type, kwargs)  # type: ignore[arg-type]
         elif field.name in kwargs:
-            result_kwargs[field.name] = kwargs.pop(field.name)
+            value = kwargs.pop(field.name)
+            # argparse applies type conversion for CLI values but not for defaults set via
+            # set_defaults() (which is how TOML values are injected).  Apply the same
+            # conversion here so that e.g. enum fields and ConfigType address fields work
+            # correctly when their values come from a TOML file rather than the CLI.
+            if isinstance(value, str):
+                type_fn = field.metadata.get("type") or get_type_args(field.type).get("type")
+                if type_fn and type_fn is not str:
+                    value = type_fn(value)
+            result_kwargs[field.name] = value
     return config_cls(**result_kwargs)
 
 

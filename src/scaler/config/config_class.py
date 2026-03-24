@@ -293,16 +293,26 @@ class ConfigClass:
 
         # Load TOML and inject section values as defaults (below CLI, above hardcoded).
         toml_data: Dict[str, Any] = {}  # type: ignore[no-redef]
+        injected_dests: Dict[str, Any] = {}
         if config_path_str:
             toml_data = _load_toml(config_path_str)
             toml_defs = _toml_section_defaults(toml_data.get(section, {}), cls)
             if toml_defs:
                 parser.set_defaults(**toml_defs)
+                injected_dests.update(toml_defs)
 
         # Env-var defaults override TOML but are overridden by CLI.
         env_defs = _env_defaults(cls)
         if env_defs:
             parser.set_defaults(**env_defs)
+            injected_dests.update(env_defs)
+
+        # argparse does not consider set_defaults() values as satisfying required=True.
+        # Relax the required flag for any optional argument whose value was provided by
+        # TOML or an env var so that those sources count as valid.
+        for action in parser._actions:
+            if action.required and action.dest in injected_dests:
+                action.required = False
 
         # Pass 2: full parse — CLI wins.
         kwargs = vars(parser.parse_args())
@@ -355,8 +365,10 @@ def _build_subparser_tree(
         for s in level_sections:
             combined.update(toml_data.get(s, {}))
         toml_defs = _toml_section_defaults(combined, config_cls)  # type: ignore[arg-type]
+        injected_dests: Dict[str, Any] = {}
         if toml_defs:
             subparser.set_defaults(**toml_defs)
+            injected_dests.update(toml_defs)
 
         # Inject TOML defaults for parent-class ConfigClass fields (e.g. logging) from
         # sections named after the field — e.g. [logging] → LoggingConfig defaults.
@@ -371,11 +383,20 @@ def _build_subparser_tree(
                     )
                     if parent_section_defs:
                         subparser.set_defaults(**parent_section_defs)
+                        injected_dests.update(parent_section_defs)
 
         # Env-var defaults override TOML.
         env_defs = _env_defaults(config_cls)  # type: ignore[arg-type]
         if env_defs:
             subparser.set_defaults(**env_defs)
+            injected_dests.update(env_defs)
+
+        # argparse does not consider set_defaults() values as satisfying required=True.
+        # Relax the required flag for any optional argument whose value was provided by
+        # TOML or an env var so that those sources count as valid.
+        for action in subparser._actions:
+            if action.required and action.dest in injected_dests:
+                action.required = False
 
         _build_subparser_tree(
             config_cls,  # type: ignore[arg-type]

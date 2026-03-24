@@ -167,32 +167,32 @@ _NATIVE_BASE_ARGS = [
 
 
 class TestWorkerManagerConfigFields(unittest.TestCase):
-    """Tests that _WorkerManagerConfig parses per-manager logging and worker fields from the CLI."""
+    """Tests that WorkerManagerConfig parses per-manager logging and worker fields from the CLI."""
 
     @patch("sys.argv", [*_NATIVE_BASE_ARGS, "--logging-level", "DEBUG"])
     def test_logging_level_from_cli(self) -> None:
-        from scaler.entry_points.worker_manager import _WorkerManagerConfig
+        from scaler.entry_points.worker_manager import WorkerManagerConfig
 
-        config = _WorkerManagerConfig.parse("scaler_worker_manager", "")
+        config = WorkerManagerConfig.parse("scaler_worker_manager", "")
         self.assertEqual(config.baremetal_native.logging_config.level, "DEBUG")
 
     @patch("sys.argv", [*_NATIVE_BASE_ARGS, "--logging-paths", "/tmp/scaler.log"])
     def test_logging_paths_from_cli(self) -> None:
-        from scaler.entry_points.worker_manager import _WorkerManagerConfig
+        from scaler.entry_points.worker_manager import WorkerManagerConfig
 
-        config = _WorkerManagerConfig.parse("scaler_worker_manager", "")
+        config = WorkerManagerConfig.parse("scaler_worker_manager", "")
         self.assertIn("/tmp/scaler.log", config.baremetal_native.logging_config.paths)
 
     @patch("sys.argv", _NATIVE_BASE_ARGS)
     def test_logging_defaults(self) -> None:
         from scaler.config.common.logging import LoggingConfig
-        from scaler.entry_points.worker_manager import _WorkerManagerConfig
+        from scaler.entry_points.worker_manager import WorkerManagerConfig
 
-        config = _WorkerManagerConfig.parse("scaler_worker_manager", "")
+        config = WorkerManagerConfig.parse("scaler_worker_manager", "")
         self.assertEqual(config.baremetal_native.logging_config.level, LoggingConfig().level)
 
     def test_logging_level_from_toml(self) -> None:
-        from scaler.entry_points.worker_manager import _WorkerManagerConfig
+        from scaler.entry_points.worker_manager import WorkerManagerConfig
 
         toml_content = b"""
 [baremetal_native]
@@ -213,11 +213,11 @@ logging_level = "DEBUG"
             ],
         ):
             with patch("builtins.open", mock_open(read_data=toml_content)):
-                config = _WorkerManagerConfig.parse("scaler_worker_manager", "")
+                config = WorkerManagerConfig.parse("scaler_worker_manager", "")
         self.assertEqual(config.baremetal_native.logging_config.level, "DEBUG")
 
     def test_cli_overrides_toml_logging(self) -> None:
-        from scaler.entry_points.worker_manager import _WorkerManagerConfig
+        from scaler.entry_points.worker_manager import WorkerManagerConfig
 
         toml_content = b"""
 [baremetal_native]
@@ -240,30 +240,30 @@ logging_level = "DEBUG"
             ],
         ):
             with patch("builtins.open", mock_open(read_data=toml_content)):
-                config = _WorkerManagerConfig.parse("scaler_worker_manager", "")
+                config = WorkerManagerConfig.parse("scaler_worker_manager", "")
         self.assertEqual(config.baremetal_native.logging_config.level, "WARNING")
 
     @patch("sys.argv", [*_NATIVE_BASE_ARGS, "--io-threads", "4"])
     def test_worker_io_threads_from_cli(self) -> None:
-        from scaler.entry_points.worker_manager import _WorkerManagerConfig
+        from scaler.entry_points.worker_manager import WorkerManagerConfig
 
-        config = _WorkerManagerConfig.parse("scaler_worker_manager", "")
+        config = WorkerManagerConfig.parse("scaler_worker_manager", "")
         self.assertIsNotNone(config.baremetal_native)
         self.assertEqual(config.baremetal_native.worker_config.io_threads, 4)
 
     @patch("sys.argv", [*_NATIVE_BASE_ARGS, "--event-loop", "builtin"])
     def test_event_loop_from_cli(self) -> None:
-        from scaler.entry_points.worker_manager import _WorkerManagerConfig
+        from scaler.entry_points.worker_manager import WorkerManagerConfig
 
-        config = _WorkerManagerConfig.parse("scaler_worker_manager", "")
+        config = WorkerManagerConfig.parse("scaler_worker_manager", "")
         self.assertIsNotNone(config.baremetal_native)
         self.assertEqual(config.baremetal_native.worker_config.event_loop, "builtin")
 
     @patch("sys.argv", _NATIVE_BASE_ARGS)
     def test_per_manager_config_defaults(self) -> None:
         from scaler.config.common.worker import WorkerConfig
-        from scaler.entry_points.worker_manager import _WorkerManagerConfig
+        from scaler.entry_points.worker_manager import WorkerManagerConfig
 
-        config = _WorkerManagerConfig.parse("scaler_worker_manager", "")
+        config = WorkerManagerConfig.parse("scaler_worker_manager", "")
         self.assertEqual(config.baremetal_native.worker_config.io_threads, WorkerConfig().io_threads)
         self.assertEqual(config.baremetal_native.worker_config.event_loop, WorkerConfig().event_loop)

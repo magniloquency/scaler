@@ -227,7 +227,7 @@ automatically loads its configuration from its corresponding section.
 
 * **Naming Convention**: The keys in the TOML file must match the long-form command-line arguments. The rule is to
   replace any hyphens (`-`) with underscores (`_`).
-    * For example, the flag `--num-of-workers` becomes the TOML key `num_of_workers`.
+    * For example, the flag `--max-task-concurrency` becomes the TOML key `max_task_concurrency`.
     * One can discover all available keys by running any command with the `-h` or `--help` flag.
 
 ### Supported Components and Section Names
@@ -271,8 +271,12 @@ worker_manager_id = "my-manager"
 # Each worker manager has its own worker_config,
 # so different managers (on different machines) can advertise
 # different capabilities to the scheduler.
-worker_config.per_worker_capabilities = "linux,cpu=8"
-worker_config.task_timeout_seconds = 600
+per_worker_capabilities = "linux,cpu=8"
+task_timeout_seconds = 600
+# Each worker manager has its own logging config,
+# so different managers can write to different log files.
+logging_level = "INFO"
+logging_paths = ["/dev/stdout", "/var/log/scaler/worker.log"]
 
 [object_storage_server]
 
@@ -299,7 +303,7 @@ example_config.toml file but test the cluster with 12 workers instead of 8:
 scaler_worker_manager baremetal_native tcp://127.0.0.1:6378 --config example_config.toml --max-task-concurrency 12
 ```
 
-The cluster will start with 12 workers, but all other settings (like `worker_config.task_timeout_seconds`) will still be loaded from the
+The cluster will start with 12 workers, but all other settings (like `task_timeout_seconds`) will still be loaded from the
 `[baremetal_native]` section of example_config.toml.
 
 ## Nested computations

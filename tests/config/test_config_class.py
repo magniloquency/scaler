@@ -215,6 +215,67 @@ class TestConfigClass(unittest.TestCase):
         self.assertEqual(config.my_int, 10)
         self.assertEqual(config.my_other_int, 20)
 
+    @patch("sys.argv", ["script", "--config", "file"])
+    @patch(
+        "builtins.open",
+        mock_open(
+            read_data=b"""
+            [my_config]
+            color = "RED"
+            """
+        ),
+    )
+    def test_enum_from_toml(self) -> None:
+        """Enum fields loaded from TOML should be converted to the enum type, not left as strings."""
+
+        class Color(Enum):
+            RED = "red"
+            GREEN = "green"
+            BLUE = "blue"
+
+        @dataclasses.dataclass
+        class MyConfigClass(ConfigClass):
+            color: Color
+
+        config = MyConfigClass.parse("test enum toml", "my_config")
+        self.assertEqual(config.color, Color.RED)
+        self.assertIsInstance(config.color, Color)
+
+    @patch("sys.argv", ["script", "--config", "file"])
+    @patch(
+        "builtins.open",
+        mock_open(
+            read_data=b"""
+            [my_config]
+            my_value = "hello"
+            """
+        ),
+    )
+    def test_config_type_from_toml(self) -> None:
+        """ConfigType fields loaded from TOML should be converted via from_string(), not left as strings."""
+
+        class MyConfigType(ConfigType):
+            def __init__(self, value: str) -> None:
+                self.value = value
+
+            @classmethod
+            def from_string(cls, value: str) -> "MyConfigType":
+                return cls(value.upper())
+
+            def __eq__(self, other: object) -> bool:
+                return isinstance(other, MyConfigType) and self.value == other.value
+
+            def __str__(self) -> str:
+                return self.value
+
+        @dataclasses.dataclass
+        class MyConfigClass(ConfigClass):
+            my_value: MyConfigType
+
+        config = MyConfigClass.parse("test config_type toml", "my_config")
+        self.assertIsInstance(config.my_value, MyConfigType)
+        self.assertEqual(config.my_value, MyConfigType("HELLO"))
+
 
 class TestPreloadCLIArgument(unittest.TestCase):
     """Tests that --preload is properly exposed as a CLI argument on worker manager configs."""

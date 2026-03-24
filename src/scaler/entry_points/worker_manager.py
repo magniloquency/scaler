@@ -11,7 +11,7 @@ from scaler.utility.logging.utility import setup_logger
 
 
 @dataclasses.dataclass
-class _WorkerManagerConfig(ConfigClass):
+class WorkerManagerConfig(ConfigClass):
     baremetal_native: Optional[NativeWorkerManagerConfig] = dataclasses.field(
         default=None, metadata=dict(subcommand="baremetal_native")
     )
@@ -27,7 +27,7 @@ class _WorkerManagerConfig(ConfigClass):
 
 
 def main() -> None:
-    config = _WorkerManagerConfig.parse("scaler_worker_manager", "")
+    config = WorkerManagerConfig.parse("scaler_worker_manager", "")
 
     if config.baremetal_native is not None:
         from scaler.worker_manager_adapter.baremetal.native import NativeWorkerManager
