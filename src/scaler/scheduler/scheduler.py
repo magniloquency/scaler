@@ -73,7 +73,9 @@ class Scheduler:
             )
         self._config_controller.update_config("object_storage_address", object_storage_address)
 
-        monitor_address = config.monitor_address or ZMQConfig(type=ZMQType.tcp, host=self._bound_address.host, port=0)
+        monitor_address = config.monitor_address or ZMQConfig(
+            type=ZMQType.tcp, host=self._bound_address.host, port=self._bound_address.port + 2
+        )
 
         self._connector_storage: AsyncObjectStorageConnector = create_async_object_storage_connector()
         logging.info(f"{self.__class__.__name__}: connect to object storage server {object_storage_address!r}")
