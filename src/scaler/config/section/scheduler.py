@@ -78,16 +78,17 @@ class SchedulerConfig(ConfigClass):
             help="exact number of repeated load balance advices when trigger load balance operation in scheduler",
         ),
     )
-
-    logging_config: LoggingConfig = dataclasses.field(default_factory=LoggingConfig)
     event_loop: str = dataclasses.field(
         default="builtin",
         metadata=dict(short="-el", choices=EventLoopType.allowed_types(), help="select the event loop type"),
     )
+
     io_threads: int = dataclasses.field(
         default=defaults.DEFAULT_IO_THREADS,
         metadata=dict(short="-it", help="set the number of io threads for io backend"),
     )
+    logging_config: LoggingConfig = dataclasses.field(default_factory=LoggingConfig)
+
     policy: PolicyConfig = dataclasses.field(default_factory=PolicyConfig)
 
     def __post_init__(self):

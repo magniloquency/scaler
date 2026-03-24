@@ -24,6 +24,13 @@ class NativeWorkerManagerConfig(ConfigClass):
         metadata=dict(short="-wmi", required=True, help="worker manager ID to identify this manager")
     )
 
+    preload: Optional[str] = dataclasses.field(
+        default=None,
+        metadata=dict(help="preload function spec executed on worker init, e.g. 'pkg.mod:func(arg1, kw=val)'"),
+    )
+    worker_config: WorkerConfig = dataclasses.field(default_factory=WorkerConfig)
+    logging_config: LoggingConfig = dataclasses.field(default_factory=LoggingConfig)
+
     mode: NativeWorkerManagerMode = dataclasses.field(
         default=NativeWorkerManagerMode.DYNAMIC,
         metadata=dict(
@@ -36,14 +43,6 @@ class NativeWorkerManagerConfig(ConfigClass):
         default=None,
         metadata=dict(help="worker type prefix used in worker IDs; defaults to 'FIX' or 'NAT' based on mode"),
     )
-
-    preload: Optional[str] = dataclasses.field(
-        default=None,
-        metadata=dict(help="preload function spec executed on worker init, e.g. 'pkg.mod:func(arg1, kw=val)'"),
-    )
-
-    worker_config: WorkerConfig = dataclasses.field(default_factory=WorkerConfig)
-    logging_config: LoggingConfig = dataclasses.field(default_factory=LoggingConfig)
 
     @classmethod
     def configure_parser(cls, parser: argparse.ArgumentParser) -> None:
