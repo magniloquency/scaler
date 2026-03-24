@@ -50,6 +50,13 @@ def _from_toml(config_cls: Type[T], data: Dict[str, Any]) -> T:
       these are converted to underscores before matching against dataclass
       field names.
 
+    * Long-name aliases: when a field has an explicit ``long`` name that
+      differs from the field name (e.g. ``long="--logging-level"`` for a
+      field named ``level``), both the field name (``level``) and the
+      normalised long name (``logging_level``) are accepted.  This keeps the
+      TOML keys consistent between the ``scaler`` and ``scaler_worker_manager``
+      entry points, which use different internal parsing paths.
+
     * Flat vs. nested layout: if a field's type is itself a ConfigClass, two
       TOML layouts are supported:
         - Nested (explicit sub-table): the value at ``data[field.name]`` is a
@@ -59,9 +66,11 @@ def _from_toml(config_cls: Type[T], data: Dict[str, Any]) -> T:
           class pulls its own fields from it.  This lets multiple composed
           classes share a single flat TOML section.
 
-    * ConfigType coercion: fields whose type carries a ``type`` converter (e.g.
-      ``ZMQConfig``, which is declared as ``ConfigType(type=ZMQConfig)``) are
-      converted by calling that converter when the raw value is a string.
+    * Type coercion: the same precedence as ``_from_args`` is used — the
+      field's explicit ``type`` metadata (if any) is tried first, then the
+      type derived from the field's Python type annotation.  This ensures
+      e.g. enum fields with a value-based constructor (``mode = "fixed"``) and
+      ConfigType address fields work identically in both entry points.
 
     Note: this function reads ``data`` without mutating it.  Multiple composed
     ConfigClass fields inside the same parent can therefore all receive the
@@ -77,19 +86,25 @@ def _from_toml(config_cls: Type[T], data: Dict[str, Any]) -> T:
             else:
                 # Flat layout: let the composed class pick its own fields from parent data
                 result_kwargs[field.name] = _from_toml(field.type, normalized)  # type: ignore[arg-type]
-        elif field.name not in normalized:
-            # Field not present in this TOML section — leave it out so the
-            # dataclass default is used when config_cls(**result_kwargs) is called.
-            continue
         else:
-            value = normalized[field.name]
-            # If the field type declares a callable converter (e.g. ZMQConfig),
-            # apply it when the TOML value arrived as a plain string.
-            type_fn = get_type_args(field.type).get("type")
-            if type_fn and isinstance(value, str):
-                result_kwargs[field.name] = type_fn(value)
+            # Resolve the value: prefer the field name, fall back to the normalised
+            # long name (e.g. "logging_level" for a field named "level").
+            long_key = field.metadata.get("long", f"--{field.name.replace('_', '-')}").lstrip("-").replace("-", "_")
+            if field.name in normalized:
+                value = normalized[field.name]
+            elif long_key != field.name and long_key in normalized:
+                value = normalized[long_key]
             else:
-                result_kwargs[field.name] = value
+                # Field not present in this TOML section — leave it out so the
+                # dataclass default is used when config_cls(**result_kwargs) is called.
+                continue
+            # Apply type conversion using the same precedence as _from_args: explicit
+            # metadata type first, then the type derived from the field's annotation.
+            if isinstance(value, str):
+                type_fn = field.metadata.get("type") or get_type_args(field.type).get("type")
+                if type_fn and type_fn is not str:
+                    value = type_fn(value)
+            result_kwargs[field.name] = value
     return config_cls(**result_kwargs)
 
 

@@ -195,6 +195,47 @@ class TestScalerAllConfigShape(unittest.TestCase):
         config = self._parse(toml)
         self.assertEqual(len(config.worker_managers), 2)
 
+    def _native_base(self, **extra):
+        return {
+            "worker_manager": {
+                "type": "baremetal_native",
+                "scheduler_address": "tcp://127.0.0.1:6378",
+                "worker_manager_id": "wm-1",
+                **extra,
+            }
+        }
+
+    def test_logging_level_long_name(self) -> None:
+        """logging_level (long name) should be accepted in [[worker_manager]] sections."""
+        config = self._parse(self._native_base(logging_level="WARNING"))
+        self.assertEqual(config.worker_managers[0].logging_config.level, "WARNING")
+
+    def test_logging_paths_long_name(self) -> None:
+        """logging_paths (long name) should be accepted in [[worker_manager]] sections."""
+        config = self._parse(self._native_base(logging_paths=["/tmp/wm.log"]))
+        self.assertIn("/tmp/wm.log", config.worker_managers[0].logging_config.paths)
+
+    def test_logging_level_field_name(self) -> None:
+        """level (field name) should also be accepted as an alias."""
+        config = self._parse(self._native_base(level="DEBUG"))
+        self.assertEqual(config.worker_managers[0].logging_config.level, "DEBUG")
+
+    def test_worker_config_per_worker_capabilities(self) -> None:
+        config = self._parse(self._native_base(per_worker_capabilities="linux,cpu=4"))
+        caps = config.worker_managers[0].worker_config.per_worker_capabilities
+        self.assertIn("linux", caps.capabilities)
+
+    def test_worker_config_task_timeout_seconds(self) -> None:
+        config = self._parse(self._native_base(task_timeout_seconds=300))
+        self.assertEqual(config.worker_managers[0].worker_config.task_timeout_seconds, 300)
+
+    def test_mode_value_based_string(self) -> None:
+        """mode = "fixed" (value-based, lowercase) should work the same as for scaler_worker_manager."""
+        from scaler.config.section.native_worker_manager import NativeWorkerManagerMode
+
+        config = self._parse(self._native_base(mode="fixed"))
+        self.assertEqual(config.worker_managers[0].mode, NativeWorkerManagerMode.FIXED)
+
 
 class TestRunWorkerManager(unittest.TestCase):
     """Tests that _run_worker_manager calls register_event_loop and setup_logger from the per-manager config."""
