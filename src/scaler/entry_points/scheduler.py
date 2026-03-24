@@ -10,7 +10,6 @@ from scaler.config.types.object_storage_server import ObjectStorageAddressConfig
 def main(
     scheduler_config: Optional[SchedulerConfig] = None,
     address_queue: Optional[multiprocessing.Queue] = None,
-    spawn_object_storage: bool = True,
 ) -> None:
     if scheduler_config is None:
         scheduler_config = SchedulerConfig.parse("Scaler Scheduler", "scheduler")
@@ -18,7 +17,7 @@ def main(
     object_storage_address = scheduler_config.object_storage_address
     object_storage = None
 
-    if spawn_object_storage and object_storage_address is None:
+    if object_storage_address is None:
         assert scheduler_config.scheduler_address.port is not None, "Scheduler address must have a port"
         object_storage_address = ObjectStorageAddressConfig(
             host=scheduler_config.scheduler_address.host, port=scheduler_config.scheduler_address.port + 1

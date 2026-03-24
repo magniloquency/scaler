@@ -1,10 +1,13 @@
 All-in-One Entry Point (scaler_all)
 ====================================
 
-``scaler_all`` boots the full Scaler stack — object storage server, scheduler, and one or more worker managers —
-from a single TOML configuration file. Each recognised section spawns a separate process. Processes are started
-in dependency order: object storage first, then the scheduler (which receives the object storage address), then
-worker managers (which receive the scheduler address and object storage address).
+``scaler_all`` boots the full Scaler stack — scheduler and one or more worker managers —
+from a single TOML configuration file. Each recognised section spawns a separate process.
+The scheduler is started first; worker managers follow once the scheduler process is running.
+
+The scheduler also manages the object storage server. If ``object_storage_address`` is omitted
+from ``[scheduler]``, the scheduler automatically spawns an object storage server on
+``scheduler_address.port + 1``.
 
 Usage
 -----
@@ -18,18 +21,19 @@ If no recognised sections are found, ``scaler_all`` exits with an error.
 Minimal Example
 ---------------
 
-The simplest useful configuration — object storage server, scheduler, and one native worker manager.
-All network addresses are chosen automatically by the OS:
+The simplest useful configuration — a scheduler and one native worker manager. Because
+``object_storage_address`` is not set in ``[scheduler]``, the scheduler automatically starts
+an object storage server on port 6379 (``scheduler_address.port + 1``):
 
 .. code-block:: toml
 
-    [object_storage_server]
-
     [scheduler]
+    scheduler_address = "tcp://127.0.0.1:6378"
 
     [[worker_manager]]
     type = "baremetal_native"
     worker_manager_id = "wm-1"
+    scheduler_address = "tcp://127.0.0.1:6378"
 
 .. code-block:: bash
 
@@ -42,8 +46,6 @@ The optional ``[logging]`` section configures logging for worker manager process
 section sets worker-level options such as the event loop and number of IO threads, shared across all worker
 managers. Use the ``[[worker_manager]]`` array-of-tables syntax to define multiple worker managers; each entry
 is fully independent and can have a different ``type``, so you can mix adapter types in a single deployment.
-Here the object storage server and scheduler are bound to explicit addresses on all interfaces so that
-remote worker managers (ECS, Batch) can reach them by the host's routable IP:
 
 .. code-block:: toml
 
@@ -54,9 +56,6 @@ remote worker managers (ECS, Batch) can reach them by the host's routable IP:
     [worker]
     event_loop = "builtin"
     io_threads = 2
-
-    [object_storage_server]
-    object_storage_address = "tcp://0.0.0.0:6379"
 
     [scheduler]
     scheduler_address = "tcp://0.0.0.0:6378"
@@ -108,78 +107,45 @@ remote worker managers (ECS, Batch) can reach them by the host's routable IP:
 Object Storage
 --------------
 
-The ``[object_storage_server]`` section tells ``scaler_all`` to start and manage the object storage server.
-The actual bound address is propagated automatically to the scheduler and all worker managers, so no
-``object_storage_address`` key needs to appear in ``[scheduler]`` or ``[[worker_manager]]``.
-Worker managers that omit ``object_storage_address`` connect on ``127.0.0.1`` at the object
-storage server's actual bound port. Worker managers that set ``object_storage_address`` to port
-``0`` keep their configured host with the port filled in from the actual bound port.
+The object storage server is managed by the scheduler, not by ``scaler_all`` directly.
 
-If a specific address is required (e.g. so an external component can connect to it), set
-``object_storage_address`` explicitly:
-
-.. code-block:: toml
-
-    [object_storage_server]
-    object_storage_address = "tcp://0.0.0.0:6379"
-
-If ``[object_storage_server]`` is absent, no object storage server is started by ``scaler_all``. In that case
-both the ``[scheduler]`` section and every ``[[worker_manager]]`` section must include an
-``object_storage_address`` pointing to an already-running server:
+If ``object_storage_address`` is omitted from ``[scheduler]``, the scheduler automatically starts
+an object storage server on the same host as the scheduler, at ``scheduler_address.port + 1``:
 
 .. code-block:: toml
 
     [scheduler]
-    object_storage_address = "tcp://127.0.0.1:6379"
+    scheduler_address = "tcp://0.0.0.0:6378"
+    # object storage server will be started automatically on port 6379
 
-    [[worker_manager]]
-    type = "baremetal_native"
-    worker_manager_id = "wm-1"
-    object_storage_address = "tcp://127.0.0.1:6379"
+If you need to use a specific object storage address (e.g. an already-running server, or a
+different port), set ``object_storage_address`` explicitly in ``[scheduler]``:
+
+.. code-block:: toml
+
+    [scheduler]
+    scheduler_address = "tcp://0.0.0.0:6378"
+    object_storage_address = "tcp://127.0.0.1:9000"
+
+Worker managers that require access to the object storage server (e.g. remote ECS or Batch
+workers) must set ``object_storage_address`` explicitly in their ``[[worker_manager]]`` entry.
+Local worker managers that only communicate with the scheduler do not need it.
 
 Scheduler Address
 -----------------
 
-If ``scheduler_address`` is omitted from ``[scheduler]``, or set to port ``0`` (e.g.
-``"tcp://0.0.0.0:0"``), the OS assigns a free port automatically.
-Worker managers that omit ``scheduler_address`` connect to the scheduler on ``127.0.0.1`` at its
-actual bound port. Worker managers that set ``scheduler_address`` to port ``0`` keep their
-configured host but have the port filled in from the scheduler's actual bound port — useful when
-a worker manager needs to reach the scheduler on a specific network interface
-(e.g. ``"tcp://10.0.1.50:0"``).
-In most deployments no address configuration is needed at all (as shown in the example above).
-
-To pin the scheduler to a specific port:
+``scheduler_address`` is required in both the ``[scheduler]`` section and every ``[[worker_manager]]``
+section. There is no automatic address discovery or propagation between sections.
 
 .. code-block:: toml
 
     [scheduler]
     scheduler_address = "tcp://0.0.0.0:6378"
 
-Setting ``scheduler_address`` to port ``0`` in a ``[[worker_manager]]`` entry lets you choose the
-network interface while still relying on auto-assigned port discovery. This is useful when a single
-host runs both local and remote worker managers at the same time:
-
-.. code-block:: toml
-
-    [object_storage_server]
-
-    [scheduler]
-    # port 0 → OS picks a free port on all interfaces
-
     [[worker_manager]]
     type = "baremetal_native"
-    worker_manager_id = "wm-local"
-    # scheduler_address omitted → connects on 127.0.0.1 at the actual bound port
-    max_task_concurrency = 4
-
-    [[worker_manager]]
-    type = "symphony"
-    worker_manager_id = "wm-remote"
-    scheduler_address = "tcp://10.0.1.50:0"       # keeps routable host, port filled in
-    object_storage_address = "tcp://10.0.1.50:0"  # same for object storage
-    service_name = "ScalerService"
-    max_task_concurrency = 8
+    worker_manager_id = "wm-1"
+    scheduler_address = "tcp://127.0.0.1:6378"
 
 Logging Configuration
 ---------------------
@@ -219,10 +185,8 @@ The following section names are recognised:
      - Component started
    * - ``[logging]``
      - Logging config for worker manager processes
-   * - ``[object_storage_server]``
-     - Object storage server
    * - ``[scheduler]``
-     - Scaler scheduler
+     - Scaler scheduler (also manages object storage server)
    * - ``[[worker_manager]]``
      - Worker manager (discriminated by ``type`` field)
 
