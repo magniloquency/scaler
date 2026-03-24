@@ -53,7 +53,7 @@ class WorkerConfig(ConfigClass):
     )
     io_threads: int = dataclasses.field(
         default=defaults.DEFAULT_IO_THREADS,
-        metadata=dict(short="-wit", help="set the number of io threads for io backend per worker"),
+        metadata=dict(short="-it", help="set the number of io threads for io backend per worker"),
     )
     event_loop: str = dataclasses.field(
         default="builtin",
