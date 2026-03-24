@@ -20,10 +20,15 @@ class NativeWorkerManagerMode(enum.Enum):
 class NativeWorkerManagerConfig(ConfigClass):
     worker_manager_config: WorkerManagerConfig
     worker_manager_id: str = dataclasses.field(
-        metadata=dict(short="-wmi", help="worker manager ID to identify which manager spawned these workers")
+        metadata=dict(
+            short="-wmi", required=True, help="worker manager ID to identify which manager spawned these workers"
+        )
     )
 
-    preload: Optional[str] = None
+    preload: Optional[str] = dataclasses.field(
+        default=None,
+        metadata=dict(help="preload function spec executed on worker init, e.g. 'pkg.mod:func(arg1, kw=val)'"),
+    )
     worker_config: WorkerConfig = dataclasses.field(default_factory=WorkerConfig)
     logging_config: LoggingConfig = dataclasses.field(default_factory=LoggingConfig)
     event_loop: str = dataclasses.field(
@@ -55,8 +60,6 @@ class NativeWorkerManagerConfig(ConfigClass):
         parser.add_argument("-n", "--num-of-workers", dest="max_task_concurrency", type=int, help=argparse.SUPPRESS)
 
     def __post_init__(self) -> None:
-        if not self.worker_manager_id:
-            raise ValueError("worker_manager_id cannot be an empty string.")
         if self.worker_io_threads <= 0:
             raise ValueError("worker_io_threads must be a positive integer.")
         if self.mode == NativeWorkerManagerMode.FIXED and self.worker_manager_config.max_task_concurrency < 0:
