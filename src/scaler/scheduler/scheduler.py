@@ -1,5 +1,4 @@
 import asyncio
-import functools
 import logging
 
 import zmq.asyncio
@@ -269,9 +268,3 @@ class Scheduler:
         self._binder.destroy()
         self._binder_monitor.destroy()
         self._connector_storage.destroy()
-
-
-@functools.wraps(Scheduler)
-async def scheduler_main(*args, **kwargs):
-    scheduler = Scheduler(*args, **kwargs)
-    await scheduler.get_loops()
