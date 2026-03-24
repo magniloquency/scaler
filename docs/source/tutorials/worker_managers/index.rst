@@ -62,7 +62,7 @@ Unified Entry Points
 ~~~~~~~~~~~~~~~~~~~~
 
 The :doc:`scaler_worker_manager <worker_manager>` command provides a single entry point for all worker managers.
-The :doc:`scaler_all <all>` command boots the full stack from a single TOML config file.
+The :doc:`scaler <all>` command boots the full stack from a single TOML config file.
 
 .. toctree::
     :maxdepth: 1

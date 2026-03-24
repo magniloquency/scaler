@@ -61,10 +61,10 @@ def _run_worker_manager(logging: LoggingConfig, config: WorkerManagerUnion, work
 
 
 def main() -> None:
-    config = ScalerAllConfig.parse("scaler_all", "all")
+    config = ScalerAllConfig.parse("scaler", "all")
 
     if config.scheduler is None and not config.worker_managers:
-        print("scaler_all: no recognized sections found in config file", file=sys.stderr)
+        print("scaler: no recognized sections found in config file", file=sys.stderr)
         sys.exit(1)
 
     processes: List[multiprocessing.Process] = []

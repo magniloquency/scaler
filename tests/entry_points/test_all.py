@@ -89,42 +89,42 @@ class TestScalerAllEndToEnd(unittest.TestCase):
         """Return a mock _load_toml that yields the given data dict."""
         return patch("scaler.config.config_class._load_toml", return_value=data)
 
-    @patch("sys.argv", ["scaler_all", "--config", "test.toml"])
+    @patch("sys.argv", ["scaler", "--config", "test.toml"])
     def test_no_recognized_sections_exits(self) -> None:
         with self._make_toml_data({}):
-            config = _StubScalerAllConfig.parse("scaler_all", "all")
+            config = _StubScalerAllConfig.parse("scaler", "all")
         self.assertIsNone(config.scheduler)
         self.assertEqual(config.workers, [])
 
-    @patch("sys.argv", ["scaler_all", "--config", "test.toml"])
+    @patch("sys.argv", ["scaler", "--config", "test.toml"])
     def test_scheduler_section_populated(self) -> None:
         toml = {"scheduler": {"host": "127.0.0.1", "port": 8516}}
         with self._make_toml_data(toml):
-            config = _StubScalerAllConfig.parse("scaler_all", "all")
+            config = _StubScalerAllConfig.parse("scaler", "all")
         self.assertIsNotNone(config.scheduler)
         self.assertEqual(config.scheduler.host, "127.0.0.1")
 
-    @patch("sys.argv", ["scaler_all", "--config", "test.toml"])
+    @patch("sys.argv", ["scaler", "--config", "test.toml"])
     def test_workers_list_populated(self) -> None:
         toml = {"workers": [{"workers": 4}, {"workers": 8}]}
         with self._make_toml_data(toml):
-            config = _StubScalerAllConfig.parse("scaler_all", "all")
+            config = _StubScalerAllConfig.parse("scaler", "all")
         self.assertEqual(len(config.workers), 2)
 
-    @patch("sys.argv", ["scaler_all", "--help"])
+    @patch("sys.argv", ["scaler", "--help"])
     def test_help_exits(self) -> None:
         with self.assertRaises(SystemExit):
-            _StubScalerAllConfig.parse("scaler_all", "all")
+            _StubScalerAllConfig.parse("scaler", "all")
 
 
 class TestAIOMain(unittest.TestCase):
     """Tests for scaler_all main() process spawning logic."""
 
     def test_no_sections_exits_with_code_1(self) -> None:
-        from scaler.entry_points.all import main
+        from scaler.entry_points.scaler import main
 
         with patch("scaler.config.config_class._load_toml", return_value={}), patch(
-            "sys.argv", ["scaler_all", "--config", "test.toml"]
+            "sys.argv", ["scaler", "--config", "test.toml"]
         ):
             with self.assertRaises(SystemExit) as ctx:
                 main()
@@ -140,12 +140,12 @@ class TestScalerAllConfigShape(unittest.TestCase):
     """Tests that ScalerAllConfig reads the [logging] and [worker] sections."""
 
     def _parse(self, toml_data):
-        from scaler.entry_points.all import ScalerAllConfig
+        from scaler.entry_points.scaler import ScalerAllConfig
 
         with patch("scaler.config.config_class._load_toml", return_value=toml_data), patch(
-            "sys.argv", ["scaler_all", "--config", "test.toml"]
+            "sys.argv", ["scaler", "--config", "test.toml"]
         ):
-            return ScalerAllConfig.parse("scaler_all", "all")
+            return ScalerAllConfig.parse("scaler", "all")
 
     def test_logging_section_sets_level(self) -> None:
         config = self._parse({"logging": {"level": "DEBUG"}})
@@ -223,13 +223,13 @@ class TestRunWorkerManager(unittest.TestCase):
     def test_register_event_loop_called_with_worker_config_event_loop(self) -> None:
         from scaler.config.common.logging import LoggingConfig
         from scaler.config.common.worker import WorkerConfig
-        from scaler.entry_points.all import _run_worker_manager
+        from scaler.entry_points.scaler import _run_worker_manager
 
         config = self._make_native_config()
         worker_config = WorkerConfig(event_loop="builtin")
 
-        with patch("scaler.entry_points.all.register_event_loop") as mock_reg, patch(
-            "scaler.entry_points.all.setup_logger"
+        with patch("scaler.entry_points.scaler.register_event_loop") as mock_reg, patch(
+            "scaler.entry_points.scaler.setup_logger"
         ), patch("scaler.worker_manager_adapter.baremetal.native.NativeWorkerManager") as mock_nm:
             mock_nm.return_value.run.return_value = None
             _run_worker_manager(LoggingConfig(), config, worker_config)
@@ -239,13 +239,13 @@ class TestRunWorkerManager(unittest.TestCase):
     def test_setup_logger_called_with_logging_config(self) -> None:
         from scaler.config.common.logging import LoggingConfig
         from scaler.config.common.worker import WorkerConfig
-        from scaler.entry_points.all import _run_worker_manager
+        from scaler.entry_points.scaler import _run_worker_manager
 
         config = self._make_native_config()
         logging_cfg = LoggingConfig(level="WARNING")
 
-        with patch("scaler.entry_points.all.setup_logger") as mock_log, patch(
-            "scaler.entry_points.all.register_event_loop"
+        with patch("scaler.entry_points.scaler.setup_logger") as mock_log, patch(
+            "scaler.entry_points.scaler.register_event_loop"
         ), patch("scaler.worker_manager_adapter.baremetal.native.NativeWorkerManager") as mock_nm:
             mock_nm.return_value.run.return_value = None
             _run_worker_manager(logging_cfg, config, WorkerConfig())

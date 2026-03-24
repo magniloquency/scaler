@@ -1,7 +1,7 @@
-All-in-One Entry Point (scaler_all)
-====================================
+All-in-One Entry Point (scaler)
+===============================
 
-``scaler_all`` boots the full Scaler stack — scheduler and one or more worker managers —
+``scaler`` boots the full Scaler stack — scheduler and one or more worker managers —
 from a single TOML configuration file. Each recognised section spawns a separate process.
 The scheduler is started first; worker managers follow once the scheduler process is running.
 
@@ -14,9 +14,9 @@ Usage
 
 .. code-block:: bash
 
-    scaler_all --config <file>
+    scaler --config <file>
 
-If no recognised sections are found, ``scaler_all`` exits with an error.
+If no recognised sections are found, ``scaler`` exits with an error.
 
 Minimal Example
 ---------------
@@ -37,7 +37,7 @@ an object storage server on port 6379 (``scheduler_address.port + 1``):
 
 .. code-block:: bash
 
-    scaler_all --config stack.toml
+    scaler --config stack.toml
 
 Extended Example
 ----------------
@@ -102,12 +102,12 @@ is fully independent and can have a different ``type``, so you can mix adapter t
 
 .. code-block:: bash
 
-    scaler_all --config stack.toml
+    scaler --config stack.toml
 
 Object Storage
 --------------
 
-The object storage server is managed by the scheduler, not by ``scaler_all`` directly.
+The object storage server is managed by the scheduler, not by ``scaler`` directly.
 
 If ``object_storage_address`` is omitted from ``[scheduler]``, the scheduler automatically starts
 an object storage server on the same host as the scheduler, at ``scheduler_address.port + 1``:
@@ -150,7 +150,7 @@ section. There is no automatic address discovery or propagation between sections
 Logging Configuration
 ---------------------
 
-The optional ``[logging]`` section configures logging for all worker manager processes started by ``scaler_all``.
+The optional ``[logging]`` section configures logging for all worker manager processes started by ``scaler``.
 The scheduler process uses its own ``[scheduler]`` logging settings (see below).
 
 .. code-block:: toml
@@ -165,7 +165,7 @@ Worker Configuration
 --------------------
 
 Worker settings such as ``event_loop`` and ``io_threads`` belong to the ``[worker]`` section,
-which is shared across all worker managers started by ``scaler_all``:
+which is shared across all worker managers started by ``scaler``:
 
 .. code-block:: toml
 
