@@ -371,7 +371,6 @@ class TestClientPreload(unittest.TestCase):
                 ),
                 worker_manager_id="test_manager",
                 mode=NativeWorkerManagerMode.FIXED,
-                preload=preload,
                 worker_config=WorkerConfig(
                     per_worker_capabilities=WorkerCapabilities({}),
                     per_worker_task_queue_size=base_manager._task_queue_size,
@@ -383,6 +382,7 @@ class TestClientPreload(unittest.TestCase):
                     hard_processor_suspend=base_manager._hard_processor_suspend,
                     io_threads=base_manager._io_threads,
                     event_loop=base_manager._event_loop,
+                    preload=preload,
                 ),
                 logging_config=LoggingConfig(
                     paths=logging_paths,

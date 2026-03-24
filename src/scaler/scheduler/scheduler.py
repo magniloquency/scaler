@@ -67,9 +67,7 @@ class Scheduler:
                 host=config.object_storage_address.host, port=config.object_storage_address.port
             )
         else:
-            object_storage_address = ObjectStorageAddress.new_msg(
-                host=self._address.host, port=self._address.port + 1
-            )
+            object_storage_address = ObjectStorageAddress.new_msg(host=self._address.host, port=self._address.port + 1)
         self._config_controller.update_config("object_storage_address", object_storage_address)
 
         monitor_address = config.monitor_address or ZMQConfig(
