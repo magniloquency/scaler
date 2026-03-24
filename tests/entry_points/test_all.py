@@ -206,6 +206,7 @@ class TestScalerAllConfigShape(unittest.TestCase):
         config = self._parse(toml)
         self.assertEqual(len(config.worker_managers), 2)
 
+
 class TestRunWorkerManager(unittest.TestCase):
     """Tests that _run_worker_manager calls register_event_loop with worker_config.event_loop."""
 

@@ -8,8 +8,7 @@ from scaler.config.types.object_storage_server import ObjectStorageAddressConfig
 
 
 def main(
-    scheduler_config: Optional[SchedulerConfig] = None,
-    address_queue: Optional[multiprocessing.Queue] = None,
+    scheduler_config: Optional[SchedulerConfig] = None, address_queue: Optional[multiprocessing.Queue] = None
 ) -> None:
     if scheduler_config is None:
         scheduler_config = SchedulerConfig.parse("Scaler Scheduler", "scheduler")
