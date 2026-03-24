@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import shlex
 import signal
 import uuid
 from dataclasses import dataclass
@@ -49,6 +50,7 @@ class ECSWorkerManager:
         self._garbage_collect_interval_seconds = worker_config.garbage_collect_interval_seconds
         self._trim_memory_threshold_bytes = worker_config.trim_memory_threshold_bytes
         self._hard_processor_suspend = worker_config.hard_processor_suspend
+        self._preload = config.preload
         self._event_loop = worker_config.event_loop
 
         self._aws_access_key_id = config.aws_access_key_id
@@ -236,6 +238,9 @@ class ECSWorkerManager:
             command += f" --per-worker-capabilities {format_capabilities(self._capabilities)}"
 
         command += f" --worker-manager-id {self._worker_manager_id.decode()}"
+
+        if self._preload is not None:
+            command += f" --preload {shlex.quote(self._preload)}"
 
         resp = self._ecs_client.run_task(
             cluster=self._ecs_cluster,
