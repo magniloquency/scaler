@@ -28,19 +28,29 @@ def _load_toml(config_path: str) -> Dict[str, Any]:
 def _toml_section_defaults(section_data: Dict[str, Any], cls: type) -> Dict[str, Any]:
     """Flatten a raw TOML section dict into argparse-compatible defaults.
 
-    Normalises keys so that both 'my-field' and 'my_field' map to 'my_field'.
+    Keys correspond to the long CLI argument name (without '--'), and may use
+    underscores or hyphens interchangeably. For fields without an explicit long
+    name, the field name is used (which equals the auto-derived long name).
     Only returns keys that correspond to actual fields on cls (and its nested
     ConfigClass fields), so unrelated TOML keys are silently ignored.
     """
-    field_names: set = set()
+    # Map normalized TOML key -> argparse dest (field name).
+    key_to_dest: Dict[str, str] = {}
     for f in dataclasses.fields(cls):  # type: ignore[arg-type]
         if is_config_class(f.type):
             for ff in dataclasses.fields(f.type):  # type: ignore[arg-type]
-                field_names.add(ff.name)
+                long = ff.metadata.get("long", f"--{ff.name.replace('_', '-')}")
+                key_to_dest[long.lstrip("-").replace("-", "_")] = ff.name
         elif "subcommand" not in f.metadata and "section" not in f.metadata:
-            field_names.add(f.name)
+            long = f.metadata.get("long", f"--{f.name.replace('_', '-')}")
+            key_to_dest[long.lstrip("-").replace("-", "_")] = f.name
 
-    return {key.replace("-", "_"): value for key, value in section_data.items() if key.replace("-", "_") in field_names}
+    result: Dict[str, Any] = {}
+    for key, value in section_data.items():
+        dest = key_to_dest.get(key.replace("-", "_"))
+        if dest is not None:
+            result[dest] = value
+    return result
 
 
 def _env_defaults(cls: type) -> Dict[str, Any]:
