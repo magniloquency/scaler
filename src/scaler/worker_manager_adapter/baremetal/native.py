@@ -7,8 +7,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import zmq
 
-from scaler.config.common.logging import LoggingConfig
-from scaler.config.common.worker import WorkerConfig
 from scaler.config.section.native_worker_manager import NativeWorkerManagerConfig, NativeWorkerManagerMode
 from scaler.io import ymq
 from scaler.io.mixins import AsyncConnector
@@ -29,25 +27,25 @@ Status = WorkerManagerCommandResponse.Status
 
 
 class NativeWorkerManager:
-    def __init__(self, config: NativeWorkerManagerConfig, worker_config: WorkerConfig, logging_config: LoggingConfig):
+    def __init__(self, config: NativeWorkerManagerConfig):
         self._address = config.worker_manager_config.scheduler_address
         self._object_storage_address = config.worker_manager_config.object_storage_address
-        self._capabilities = worker_config.per_worker_capabilities.capabilities
-        self._worker_manager_id = config.worker_manager_config.worker_manager_id.encode()
-        self._io_threads = worker_config.io_threads
-        self._task_queue_size = worker_config.per_worker_task_queue_size
+        self._capabilities = config.worker_config.per_worker_capabilities.capabilities
+        self._worker_manager_id = config.worker_manager_id.encode()
+        self._io_threads = config.worker_config.io_threads
+        self._task_queue_size = config.worker_config.per_worker_task_queue_size
         self._max_task_concurrency = config.worker_manager_config.max_task_concurrency
-        self._heartbeat_interval_seconds = worker_config.heartbeat_interval_seconds
-        self._task_timeout_seconds = worker_config.task_timeout_seconds
-        self._death_timeout_seconds = worker_config.death_timeout_seconds
-        self._garbage_collect_interval_seconds = worker_config.garbage_collect_interval_seconds
-        self._trim_memory_threshold_bytes = worker_config.trim_memory_threshold_bytes
-        self._hard_processor_suspend = worker_config.hard_processor_suspend
-        self._event_loop = worker_config.event_loop
-        self._preload = config.worker_manager_config.preload
-        self._logging_paths = logging_config.paths
-        self._logging_level = logging_config.level
-        self._logging_config_file = logging_config.config_file
+        self._heartbeat_interval_seconds = config.worker_config.heartbeat_interval_seconds
+        self._task_timeout_seconds = config.worker_config.task_timeout_seconds
+        self._death_timeout_seconds = config.worker_config.death_timeout_seconds
+        self._garbage_collect_interval_seconds = config.worker_config.garbage_collect_interval_seconds
+        self._trim_memory_threshold_bytes = config.worker_config.trim_memory_threshold_bytes
+        self._hard_processor_suspend = config.worker_config.hard_processor_suspend
+        self._event_loop = config.worker_config.event_loop
+        self._preload = config.preload
+        self._logging_paths = config.logging_config.logging_paths
+        self._logging_level = config.logging_config.logging_level
+        self._logging_config_file = config.logging_config.config_file
         self._mode = config.mode
 
         if config.worker_type is not None:

@@ -95,25 +95,27 @@ class SchedulerClusterCombo:
             NativeWorkerManagerConfig(
                 worker_manager_config=WorkerManagerConfig(
                     scheduler_address=self._address,
-                    worker_manager_id=worker_manager_id,
                     object_storage_address=self._object_storage_address,
                     max_task_concurrency=n_workers,
                 ),
+                worker_manager_id=worker_manager_id,
                 mode=NativeWorkerManagerMode.FIXED,
-            ),
-            WorkerConfig(
-                per_worker_capabilities=WorkerCapabilities(per_worker_capabilities or {}),
-                per_worker_task_queue_size=per_worker_task_queue_size,
-                heartbeat_interval_seconds=heartbeat_interval_seconds,
-                task_timeout_seconds=task_timeout_seconds,
-                death_timeout_seconds=death_timeout_seconds,
-                garbage_collect_interval_seconds=garbage_collect_interval_seconds,
-                trim_memory_threshold_bytes=trim_memory_threshold_bytes,
-                hard_processor_suspend=hard_processor_suspend,
-                io_threads=worker_io_threads,
-                event_loop=event_loop,
-            ),
-            LoggingConfig(paths=logging_paths, config_file=logging_config_file, level=logging_level),
+                worker_config=WorkerConfig(
+                    per_worker_capabilities=WorkerCapabilities(per_worker_capabilities or {}),
+                    per_worker_task_queue_size=per_worker_task_queue_size,
+                    heartbeat_interval_seconds=heartbeat_interval_seconds,
+                    task_timeout_seconds=task_timeout_seconds,
+                    death_timeout_seconds=death_timeout_seconds,
+                    garbage_collect_interval_seconds=garbage_collect_interval_seconds,
+                    trim_memory_threshold_bytes=trim_memory_threshold_bytes,
+                    hard_processor_suspend=hard_processor_suspend,
+                    io_threads=worker_io_threads,
+                    event_loop=event_loop,
+                ),
+                logging_config=LoggingConfig(
+                    logging_paths=logging_paths, config_file=logging_config_file, logging_level=logging_level
+                ),
+            )
         )
 
         self._worker_manager_process = multiprocessing.Process(target=self._worker_manager.run)

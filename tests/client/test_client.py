@@ -366,28 +366,30 @@ class TestClientPreload(unittest.TestCase):
             NativeWorkerManagerConfig(
                 worker_manager_config=WorkerManagerConfig(
                     scheduler_address=self.combo._address,
-                    worker_manager_id="test_manager",
                     object_storage_address=self.combo._object_storage_address,
                     max_task_concurrency=1,
-                    preload=preload,
                 ),
+                worker_manager_id="test_manager",
                 mode=NativeWorkerManagerMode.FIXED,
-            ),
-            WorkerConfig(
-                per_worker_capabilities=WorkerCapabilities({}),
-                per_worker_task_queue_size=base_manager._task_queue_size,
-                heartbeat_interval_seconds=base_manager._heartbeat_interval_seconds,
-                task_timeout_seconds=base_manager._task_timeout_seconds,
-                death_timeout_seconds=base_manager._death_timeout_seconds,
-                garbage_collect_interval_seconds=base_manager._garbage_collect_interval_seconds,
-                trim_memory_threshold_bytes=base_manager._trim_memory_threshold_bytes,
-                hard_processor_suspend=base_manager._hard_processor_suspend,
-                io_threads=base_manager._io_threads,
-                event_loop=base_manager._event_loop,
-            ),
-            LoggingConfig(
-                paths=logging_paths, level=base_manager._logging_level, config_file=base_manager._logging_config_file
-            ),
+                preload=preload,
+                worker_config=WorkerConfig(
+                    per_worker_capabilities=WorkerCapabilities({}),
+                    per_worker_task_queue_size=base_manager._task_queue_size,
+                    heartbeat_interval_seconds=base_manager._heartbeat_interval_seconds,
+                    task_timeout_seconds=base_manager._task_timeout_seconds,
+                    death_timeout_seconds=base_manager._death_timeout_seconds,
+                    garbage_collect_interval_seconds=base_manager._garbage_collect_interval_seconds,
+                    trim_memory_threshold_bytes=base_manager._trim_memory_threshold_bytes,
+                    hard_processor_suspend=base_manager._hard_processor_suspend,
+                    io_threads=base_manager._io_threads,
+                    event_loop=base_manager._event_loop,
+                ),
+                logging_config=LoggingConfig(
+                    logging_paths=logging_paths,
+                    logging_level=base_manager._logging_level,
+                    config_file=base_manager._logging_config_file,
+                ),
+            )
         )
         return multiprocessing.Process(target=preload_manager.run)
 

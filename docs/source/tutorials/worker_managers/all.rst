@@ -42,20 +42,11 @@ an object storage server on port 6379 (``scheduler_address.port + 1``):
 Extended Example
 ----------------
 
-The optional ``[logging]`` section configures logging for worker manager processes. The optional ``[worker]``
-section sets worker-level options such as the event loop and number of IO threads, shared across all worker
-managers. Use the ``[[worker_manager]]`` array-of-tables syntax to define multiple worker managers; each entry
-is fully independent and can have a different ``type``, so you can mix adapter types in a single deployment.
+Use the ``[[worker_manager]]`` array-of-tables syntax to define multiple worker managers; each entry is fully
+independent and can have a different ``type``, so you can mix adapter types in a single deployment. Each manager
+carries its own ``logging_level``, ``logging_paths``, ``event_loop``, and ``worker_io_threads`` settings.
 
 .. code-block:: toml
-
-    [logging]
-    level = "INFO"
-    paths = ["/var/log/scaler/worker.log"]
-
-    [worker]
-    event_loop = "builtin"
-    io_threads = 2
 
     [scheduler]
     scheduler_address = "tcp://0.0.0.0:6378"
@@ -66,6 +57,10 @@ is fully independent and can have a different ``type``, so you can mix adapter t
     scheduler_address = "tcp://127.0.0.1:6378"
     max_task_concurrency = 4
     mode = "fixed"
+    event_loop = "builtin"
+    io_threads = 2
+    logging_level = "INFO"
+    logging_paths = ["/var/log/scaler/worker.log"]
 
     [[worker_manager]]
     type = "baremetal_native"
@@ -147,32 +142,6 @@ section. There is no automatic address discovery or propagation between sections
     worker_manager_id = "wm-1"
     scheduler_address = "tcp://127.0.0.1:6378"
 
-Logging Configuration
----------------------
-
-The optional ``[logging]`` section configures logging for all worker manager processes started by ``scaler``.
-The scheduler process uses its own ``[scheduler]`` logging settings (see below).
-
-.. code-block:: toml
-
-    [logging]
-    level = "DEBUG"
-    paths = ["/var/log/scaler/worker.log"]
-
-If ``[logging]`` is absent, default logging settings are used (stdout, ``INFO`` level).
-
-Worker Configuration
---------------------
-
-Worker settings such as ``event_loop`` and ``io_threads`` belong to the ``[worker]`` section,
-which is shared across all worker managers started by ``scaler``:
-
-.. code-block:: toml
-
-    [worker]
-    event_loop = "builtin"    # or "uvloop"
-    io_threads = 2
-
 Recognised Section Names
 -------------------------
 
@@ -183,8 +152,6 @@ The following section names are recognised:
 
    * - TOML Section
      - Component started
-   * - ``[logging]``
-     - Logging config for worker manager processes
    * - ``[scheduler]``
      - Scaler scheduler (also manages object storage server)
    * - ``[[worker_manager]]``

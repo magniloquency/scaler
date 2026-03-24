@@ -8,7 +8,7 @@ from scaler.utility.logging.utility import LoggingLevel
 
 @dataclasses.dataclass
 class LoggingConfig(ConfigClass):
-    paths: Tuple[str, ...] = dataclasses.field(
+    logging_paths: Tuple[str, ...] = dataclasses.field(
         default=defaults.DEFAULT_LOGGING_PATHS,
         metadata=dict(
             type=str,
@@ -30,7 +30,7 @@ class LoggingConfig(ConfigClass):
             "and also does not support per-worker logging",
         ),
     )
-    level: str = dataclasses.field(
+    logging_level: str = dataclasses.field(
         default=defaults.DEFAULT_LOGGING_LEVEL,
         metadata=dict(
             long="--logging-level",

@@ -3,6 +3,8 @@ import dataclasses
 import enum
 from typing import ClassVar, Optional
 
+from scaler.config.common.logging import LoggingConfig
+from scaler.config.common.worker import WorkerConfig
 from scaler.config.common.worker_manager import WorkerManagerConfig
 from scaler.config.config_class import ConfigClass
 
@@ -18,6 +20,10 @@ class NativeWorkerManagerConfig(ConfigClass):
 
     worker_manager_config: WorkerManagerConfig
 
+    worker_manager_id: str = dataclasses.field(
+        metadata=dict(short="-wmi", required=True, help="worker manager ID to identify this manager")
+    )
+
     mode: NativeWorkerManagerMode = dataclasses.field(
         default=NativeWorkerManagerMode.DYNAMIC,
         metadata=dict(
@@ -31,11 +37,21 @@ class NativeWorkerManagerConfig(ConfigClass):
         metadata=dict(help="worker type prefix used in worker IDs; defaults to 'FIX' or 'NAT' based on mode"),
     )
 
+    preload: Optional[str] = dataclasses.field(
+        default=None,
+        metadata=dict(help="preload function spec executed on worker init, e.g. 'pkg.mod:func(arg1, kw=val)'"),
+    )
+
+    worker_config: WorkerConfig = dataclasses.field(default_factory=WorkerConfig)
+    logging_config: LoggingConfig = dataclasses.field(default_factory=LoggingConfig)
+
     @classmethod
     def configure_parser(cls, parser: argparse.ArgumentParser) -> None:
         super().configure_parser(parser)
         parser.add_argument("-n", "--num-of-workers", dest="max_task_concurrency", type=int, help=argparse.SUPPRESS)
 
     def __post_init__(self) -> None:
+        if not self.worker_manager_id:
+            raise ValueError("worker_manager_id cannot be an empty string.")
         if self.mode == NativeWorkerManagerMode.FIXED and self.worker_manager_config.max_task_concurrency < 0:
             raise ValueError("max_task_concurrency must be >= 0 for fixed mode")

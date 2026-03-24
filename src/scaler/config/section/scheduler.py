@@ -79,7 +79,7 @@ class SchedulerConfig(ConfigClass):
         ),
     )
 
-    logging: LoggingConfig = dataclasses.field(default_factory=LoggingConfig)
+    logging_config: LoggingConfig = dataclasses.field(default_factory=LoggingConfig)
     event_loop: str = dataclasses.field(
         default="builtin",
         metadata=dict(short="-el", choices=EventLoopType.allowed_types(), help="select the event loop type"),

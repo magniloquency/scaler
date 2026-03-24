@@ -260,9 +260,9 @@ class TestPreloadCLIArgument(unittest.TestCase):
     )
     def test_native_worker_manager_config_parses_preload(self) -> None:
         config = NativeWorkerManagerConfig.parse("test", "native_worker_manager")
-        self.assertEqual(config.worker_manager_config.preload, "mypackage.init:setup('production')")
+        self.assertEqual(config.preload, "mypackage.init:setup('production')")
 
     @patch("sys.argv", ["script", "tcp://127.0.0.1:8516", "--worker-manager-id", "test_wm"])
     def test_native_worker_manager_config_preload_defaults_to_none(self) -> None:
         config = NativeWorkerManagerConfig.parse("test", "native_worker_manager")
-        self.assertIsNone(config.worker_manager_config.preload)
+        self.assertIsNone(config.preload)

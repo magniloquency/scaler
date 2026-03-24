@@ -3,8 +3,6 @@ import multiprocessing
 import sys
 from typing import List, Optional, Union
 
-from scaler.config.common.logging import LoggingConfig
-from scaler.config.common.worker import WorkerConfig
 from scaler.config.config_class import ConfigClass
 from scaler.config.section.aws_hpc_worker_manager import AWSBatchWorkerManagerConfig
 from scaler.config.section.ecs_worker_manager import ECSWorkerManagerConfig
@@ -22,8 +20,6 @@ WorkerManagerUnion = Union[
 @dataclasses.dataclass
 class ScalerAllConfig(ConfigClass):
     # Declaration order = startup order (scheduler before workers).
-    logging: LoggingConfig = dataclasses.field(default_factory=LoggingConfig, metadata=dict(section="logging"))
-    worker: WorkerConfig = dataclasses.field(default_factory=WorkerConfig, metadata=dict(section="worker"))
     scheduler: Optional[SchedulerConfig] = dataclasses.field(default=None, metadata=dict(section="scheduler"))
     worker_managers: List[WorkerManagerUnion] = dataclasses.field(
         default_factory=list, metadata=dict(section="worker_manager", discriminator="type")
@@ -39,25 +35,30 @@ def _run_scheduler(config: SchedulerConfig) -> None:
     _main(config)
 
 
-def _run_worker_manager(logging: LoggingConfig, config: WorkerManagerUnion, worker_config: WorkerConfig) -> None:
-    setup_logger(logging.paths, logging.config_file, logging.level)
-    register_event_loop(worker_config.event_loop)
+def _run_worker_manager(config: WorkerManagerUnion) -> None:
+    setup_logger(
+        config.logging_config.logging_paths, config.logging_config.config_file, config.logging_config.logging_level
+    )
+    if isinstance(config, AWSBatchWorkerManagerConfig):
+        register_event_loop(config.event_loop)
+    else:
+        register_event_loop(config.worker_config.event_loop)
     if isinstance(config, NativeWorkerManagerConfig):
         from scaler.worker_manager_adapter.baremetal.native import NativeWorkerManager
 
-        NativeWorkerManager(config, worker_config, logging).run()
+        NativeWorkerManager(config).run()
     elif isinstance(config, SymphonyWorkerManagerConfig):
         from scaler.worker_manager_adapter.symphony.worker_manager import SymphonyWorkerManager
 
-        SymphonyWorkerManager(config, worker_config).run()
+        SymphonyWorkerManager(config).run()
     elif isinstance(config, ECSWorkerManagerConfig):
         from scaler.worker_manager_adapter.aws_raw.ecs import ECSWorkerManager
 
-        ECSWorkerManager(config, worker_config).run()
+        ECSWorkerManager(config).run()
     elif isinstance(config, AWSBatchWorkerManagerConfig):
         from scaler.worker_manager_adapter.aws_hpc.worker_manager import AWSHPCWorkerManager
 
-        AWSHPCWorkerManager(config, worker_config).run()
+        AWSHPCWorkerManager(config).run()
 
 
 def main() -> None:
@@ -75,9 +76,7 @@ def main() -> None:
         processes.append(sched_process)
 
     for wm_config in config.worker_managers:
-        wm_process = multiprocessing.Process(
-            target=_run_worker_manager, args=(config.logging, wm_config, config.worker), name=wm_config._tag
-        )
+        wm_process = multiprocessing.Process(target=_run_worker_manager, args=(wm_config,), name=wm_config._tag)
         wm_process.start()
         processes.append(wm_process)
 

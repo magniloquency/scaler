@@ -53,31 +53,26 @@ the manager. They appear under the sub-command:
 Using a TOML Config File
 -------------------------
 
-All flags can be placed in a TOML file. Logging settings go in an optional ``[logging]`` section;
-worker settings (e.g. ``event_loop``, ``io_threads``) go in a ``[worker]`` section;
-worker manager settings go in the sub-command section:
+All flags can be placed in a TOML file. All settings — including logging and worker settings —
+go in the sub-command section:
 
 .. code-block:: toml
 
     # cluster.toml
-    [logging]
-    level = "INFO"
-
-    [worker]
-    event_loop = "builtin"
-    io_threads = 2
-
     [baremetal_native]
     scheduler_address = "tcp://127.0.0.1:8516"
     worker_manager_id = "wm-1"
     max_task_concurrency = 4
+    logging_level = "INFO"
+    event_loop = "builtin"
+    io_threads = 2
 
 .. code-block:: bash
 
-    scaler_worker_manager baremetal_native --config cluster.toml tcp://127.0.0.1:8516 --worker-manager-id wm-1
+    scaler_worker_manager baremetal_native --config cluster.toml tcp://127.0.0.1:8516
 
 CLI flags always override TOML values, so ``--logging-level DEBUG`` takes precedence over
-``level = "INFO"`` in the config file.
+``logging_level = "INFO"`` in the config file.
 
 Sub-commands
 ------------

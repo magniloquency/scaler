@@ -461,24 +461,24 @@ def _run_native_worker_manager(
         NativeWorkerManagerConfig(
             worker_manager_config=WorkerManagerConfig(
                 scheduler_address=ZMQConfig.from_string(scheduler_address),
-                worker_manager_id=worker_manager_id,
                 object_storage_address=None,
                 max_task_concurrency=max_task_concurrency,
-            )
-        ),
-        WorkerConfig(
-            per_worker_capabilities=WorkerCapabilities({}),
-            per_worker_task_queue_size=10,
-            heartbeat_interval_seconds=DEFAULT_HEARTBEAT_INTERVAL_SECONDS,
-            task_timeout_seconds=DEFAULT_TASK_TIMEOUT_SECONDS,
-            death_timeout_seconds=DEFAULT_WORKER_DEATH_TIMEOUT,
-            garbage_collect_interval_seconds=DEFAULT_GARBAGE_COLLECT_INTERVAL_SECONDS,
-            trim_memory_threshold_bytes=DEFAULT_TRIM_MEMORY_THRESHOLD_BYTES,
-            hard_processor_suspend=DEFAULT_HARD_PROCESSOR_SUSPEND,
-            io_threads=DEFAULT_IO_THREADS,
-            event_loop="builtin",
-        ),
-        LoggingConfig(paths=("/dev/stdout",), level="INFO", config_file=None),
+            ),
+            worker_manager_id=worker_manager_id,
+            worker_config=WorkerConfig(
+                per_worker_capabilities=WorkerCapabilities({}),
+                per_worker_task_queue_size=10,
+                heartbeat_interval_seconds=DEFAULT_HEARTBEAT_INTERVAL_SECONDS,
+                task_timeout_seconds=DEFAULT_TASK_TIMEOUT_SECONDS,
+                death_timeout_seconds=DEFAULT_WORKER_DEATH_TIMEOUT,
+                garbage_collect_interval_seconds=DEFAULT_GARBAGE_COLLECT_INTERVAL_SECONDS,
+                trim_memory_threshold_bytes=DEFAULT_TRIM_MEMORY_THRESHOLD_BYTES,
+                hard_processor_suspend=DEFAULT_HARD_PROCESSOR_SUSPEND,
+                io_threads=DEFAULT_IO_THREADS,
+                event_loop="builtin",
+            ),
+            logging_config=LoggingConfig(logging_paths=("/dev/stdout",), logging_level="INFO", config_file=None),
+        )
     )
 
     manager.run()

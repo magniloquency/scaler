@@ -137,7 +137,7 @@ class TestAIOMain(unittest.TestCase):
 
 
 class TestScalerAllConfigShape(unittest.TestCase):
-    """Tests that ScalerAllConfig reads the [logging] and [worker] sections."""
+    """Tests that ScalerAllConfig reads the [[worker_manager]] sections."""
 
     def _parse(self, toml_data):
         from scaler.entry_points.scaler import ScalerAllConfig
@@ -146,17 +146,6 @@ class TestScalerAllConfigShape(unittest.TestCase):
             "sys.argv", ["scaler", "--config", "test.toml"]
         ):
             return ScalerAllConfig.parse("scaler", "all")
-
-    def test_logging_section_sets_level(self) -> None:
-        config = self._parse({"logging": {"level": "DEBUG"}})
-        self.assertEqual(config.logging.level, "DEBUG")
-
-    def test_logging_section_absent_uses_defaults(self) -> None:
-        from scaler.config.common.logging import LoggingConfig
-
-        config = self._parse({})
-        self.assertEqual(config.logging.level, LoggingConfig().level)
-        self.assertEqual(config.logging.paths, LoggingConfig().paths)
 
     def test_worker_manager_native_parsed_from_toml(self) -> None:
         from scaler.config.section.native_worker_manager import NativeWorkerManagerConfig
@@ -172,29 +161,29 @@ class TestScalerAllConfigShape(unittest.TestCase):
         self.assertEqual(len(config.worker_managers), 1)
         self.assertIsInstance(config.worker_managers[0], NativeWorkerManagerConfig)
 
-    def test_worker_config_io_threads_from_toml(self) -> None:
+    def test_per_manager_worker_io_threads_from_toml(self) -> None:
         toml = {
-            "worker": {"io_threads": 4},
             "worker_manager": {
                 "type": "baremetal_native",
                 "scheduler_address": "tcp://127.0.0.1:6378",
                 "worker_manager_id": "wm-1",
-            },
+                "io_threads": 4,
+            }
         }
         config = self._parse(toml)
-        self.assertEqual(config.worker.io_threads, 4)
+        self.assertEqual(config.worker_managers[0].worker_config.io_threads, 4)
 
-    def test_worker_config_event_loop_from_toml(self) -> None:
+    def test_per_manager_event_loop_from_toml(self) -> None:
         toml = {
-            "worker": {"event_loop": "builtin"},
             "worker_manager": {
                 "type": "baremetal_native",
                 "scheduler_address": "tcp://127.0.0.1:6378",
                 "worker_manager_id": "wm-1",
-            },
+                "event_loop": "builtin",
+            }
         }
         config = self._parse(toml)
-        self.assertEqual(config.worker.event_loop, "builtin")
+        self.assertEqual(config.worker_managers[0].worker_config.event_loop, "builtin")
 
     def test_multiple_worker_managers_from_toml(self) -> None:
         toml = {
@@ -208,46 +197,47 @@ class TestScalerAllConfigShape(unittest.TestCase):
 
 
 class TestRunWorkerManager(unittest.TestCase):
-    """Tests that _run_worker_manager calls register_event_loop with worker_config.event_loop."""
+    """Tests that _run_worker_manager calls register_event_loop and setup_logger from the per-manager config."""
 
-    def _make_native_config(self):
+    def _make_native_config(self, event_loop="builtin", logging_level="INFO"):
+        from scaler.config.common.logging import LoggingConfig
+        from scaler.config.common.worker import WorkerConfig
         from scaler.config.common.worker_manager import WorkerManagerConfig
         from scaler.config.section.native_worker_manager import NativeWorkerManagerConfig
         from scaler.config.types.zmq import ZMQConfig
 
-        wmc = WorkerManagerConfig(
-            scheduler_address=ZMQConfig.from_string("tcp://localhost:6378"), worker_manager_id="wm-test"
+        wmc = WorkerManagerConfig(scheduler_address=ZMQConfig.from_string("tcp://localhost:6378"))
+        return NativeWorkerManagerConfig(
+            worker_manager_config=wmc,
+            worker_manager_id="wm-test",
+            worker_config=WorkerConfig(event_loop=event_loop),
+            logging_config=LoggingConfig(logging_level=logging_level),
         )
-        return NativeWorkerManagerConfig(worker_manager_config=wmc)
 
-    def test_register_event_loop_called_with_worker_config_event_loop(self) -> None:
-        from scaler.config.common.logging import LoggingConfig
-        from scaler.config.common.worker import WorkerConfig
+    def test_register_event_loop_called_with_config_event_loop(self) -> None:
         from scaler.entry_points.scaler import _run_worker_manager
 
-        config = self._make_native_config()
-        worker_config = WorkerConfig(event_loop="builtin")
+        config = self._make_native_config(event_loop="builtin")
 
         with patch("scaler.entry_points.scaler.register_event_loop") as mock_reg, patch(
             "scaler.entry_points.scaler.setup_logger"
         ), patch("scaler.worker_manager_adapter.baremetal.native.NativeWorkerManager") as mock_nm:
             mock_nm.return_value.run.return_value = None
-            _run_worker_manager(LoggingConfig(), config, worker_config)
+            _run_worker_manager(config)
 
         mock_reg.assert_called_once_with("builtin")
 
     def test_setup_logger_called_with_logging_config(self) -> None:
-        from scaler.config.common.logging import LoggingConfig
-        from scaler.config.common.worker import WorkerConfig
         from scaler.entry_points.scaler import _run_worker_manager
 
-        config = self._make_native_config()
-        logging_cfg = LoggingConfig(level="WARNING")
+        config = self._make_native_config(logging_level="WARNING")
 
         with patch("scaler.entry_points.scaler.setup_logger") as mock_log, patch(
             "scaler.entry_points.scaler.register_event_loop"
         ), patch("scaler.worker_manager_adapter.baremetal.native.NativeWorkerManager") as mock_nm:
             mock_nm.return_value.run.return_value = None
-            _run_worker_manager(logging_cfg, config, WorkerConfig())
+            _run_worker_manager(config)
 
-        mock_log.assert_called_once_with(logging_cfg.paths, logging_cfg.config_file, "WARNING")
+        mock_log.assert_called_once_with(
+            config.logging_config.logging_paths, config.logging_config.config_file, "WARNING"
+        )

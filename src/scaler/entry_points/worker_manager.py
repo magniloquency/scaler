@@ -1,8 +1,6 @@
 import dataclasses
 from typing import Optional
 
-from scaler.config.common.logging import LoggingConfig
-from scaler.config.common.worker import WorkerConfig
 from scaler.config.config_class import ConfigClass
 from scaler.config.section.aws_hpc_worker_manager import AWSBatchWorkerManagerConfig
 from scaler.config.section.ecs_worker_manager import ECSWorkerManagerConfig
@@ -14,9 +12,6 @@ from scaler.utility.logging.utility import setup_logger
 
 @dataclasses.dataclass
 class _WorkerManagerConfig(ConfigClass):
-    logging: LoggingConfig = dataclasses.field(default_factory=LoggingConfig)
-    worker: WorkerConfig = dataclasses.field(default_factory=WorkerConfig)
-
     baremetal_native: Optional[NativeWorkerManagerConfig] = dataclasses.field(
         default=None, metadata=dict(subcommand="baremetal_native")
     )
@@ -34,26 +29,46 @@ class _WorkerManagerConfig(ConfigClass):
 def main() -> None:
     config = _WorkerManagerConfig.parse("scaler_worker_manager", "")
 
-    setup_logger(config.logging.paths, config.logging.config_file, config.logging.level)
-
-    register_event_loop(config.worker.event_loop)
-
     if config.baremetal_native is not None:
         from scaler.worker_manager_adapter.baremetal.native import NativeWorkerManager
 
-        NativeWorkerManager(config.baremetal_native, config.worker, config.logging).run()
+        setup_logger(
+            config.baremetal_native.logging_config.logging_paths,
+            config.baremetal_native.logging_config.config_file,
+            config.baremetal_native.logging_config.logging_level,
+        )
+        register_event_loop(config.baremetal_native.worker_config.event_loop)
+        NativeWorkerManager(config.baremetal_native).run()
     elif config.symphony is not None:
         from scaler.worker_manager_adapter.symphony.worker_manager import SymphonyWorkerManager
 
-        SymphonyWorkerManager(config.symphony, config.worker).run()
+        setup_logger(
+            config.symphony.logging_config.logging_paths,
+            config.symphony.logging_config.config_file,
+            config.symphony.logging_config.logging_level,
+        )
+        register_event_loop(config.symphony.worker_config.event_loop)
+        SymphonyWorkerManager(config.symphony).run()
     elif config.aws_raw_ecs is not None:
         from scaler.worker_manager_adapter.aws_raw.ecs import ECSWorkerManager
 
-        ECSWorkerManager(config.aws_raw_ecs, config.worker).run()
+        setup_logger(
+            config.aws_raw_ecs.logging_config.logging_paths,
+            config.aws_raw_ecs.logging_config.config_file,
+            config.aws_raw_ecs.logging_config.logging_level,
+        )
+        register_event_loop(config.aws_raw_ecs.worker_config.event_loop)
+        ECSWorkerManager(config.aws_raw_ecs).run()
     elif config.aws_hpc is not None:
         from scaler.worker_manager_adapter.aws_hpc.worker_manager import AWSHPCWorkerManager
 
-        AWSHPCWorkerManager(config.aws_hpc, config.worker).run()
+        setup_logger(
+            config.aws_hpc.logging_config.logging_paths,
+            config.aws_hpc.logging_config.config_file,
+            config.aws_hpc.logging_config.logging_level,
+        )
+        register_event_loop(config.aws_hpc.event_loop)
+        AWSHPCWorkerManager(config.aws_hpc).run()
 
 
 if __name__ == "__main__":
