@@ -1,4 +1,5 @@
 import dataclasses
+from typing import Optional
 
 from scaler.config import defaults
 from scaler.config.config_class import ConfigClass
@@ -58,6 +59,10 @@ class WorkerConfig(ConfigClass):
     event_loop: str = dataclasses.field(
         default="builtin",
         metadata=dict(short="-el", choices=EventLoopType.allowed_types(), help="select the event loop type"),
+    )
+    preload: Optional[str] = dataclasses.field(
+        default=None,
+        metadata=dict(help="preload function spec executed on worker init, e.g. 'pkg.mod:func(arg1, kw=val)'"),
     )
 
     def __post_init__(self) -> None:

@@ -58,9 +58,9 @@ class Scheduler:
         self._binder: AsyncBinder = create_async_binder(
             self._context, name="scheduler", address=config.scheduler_address
         )
-        self._bound_address: ZMQConfig = ZMQConfig.from_string(self._binder.bound_address)
+        self._address: ZMQConfig = self._binder.address
 
-        logging.info(f"{self.__class__.__name__}: listen to scheduler address {self._bound_address}")
+        logging.info(f"{self.__class__.__name__}: listen to scheduler address {self._address}")
 
         if config.object_storage_address is not None:
             object_storage_address = ObjectStorageAddress.new_msg(
@@ -68,12 +68,12 @@ class Scheduler:
             )
         else:
             object_storage_address = ObjectStorageAddress.new_msg(
-                host=self._bound_address.host, port=self._bound_address.port + 1
+                host=self._address.host, port=self._address.port + 1
             )
         self._config_controller.update_config("object_storage_address", object_storage_address)
 
         monitor_address = config.monitor_address or ZMQConfig(
-            type=ZMQType.tcp, host=self._bound_address.host, port=self._bound_address.port + 2
+            type=ZMQType.tcp, host=self._address.host, port=self._address.port + 2
         )
 
         self._connector_storage: AsyncObjectStorageConnector = create_async_object_storage_connector()
@@ -150,8 +150,8 @@ class Scheduler:
         )
 
     @property
-    def bound_address(self) -> ZMQConfig:
-        return self._bound_address
+    def address(self) -> ZMQConfig:
+        return self._address
 
     async def connect_to_storage(self):
         object_storage_address = self._config_controller.get_config("object_storage_address")

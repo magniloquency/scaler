@@ -20,11 +20,6 @@ class ECSWorkerManagerConfig(ConfigClass):
     worker_config: WorkerConfig = dataclasses.field(default_factory=WorkerConfig)
     logging_config: LoggingConfig = dataclasses.field(default_factory=LoggingConfig)
 
-    preload: Optional[str] = dataclasses.field(
-        default=None,
-        metadata=dict(help="preload function spec executed on worker init, e.g. 'pkg.mod:func(arg1, kw=val)'"),
-    )
-
     # AWS / ECS specific configuration
     aws_access_key_id: Optional[str] = dataclasses.field(
         default=None, metadata=dict(env_var="AWS_ACCESS_KEY_ID", help="AWS access key id")

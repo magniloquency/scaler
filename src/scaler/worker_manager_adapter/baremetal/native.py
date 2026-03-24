@@ -42,7 +42,7 @@ class NativeWorkerManager:
         self._trim_memory_threshold_bytes = config.worker_config.trim_memory_threshold_bytes
         self._hard_processor_suspend = config.worker_config.hard_processor_suspend
         self._event_loop = config.worker_config.event_loop
-        self._preload = config.preload
+        self._preload = config.worker_config.preload
         self._logging_paths = config.logging_config.paths
         self._logging_level = config.logging_config.level
         self._logging_config_file = config.logging_config.config_file

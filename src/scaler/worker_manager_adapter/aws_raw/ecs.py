@@ -49,7 +49,7 @@ class ECSWorkerManager:
         self._garbage_collect_interval_seconds = config.worker_config.garbage_collect_interval_seconds
         self._trim_memory_threshold_bytes = config.worker_config.trim_memory_threshold_bytes
         self._hard_processor_suspend = config.worker_config.hard_processor_suspend
-        self._preload = config.preload
+        self._preload = config.worker_config.preload
         self._event_loop = config.worker_config.event_loop
 
         self._aws_access_key_id = config.aws_access_key_id

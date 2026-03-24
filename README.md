@@ -268,10 +268,11 @@ policy_content = "allocate=even_load; scaling=no"
 mode = "fixed"
 max_task_concurrency = 8
 worker_manager_id = "my-manager"
-
-[worker]
-per_worker_capabilities = "linux,cpu=8"
-task_timeout_seconds = 600
+# Worker capabilities are set via dotted keys. Each worker manager has its own
+# worker_config, so different managers (on different machines) can advertise
+# different capabilities to the scheduler.
+worker_config.per_worker_capabilities = "linux,cpu=8"
+worker_config.task_timeout_seconds = 600
 
 [object_storage_server]
 
@@ -298,8 +299,8 @@ example_config.toml file but test the cluster with 12 workers instead of 8:
 scaler_worker_manager baremetal_native tcp://127.0.0.1:6378 --config example_config.toml --max-task-concurrency 12
 ```
 
-The cluster will start with 12 workers, but all other settings (like `task_timeout_seconds`) will still be loaded from the
-`[baremetal_native]` and `[worker]` sections of example_config.toml.
+The cluster will start with 12 workers, but all other settings (like `worker_config.task_timeout_seconds`) will still be loaded from the
+`[baremetal_native]` section of example_config.toml.
 
 ## Nested computations
 

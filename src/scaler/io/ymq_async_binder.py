@@ -14,8 +14,6 @@ from scaler.protocol.python.status import BinderStatus
 
 class YMQAsyncBinder(AsyncBinder):
     def __init__(self, name: str, address: ZMQConfig, identity: Optional[bytes] = None):
-        self._address = address
-
         if identity is None:
             identity = f"{os.getpid()}|{name}|{uuid.uuid4()}".encode()
         self._identity = identity
@@ -23,8 +21,8 @@ class YMQAsyncBinder(AsyncBinder):
         self._context = IOContext()
 
         self._socket = BinderSocket(self._context, self._identity.decode())
-        bound = self._socket.bind_to_sync(self._address.to_address())
-        self._bound_address: str = repr(bound)
+        bound = self._socket.bind_to_sync(address.to_address())
+        self._address: ZMQConfig = ZMQConfig.from_string(repr(bound))
 
         self._callback: Optional[Callable[[bytes, Message], Awaitable[None]]] = None
 
@@ -36,8 +34,8 @@ class YMQAsyncBinder(AsyncBinder):
         return self._identity
 
     @property
-    def bound_address(self) -> str:
-        return self._bound_address
+    def address(self) -> ZMQConfig:
+        return self._address
 
     def destroy(self):
         self._socket = None

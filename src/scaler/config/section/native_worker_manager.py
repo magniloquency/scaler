@@ -24,10 +24,6 @@ class NativeWorkerManagerConfig(ConfigClass):
         metadata=dict(short="-wmi", required=True, help="worker manager ID to identify this manager")
     )
 
-    preload: Optional[str] = dataclasses.field(
-        default=None,
-        metadata=dict(help="preload function spec executed on worker init, e.g. 'pkg.mod:func(arg1, kw=val)'"),
-    )
     worker_config: WorkerConfig = dataclasses.field(default_factory=WorkerConfig)
     logging_config: LoggingConfig = dataclasses.field(default_factory=LoggingConfig)
 
