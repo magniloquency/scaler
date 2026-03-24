@@ -72,8 +72,8 @@ class TestBalance(unittest.TestCase):
                     event_loop=base_manager._event_loop,
                 ),
                 logging_config=LoggingConfig(
-                    logging_paths=base_manager._logging_paths,
-                    logging_level=base_manager._logging_level,
+                    paths=base_manager._logging_paths,
+                    level=base_manager._logging_level,
                     config_file=base_manager._logging_config_file,
                 ),
             )

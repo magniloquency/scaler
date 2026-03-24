@@ -55,8 +55,8 @@ class TestClusterDisconnect(unittest.TestCase):
                     event_loop=base_manager._event_loop,
                 ),
                 logging_config=LoggingConfig(
-                    logging_paths=DEFAULT_LOGGING_PATHS,
-                    logging_level=base_manager._logging_level,
+                    paths=DEFAULT_LOGGING_PATHS,
+                    level=base_manager._logging_level,
                     config_file=base_manager._logging_config_file,
                 ),
             )

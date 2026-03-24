@@ -33,9 +33,9 @@ def main() -> None:
         from scaler.worker_manager_adapter.baremetal.native import NativeWorkerManager
 
         setup_logger(
-            config.baremetal_native.logging_config.logging_paths,
+            config.baremetal_native.logging_config.paths,
             config.baremetal_native.logging_config.config_file,
-            config.baremetal_native.logging_config.logging_level,
+            config.baremetal_native.logging_config.level,
         )
         register_event_loop(config.baremetal_native.worker_config.event_loop)
         NativeWorkerManager(config.baremetal_native).run()
@@ -43,9 +43,9 @@ def main() -> None:
         from scaler.worker_manager_adapter.symphony.worker_manager import SymphonyWorkerManager
 
         setup_logger(
-            config.symphony.logging_config.logging_paths,
+            config.symphony.logging_config.paths,
             config.symphony.logging_config.config_file,
-            config.symphony.logging_config.logging_level,
+            config.symphony.logging_config.level,
         )
         register_event_loop(config.symphony.worker_config.event_loop)
         SymphonyWorkerManager(config.symphony).run()
@@ -53,9 +53,9 @@ def main() -> None:
         from scaler.worker_manager_adapter.aws_raw.ecs import ECSWorkerManager
 
         setup_logger(
-            config.aws_raw_ecs.logging_config.logging_paths,
+            config.aws_raw_ecs.logging_config.paths,
             config.aws_raw_ecs.logging_config.config_file,
-            config.aws_raw_ecs.logging_config.logging_level,
+            config.aws_raw_ecs.logging_config.level,
         )
         register_event_loop(config.aws_raw_ecs.worker_config.event_loop)
         ECSWorkerManager(config.aws_raw_ecs).run()
@@ -63,9 +63,9 @@ def main() -> None:
         from scaler.worker_manager_adapter.aws_hpc.worker_manager import AWSHPCWorkerManager
 
         setup_logger(
-            config.aws_hpc.logging_config.logging_paths,
+            config.aws_hpc.logging_config.paths,
             config.aws_hpc.logging_config.config_file,
-            config.aws_hpc.logging_config.logging_level,
+            config.aws_hpc.logging_config.level,
         )
         register_event_loop(config.aws_hpc.event_loop)
         AWSHPCWorkerManager(config.aws_hpc).run()

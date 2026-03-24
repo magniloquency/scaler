@@ -657,7 +657,7 @@ def _run_native_worker_manager(
                 io_threads=DEFAULT_IO_THREADS,
                 event_loop="builtin",
             ),
-            logging_config=LoggingConfig(logging_paths=("/dev/stdout",), logging_level="INFO", config_file=None),
+            logging_config=LoggingConfig(paths=("/dev/stdout",), level="INFO", config_file=None),
         )
     )
 

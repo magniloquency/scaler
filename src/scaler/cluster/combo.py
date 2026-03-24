@@ -112,9 +112,7 @@ class SchedulerClusterCombo:
                     io_threads=worker_io_threads,
                     event_loop=event_loop,
                 ),
-                logging_config=LoggingConfig(
-                    logging_paths=logging_paths, config_file=logging_config_file, logging_level=logging_level
-                ),
+                logging_config=LoggingConfig(paths=logging_paths, config_file=logging_config_file, level=logging_level),
             )
         )
 

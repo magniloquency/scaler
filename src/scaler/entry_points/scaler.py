@@ -36,9 +36,7 @@ def _run_scheduler(config: SchedulerConfig) -> None:
 
 
 def _run_worker_manager(config: WorkerManagerUnion) -> None:
-    setup_logger(
-        config.logging_config.logging_paths, config.logging_config.config_file, config.logging_config.logging_level
-    )
+    setup_logger(config.logging_config.paths, config.logging_config.config_file, config.logging_config.level)
     if isinstance(config, AWSBatchWorkerManagerConfig):
         register_event_loop(config.event_loop)
     else:

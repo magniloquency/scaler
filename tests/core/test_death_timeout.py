@@ -58,7 +58,7 @@ class TestDeathTimeout(unittest.TestCase):
                     event_loop="builtin",
                 ),
                 logging_config=LoggingConfig(
-                    logging_paths=DEFAULT_LOGGING_PATHS, logging_level=DEFAULT_LOGGING_LEVEL, config_file=None
+                    paths=DEFAULT_LOGGING_PATHS, level=DEFAULT_LOGGING_LEVEL, config_file=None
                 ),
             )
         )

@@ -211,7 +211,7 @@ class TestRunWorkerManager(unittest.TestCase):
             worker_manager_config=wmc,
             worker_manager_id="wm-test",
             worker_config=WorkerConfig(event_loop=event_loop),
-            logging_config=LoggingConfig(logging_level=logging_level),
+            logging_config=LoggingConfig(level=logging_level),
         )
 
     def test_register_event_loop_called_with_config_event_loop(self) -> None:
@@ -238,6 +238,4 @@ class TestRunWorkerManager(unittest.TestCase):
             mock_nm.return_value.run.return_value = None
             _run_worker_manager(config)
 
-        mock_log.assert_called_once_with(
-            config.logging_config.logging_paths, config.logging_config.config_file, "WARNING"
-        )
+        mock_log.assert_called_once_with(config.logging_config.paths, config.logging_config.config_file, "WARNING")

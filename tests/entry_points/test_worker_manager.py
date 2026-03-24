@@ -174,14 +174,14 @@ class TestWorkerManagerConfigFields(unittest.TestCase):
         from scaler.entry_points.worker_manager import _WorkerManagerConfig
 
         config = _WorkerManagerConfig.parse("scaler_worker_manager", "")
-        self.assertEqual(config.baremetal_native.logging_config.logging_level, "DEBUG")
+        self.assertEqual(config.baremetal_native.logging_config.level, "DEBUG")
 
     @patch("sys.argv", [*_NATIVE_BASE_ARGS, "--logging-paths", "/tmp/scaler.log"])
     def test_logging_paths_from_cli(self) -> None:
         from scaler.entry_points.worker_manager import _WorkerManagerConfig
 
         config = _WorkerManagerConfig.parse("scaler_worker_manager", "")
-        self.assertIn("/tmp/scaler.log", config.baremetal_native.logging_config.logging_paths)
+        self.assertIn("/tmp/scaler.log", config.baremetal_native.logging_config.paths)
 
     @patch("sys.argv", _NATIVE_BASE_ARGS)
     def test_logging_defaults(self) -> None:
@@ -189,7 +189,7 @@ class TestWorkerManagerConfigFields(unittest.TestCase):
         from scaler.entry_points.worker_manager import _WorkerManagerConfig
 
         config = _WorkerManagerConfig.parse("scaler_worker_manager", "")
-        self.assertEqual(config.baremetal_native.logging_config.logging_level, LoggingConfig().logging_level)
+        self.assertEqual(config.baremetal_native.logging_config.level, LoggingConfig().level)
 
     def test_logging_level_from_toml(self) -> None:
         from scaler.entry_points.worker_manager import _WorkerManagerConfig
@@ -214,7 +214,7 @@ logging_level = "DEBUG"
         ):
             with patch("builtins.open", mock_open(read_data=toml_content)):
                 config = _WorkerManagerConfig.parse("scaler_worker_manager", "")
-        self.assertEqual(config.baremetal_native.logging_config.logging_level, "DEBUG")
+        self.assertEqual(config.baremetal_native.logging_config.level, "DEBUG")
 
     def test_cli_overrides_toml_logging(self) -> None:
         from scaler.entry_points.worker_manager import _WorkerManagerConfig
@@ -241,7 +241,7 @@ logging_level = "DEBUG"
         ):
             with patch("builtins.open", mock_open(read_data=toml_content)):
                 config = _WorkerManagerConfig.parse("scaler_worker_manager", "")
-        self.assertEqual(config.baremetal_native.logging_config.logging_level, "WARNING")
+        self.assertEqual(config.baremetal_native.logging_config.level, "WARNING")
 
     @patch("sys.argv", [*_NATIVE_BASE_ARGS, "--io-threads", "4"])
     def test_worker_io_threads_from_cli(self) -> None:

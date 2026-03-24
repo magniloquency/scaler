@@ -20,9 +20,9 @@ def main(scheduler_config: Optional[SchedulerConfig] = None) -> None:
         )
         object_storage = ObjectStorageServerProcess(
             object_storage_address=object_storage_address,
-            logging_paths=scheduler_config.logging_config.logging_paths,
+            logging_paths=scheduler_config.logging_config.paths,
             logging_config_file=scheduler_config.logging_config.config_file,
-            logging_level=scheduler_config.logging_config.logging_level,
+            logging_level=scheduler_config.logging_config.level,
         )
         object_storage.start()
         object_storage.wait_until_ready()  # object storage should be ready before starting the cluster
@@ -41,9 +41,9 @@ def main(scheduler_config: Optional[SchedulerConfig] = None) -> None:
         protected=scheduler_config.protected,
         event_loop=scheduler_config.event_loop,
         policy=scheduler_config.policy,
-        logging_paths=scheduler_config.logging_config.logging_paths,
+        logging_paths=scheduler_config.logging_config.paths,
         logging_config_file=scheduler_config.logging_config.config_file,
-        logging_level=scheduler_config.logging_config.logging_level,
+        logging_level=scheduler_config.logging_config.level,
     )
     scheduler.start()
 
