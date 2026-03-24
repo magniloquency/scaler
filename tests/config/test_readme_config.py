@@ -22,7 +22,7 @@ logging_paths = ["/dev/stdout", "/var/log/scaler/scheduler.log"]
 policy_engine_type = "simple"
 policy_content = "allocate=even_load; scaling=no"
 
-[baremetal_native]
+[worker_manager_baremetal_native]
 mode = "fixed"
 max_task_concurrency = 8
 worker_manager_id = "my-manager"
@@ -33,7 +33,7 @@ logging_paths = ["/dev/stdout", "/var/log/scaler/worker.log"]
 
 [object_storage_server]
 
-[webui]
+[ui]
 web_port = 8081
 """
 
@@ -74,6 +74,6 @@ class TestReadmeConfig(unittest.TestCase):
     @patch("sys.argv", ["scaler_ui", "tcp://127.0.0.1:6380", "--config", "config.toml"])
     @patch("builtins.open", mock_open(read_data=README_TOML))
     def test_webui_section(self) -> None:
-        config = WebUIConfig.parse("scaler_ui", "webui")
+        config = WebUIConfig.parse("scaler_ui", "ui")
 
         self.assertEqual(config.web_port, 8081)

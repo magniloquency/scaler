@@ -238,12 +238,12 @@ The following table maps each Scaler command to its corresponding section name i
 |--------------------------------------|---------------------------------|
 | `scaler_scheduler`                   | `[scheduler]`                   |
 | `scaler_object_storage_server`       | `[object_storage_server]`       |
-| `scaler_ui`                          | `[webui]`                       |
+| `scaler_ui`                          | `[ui]`                          |
 | `scaler_top`                         | `[top]`                         |
-| `scaler_worker_manager baremetal_native` | `[baremetal_native]`        |
-| `scaler_worker_manager symphony`     | `[symphony]`                    |
-| `scaler_worker_manager aws_raw_ecs`  | `[aws_raw_ecs]`                 |
-| `scaler_worker_manager aws_hpc`      | `[aws_hpc]`                     |
+| `scaler_worker_manager baremetal_native` | `[worker_manager_baremetal_native]` |
+| `scaler_worker_manager symphony`     | `[worker_manager_symphony]`         |
+| `scaler_worker_manager aws_raw_ecs`  | `[worker_manager_aws_raw_ecs]`      |
+| `scaler_worker_manager aws_hpc`      | `[worker_manager_aws_hpc]`          |
 
 ### Practical Scenarios & Examples
 
@@ -264,7 +264,7 @@ logging_paths = ["/dev/stdout", "/var/log/scaler/scheduler.log"]
 policy_engine_type = "simple"
 policy_content = "allocate=even_load; scaling=no"
 
-[baremetal_native]
+[worker_manager_baremetal_native]
 mode = "fixed"
 max_task_concurrency = 8
 worker_manager_id = "my-manager"
@@ -280,7 +280,7 @@ logging_paths = ["/dev/stdout", "/var/log/scaler/worker.log"]
 
 [object_storage_server]
 
-[webui]
+[ui]
 web_port = 8081
 ```
 
@@ -299,12 +299,12 @@ You can override any value from the TOML file by providing it as a command-line 
 example_config.toml file but test the cluster with 12 workers instead of 8:
 
 ```bash
-# The --max-task-concurrency flag will take precedence over the [baremetal_native] section
+# The --max-task-concurrency flag will take precedence over the [worker_manager_baremetal_native] section
 scaler_worker_manager baremetal_native tcp://127.0.0.1:6378 --config example_config.toml --max-task-concurrency 12
 ```
 
 The cluster will start with 12 workers, but all other settings (like `task_timeout_seconds`) will still be loaded from the
-`[baremetal_native]` section of example_config.toml.
+`[worker_manager_baremetal_native]` section of example_config.toml.
 
 ## Nested computations
 

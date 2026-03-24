@@ -13,16 +13,16 @@ from scaler.utility.logging.utility import setup_logger
 @dataclasses.dataclass
 class WorkerManagerConfig(ConfigClass):
     baremetal_native: Optional[NativeWorkerManagerConfig] = dataclasses.field(
-        default=None, metadata=dict(subcommand="baremetal_native")
+        default=None, metadata=dict(subcommand="worker_manager_baremetal_native")
     )
     symphony: Optional[SymphonyWorkerManagerConfig] = dataclasses.field(
-        default=None, metadata=dict(subcommand="symphony")
+        default=None, metadata=dict(subcommand="worker_manager_symphony")
     )
     aws_raw_ecs: Optional[ECSWorkerManagerConfig] = dataclasses.field(
-        default=None, metadata=dict(subcommand="aws_raw_ecs")
+        default=None, metadata=dict(subcommand="worker_manager_aws_raw_ecs")
     )
     aws_hpc: Optional[AWSBatchWorkerManagerConfig] = dataclasses.field(
-        default=None, metadata=dict(subcommand="aws_hpc")
+        default=None, metadata=dict(subcommand="worker_manager_aws_hpc")
     )
 
 

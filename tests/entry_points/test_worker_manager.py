@@ -195,7 +195,7 @@ class TestWorkerManagerConfigFields(unittest.TestCase):
         from scaler.entry_points.worker_manager import WorkerManagerConfig
 
         toml_content = b"""
-[baremetal_native]
+[worker_manager_baremetal_native]
 scheduler_address = "tcp://127.0.0.1:6378"
 worker_manager_id = "wm-test"
 logging_level = "DEBUG"
@@ -220,7 +220,7 @@ logging_level = "DEBUG"
         from scaler.entry_points.worker_manager import WorkerManagerConfig
 
         toml_content = b"""
-[baremetal_native]
+[worker_manager_baremetal_native]
 scheduler_address = "tcp://127.0.0.1:6378"
 worker_manager_id = "wm-test"
 logging_level = "DEBUG"
