@@ -1,4 +1,3 @@
-import multiprocessing
 from typing import Optional
 
 from scaler.cluster.object_storage_server import ObjectStorageServerProcess
@@ -7,9 +6,7 @@ from scaler.config.section.scheduler import SchedulerConfig
 from scaler.config.types.object_storage_server import ObjectStorageAddressConfig
 
 
-def main(
-    scheduler_config: Optional[SchedulerConfig] = None, address_queue: Optional[multiprocessing.Queue] = None
-) -> None:
+def main(scheduler_config: Optional[SchedulerConfig] = None) -> None:
     if scheduler_config is None:
         scheduler_config = SchedulerConfig.parse("Scaler Scheduler", "scheduler")
 
@@ -47,7 +44,6 @@ def main(
         logging_paths=scheduler_config.logging.paths,
         logging_config_file=scheduler_config.logging.config_file,
         logging_level=scheduler_config.logging.level,
-        address_queue=address_queue,
     )
     scheduler.start()
 

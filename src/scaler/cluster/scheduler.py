@@ -31,7 +31,6 @@ class SchedulerProcess(multiprocessing.get_context("spawn").Process):  # type: i
         logging_paths: Tuple[str, ...],
         logging_config_file: Optional[str],
         logging_level: str,
-        address_queue: Optional[multiprocessing.Queue] = None,
     ):
         multiprocessing.Process.__init__(self, name="Scheduler")
         self._scheduler_config = SchedulerConfig(
@@ -53,7 +52,6 @@ class SchedulerProcess(multiprocessing.get_context("spawn").Process):  # type: i
         self._logging_paths = logging_paths
         self._logging_config_file = logging_config_file
         self._logging_level = logging_level
-        self._address_queue = address_queue
 
         self._scheduler: Optional[Scheduler] = None
         self._loop: Optional[AbstractEventLoop] = None
@@ -67,10 +65,6 @@ class SchedulerProcess(multiprocessing.get_context("spawn").Process):  # type: i
         self.__initialize()
 
         scheduler = Scheduler(self._scheduler_config)
-
-        if self._address_queue is not None:
-            self._address_queue.put(scheduler.bound_address)
-
         self._task = self._loop.create_task(scheduler.get_loops())
         self.__register_signal()
         await self._task
