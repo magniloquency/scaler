@@ -44,7 +44,7 @@ Extended Example
 
 Use the ``[[worker_manager]]`` array-of-tables syntax to define multiple worker managers; each entry is fully
 independent and can have a different ``type``, so you can mix adapter types in a single deployment. Each manager
-carries its own ``logging_level``, ``logging_paths``, ``event_loop``, and ``worker_io_threads`` settings.
+carries its own ``logging_config`` and ``worker_config`` settings (e.g. ``event_loop``, ``io_threads``).
 
 .. code-block:: toml
 

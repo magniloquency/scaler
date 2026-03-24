@@ -67,7 +67,7 @@ def main() -> None:
             config.aws_hpc.logging_config.config_file,
             config.aws_hpc.logging_config.level,
         )
-        register_event_loop(config.aws_hpc.event_loop)
+        register_event_loop(config.aws_hpc.worker_config.event_loop)
         AWSHPCWorkerManager(config.aws_hpc).run()
 
 

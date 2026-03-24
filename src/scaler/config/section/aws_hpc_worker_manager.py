@@ -2,11 +2,10 @@ import dataclasses
 import enum
 from typing import ClassVar, Optional
 
-from scaler.config import defaults
 from scaler.config.common.logging import LoggingConfig
+from scaler.config.common.worker import WorkerConfig
 from scaler.config.common.worker_manager import WorkerManagerConfig
 from scaler.config.config_class import ConfigClass
-from scaler.utility.event_loop import EventLoopType
 
 
 class AWSHPCBackend(enum.Enum):
@@ -35,26 +34,8 @@ class AWSBatchWorkerManagerConfig(ConfigClass):
     job_definition: str = dataclasses.field(metadata=dict(short="-d", help="AWS Batch job definition name"))
     s3_bucket: str = dataclasses.field(metadata=dict(help="S3 bucket for task data"))
 
+    worker_config: WorkerConfig = dataclasses.field(default_factory=WorkerConfig)
     logging_config: LoggingConfig = dataclasses.field(default_factory=LoggingConfig)
-
-    heartbeat_interval_seconds: int = dataclasses.field(
-        default=defaults.DEFAULT_HEARTBEAT_INTERVAL_SECONDS,
-        metadata=dict(short="-his", help="the interval at which to send heartbeats in seconds"),
-    )
-    death_timeout_seconds: int = dataclasses.field(
-        default=defaults.DEFAULT_WORKER_DEATH_TIMEOUT, metadata=dict(short="-dts", help="death timeout seconds")
-    )
-    task_queue_size: int = dataclasses.field(
-        default=defaults.DEFAULT_PER_WORKER_QUEUE_SIZE, metadata=dict(help="set the per worker queue size")
-    )
-    worker_io_threads: int = dataclasses.field(
-        default=defaults.DEFAULT_IO_THREADS,
-        metadata=dict(short="-wit", help="set the number of io threads for io backend per worker"),
-    )
-    event_loop: str = dataclasses.field(
-        default="builtin",
-        metadata=dict(short="-el", choices=EventLoopType.allowed_types(), help="select the event loop type"),
-    )
 
     backend: AWSHPCBackend = dataclasses.field(
         default=AWSHPCBackend.batch, metadata=dict(short="-b", help="AWS HPC backend")
@@ -74,14 +55,6 @@ class AWSBatchWorkerManagerConfig(ConfigClass):
     def __post_init__(self) -> None:
         if not self.worker_manager_id:
             raise ValueError("worker_manager_id cannot be an empty string.")
-        if self.worker_io_threads <= 0:
-            raise ValueError("worker_io_threads must be a positive integer.")
-        if self.heartbeat_interval_seconds <= 0:
-            raise ValueError("heartbeat_interval_seconds must be a positive integer.")
-        if self.death_timeout_seconds <= 0:
-            raise ValueError("death_timeout_seconds must be a positive integer.")
-        if self.task_queue_size <= 0:
-            raise ValueError("task_queue_size must be a positive integer.")
         if not self.job_queue:
             raise ValueError("job_queue cannot be an empty string.")
         if not self.job_definition:
