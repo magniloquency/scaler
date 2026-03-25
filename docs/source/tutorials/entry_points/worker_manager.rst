@@ -95,7 +95,7 @@ Provisions workers as local subprocesses. Supports dynamic (default) and fixed-p
         --worker-manager-id wm-1 \
         tcp://127.0.0.1:8516
 
-See :doc:`baremetal_native` for full parameter details.
+See :doc:`../worker_managers/baremetal_native` for full parameter details.
 
 symphony
 ~~~~~~~~
@@ -134,4 +134,4 @@ Provisions workers via AWS Batch.
         --job-definition my-job-def \
         --s3-bucket my-bucket
 
-See :doc:`aws_hpc_batch` for full parameter details.
+See :doc:`../worker_managers/aws_hpc_batch` for full parameter details.

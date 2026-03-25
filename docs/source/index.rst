@@ -20,6 +20,7 @@ Content
    tutorials/introduction
    tutorials/compatibility_layer
    tutorials/scaling
+   tutorials/entry_points/index
    tutorials/worker_managers/index
    tutorials/features
    tutorials/compatibility/ray

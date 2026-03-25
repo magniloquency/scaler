@@ -61,8 +61,8 @@ See :doc:`Common Worker Manager Parameters <common_parameters>` for these shared
 Unified Entry Points
 ~~~~~~~~~~~~~~~~~~~~
 
-The :doc:`scaler_worker_manager <worker_manager>` command provides a single entry point for all worker managers.
-The :doc:`scaler <all>` command boots the full stack from a single TOML config file.
+The :doc:`scaler_worker_manager <../entry_points/worker_manager>` command provides a single entry point for all worker managers.
+The :doc:`scaler <../entry_points/all>` command boots the full stack from a single TOML config file.
 
 .. toctree::
     :maxdepth: 1
@@ -73,5 +73,3 @@ The :doc:`scaler <all>` command boots the full stack from a single TOML config f
     aws_raw_ecs
     symphony
     common_parameters
-    worker_manager
-    all
