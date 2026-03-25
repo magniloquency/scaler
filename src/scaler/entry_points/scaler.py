@@ -19,6 +19,7 @@ WorkerManagerUnion = Union[
 
 @dataclasses.dataclass
 class ScalerAllConfig(ConfigClass):
+    config: str = dataclasses.field(metadata=dict(positional=True, help="Path to the TOML configuration file."))
     # Declaration order = startup order (scheduler before workers).
     scheduler: Optional[SchedulerConfig] = dataclasses.field(default=None, metadata=dict(section="scheduler"))
     worker_managers: List[WorkerManagerUnion] = dataclasses.field(
@@ -57,7 +58,7 @@ def _run_worker_manager(config: WorkerManagerUnion) -> None:
 
 
 def main() -> None:
-    config = ScalerAllConfig.parse("scaler", "all")
+    config = ScalerAllConfig.parse("scaler", "all", disable_config_flag=True)
 
     if config.scheduler is None and not config.worker_managers:
         print("scaler: no recognized sections found in config file", file=sys.stderr)

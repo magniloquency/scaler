@@ -103,7 +103,8 @@ class ConfigClass:
     A short name for the argument can be provided in the field metadata using the `short` key.
     The value is the short option name and must include the hyphen, e.g. `-n`.
 
-    There is one restriction: `--config` and `-c` are reserved for the config file.
+    There is one restriction: `--config` and `-c` are reserved for the config file unless
+    `disable_config_flag=True` is passed to `.parse()`.
 
     ```python
     # this will have long name --field-one, and no short name
@@ -261,7 +262,7 @@ class ConfigClass:
             parser.add_argument(*args, **kwargs)
 
     @classmethod
-    def parse(cls: Type[T], program_name: str, section: str) -> T:
+    def parse(cls: Type[T], program_name: str, section: str, disable_config_flag: bool = False) -> T:
         subcommand_fields = [
             field for field in dataclasses.fields(cls) if "subcommand" in field.metadata  # type: ignore[arg-type]
         ]
@@ -285,7 +286,8 @@ class ConfigClass:
 
         # Normal path.
         parser = argparse.ArgumentParser(prog=program_name, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-        parser.add_argument("--config", "-c", metavar="FILE", help="Path to the TOML configuration file.")
+        if not disable_config_flag:
+            parser.add_argument("--config", "-c", metavar="FILE", help="Path to the TOML configuration file.")
         cls.configure_parser(parser)
 
         # Pass 1: locate --config without failing on unrecognised args.
@@ -316,7 +318,8 @@ class ConfigClass:
 
         # Pass 2: full parse — CLI wins.
         kwargs = vars(parser.parse_args())
-        kwargs.pop("config", None)
+        if not disable_config_flag:
+            kwargs.pop("config", None)
 
         # Populate section= fields from the raw TOML (not from parsed args).
         section_fields = [f for f in dataclasses.fields(cls) if "section" in f.metadata]  # type: ignore[arg-type]

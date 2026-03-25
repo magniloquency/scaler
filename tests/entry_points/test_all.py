@@ -117,14 +117,14 @@ class TestScalerAllEndToEnd(unittest.TestCase):
             _StubScalerAllConfig.parse("scaler", "all")
 
 
-class TestAIOMain(unittest.TestCase):
-    """Tests for scaler_all main() process spawning logic."""
+class TestScalerMain(unittest.TestCase):
+    """Tests for scaler main() process spawning logic."""
 
     def test_no_sections_exits_with_code_1(self) -> None:
         from scaler.entry_points.scaler import main
 
         with patch("scaler.config.config_class._load_toml", return_value={}), patch(
-            "sys.argv", ["scaler", "--config", "test.toml"]
+            "sys.argv", ["scaler", "test.toml"]
         ):
             with self.assertRaises(SystemExit) as ctx:
                 main()
@@ -143,9 +143,9 @@ class TestScalerAllConfigShape(unittest.TestCase):
         from scaler.entry_points.scaler import ScalerAllConfig
 
         with patch("scaler.config.config_class._load_toml", return_value=toml_data), patch(
-            "sys.argv", ["scaler", "--config", "test.toml"]
+            "sys.argv", ["scaler", "test.toml"]
         ):
-            return ScalerAllConfig.parse("scaler", "all")
+            return ScalerAllConfig.parse("scaler", "all", disable_config_flag=True)
 
     def test_worker_manager_native_parsed_from_toml(self) -> None:
         from scaler.config.section.native_worker_manager import NativeWorkerManagerConfig

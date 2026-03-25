@@ -14,7 +14,7 @@ Usage
 
 .. code-block:: bash
 
-    scaler --config <file>
+    scaler <file>
 
 If no recognised sections are found, ``scaler`` exits with an error.
 
@@ -37,7 +37,7 @@ an object storage server on port 6379 (``scheduler_address.port + 1``):
 
 .. code-block:: bash
 
-    scaler --config stack.toml
+    scaler stack.toml
 
 Extended Example
 ----------------
@@ -97,7 +97,7 @@ carries its own ``logging_config`` and ``worker_config`` settings (e.g. ``event_
 
 .. code-block:: bash
 
-    scaler --config stack.toml
+    scaler stack.toml
 
 Object Storage
 --------------
