@@ -150,6 +150,37 @@ $ scaler_scheduler -h
 $ scaler_worker_manager baremetal_native --help
 ```
 
+### All-in-one `scaler` entrypoint
+
+The `scaler` command starts the full stack — scheduler and one or more worker managers — from a single TOML file,
+with each component running in its own process. This is the simplest way to bring up a cluster from the CLI.
+
+Create a `stack.toml`:
+
+```toml
+[scheduler]
+scheduler_address = "tcp://127.0.0.1:2345"
+
+[[worker_manager]]
+type = "baremetal_native"
+worker_manager_id = "wm-1"
+scheduler_address = "tcp://127.0.0.1:2345"
+mode = "fixed"
+max_task_concurrency = 4
+```
+
+Then start the entire stack with a single command:
+
+```bash
+$ scaler stack.toml
+```
+
+The object storage server is managed automatically by the scheduler; by default it starts on
+`scheduler_address.port + 1` (port `2346` in this example).
+
+Multiple worker managers can be defined using the `[[worker_manager]]` array-of-tables syntax, each with its own
+`type`, concurrency settings, and logging configuration.
+
 ### Submitting Python tasks using the Scaler client
 
 Knowing the scheduler address, you can connect and submit tasks from a client in your Python code:
