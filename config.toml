@@ -1,5 +1,0 @@
-[worker_manager_baremetal_native]
-worker_manager_id = "id"
-mode = "fixed"
-scheduler_address = "tcp://127.0.0.1:6378"
-max_task_concurrency = 2
