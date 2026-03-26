@@ -86,6 +86,20 @@ class ORBWorkerAdapter:
                 "providers": [
                     {"name": "aws-default", "type": "aws", "enabled": True, "priority": 1, "config": {"region": region}}
                 ],
+                # ORB skips loading strategy defaults (aws_defaults.json) when config_dict is
+                # provided, so provider_defaults must be included explicitly here. Without it,
+                # get_effective_handlers() returns {} and RunInstances is not in supported_apis.
+                "provider_defaults": {
+                    "aws": {
+                        "handlers": {
+                            "RunInstances": {
+                                "handler_class": "RunInstancesHandler",
+                                "supports_spot": False,
+                                "supports_ondemand": True,
+                            }
+                        }
+                    }
+                },
             },
             "storage": {"type": "json"},
         }
