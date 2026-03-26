@@ -23,10 +23,7 @@ Before using the ORB worker adapter, ensure the following requirements are met o
 Getting Started
 ---------------
 
-The ORB worker adapter can be started in two ways.
-
-**Unified entry point** (recommended): use the ``scaler_worker_manager orb`` subcommand, which integrates with
-the :ref:`scaler <cmd-scaler>` all-in-one launcher and supports the standard ``[[worker_manager]]`` TOML section.
+To start the ORB worker adapter, use the ``scaler_worker_manager orb`` subcommand:
 
 .. code-block:: bash
 
@@ -60,25 +57,6 @@ Equivalent configuration using a TOML file with ``scaler``:
 .. code-block:: bash
 
     scaler stack.toml
-
-**Dedicated entry point** (legacy): use the ``scaler_worker_manager_orb`` command. This supports the
-``[orb_worker_adapter]`` TOML section but does not integrate with the ``scaler`` all-in-one launcher.
-
-.. code-block:: bash
-
-    scaler_worker_manager_orb tcp://<SCHEDULER_EXTERNAL_IP>:8516 --config config.toml
-
-.. code-block:: toml
-
-    # config.toml
-
-    [orb_worker_adapter]
-    object_storage_address = "tcp://<OSS_EXTERNAL_IP>:8517"
-    image_id = "ami-0528819f94f4f5fa5"
-    instance_type = "t3.medium"
-    aws_region = "us-east-1"
-    logging_level = "INFO"
-    task_timeout_seconds = 60
 
 *   ``tcp://<SCHEDULER_EXTERNAL_IP>:8516`` is the address workers will use to connect to the scheduler.
 *   ``tcp://<OSS_EXTERNAL_IP>:8517`` is the address workers will use to connect to the object storage server.
