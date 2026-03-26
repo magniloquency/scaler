@@ -158,8 +158,12 @@ with each component running in its own process. This is the simplest way to brin
 Create a `stack.toml`:
 
 ```toml
+[object_storage_server]
+object_storage_address = "tcp://127.0.0.1:2346"
+
 [scheduler]
 scheduler_address = "tcp://127.0.0.1:2345"
+object_storage_address = "tcp://127.0.0.1:2346"
 
 [[worker_manager]]
 type = "baremetal_native"
@@ -175,8 +179,8 @@ Then start the entire stack with a single command:
 $ scaler stack.toml
 ```
 
-The object storage server is managed automatically by the scheduler; by default it starts on
-`scheduler_address.port + 1` (port `2346` in this example).
+The `[object_storage_server]` section is required; `object_storage_address` must be set in
+both `[object_storage_server]` and `[scheduler]` and the two addresses should match.
 
 Multiple worker managers can be defined using the `[[worker_manager]]` array-of-tables syntax, each with its own
 `type`, concurrency settings, and logging configuration.
@@ -312,6 +316,7 @@ logging_level = "INFO"
 logging_paths = ["/dev/stdout", "/var/log/scaler/worker.log"]
 
 [object_storage_server]
+object_storage_address = "tcp://127.0.0.1:6379"
 
 [gui]
 gui_address = "0.0.0.0:8081"
