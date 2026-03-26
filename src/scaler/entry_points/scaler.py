@@ -1,7 +1,7 @@
 import dataclasses
 import multiprocessing
 import sys
-from typing import List, Optional, Union
+from typing import List, Optional
 
 from scaler.config.config_class import ConfigClass
 from scaler.config.section.aws_hpc_worker_manager import AWSBatchWorkerManagerConfig
@@ -10,12 +10,9 @@ from scaler.config.section.native_worker_manager import NativeWorkerManagerConfi
 from scaler.config.section.scheduler import SchedulerConfig
 from scaler.config.section.symphony_worker_manager import SymphonyWorkerManagerConfig
 from scaler.config.section.webgui import WebGUIConfig
+from scaler.config.section.worker_manager_union import WorkerManagerUnion
 from scaler.utility.event_loop import register_event_loop
 from scaler.utility.logging.utility import setup_logger
-
-WorkerManagerUnion = Union[
-    NativeWorkerManagerConfig, SymphonyWorkerManagerConfig, ECSWorkerManagerConfig, AWSBatchWorkerManagerConfig
-]
 
 
 @dataclasses.dataclass
