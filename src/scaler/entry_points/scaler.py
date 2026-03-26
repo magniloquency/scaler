@@ -80,7 +80,7 @@ def main() -> None:
         and config.scheduler.object_storage_address is None
     ):
         print(
-            "scaler: [scheduler] object_storage_address is required when [object_storage_server] is present",
+            "scaler: object_storage_address is required in section [scheduler] when section [object_storage_server] is present",
             file=sys.stderr,
         )
         sys.exit(1)
