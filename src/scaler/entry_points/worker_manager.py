@@ -1,6 +1,6 @@
 import argparse
 import sys
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Dict, Type, Union, cast
 
 from scaler.config.config_class import ConfigClass
 from scaler.config.loading import _load_toml
@@ -10,6 +10,10 @@ from scaler.config.section.native_worker_manager import NativeWorkerManagerConfi
 from scaler.config.section.symphony_worker_manager import SymphonyWorkerManagerConfig
 from scaler.utility.event_loop import register_event_loop
 from scaler.utility.logging.utility import setup_logger
+
+WorkerManagerConfig = Union[
+    NativeWorkerManagerConfig, SymphonyWorkerManagerConfig, ECSWorkerManagerConfig, AWSBatchWorkerManagerConfig
+]
 
 _TYPE_MAP: Dict[str, Type[ConfigClass]] = {
     NativeWorkerManagerConfig._tag: NativeWorkerManagerConfig,
@@ -41,10 +45,7 @@ def main() -> None:
             entries = [entries]
         matching = [e for e in entries if e.get("type") == wm_type]
         if not matching:
-            print(
-                f"scaler_worker_manager: no worker manager of type '{wm_type}' found in config",
-                file=sys.stderr,
-            )
+            print(f"scaler_worker_manager: no worker manager of type '{wm_type}' found in config", file=sys.stderr)
             sys.exit(1)
         if len(matching) > 1:
             print(
@@ -57,7 +58,9 @@ def main() -> None:
 
     # Pass 2: parse the type-specific config using TOML defaults + remaining CLI args.
     config_cls = _TYPE_MAP[wm_type]
-    wm_config = config_cls.parse_with_section("scaler_worker_manager", section_data, argv=remaining_argv)
+    wm_config = cast(
+        WorkerManagerConfig, config_cls.parse_with_section("scaler_worker_manager", section_data, argv=remaining_argv)
+    )
 
     setup_logger(wm_config.logging_config.paths, wm_config.logging_config.config_file, wm_config.logging_config.level)
     register_event_loop(wm_config.worker_config.event_loop)

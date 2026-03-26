@@ -169,7 +169,9 @@ class TestWorkerManagerConfigFields(unittest.TestCase):
         from scaler.config.section.native_worker_manager import NativeWorkerManagerConfig
 
         config = NativeWorkerManagerConfig.parse_with_section(
-            "scaler_worker_manager", {}, argv=["--worker-manager-id", "wm-test", "tcp://127.0.0.1:6378", "--logging-level", "DEBUG"]
+            "scaler_worker_manager",
+            {},
+            argv=["--worker-manager-id", "wm-test", "tcp://127.0.0.1:6378", "--logging-level", "DEBUG"],
         )
         self.assertEqual(config.logging_config.level, "DEBUG")
 
@@ -178,7 +180,9 @@ class TestWorkerManagerConfigFields(unittest.TestCase):
         from scaler.config.section.native_worker_manager import NativeWorkerManagerConfig
 
         config = NativeWorkerManagerConfig.parse_with_section(
-            "scaler_worker_manager", {}, argv=["--worker-manager-id", "wm-test", "tcp://127.0.0.1:6378", "--logging-paths", "/tmp/scaler.log"]
+            "scaler_worker_manager",
+            {},
+            argv=["--worker-manager-id", "wm-test", "tcp://127.0.0.1:6378", "--logging-paths", "/tmp/scaler.log"],
         )
         self.assertIn("/tmp/scaler.log", config.logging_config.paths)
 
@@ -200,9 +204,7 @@ class TestWorkerManagerConfigFields(unittest.TestCase):
             "worker_manager_id": "wm-test",
             "logging_level": "DEBUG",
         }
-        config = NativeWorkerManagerConfig.parse_with_section(
-            "scaler_worker_manager", section_data, argv=[]
-        )
+        config = NativeWorkerManagerConfig.parse_with_section("scaler_worker_manager", section_data, argv=[])
         self.assertEqual(config.logging_config.level, "DEBUG")
 
     def test_cli_overrides_toml_logging(self) -> None:
@@ -223,7 +225,9 @@ class TestWorkerManagerConfigFields(unittest.TestCase):
         from scaler.config.section.native_worker_manager import NativeWorkerManagerConfig
 
         config = NativeWorkerManagerConfig.parse_with_section(
-            "scaler_worker_manager", {}, argv=["--worker-manager-id", "wm-test", "tcp://127.0.0.1:6378", "--io-threads", "4"]
+            "scaler_worker_manager",
+            {},
+            argv=["--worker-manager-id", "wm-test", "tcp://127.0.0.1:6378", "--io-threads", "4"],
         )
         self.assertEqual(config.worker_config.io_threads, 4)
 
@@ -231,7 +235,9 @@ class TestWorkerManagerConfigFields(unittest.TestCase):
         from scaler.config.section.native_worker_manager import NativeWorkerManagerConfig
 
         config = NativeWorkerManagerConfig.parse_with_section(
-            "scaler_worker_manager", {}, argv=["--worker-manager-id", "wm-test", "tcp://127.0.0.1:6378", "--event-loop", "builtin"]
+            "scaler_worker_manager",
+            {},
+            argv=["--worker-manager-id", "wm-test", "tcp://127.0.0.1:6378", "--event-loop", "builtin"],
         )
         self.assertEqual(config.worker_config.event_loop, "builtin")
 
@@ -249,7 +255,10 @@ class TestWorkerManagerConfigFields(unittest.TestCase):
 class TestWorkerManagerMain(unittest.TestCase):
     """Tests for the main() entry point dispatch and error handling."""
 
-    @patch("sys.argv", ["scaler_worker_manager", "--type", "baremetal_native", "--worker-manager-id", "wm-1", "tcp://127.0.0.1:6378"])
+    @patch(
+        "sys.argv",
+        ["scaler_worker_manager", "--type", "baremetal_native", "--worker-manager-id", "wm-1", "tcp://127.0.0.1:6378"],
+    )
     def test_no_matching_type_exits(self) -> None:
         """When --config is provided but has no matching type, exit with error."""
         toml_content = b"""

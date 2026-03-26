@@ -74,7 +74,11 @@ def main() -> None:
         print("scaler: no any recognized section found in config file", file=sys.stderr)
         sys.exit(1)
 
-    if config.object_storage is not None and config.scheduler is not None and config.scheduler.object_storage_address is None:
+    if (
+        config.object_storage is not None
+        and config.scheduler is not None
+        and config.scheduler.object_storage_address is None
+    ):
         print(
             "scaler: [scheduler] object_storage_address is required when [object_storage_server] is present",
             file=sys.stderr,
