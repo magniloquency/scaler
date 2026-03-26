@@ -34,7 +34,7 @@ logging_paths = ["/dev/stdout", "/var/log/scaler/worker.log"]
 [object_storage_server]
 
 [gui]
-web_port = 8081
+gui_address = "127.0.0.1:8081"
 """
 
 
@@ -76,4 +76,5 @@ class TestReadmeConfig(unittest.TestCase):
     def test_webgui_section(self) -> None:
         config = WebGUIConfig.parse("scaler_gui", "gui")
 
-        self.assertEqual(config.web_port, 8081)
+        self.assertEqual(config.gui_address.host, "127.0.0.1")
+        self.assertEqual(config.gui_address.port, 8081)

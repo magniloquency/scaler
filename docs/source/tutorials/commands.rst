@@ -100,8 +100,7 @@ Scaler examples
 
             [gui]
             monitor_address = "tcp://127.0.0.1:6380"
-            web_host = "127.0.0.1"
-            web_port = 50001
+            gui_address = "127.0.0.1:50001"
             logging_level = "INFO"
 
             [[worker_manager]]
@@ -891,8 +890,7 @@ UI examples
 
             [gui]
             monitor_address = "tcp://127.0.0.1:6380"
-            web_host = "127.0.0.1"
-            web_port = 50001
+            gui_address = "127.0.0.1:50001"
             logging_level = "INFO"
 
         Run command:

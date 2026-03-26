@@ -312,7 +312,7 @@ logging_paths = ["/dev/stdout", "/var/log/scaler/worker.log"]
 [object_storage_server]
 
 [gui]
-web_port = 8081
+gui_address = "0.0.0.0:8081"
 ```
 
 With this single file, starting your entire stack is simple and consistent:
