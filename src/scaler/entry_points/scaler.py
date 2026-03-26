@@ -89,8 +89,14 @@ def main() -> None:
         gui_process.start()
         processes.append(gui_process)
 
-    for process in processes:
-        process.join()
+    try:
+        for process in processes:
+            process.join()
+    except KeyboardInterrupt:
+        for process in processes:
+            process.terminate()
+        for process in processes:
+            process.join()
 
 
 if __name__ == "__main__":
