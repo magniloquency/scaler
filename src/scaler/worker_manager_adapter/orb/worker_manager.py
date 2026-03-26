@@ -62,7 +62,7 @@ class ORBWorkerAdapter:
         self._capabilities = config.worker_config.per_worker_capabilities.capabilities
         self._max_task_concurrency = config.worker_manager_config.max_task_concurrency
 
-        self._event_loop = config.event_loop
+        self._event_loop = config.worker_config.event_loop
         self._logging_paths = config.logging_config.paths
         self._logging_level = config.logging_config.level
         self._logging_config_file = config.logging_config.config_file
@@ -257,8 +257,8 @@ nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address
     --garbage-collect-interval-seconds {worker_config.garbage_collect_interval_seconds} \
     --death-timeout-seconds {worker_config.death_timeout_seconds} \
     --trim-memory-threshold-bytes {worker_config.trim_memory_threshold_bytes} \
-    --event-loop {self._config.event_loop} \
-    --worker-io-threads {self._config.worker_io_threads}"""
+    --event-loop {self._config.worker_config.event_loop} \
+    --worker-io-threads {self._config.worker_config.io_threads}"""
 
         if worker_config.hard_processor_suspend:
             script += " \

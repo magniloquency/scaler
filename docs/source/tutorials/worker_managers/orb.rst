@@ -23,13 +23,14 @@ Before using the ORB worker adapter, ensure the following requirements are met o
 Getting Started
 ---------------
 
-To start the ORB worker adapter, use the ``scaler_worker_manager_orb`` command.
+The ORB worker adapter can be started in two ways.
 
-Example command:
+**Unified entry point** (recommended): use the ``scaler_worker_manager orb`` subcommand, which integrates with
+the :ref:`scaler <cmd-scaler>` all-in-one launcher and supports the standard ``[[worker_manager]]`` TOML section.
 
 .. code-block:: bash
 
-    scaler_worker_manager_orb tcp://<SCHEDULER_EXTERNAL_IP>:8516 \
+    scaler_worker_manager orb tcp://<SCHEDULER_EXTERNAL_IP>:8516 \
         --object-storage-address tcp://<OSS_EXTERNAL_IP>:8517 \
         --image-id ami-0528819f94f4f5fa5 \
         --instance-type t3.medium \
@@ -37,7 +38,31 @@ Example command:
         --logging-level INFO \
         --task-timeout-seconds 60
 
-Equivalent configuration using a TOML file:
+Equivalent configuration using a TOML file with ``scaler``:
+
+.. code-block:: toml
+
+    # stack.toml
+
+    [scheduler]
+    scheduler_address = "tcp://<SCHEDULER_EXTERNAL_IP>:8516"
+
+    [[worker_manager]]
+    type = "orb"
+    scheduler_address = "tcp://<SCHEDULER_EXTERNAL_IP>:8516"
+    object_storage_address = "tcp://<OSS_EXTERNAL_IP>:8517"
+    image_id = "ami-0528819f94f4f5fa5"
+    instance_type = "t3.medium"
+    aws_region = "us-east-1"
+    logging_level = "INFO"
+    task_timeout_seconds = 60
+
+.. code-block:: bash
+
+    scaler stack.toml
+
+**Dedicated entry point** (legacy): use the ``scaler_worker_manager_orb`` command. This supports the
+``[orb_worker_adapter]`` TOML section but does not integrate with the ``scaler`` all-in-one launcher.
 
 .. code-block:: bash
 

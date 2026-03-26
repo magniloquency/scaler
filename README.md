@@ -275,7 +275,7 @@ The following table maps each Scaler command to its corresponding section name i
 | `scaler_worker_manager symphony`     | `[worker_manager_symphony]`         |
 | `scaler_worker_manager aws_raw_ecs`  | `[worker_manager_aws_raw_ecs]`      |
 | `scaler_worker_manager aws_hpc`      | `[worker_manager_aws_hpc]`          |
-| `scaler_worker_manager_orb`          | `[orb_worker_adapter]`              |
+| `scaler_worker_manager orb`          | `[worker_manager_orb]`              |
 
 ### Practical Scenarios & Examples
 
@@ -506,10 +506,24 @@ a base task that calls a nested task that calls another nested task, then the de
 A Scaler scheduler can interface with ORB (Open Resource Broker) to dynamically provision and manage workers on AWS EC2 instances.
 
 ```bash
-$ scaler_worker_manager_orb tcp://127.0.0.1:2345 --image-id ami-0528819f94f4f5fa5
+$ scaler_worker_manager orb tcp://127.0.0.1:2345 --image-id ami-0528819f94f4f5fa5
 ```
 
 This will start an ORB worker adapter that connects to the Scaler scheduler at `tcp://127.0.0.1:2345`. The scheduler can then request new workers from this adapter, which will be launched as EC2 instances.
+
+The ORB worker manager can also be included in a `scaler` all-in-one TOML config:
+
+```toml
+[scheduler]
+scheduler_address = "tcp://127.0.0.1:2345"
+
+[[worker_manager]]
+type = "orb"
+scheduler_address = "tcp://127.0.0.1:2345"
+image_id = "ami-0528819f94f4f5fa5"
+instance_type = "t3.medium"
+aws_region = "us-east-1"
+```
 
 ### Configuration
 

@@ -7,6 +7,7 @@ from scaler.config.config_class import ConfigClass
 from scaler.config.section.aws_hpc_worker_manager import AWSBatchWorkerManagerConfig
 from scaler.config.section.ecs_worker_manager import ECSWorkerManagerConfig
 from scaler.config.section.native_worker_manager import NativeWorkerManagerConfig
+from scaler.config.section.orb_worker_adapter import ORBWorkerAdapterConfig
 from scaler.config.section.scheduler import SchedulerConfig
 from scaler.config.section.symphony_worker_manager import SymphonyWorkerManagerConfig
 from scaler.config.section.webgui import WebGUIConfig
@@ -14,7 +15,11 @@ from scaler.utility.event_loop import register_event_loop
 from scaler.utility.logging.utility import setup_logger
 
 WorkerManagerUnion = Union[
-    NativeWorkerManagerConfig, SymphonyWorkerManagerConfig, ECSWorkerManagerConfig, AWSBatchWorkerManagerConfig
+    NativeWorkerManagerConfig,
+    SymphonyWorkerManagerConfig,
+    ECSWorkerManagerConfig,
+    AWSBatchWorkerManagerConfig,
+    ORBWorkerAdapterConfig,
 ]
 
 
@@ -57,6 +62,10 @@ def _run_worker_manager(config: WorkerManagerUnion) -> None:
         from scaler.worker_manager_adapter.aws_hpc.worker_manager import AWSHPCWorkerManager
 
         AWSHPCWorkerManager(config).run()
+    elif isinstance(config, ORBWorkerAdapterConfig):
+        from scaler.worker_manager_adapter.orb.worker_manager import ORBWorkerAdapter
+
+        ORBWorkerAdapter(config).run()
 
 
 def _run_gui(config: WebGUIConfig) -> None:

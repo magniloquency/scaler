@@ -261,3 +261,50 @@ logging_level = "DEBUG"
         config = WorkerManagerConfig.parse("scaler_worker_manager", "")
         self.assertEqual(config.baremetal_native.worker_config.io_threads, WorkerConfig().io_threads)
         self.assertEqual(config.baremetal_native.worker_config.event_loop, WorkerConfig().event_loop)
+
+
+_ORB_BASE_ARGS = ["scaler_worker_manager", "orb", "--image-id", "ami-0528819f94f4f5fa5", "tcp://127.0.0.1:6378"]
+
+
+class TestORBWorkerManagerSubcommand(unittest.TestCase):
+    """Tests that WorkerManagerConfig correctly parses the orb subcommand."""
+
+    @patch("sys.argv", _ORB_BASE_ARGS)
+    def test_orb_subcommand_selected(self) -> None:
+        from scaler.config.section.orb_worker_adapter import ORBWorkerAdapterConfig
+        from scaler.entry_points.worker_manager import WorkerManagerConfig
+
+        config = WorkerManagerConfig.parse("scaler_worker_manager", "")
+        self.assertIsNotNone(config.orb)
+        self.assertIsNone(config.baremetal_native)
+        self.assertIsInstance(config.orb, ORBWorkerAdapterConfig)
+
+    @patch("sys.argv", _ORB_BASE_ARGS)
+    def test_orb_image_id_parsed(self) -> None:
+        from scaler.entry_points.worker_manager import WorkerManagerConfig
+
+        config = WorkerManagerConfig.parse("scaler_worker_manager", "")
+        self.assertEqual(config.orb.image_id, "ami-0528819f94f4f5fa5")
+
+    @patch("sys.argv", _ORB_BASE_ARGS)
+    def test_orb_defaults(self) -> None:
+        from scaler.entry_points.worker_manager import WorkerManagerConfig
+
+        config = WorkerManagerConfig.parse("scaler_worker_manager", "")
+        self.assertEqual(config.orb.instance_type, "t2.micro")
+        self.assertEqual(config.orb.aws_region, "us-east-1")
+
+    @patch("sys.argv", [*_ORB_BASE_ARGS, "--instance-type", "t3.medium", "--aws-region", "eu-west-1"])
+    def test_orb_instance_type_and_region_from_cli(self) -> None:
+        from scaler.entry_points.worker_manager import WorkerManagerConfig
+
+        config = WorkerManagerConfig.parse("scaler_worker_manager", "")
+        self.assertEqual(config.orb.instance_type, "t3.medium")
+        self.assertEqual(config.orb.aws_region, "eu-west-1")
+
+    @patch("sys.argv", [*_ORB_BASE_ARGS, "--logging-level", "DEBUG"])
+    def test_orb_logging_level_from_cli(self) -> None:
+        from scaler.entry_points.worker_manager import WorkerManagerConfig
+
+        config = WorkerManagerConfig.parse("scaler_worker_manager", "")
+        self.assertEqual(config.orb.logging_config.level, "DEBUG")

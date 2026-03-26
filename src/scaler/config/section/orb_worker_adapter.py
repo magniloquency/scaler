@@ -1,17 +1,17 @@
 import dataclasses
-from typing import List, Optional
+from typing import ClassVar, List, Optional
 
-from scaler.config import defaults
 from scaler.config.common.logging import LoggingConfig
 from scaler.config.common.worker import WorkerConfig
 from scaler.config.common.worker_manager import WorkerManagerConfig
 from scaler.config.config_class import ConfigClass
-from scaler.utility.event_loop import EventLoopType
 
 
 @dataclasses.dataclass
 class ORBWorkerAdapterConfig(ConfigClass):
     """Configuration for the ORB worker adapter."""
+
+    _tag: ClassVar[str] = "orb"
 
     worker_manager_config: WorkerManagerConfig
 
@@ -26,15 +26,6 @@ class ORBWorkerAdapterConfig(ConfigClass):
 
     worker_config: WorkerConfig = dataclasses.field(default_factory=WorkerConfig)
     logging_config: LoggingConfig = dataclasses.field(default_factory=LoggingConfig)
-    event_loop: str = dataclasses.field(
-        default="builtin",
-        metadata=dict(short="-el", choices=EventLoopType.allowed_types(), help="select the event loop type"),
-    )
-
-    worker_io_threads: int = dataclasses.field(
-        default=defaults.DEFAULT_IO_THREADS,
-        metadata=dict(short="-wit", help="set the number of io threads for io backend per worker"),
-    )
 
     instance_type: str = dataclasses.field(default="t2.micro", metadata=dict(help="EC2 instance type"))
     aws_region: Optional[str] = dataclasses.field(default="us-east-1", metadata=dict(help="AWS region"))
@@ -44,7 +35,3 @@ class ORBWorkerAdapterConfig(ConfigClass):
             type=lambda s: [x for x in s.split(",") if x], help="Comma-separated list of AWS security group IDs"
         ),
     )
-
-    def __post_init__(self) -> None:
-        if self.worker_io_threads <= 0:
-            raise ValueError("worker_io_threads must be a positive integer.")

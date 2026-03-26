@@ -5,6 +5,7 @@ from scaler.config.config_class import ConfigClass
 from scaler.config.section.aws_hpc_worker_manager import AWSBatchWorkerManagerConfig
 from scaler.config.section.ecs_worker_manager import ECSWorkerManagerConfig
 from scaler.config.section.native_worker_manager import NativeWorkerManagerConfig
+from scaler.config.section.orb_worker_adapter import ORBWorkerAdapterConfig
 from scaler.config.section.symphony_worker_manager import SymphonyWorkerManagerConfig
 from scaler.utility.event_loop import register_event_loop
 from scaler.utility.logging.utility import setup_logger
@@ -23,6 +24,9 @@ class WorkerManagerConfig(ConfigClass):
     )
     aws_hpc: Optional[AWSBatchWorkerManagerConfig] = dataclasses.field(
         default=None, metadata=dict(subcommand="worker_manager_aws_hpc")
+    )
+    orb: Optional[ORBWorkerAdapterConfig] = dataclasses.field(
+        default=None, metadata=dict(subcommand="worker_manager_orb")
     )
 
 
@@ -69,6 +73,14 @@ def main() -> None:
         )
         register_event_loop(config.aws_hpc.worker_config.event_loop)
         AWSHPCWorkerManager(config.aws_hpc).run()
+    elif config.orb is not None:
+        from scaler.worker_manager_adapter.orb.worker_manager import ORBWorkerAdapter
+
+        setup_logger(
+            config.orb.logging_config.paths, config.orb.logging_config.config_file, config.orb.logging_config.level
+        )
+        register_event_loop(config.orb.worker_config.event_loop)
+        ORBWorkerAdapter(config.orb).run()
 
 
 if __name__ == "__main__":
