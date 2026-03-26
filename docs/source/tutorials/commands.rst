@@ -498,17 +498,11 @@ Local-process worker manager (dynamic auto-scaling or fixed pre-spawned workers)
             mode = "dynamic"
             max_task_concurrency = 8
 
-        Run with ``scaler`` (all-in-one):
+        Run command:
 
         .. code-block:: bash
 
             $ scaler config.toml
-
-        Or with ``scaler_worker_manager`` directly:
-
-        .. code-block:: bash
-
-            $ scaler_worker_manager baremetal_native --config config.toml
 
 .. list-table::
    :header-rows: 1
@@ -559,17 +553,11 @@ IBM Spectrum Symphony worker manager.
             worker_manager_id = "wm-symphony"
             service_name = "ScalerService"
 
-        Run with ``scaler`` (all-in-one):
+        Run command:
 
         .. code-block:: bash
 
             $ scaler config.toml
-
-        Or with ``scaler_worker_manager`` directly:
-
-        .. code-block:: bash
-
-            $ scaler_worker_manager symphony --config config.toml
 
 .. list-table::
    :header-rows: 1
@@ -620,17 +608,11 @@ AWS ECS (Fargate) worker manager.
             ecs_task_definition = "scaler-task-definition"
             aws_region = "us-east-1"
 
-        Run with ``scaler`` (all-in-one):
+        Run command:
 
         .. code-block:: bash
 
             $ scaler config.toml
-
-        Or with ``scaler_worker_manager`` directly:
-
-        .. code-block:: bash
-
-            $ scaler_worker_manager aws_raw_ecs --config config.toml
 
 .. list-table::
    :header-rows: 1
@@ -721,17 +703,11 @@ AWS Batch worker manager.
             s3_bucket = "my-scaler-bucket"
             aws_region = "us-east-1"
 
-        Run with ``scaler`` (all-in-one):
+        Run command:
 
         .. code-block:: bash
 
             $ scaler config.toml
-
-        Or with ``scaler_worker_manager`` directly:
-
-        .. code-block:: bash
-
-            $ scaler_worker_manager aws_hpc --config config.toml
 
 .. list-table::
    :header-rows: 1
