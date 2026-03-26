@@ -135,7 +135,7 @@ $ scaler_scheduler "tcp://127.0.0.1:2345"
 Finally, start a set of workers that connects to the previously started scheduler:
 
 ```bash
-$ scaler_worker_manager --type baremetal_native --worker-manager-id my-manager --mode fixed --max-task-concurrency 4 tcp://127.0.0.1:2345
+$ scaler_worker_manager baremetal_native --worker-manager-id my-manager --mode fixed --max-task-concurrency 4 tcp://127.0.0.1:2345
 ...
 ```
 
@@ -147,7 +147,7 @@ servers.
 ```bash
 $ scaler_object_storage_server -h
 $ scaler_scheduler -h
-$ scaler_worker_manager --type baremetal_native --help
+$ scaler_worker_manager baremetal_native --help
 ```
 
 ### All-in-one `scaler` entrypoint
@@ -275,10 +275,10 @@ The following table maps each Scaler command to its corresponding section name i
 | `scaler_object_storage_server`                 | `[object_storage_server]`                           |
 | `scaler_gui`                                   | `[gui]`                                             |
 | `scaler_top`                                   | `[top]`                                             |
-| `scaler_worker_manager --type baremetal_native` | `[[worker_manager]]` + `type = "baremetal_native"` |
-| `scaler_worker_manager --type symphony`        | `[[worker_manager]]` + `type = "symphony"`          |
-| `scaler_worker_manager --type aws_raw_ecs`     | `[[worker_manager]]` + `type = "aws_raw_ecs"`       |
-| `scaler_worker_manager --type aws_hpc`         | `[[worker_manager]]` + `type = "aws_hpc"`           |
+| `scaler_worker_manager baremetal_native` | `[[worker_manager]]` + `type = "baremetal_native"` |
+| `scaler_worker_manager symphony`        | `[[worker_manager]]` + `type = "symphony"`          |
+| `scaler_worker_manager aws_raw_ecs`     | `[[worker_manager]]` + `type = "aws_raw_ecs"`       |
+| `scaler_worker_manager aws_hpc`         | `[[worker_manager]]` + `type = "aws_hpc"`           |
 
 ### Practical Scenarios & Examples
 
@@ -327,7 +327,7 @@ With this single file, starting your entire stack is simple and consistent:
 ```bash
 scaler_object_storage_server tcp://127.0.0.1:6379 --config example_config.toml &
 scaler_scheduler tcp://127.0.0.1:6378 --config example_config.toml &
-scaler_worker_manager --type baremetal_native --config example_config.toml &
+scaler_worker_manager baremetal_native --config example_config.toml &
 scaler_gui tcp://127.0.0.1:6380 --config example_config.toml &
 ```
 
@@ -338,7 +338,7 @@ example_config.toml file but test the cluster with 12 workers instead of 8:
 
 ```bash
 # The --max-task-concurrency flag will take precedence over the [[worker_manager]] section
-scaler_worker_manager --type baremetal_native --config example_config.toml --max-task-concurrency 12
+scaler_worker_manager baremetal_native --config example_config.toml --max-task-concurrency 12
 ```
 
 The cluster will start with 12 workers, but all other settings (like `task_timeout_seconds`) will still be loaded from the

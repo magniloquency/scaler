@@ -11,7 +11,7 @@ from scaler.config.section.symphony_worker_manager import SymphonyWorkerManagerC
 from scaler.utility.event_loop import register_event_loop
 from scaler.utility.logging.utility import setup_logger
 
-WorkerManagerConfig = Union[
+_AnyWorkerManagerConfig = Union[
     NativeWorkerManagerConfig, SymphonyWorkerManagerConfig, ECSWorkerManagerConfig, AWSBatchWorkerManagerConfig
 ]
 
@@ -24,16 +24,16 @@ _TYPE_MAP: Dict[str, Type[ConfigClass]] = {
 
 
 def main() -> None:
-    # Pass 1: extract --type and --config before building the type-specific parser.
+    # Pass 1: extract subcommand and --config before building the type-specific parser.
     pre_parser = argparse.ArgumentParser(add_help=False)
     pre_parser.add_argument("--config", "-c")
-    pre_parser.add_argument("--type", "-t", required=True)
+    pre_parser.add_argument("subcommand")
     pre_args, remaining_argv = pre_parser.parse_known_args()
 
-    wm_type = pre_args.type
+    wm_type = pre_args.subcommand
     if wm_type not in _TYPE_MAP:
         valid = ", ".join(_TYPE_MAP)
-        print(f"scaler_worker_manager: unknown type '{wm_type}', must be one of: {valid}", file=sys.stderr)
+        print(f"scaler_worker_manager: unknown subcommand '{wm_type}', must be one of: {valid}", file=sys.stderr)
         sys.exit(1)
 
     # Load TOML and find the matching [[worker_manager]] entry.
@@ -59,7 +59,8 @@ def main() -> None:
     # Pass 2: parse the type-specific config using TOML defaults + remaining CLI args.
     config_cls = _TYPE_MAP[wm_type]
     wm_config = cast(
-        WorkerManagerConfig, config_cls.parse_with_section("scaler_worker_manager", section_data, argv=remaining_argv)
+        _AnyWorkerManagerConfig,
+        config_cls.parse_with_section("scaler_worker_manager", section_data, argv=remaining_argv),
     )
 
     setup_logger(wm_config.logging_config.paths, wm_config.logging_config.config_file, wm_config.logging_config.level)

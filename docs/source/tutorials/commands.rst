@@ -14,7 +14,7 @@ After installing ``opengris-scaler``, the following CLI commands are available f
    * - :ref:`scaler_scheduler <cmd-scaler-scheduler>`
      - Start only the scheduler process (and auto-start object storage when needed).
    * - :ref:`scaler_worker_manager <cmd-scaler-worker-manager>`
-     - Start one worker manager using ``--type`` (``baremetal_native``, ``symphony``, ``aws_raw_ecs``, ``aws_hpc``).
+     - Start one worker manager using a subcommand (``baremetal_native``, ``symphony``, ``aws_raw_ecs``, ``aws_hpc``).
    * - :ref:`scaler_object_storage_server <cmd-scaler-object-storage-server>`
      - Start only the object storage server.
    * - :ref:`scaler_top <cmd-scaler-top>`
@@ -45,13 +45,13 @@ All commands support ``--config``/``-c``. In practice, most deployments use TOML
      - ``[top]``
    * - ``scaler_gui``
      - ``[gui]``
-   * - ``scaler_worker_manager --type baremetal_native``
+   * - ``scaler_worker_manager baremetal_native``
      - ``[[worker_manager]]`` + ``type = "baremetal_native"``
-   * - ``scaler_worker_manager --type symphony``
+   * - ``scaler_worker_manager symphony``
      - ``[[worker_manager]]`` + ``type = "symphony"``
-   * - ``scaler_worker_manager --type aws_raw_ecs``
+   * - ``scaler_worker_manager aws_raw_ecs``
      - ``[[worker_manager]]`` + ``type = "aws_raw_ecs"``
-   * - ``scaler_worker_manager --type aws_hpc``
+   * - ``scaler_worker_manager aws_hpc``
      - ``[[worker_manager]]`` + ``type = "aws_hpc"``
 
 
@@ -339,14 +339,14 @@ The scheduler uses ``builtin`` event loop by default. You can switch to ``uvloop
 scaler_worker_manager
 ---------------------
 
-``scaler_worker_manager`` is the unified worker-manager entry point. Use ``--type`` to select
-an adapter and then pass shared and adapter-specific options.
+``scaler_worker_manager`` is the unified worker-manager entry point. You select an adapter
+with a subcommand and then pass shared and adapter-specific options.
 
 .. code-block:: bash
 
-    $ scaler_worker_manager --type <type> [options] [scheduler_address]
+    $ scaler_worker_manager <subcommand> [options] <scheduler_address>
 
-Available types:
+Available subcommands:
 
 - ``baremetal_native``
 - ``symphony``
@@ -354,12 +354,12 @@ Available types:
 - ``aws_hpc``
 
 When ``--config``/``-c`` is supplied, ``scaler_worker_manager`` reads the ``[[worker_manager]]``
-array from the TOML file and picks the entry whose ``type`` field matches ``--type``.
+array from the TOML file and picks the entry whose ``type`` field matches the subcommand.
 It is an error if no entry matches or if more than one entry matches.
 Command-line flags always override TOML values.
 
-Arguments (shared by all types)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Arguments (shared by all subcommands)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. list-table:: Shared options
    :header-rows: 1
@@ -440,14 +440,10 @@ Arguments (shared by all types)
      - No
      - ``None``
      - Python logging ``.conf`` file.
-   * - ``-t``, ``--type``
-     - Yes
-     - -
-     - Worker manager type (``baremetal_native``, ``symphony``, ``aws_raw_ecs``, ``aws_hpc``).
    * - ``-c``, ``--config``
      - No
      - ``None``
-     - TOML config file path. Config is read from the ``[[worker_manager]]`` entry matching ``--type``.
+     - TOML config file path. Config is read from the ``[[worker_manager]]`` entry matching the subcommand.
 
 Worker runtime notes
 ~~~~~~~~~~~~~~~~~~~~
@@ -459,8 +455,8 @@ Workers can run initialization logic before processing tasks via ``--preload``.
 
 .. code-block:: bash
 
-    $ scaler_worker_manager --type baremetal_native tcp://127.0.0.1:6378 --worker-manager-id wm-preload --preload "mypackage.init:setup"
-    $ scaler_worker_manager --type baremetal_native tcp://127.0.0.1:6378 --worker-manager-id wm-preload --preload "mypackage.init:configure('production', debug=False)"
+    $ scaler_worker_manager baremetal_native tcp://127.0.0.1:6378 --worker-manager-id wm-preload --preload "mypackage.init:setup"
+    $ scaler_worker_manager baremetal_native tcp://127.0.0.1:6378 --worker-manager-id wm-preload --preload "mypackage.init:configure('production', debug=False)"
 
 Death timeout
 ^^^^^^^^^^^^^
@@ -469,16 +465,16 @@ Death timeout
 
 .. code-block:: bash
 
-    $ scaler_worker_manager --type baremetal_native tcp://127.0.0.1:6378 --worker-manager-id wm-fixed --mode fixed --max-task-concurrency 10 -dts 300
+    $ scaler_worker_manager baremetal_native tcp://127.0.0.1:6378 --worker-manager-id wm-fixed --mode fixed --max-task-concurrency 10 -dts 300
 
-Type: ``baremetal_native``
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+Subcommand: ``baremetal_native``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Local-process worker manager (dynamic auto-scaling or fixed pre-spawned workers).
 
 .. code-block:: bash
 
-    $ scaler_worker_manager --type baremetal_native [options] <scheduler_address>
+    $ scaler_worker_manager baremetal_native [options] <scheduler_address>
 
 .. tabs::
 
@@ -486,7 +482,7 @@ Local-process worker manager (dynamic auto-scaling or fixed pre-spawned workers)
 
         .. code-block:: bash
 
-            $ scaler_worker_manager --type baremetal_native tcp://127.0.0.1:6378 \
+            $ scaler_worker_manager baremetal_native tcp://127.0.0.1:6378 \
                 --worker-manager-id wm-native \
                 --mode dynamic \
                 --max-task-concurrency 8
@@ -512,7 +508,7 @@ Local-process worker manager (dynamic auto-scaling or fixed pre-spawned workers)
 
         .. code-block:: bash
 
-            $ scaler_worker_manager --type baremetal_native --config config.toml
+            $ scaler_worker_manager baremetal_native --config config.toml
 
 .. list-table::
    :header-rows: 1
@@ -534,14 +530,14 @@ Local-process worker manager (dynamic auto-scaling or fixed pre-spawned workers)
      - -
      - Backward-compatible alias for ``--max-task-concurrency``.
 
-Type: ``symphony``
-~~~~~~~~~~~~~~~~~~
+Subcommand: ``symphony``
+~~~~~~~~~~~~~~~~~~~~~~~~
 
 IBM Spectrum Symphony worker manager.
 
 .. code-block:: bash
 
-    $ scaler_worker_manager --type symphony [options] <scheduler_address>
+    $ scaler_worker_manager symphony [options] <scheduler_address>
 
 .. tabs::
 
@@ -549,7 +545,7 @@ IBM Spectrum Symphony worker manager.
 
         .. code-block:: bash
 
-            $ scaler_worker_manager --type symphony tcp://127.0.0.1:6378 \
+            $ scaler_worker_manager symphony tcp://127.0.0.1:6378 \
                 --worker-manager-id wm-symphony \
                 --service-name ScalerService
 
@@ -573,7 +569,7 @@ IBM Spectrum Symphony worker manager.
 
         .. code-block:: bash
 
-            $ scaler_worker_manager --type symphony --config config.toml
+            $ scaler_worker_manager symphony --config config.toml
 
 .. list-table::
    :header-rows: 1
@@ -587,14 +583,14 @@ IBM Spectrum Symphony worker manager.
      - -
      - Symphony service name to use for submitted workers.
 
-Type: ``aws_raw_ecs``
-~~~~~~~~~~~~~~~~~~~~~
+Subcommand: ``aws_raw_ecs``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 AWS ECS (Fargate) worker manager.
 
 .. code-block:: bash
 
-    $ scaler_worker_manager --type aws_raw_ecs [options] <scheduler_address>
+    $ scaler_worker_manager aws_raw_ecs [options] <scheduler_address>
 
 .. tabs::
 
@@ -602,7 +598,7 @@ AWS ECS (Fargate) worker manager.
 
         .. code-block:: bash
 
-            $ scaler_worker_manager --type aws_raw_ecs tcp://127.0.0.1:6378 \
+            $ scaler_worker_manager aws_raw_ecs tcp://127.0.0.1:6378 \
                 --object-storage-address tcp://127.0.0.1:6379 \
                 --worker-manager-id wm-ecs \
                 --ecs-subnets subnet-0abc123,subnet-0def456 \
@@ -634,7 +630,7 @@ AWS ECS (Fargate) worker manager.
 
         .. code-block:: bash
 
-            $ scaler_worker_manager --type aws_raw_ecs --config config.toml
+            $ scaler_worker_manager aws_raw_ecs --config config.toml
 
 .. list-table::
    :header-rows: 1
@@ -688,14 +684,14 @@ AWS ECS (Fargate) worker manager.
      - ``30``
      - ECS task memory in GB.
 
-Type: ``aws_hpc``
-~~~~~~~~~~~~~~~~~
+Subcommand: ``aws_hpc``
+~~~~~~~~~~~~~~~~~~~~~~~
 
 AWS Batch worker manager.
 
 .. code-block:: bash
 
-    $ scaler_worker_manager --type aws_hpc [options] <scheduler_address>
+    $ scaler_worker_manager aws_hpc [options] <scheduler_address>
 
 .. tabs::
 
@@ -703,7 +699,7 @@ AWS Batch worker manager.
 
         .. code-block:: bash
 
-            $ scaler_worker_manager --type aws_hpc tcp://127.0.0.1:6378 \
+            $ scaler_worker_manager aws_hpc tcp://127.0.0.1:6378 \
                 --object-storage-address tcp://127.0.0.1:6379 \
                 --worker-manager-id wm-batch \
                 --job-queue scaler-job-queue \
@@ -735,7 +731,7 @@ AWS Batch worker manager.
 
         .. code-block:: bash
 
-            $ scaler_worker_manager --type aws_hpc --config config.toml
+            $ scaler_worker_manager aws_hpc --config config.toml
 
 .. list-table::
    :header-rows: 1

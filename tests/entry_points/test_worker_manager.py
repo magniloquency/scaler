@@ -153,7 +153,6 @@ class TestWorkerManagerSubcommands(unittest.TestCase):
 
 _NATIVE_BASE_ARGS = [
     "scaler_worker_manager",
-    "--type",
     "baremetal_native",
     "--worker-manager-id",
     "wm-test",
@@ -269,7 +268,7 @@ worker_manager_id = "wm-sym"
 service_name = "svc"
 """
         with patch("builtins.open", mock_open(read_data=toml_content)):
-            with patch("sys.argv", ["scaler_worker_manager", "--type", "baremetal_native", "--config", "cfg.toml"]):
+            with patch("sys.argv", ["scaler_worker_manager", "baremetal_native", "--config", "cfg.toml"]):
                 from scaler.entry_points.worker_manager import main
 
                 with self.assertRaises(SystemExit) as ctx:
@@ -290,7 +289,7 @@ scheduler_address = "tcp://127.0.0.1:6378"
 worker_manager_id = "wm-2"
 """
         with patch("builtins.open", mock_open(read_data=toml_content)):
-            with patch("sys.argv", ["scaler_worker_manager", "--type", "baremetal_native", "--config", "cfg.toml"]):
+            with patch("sys.argv", ["scaler_worker_manager", "baremetal_native", "--config", "cfg.toml"]):
                 from scaler.entry_points.worker_manager import main
 
                 with self.assertRaises(SystemExit) as ctx:
@@ -298,8 +297,8 @@ worker_manager_id = "wm-2"
                 self.assertEqual(ctx.exception.code, 1)
 
     def test_unknown_type_exits(self) -> None:
-        """Unknown --type value exits with code 1."""
-        with patch("sys.argv", ["scaler_worker_manager", "--type", "nonexistent"]):
+        """Unknown subcommand exits with code 1."""
+        with patch("sys.argv", ["scaler_worker_manager", "nonexistent"]):
             from scaler.entry_points.worker_manager import main
 
             with self.assertRaises(SystemExit) as ctx:
