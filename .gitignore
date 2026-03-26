@@ -45,3 +45,5 @@ orb/metrics/
 
 # Per-user agent preferences (not committed)
 .agents-local.md
+
+.ipynb_checkpoints/

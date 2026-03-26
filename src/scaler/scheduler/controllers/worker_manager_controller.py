@@ -151,6 +151,7 @@ class WorkerManagerController(Looper, Reporter):
                 max_task_concurrency=heartbeat.max_task_concurrency,
                 worker_count=worker_count,
                 last_seen_s=last_seen,
+                capabilities=heartbeat.capabilities,
             )
         return snapshots
 

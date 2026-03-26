@@ -28,7 +28,11 @@ Paste the result into the TOML below and run the three commands:
 .. code-block:: toml
    :caption: config.toml
 
-   [ecs_worker_manager]
+   [[worker_manager]]
+   type = "aws_raw_ecs"
+   scheduler_address = "tcp://<SCHEDULER_PUBLIC_IP>:8516"
+   object_storage_address = "tcp://<SCHEDULER_PUBLIC_IP>:8517"
+   worker_manager_id = "wm-ecs"
    ecs_subnets = "subnet-0abc1234def56789a"  # paste your subnet ID here
    aws_region = "us-east-1"
    max_task_concurrency = 4
@@ -48,7 +52,7 @@ Paste the result into the TOML below and run the three commands:
 .. code-block:: bash
 
    # Terminal 2 — AWS Raw ECS Worker Manager
-   scaler_worker_manager_aws_raw_ecs tcp://<SCHEDULER_PUBLIC_IP>:8516 --config config.toml
+   $ scaler config.toml
 
 .. code-block:: python
    :caption: my_client.py (Terminal 3)
@@ -124,7 +128,7 @@ Step 4: Start the AWS Raw ECS Worker Manager
 
 .. code-block:: bash
 
-   scaler_worker_manager_aws_raw_ecs tcp://<SCHEDULER_PUBLIC_IP>:8516 \
+   scaler_worker_manager aws_raw_ecs tcp://<SCHEDULER_PUBLIC_IP>:8516 \
        --ecs-subnets subnet-0abc1234def56789a \
        --aws-region us-east-1 \
        --max-task-concurrency 4 \
@@ -135,12 +139,16 @@ Or use a TOML configuration file:
 
 .. code-block:: bash
 
-   scaler_worker_manager_aws_raw_ecs tcp://<SCHEDULER_PUBLIC_IP>:8516 --config config.toml
+   $ scaler config.toml
 
 .. code-block:: toml
    :caption: config.toml
 
-   [ecs_worker_manager]
+   [[worker_manager]]
+   type = "aws_raw_ecs"
+   scheduler_address = "tcp://<SCHEDULER_PUBLIC_IP>:8516"
+   object_storage_address = "tcp://<SCHEDULER_PUBLIC_IP>:8517"
+   worker_manager_id = "wm-ecs"
    ecs_subnets = "subnet-0abc1234def56789a"
    aws_region = "us-east-1"
    max_task_concurrency = 4

@@ -4,7 +4,7 @@ Common Worker Manager Parameters
 All worker managers in Scaler share a set of common configuration parameters. Not every worker manager supports every parameter — specific docs note any differences.
 
 .. note::
-    For more details on Scaler configuration, see the :doc:`../configuration` section.
+    For more details on Scaler configuration, see :doc:`../commands`.
 
 Networking
 ----------
@@ -26,7 +26,7 @@ These parameters control individual worker processes started by the worker manag
 * ``--garbage-collect-interval-seconds`` (``-gc``): Interval at which the worker runs garbage collection in seconds (default: ``30``).
 * ``--trim-memory-threshold-bytes`` (``-tm``): Threshold for trimming libc's memory in bytes (default: ``1073741824``, i.e., 1 GB).
 * ``--hard-processor-suspend`` (``-hps``): When set, suspends worker processors using SIGTSTP instead of a synchronization event.
-* ``--worker-io-threads`` (``-wit``): Number of IO threads per worker (default: ``1``).
+* ``--io-threads`` (``-it``): Number of IO threads per worker (default: ``1``).
 * ``--per-worker-capabilities`` (``-pwc``): Comma-separated list of capabilities (e.g., ``"linux,cpu=4"``).
 
 Logging and Event Loop
