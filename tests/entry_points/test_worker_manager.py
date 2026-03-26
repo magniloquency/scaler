@@ -148,7 +148,7 @@ class TestWorkerManagerSubcommands(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# Tests for the scaler_worker_manager --type interface
+# Tests for the scaler_worker_manager subcommand interface
 # ---------------------------------------------------------------------------
 
 _NATIVE_BASE_ARGS = [
@@ -161,7 +161,7 @@ _NATIVE_BASE_ARGS = [
 
 
 class TestWorkerManagerConfigFields(unittest.TestCase):
-    """Tests that the --type interface correctly parses per-manager fields from CLI and TOML."""
+    """Tests that the subcommand interface correctly parses per-manager fields from CLI and TOML."""
 
     @patch("sys.argv", [*_NATIVE_BASE_ARGS, "--logging-level", "DEBUG"])
     def test_logging_level_from_cli(self) -> None:
@@ -254,10 +254,6 @@ class TestWorkerManagerConfigFields(unittest.TestCase):
 class TestWorkerManagerMain(unittest.TestCase):
     """Tests for the main() entry point dispatch and error handling."""
 
-    @patch(
-        "sys.argv",
-        ["scaler_worker_manager", "--type", "baremetal_native", "--worker-manager-id", "wm-1", "tcp://127.0.0.1:6378"],
-    )
     def test_no_matching_type_exits(self) -> None:
         """When --config is provided but has no matching type, exit with error."""
         toml_content = b"""
