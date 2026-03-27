@@ -8,14 +8,14 @@ from scaler.config.config_class import ConfigClass
 
 
 @dataclasses.dataclass
-class ORBWorkerAdapterConfig(ConfigClass):
-    """Configuration for the ORB worker adapter."""
+class ORBAWSEC2WorkerAdapterConfig(ConfigClass):
+    """Configuration for the ORB AWS EC2 worker adapter."""
 
-    _tag: ClassVar[str] = "orb"
+    _tag: ClassVar[str] = "orb_aws_ec2"
 
     worker_manager_config: WorkerManagerConfig
 
-    # ORB Template configuration
+    # ORB AWS EC2 Template configuration
     image_id: str = dataclasses.field(metadata=dict(help="AMI ID for the worker instances", required=True))
     key_name: Optional[str] = dataclasses.field(
         default=None, metadata=dict(help="AWS key pair name for the instances (optional)")

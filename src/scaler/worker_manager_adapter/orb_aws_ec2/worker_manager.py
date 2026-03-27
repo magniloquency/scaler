@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import boto3
 import zmq
 
-from scaler.config.section.orb_worker_adapter import ORBWorkerAdapterConfig
+from scaler.config.section.orb_aws_ec2_worker_adapter import ORBAWSEC2WorkerAdapterConfig
 from scaler.io import ymq
 from scaler.io.mixins import AsyncConnector
 from scaler.io.utility import create_async_connector, create_async_simple_context
@@ -29,14 +29,14 @@ Status = WorkerManagerCommandResponse.Status
 logger = logging.getLogger(__name__)
 
 
-# Polling configuration for ORB machine requests
-ORB_POLLING_INTERVAL_SECONDS = 5
-ORB_MAX_POLLING_ATTEMPTS = 60
+# Polling configuration for ORB AWS EC2 machine requests
+ORB_AWS_EC2_POLLING_INTERVAL_SECONDS = 5
+ORB_AWS_EC2_MAX_POLLING_ATTEMPTS = 60
 
 
-def get_orb_worker_name(instance_id: str) -> str:
+def get_orb_aws_ec2_worker_name(instance_id: str) -> str:
     """
-    Returns the deterministic worker name for an ORB instance.
+    Returns the deterministic worker name for an ORB AWS EC2 instance.
     If instance_id is the bash variable '${INSTANCE_ID}', it returns a bash-compatible string.
     """
     if instance_id == "${INSTANCE_ID}":
@@ -45,8 +45,8 @@ def get_orb_worker_name(instance_id: str) -> str:
     return f"Worker|ORB|{instance_id}|{tag}"
 
 
-class ORBWorkerAdapter:
-    _config: ORBWorkerAdapterConfig
+class ORBAWSEC2WorkerAdapter:
+    _config: ORBAWSEC2WorkerAdapterConfig
     _sdk: Optional[Any]
     _workers: Dict[WorkerID, str]
     _template_id: str
@@ -54,7 +54,7 @@ class ORBWorkerAdapter:
     _created_key_name: Optional[str]
     _ec2: Optional[Any]
 
-    def __init__(self, config: ORBWorkerAdapterConfig):
+    def __init__(self, config: ORBAWSEC2WorkerAdapterConfig):
         self._config = config
         self._address = config.worker_manager_config.scheduler_address
         self._heartbeat_interval_seconds = config.worker_config.heartbeat_interval_seconds
@@ -74,7 +74,7 @@ class ORBWorkerAdapter:
         self._created_key_name: Optional[str] = None
         self._cleaned_up = False
         self._workers: Dict[WorkerID, str] = {}
-        self._ident: bytes = b"worker_manager_orb|uninitialized"
+        self._ident: bytes = b"worker_manager_orb_aws_ec2|uninitialized"
         self._subnet_id: Optional[str] = None
 
     def _build_app_config(self) -> dict:
@@ -142,7 +142,7 @@ class ORBWorkerAdapter:
         logger.info(f"validate_template result: {validate_result}")
 
         self._context = create_async_simple_context()
-        self._name = "worker_manager_orb"
+        self._name = "worker_manager_orb_aws_ec2"
         self._ident = f"{self._name}|{uuid.uuid4().bytes.hex()}".encode()
 
         self._connector_external = create_async_connector(
@@ -378,10 +378,10 @@ nohup /usr/local/bin/scaler_worker_manager baremetal_native {adapter_config.sche
 
         logger.info(f"ORB machine request {request_id} submitted, waiting for instance IDs...")
 
-        timeout = float(ORB_MAX_POLLING_ATTEMPTS * ORB_POLLING_INTERVAL_SECONDS)
+        timeout = float(ORB_AWS_EC2_MAX_POLLING_ATTEMPTS * ORB_AWS_EC2_POLLING_INTERVAL_SECONDS)
         try:
             final = await self._sdk.wait_for_request(
-                request_id, timeout=timeout, poll_interval=float(ORB_POLLING_INTERVAL_SECONDS)
+                request_id, timeout=timeout, poll_interval=float(ORB_AWS_EC2_POLLING_INTERVAL_SECONDS)
             )
         except TimeoutError:
             logger.error(f"ORB machine request {request_id} timed out after {timeout:.0f}s.")
@@ -398,7 +398,7 @@ nohup /usr/local/bin/scaler_worker_manager baremetal_native {adapter_config.sche
             return [], Status.UnknownAction
 
         logger.info(f"ORB request {request_id} fulfilled with instance ID: {instance_id}")
-        worker_id = WorkerID(get_orb_worker_name(instance_id).encode())
+        worker_id = WorkerID(get_orb_aws_ec2_worker_name(instance_id).encode())
         self._workers[worker_id] = instance_id
         return [bytes(worker_id)], Status.Success
 

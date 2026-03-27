@@ -1,20 +1,20 @@
-ORB Worker Adapter
-==================
+ORB AWS EC2 Worker Adapter
+==========================
 
-The ORB worker adapter allows Scaler to dynamically provision workers on AWS EC2 instances using the ORB (Open Resource Broker) system. This is particularly useful for scaling workloads that require significant compute resources or specialized hardware available in the cloud.
+The ORB AWS EC2 worker adapter allows Scaler to dynamically provision workers on AWS EC2 instances using the ORB (Open Resource Broker) system. This is particularly useful for scaling workloads that require significant compute resources or specialized hardware available in the cloud.
 
-This tutorial describes the steps required to get up and running with the ORB adapter.
+This tutorial describes the steps required to get up and running with the ORB AWS EC2 adapter.
 
 Requirements
 ------------
 
-Before using the ORB worker adapter, ensure the following requirements are met on the machine that will run the adapter:
+Before using the ORB AWS EC2 worker adapter, ensure the following requirements are met on the machine that will run the adapter:
 
-1.  **orb-py and boto3**: The ``orb-py`` and ``boto3`` packages must be installed. These can be installed using the ``orb`` optional dependency of Scaler:
+1.  **orb-py and boto3**: The ``orb-py`` and ``boto3`` packages must be installed. These can be installed using the ``orb_aws_ec2`` optional dependency of Scaler:
 
     .. code-block:: bash
 
-        pip install "opengris-scaler[orb]"
+        pip install "opengris-scaler[orb_aws_ec2]"
 
 2.  **AWS CLI**: The AWS Command Line Interface must be installed and configured with a default profile that has permissions to launch, describe, and terminate EC2 instances.
 
@@ -23,11 +23,11 @@ Before using the ORB worker adapter, ensure the following requirements are met o
 Getting Started
 ---------------
 
-To start the ORB worker adapter, use the ``scaler_worker_manager orb`` subcommand:
+To start the ORB AWS EC2 worker adapter, use the ``scaler_worker_manager orb_aws_ec2`` subcommand:
 
 .. code-block:: bash
 
-    scaler_worker_manager orb tcp://<SCHEDULER_EXTERNAL_IP>:8516 \
+    scaler_worker_manager orb_aws_ec2 tcp://<SCHEDULER_EXTERNAL_IP>:8516 \
         --object-storage-address tcp://<OSS_EXTERNAL_IP>:8517 \
         --image-id ami-0528819f94f4f5fa5 \
         --instance-type t3.medium \
@@ -45,7 +45,7 @@ Equivalent configuration using a TOML file with ``scaler``:
     scheduler_address = "tcp://<SCHEDULER_EXTERNAL_IP>:8516"
 
     [[worker_manager]]
-    type = "orb"
+    type = "orb_aws_ec2"
     scheduler_address = "tcp://<SCHEDULER_EXTERNAL_IP>:8516"
     object_storage_address = "tcp://<OSS_EXTERNAL_IP>:8517"
     image_id = "ami-0528819f94f4f5fa5"
@@ -65,7 +65,7 @@ Equivalent configuration using a TOML file with ``scaler``:
 Networking Configuration
 ------------------------
 
-Workers launched by the ORB adapter are EC2 instances and require an externally-reachable IP address for the scheduler.
+Workers launched by the ORB AWS EC2 adapter are EC2 instances and require an externally-reachable IP address for the scheduler.
 
 *   **Internal Communication**: If the machine running the scheduler is another EC2 instance in the same VPC, you can use EC2 private IP addresses.
 *   **Public Internet**: If communicating over the public internet, it is highly recommended to set up robust security rules and/or a VPN to protect the cluster.
@@ -108,9 +108,9 @@ Supported Parameters
 .. note::
     For more details on how to configure Scaler, see the :doc:`../configuration` section.
 
-The ORB worker adapter supports ORB-specific configuration parameters as well as common worker adapter parameters.
+The ORB AWS EC2 worker adapter supports ORB-specific configuration parameters as well as common worker adapter parameters.
 
-Orb Template Configuration
+ORB AWS EC2 Template Configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 *   ``--image-id`` (Required): AMI ID for the worker instances.
@@ -130,7 +130,7 @@ For a full list of common parameters including networking, worker configuration,
 Cleanup
 -------
 
-The ORB worker adapter is designed to be self-cleaning, but it is important to be aware of the resources it manages:
+The ORB AWS EC2 worker adapter is designed to be self-cleaning, but it is important to be aware of the resources it manages:
 
 *   **Key Pairs**: If a ``--key-name`` is not provided, the adapter creates a temporary AWS key pair.
 *   **Security Groups**: If ``--security-group-ids`` are not provided, the adapter creates a temporary security group to allow communication.

@@ -54,7 +54,7 @@ Worker Managers Overview
      - Offloads tasks to IBM Spectrum Symphony via the SOAM API.
      - Concurrency-limited
      - IBM Symphony
-   * - :doc:`ORB (AWS EC2) <orb>`
+   * - :doc:`ORB AWS EC2 <orb_aws_ec2>`
      - Dynamically provisions workers on AWS EC2 instances using the ORB system.
      - Dynamic (scheduler-driven)
      - AWS EC2
@@ -76,5 +76,5 @@ The :ref:`scaler <cmd-scaler>` command boots the full stack from a single TOML c
     aws_hpc_batch
     aws_raw_ecs
     symphony
-    orb
+    orb_aws_ec2
     common_parameters

@@ -14,7 +14,7 @@ After installing ``opengris-scaler``, the following CLI commands are available f
    * - :ref:`scaler_scheduler <cmd-scaler-scheduler>`
      - Start only the scheduler process (and auto-start object storage when needed).
    * - :ref:`scaler_worker_manager <cmd-scaler-worker-manager>`
-     - Start one worker manager using a subcommand (``baremetal_native``, ``symphony``, ``aws_raw_ecs``, ``aws_hpc``, ``orb``).
+     - Start one worker manager using a subcommand (``baremetal_native``, ``symphony``, ``aws_raw_ecs``, ``aws_hpc``, ``orb_aws_ec2``).
    * - :ref:`scaler_object_storage_server <cmd-scaler-object-storage-server>`
      - Start only the object storage server.
    * - :ref:`scaler_top <cmd-scaler-top>`
@@ -53,8 +53,8 @@ All commands support ``--config``/``-c``. In practice, most deployments use TOML
      - ``[[worker_manager]]`` + ``type = "aws_raw_ecs"``
    * - ``scaler_worker_manager aws_hpc``
      - ``[[worker_manager]]`` + ``type = "aws_hpc"``
-   * - ``scaler_worker_manager orb``
-     - ``[[worker_manager]]`` + ``type = "orb"``
+   * - ``scaler_worker_manager orb_aws_ec2``
+     - ``[[worker_manager]]`` + ``type = "orb_aws_ec2"``
 
 
 .. _cmd-scaler:
@@ -354,7 +354,7 @@ Available subcommands:
 - ``symphony``
 - ``aws_raw_ecs``
 - ``aws_hpc``
-- ``orb``
+- ``orb_aws_ec2``
 
 When ``--config``/``-c`` is supplied, ``scaler_worker_manager`` reads the ``[[worker_manager]]``
 array from the TOML file and picks the entry whose ``type`` field matches the subcommand.
@@ -756,14 +756,14 @@ AWS Batch worker manager.
      - ``60``
      - Timeout for each submitted job.
 
-Subcommand: ``orb``
-~~~~~~~~~~~~~~~~~~~
+Subcommand: ``orb_aws_ec2``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ORB (Open Resource Broker) worker manager — dynamically provisions workers on AWS EC2 instances.
 
 .. code-block:: bash
 
-    $ scaler_worker_manager orb [options] <scheduler_address>
+    $ scaler_worker_manager orb_aws_ec2 [options] <scheduler_address>
 
 .. tabs::
 
@@ -771,7 +771,7 @@ ORB (Open Resource Broker) worker manager — dynamically provisions workers on 
 
         .. code-block:: bash
 
-            $ scaler_worker_manager orb tcp://127.0.0.1:6378 \
+            $ scaler_worker_manager orb_aws_ec2 tcp://127.0.0.1:6378 \
                 --object-storage-address tcp://127.0.0.1:6379 \
                 --image-id ami-0528819f94f4f5fa5 \
                 --instance-type t3.medium \
@@ -782,7 +782,7 @@ ORB (Open Resource Broker) worker manager — dynamically provisions workers on 
         .. code-block:: toml
 
             [[worker_manager]]
-            type = "orb"
+            type = "orb_aws_ec2"
             scheduler_address = "tcp://127.0.0.1:6378"
             object_storage_address = "tcp://127.0.0.1:6379"
             image_id = "ami-0528819f94f4f5fa5"
@@ -827,7 +827,7 @@ ORB (Open Resource Broker) worker manager — dynamically provisions workers on 
      - ``[]``
      - Comma-separated AWS security group IDs. A temporary group is created if omitted.
 
-For full details, see :doc:`worker_managers/orb`.
+For full details, see :doc:`worker_managers/orb_aws_ec2`.
 
 
 .. _cmd-scaler-object-storage-server:
