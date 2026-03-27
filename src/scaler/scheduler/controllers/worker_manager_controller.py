@@ -1,7 +1,7 @@
 import logging
 import time
 from collections import defaultdict
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from scaler.config.defaults import DEFAULT_WORKER_MANAGER_TIMEOUT_SECONDS
 from scaler.io.mixins import AsyncBinder
@@ -42,10 +42,11 @@ class WorkerManagerController(Looper, Reporter):
         # Reverse map: worker_manager_id -> source (for duplicate detection)
         self._manager_id_to_source: Dict[bytes, bytes] = {}
 
-        # Sources that have reported TooManyWorkers: suppress new StartWorkers until
-        # the scheduler's worker count drops below max_task_concurrency, indicating the
-        # ORB adapter's internal count has also freed up.
-        self._at_capacity_sources: Set[bytes] = set()
+        # Sources that have reported TooManyWorkers: maps source -> worker count at the time
+        # TooManyWorkers was received. Suppress new StartWorkers until the scheduler's view of
+        # managed workers grows beyond that baseline, meaning at least one booting instance has
+        # sent its first heartbeat and the ORB adapter slot is no longer occupied by a pending boot.
+        self._at_capacity_baseline: Dict[bytes, int] = {}
 
     def register(self, binder: AsyncBinder, task_controller: TaskController, worker_controller: WorkerController):
         self._binder = binder
@@ -86,13 +87,12 @@ class WorkerManagerController(Looper, Reporter):
             return
 
         # If this manager previously reported TooManyWorkers, suppress new StartWorkers requests
-        # until the scheduler's view of its worker count drops below max_task_concurrency.
+        # until the scheduler's worker count grows beyond the baseline recorded at that time.
         # This handles the visibility gap where the ORB adapter has created instances that have
         # not yet sent their first heartbeat to the scheduler.
-        if source in self._at_capacity_sources:
-            max_concurrency = heartbeat.max_task_concurrency
-            if max_concurrency == -1 or len(managed_worker_ids) < max_concurrency:
-                self._at_capacity_sources.discard(source)
+        if source in self._at_capacity_baseline:
+            if len(managed_worker_ids) > self._at_capacity_baseline[source]:
+                del self._at_capacity_baseline[source]
             else:
                 return
 
@@ -116,7 +116,11 @@ class WorkerManagerController(Looper, Reporter):
             else:
                 logging.warning(f"StartWorkers failed: {response.status.name}")
                 if response.status == WorkerManagerCommandResponse.Status.TooManyWorkers:
-                    self._at_capacity_sources.add(source)
+                    manager_entry = self._manager_alive_since.get(source)
+                    if manager_entry is not None:
+                        _, hb = manager_entry
+                        baseline = len(self._worker_controller.get_workers_by_manager_id(hb.worker_manager_id))
+                        self._at_capacity_baseline[source] = baseline
 
         elif response.command == WorkerManagerCommandType.ShutdownWorkers:
             if response.status != WorkerManagerCommandResponse.Status.Success:
@@ -205,4 +209,4 @@ class WorkerManagerController(Looper, Reporter):
         self._manager_alive_since.pop(source)
         self._pending_commands.pop(source, None)
         self._manager_capabilities.pop(source, None)
-        self._at_capacity_sources.discard(source)
+        self._at_capacity_baseline.pop(source, None)
