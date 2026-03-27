@@ -1,7 +1,7 @@
 import logging
 import time
 from collections import defaultdict
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from scaler.config.defaults import DEFAULT_WORKER_MANAGER_TIMEOUT_SECONDS
 from scaler.io.mixins import AsyncBinder
@@ -42,6 +42,11 @@ class WorkerManagerController(Looper, Reporter):
         # Reverse map: worker_manager_id -> source (for duplicate detection)
         self._manager_id_to_source: Dict[bytes, bytes] = {}
 
+        # Sources that have reported TooManyWorkers: suppress new StartWorkers until
+        # the scheduler's worker count drops below max_task_concurrency, indicating the
+        # ORB adapter's internal count has also freed up.
+        self._at_capacity_sources: Set[bytes] = set()
+
     def register(self, binder: AsyncBinder, task_controller: TaskController, worker_controller: WorkerController):
         self._binder = binder
         self._task_controller = task_controller
@@ -80,6 +85,17 @@ class WorkerManagerController(Looper, Reporter):
         if source in self._pending_commands:
             return
 
+        # If this manager previously reported TooManyWorkers, suppress new StartWorkers requests
+        # until the scheduler's view of its worker count drops below max_task_concurrency.
+        # This handles the visibility gap where the ORB adapter has created instances that have
+        # not yet sent their first heartbeat to the scheduler.
+        if source in self._at_capacity_sources:
+            max_concurrency = heartbeat.max_task_concurrency
+            if max_concurrency == -1 or len(managed_worker_ids) < max_concurrency:
+                self._at_capacity_sources.discard(source)
+            else:
+                return
+
         commands = self._policy_controller.get_scaling_commands(
             information_snapshot, heartbeat, managed_worker_ids, managed_worker_capabilities, worker_manager_snapshots
         )
@@ -99,6 +115,8 @@ class WorkerManagerController(Looper, Reporter):
                     self._manager_capabilities[source] = dict(response.capabilities)
             else:
                 logging.warning(f"StartWorkers failed: {response.status.name}")
+                if response.status == WorkerManagerCommandResponse.Status.TooManyWorkers:
+                    self._at_capacity_sources.add(source)
 
         elif response.command == WorkerManagerCommandType.ShutdownWorkers:
             if response.status != WorkerManagerCommandResponse.Status.Success:
@@ -187,3 +205,4 @@ class WorkerManagerController(Looper, Reporter):
         self._manager_alive_since.pop(source)
         self._pending_commands.pop(source, None)
         self._manager_capabilities.pop(source, None)
+        self._at_capacity_sources.discard(source)

@@ -68,7 +68,8 @@ class FixedElasticScalingPolicy(ScalingPolicy):
             self._primary_started = True
         else:
             # Secondary manager: use manager's max_task_concurrency
-            if len(managed_worker_ids) >= worker_manager_heartbeat.max_task_concurrency:
+            max_concurrency = worker_manager_heartbeat.max_task_concurrency
+            if max_concurrency != -1 and len(managed_worker_ids) >= max_concurrency:
                 logging.warning("Secondary manager capacity reached, cannot start new worker.")
                 return []
 
