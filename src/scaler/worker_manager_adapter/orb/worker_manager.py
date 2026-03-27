@@ -276,7 +276,7 @@ nohup /usr/local/bin/scaler_worker_manager baremetal_native {adapter_config.sche
     --death-timeout-seconds {worker_config.death_timeout_seconds} \
     --trim-memory-threshold-bytes {worker_config.trim_memory_threshold_bytes} \
     --event-loop {self._config.worker_config.event_loop} \
-    --worker-io-threads {self._config.worker_config.io_threads}"""
+    --io-threads {self._config.worker_config.io_threads}"""
 
         if worker_config.hard_processor_suspend:
             script += " \
