@@ -94,6 +94,11 @@ We regularly publish publicly available Amazon Machine Images (AMIs) with Python
      - 2023.10.20260302.1
      - 03/16/2026
      - ``ami-044265172bea55d51``
+   * - 1.26.4
+     - 3.13
+     - 2023.10.20260302.1
+     - 03/26/2026
+     - ``ami-0b76605999d8f5d2b``
 
 New AMIs will be added to this list as they become available.
 
