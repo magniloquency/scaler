@@ -261,11 +261,14 @@ class ORBWorkerAdapter:
         worker_config = self._config.worker_config
         adapter_config = self._config.worker_manager_config
 
-        # NOTE: --num-of-workers is not passed; scaler_cluster defaults to cpu_count - 1 workers,
+        # NOTE: --max-task-concurrency is not passed; scaler_worker_manager defaults to cpu_count - 1 workers,
         # where cpu_count is determined by the machine type configured by the user.
         script = f"""#!/bin/bash
-nohup /usr/local/bin/scaler_cluster {adapter_config.scheduler_address.to_address()} \
+INSTANCE_ID=$(ec2-metadata --instance-id --quiet)
+nohup /usr/local/bin/scaler_worker_manager baremetal_native {adapter_config.scheduler_address.to_address()} \
+    --mode fixed \
     --worker-type ORB \
+    --worker-manager-id "${{INSTANCE_ID}}" \
     --per-worker-task-queue-size {worker_config.per_worker_task_queue_size} \
     --heartbeat-interval-seconds {worker_config.heartbeat_interval_seconds} \
     --task-timeout-seconds {worker_config.task_timeout_seconds} \
