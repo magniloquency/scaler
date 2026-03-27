@@ -36,7 +36,8 @@ def main() -> None:
     # Pass 1: extract subcommand and --config before building the type-specific parser.
     pre_parser = argparse.ArgumentParser(add_help=False)
     pre_parser.add_argument("--config", "-c")
-    pre_parser.add_argument("subcommand", choices=list(_TYPE_MAP.keys()))
+    subcommand_action = pre_parser.add_argument("subcommand", metavar="{" + ",".join(_TYPE_MAP.keys()) + "}")
+    subcommand_action.completer = lambda prefix, **kwargs: list(_TYPE_MAP.keys())  # type: ignore[attr-defined]
     argcomplete.autocomplete(pre_parser)
     pre_args, remaining_argv = pre_parser.parse_known_args()
 
