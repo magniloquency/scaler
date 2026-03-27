@@ -1,6 +1,9 @@
+# PYTHON_ARGCOMPLETE_OK
 import argparse
 import sys
 from typing import Any, Dict, Type, Union, cast
+
+import argcomplete
 
 from scaler.config.config_class import ConfigClass
 from scaler.config.loading import _load_toml
@@ -33,7 +36,8 @@ def main() -> None:
     # Pass 1: extract subcommand and --config before building the type-specific parser.
     pre_parser = argparse.ArgumentParser(add_help=False)
     pre_parser.add_argument("--config", "-c")
-    pre_parser.add_argument("subcommand")
+    pre_parser.add_argument("subcommand", choices=list(_TYPE_MAP.keys()))
+    argcomplete.autocomplete(pre_parser)
     pre_args, remaining_argv = pre_parser.parse_known_args()
 
     wm_type = pre_args.subcommand
