@@ -7,7 +7,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import boto3
 import zmq
-from orb import ORBClient as orb
 
 from scaler.config.section.orb_worker_adapter import ORBWorkerAdapterConfig
 from scaler.io import ymq
@@ -222,6 +221,8 @@ class ORBWorkerAdapter:
         self._loop.add_signal_handler(signal.SIGTERM, self.__destroy)
 
     async def _run(self) -> None:
+        from orb import ORBClient as orb
+
         register_event_loop(self._event_loop)
         setup_logger(self._logging_paths, self._logging_config_file, self._logging_level)
 
