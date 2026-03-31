@@ -16,7 +16,21 @@ class ORBAWSEC2WorkerAdapterConfig(ConfigClass):
     worker_manager_config: WorkerManagerConfig
 
     # ORB AWS EC2 Template configuration
-    image_id: str = dataclasses.field(metadata=dict(help="AMI ID for the worker instances", required=True))
+    image_id: Optional[str] = dataclasses.field(
+        default=None,
+        metadata=dict(
+            help="AMI ID for the worker instances. If not provided, the latest AL2023 AMI is discovered automatically."
+        ),
+    )
+    python_version: str = dataclasses.field(
+        default="3.13", metadata=dict(help="Python version to install on the worker instance (e.g. '3.13')")
+    )
+    scaler_version: Optional[str] = dataclasses.field(
+        default=None,
+        metadata=dict(
+            help="Version of opengris-scaler to install (e.g. '1.15.0'). Defaults to the latest version on PyPI."
+        ),
+    )
     key_name: Optional[str] = dataclasses.field(
         default=None, metadata=dict(help="AWS key pair name for the instances (optional)")
     )

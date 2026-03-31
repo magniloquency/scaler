@@ -122,10 +122,12 @@ class ORBAWSEC2WorkerAdapter:
 
         user_data = self._create_user_data()
 
+        image_id = self._config.image_id or self._discover_latest_al2023_ami()
+
         create_result = await self._sdk.create_template(
             template_id=self._template_id,
             name=f"opengris-orb-{self._template_id}",
-            image_id=self._config.image_id,
+            image_id=image_id,
             provider_api="RunInstances",
             instance_type=self._config.instance_type,
             max_instances=self._config.worker_manager_config.max_task_concurrency,
@@ -260,11 +262,29 @@ class ORBAWSEC2WorkerAdapter:
     def _create_user_data(self) -> str:
         worker_config = self._config.worker_config
         adapter_config = self._config.worker_manager_config
+        python_version = self._config.python_version
+        scaler_version = self._config.scaler_version
 
+        pip_package = f"opengris-scaler=={scaler_version}" if scaler_version else "opengris-scaler"
+
+        # Phase 1: install Python and scaler. User data runs as root so no sudo is needed.
+        # set -e ensures any install failure aborts the script rather than launching a broken worker.
+        script = f"""#!/bin/bash
+set -e
+dnf update -y
+dnf install -y python{python_version} python{python_version}-pip
+python{python_version} -m venv /opt/opengris-scaler
+/opt/opengris-scaler/bin/python -m pip install --upgrade pip
+/opt/opengris-scaler/bin/pip install {pip_package}
+ln -sf /opt/opengris-scaler/bin/scaler_* /usr/local/bin/
+set +e
+
+"""
+
+        # Phase 2: launch the worker manager.
         # NOTE: --max-task-concurrency is not passed; scaler_worker_manager defaults to cpu_count - 1 workers,
         # where cpu_count is determined by the machine type configured by the user.
-        script = f"""#!/bin/bash
-INSTANCE_ID=$(ec2-metadata --instance-id --quiet)
+        script += f"""INSTANCE_ID=$(ec2-metadata --instance-id --quiet)
 nohup /usr/local/bin/scaler_worker_manager baremetal_native {adapter_config.scheduler_address.to_address()} \
     --mode fixed \
     --worker-type ORB \
@@ -296,6 +316,24 @@ nohup /usr/local/bin/scaler_worker_manager baremetal_native {adapter_config.sche
         script += " > /var/log/opengris-scaler.log 2>&1 &\n"
 
         return script
+
+    def _discover_latest_al2023_ami(self) -> str:
+        """Discover the most recent Amazon Linux 2023 x86_64 EBS HVM AMI in the configured region."""
+        response = self._ec2.describe_images(
+            Filters=[
+                {"Name": "name", "Values": ["al2023-ami-2023.*-kernel-*-x86_64"]},
+                {"Name": "root-device-type", "Values": ["ebs"]},
+                {"Name": "virtualization-type", "Values": ["hvm"]},
+            ],
+            Owners=["amazon"],
+        )
+        images = response.get("Images", [])
+        if not images:
+            raise RuntimeError("No AL2023 AMI found in the current region.")
+        images.sort(key=lambda img: img["CreationDate"], reverse=True)
+        ami_id = images[0]["ImageId"]
+        logger.info(f"Auto-discovered latest AL2023 AMI: {ami_id}")
+        return ami_id
 
     def _discover_default_subnet(self) -> str:
         vpcs = self._ec2.describe_vpcs(Filters=[{"Name": "isDefault", "Values": ["true"]}])
