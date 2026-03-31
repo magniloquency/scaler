@@ -184,7 +184,7 @@ Supported Parameters
 --------------------
 
 .. note::
-    For more details on how to configure Scaler, refer to the Scaler documentation.
+    For more details on how to configure Scaler, see the :doc:`../commands` section.
 
 The ORB AWS EC2 worker manager supports ORB-specific configuration parameters as well as common worker manager parameters.
 
