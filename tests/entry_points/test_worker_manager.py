@@ -377,8 +377,7 @@ class TestPublicSchedulerAddress(unittest.TestCase):
         )
         self.assertIsNotNone(config.worker_manager_config.public_scheduler_address)
         self.assertEqual(
-            config.worker_manager_config.effective_worker_scheduler_address.to_address(),
-            "tcp://203.0.113.5:6378",
+            config.worker_manager_config.effective_worker_scheduler_address.to_address(), "tcp://203.0.113.5:6378"
         )
         self.assertEqual(config.worker_manager_config.scheduler_address.to_address(), "tcp://127.0.0.1:6378")
 
@@ -388,17 +387,10 @@ class TestPublicSchedulerAddress(unittest.TestCase):
         config = NativeWorkerManagerConfig.parse_with_section(
             "scaler_worker_manager",
             {},
-            argv=[
-                "--worker-manager-id",
-                "wm-test",
-                "tcp://127.0.0.1:6378",
-                "-psa",
-                "tcp://203.0.113.5:6378",
-            ],
+            argv=["--worker-manager-id", "wm-test", "tcp://127.0.0.1:6378", "-psa", "tcp://203.0.113.5:6378"],
         )
         self.assertEqual(
-            config.worker_manager_config.effective_worker_scheduler_address.to_address(),
-            "tcp://203.0.113.5:6378",
+            config.worker_manager_config.effective_worker_scheduler_address.to_address(), "tcp://203.0.113.5:6378"
         )
 
     def test_public_scheduler_address_from_toml(self) -> None:
@@ -412,6 +404,5 @@ class TestPublicSchedulerAddress(unittest.TestCase):
         }
         config = NativeWorkerManagerConfig.parse_with_section("scaler_worker_manager", section_data, argv=[])
         self.assertEqual(
-            config.worker_manager_config.effective_worker_scheduler_address.to_address(),
-            "tcp://203.0.113.5:6378",
+            config.worker_manager_config.effective_worker_scheduler_address.to_address(), "tcp://203.0.113.5:6378"
         )
