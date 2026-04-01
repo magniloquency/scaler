@@ -26,7 +26,6 @@ from scaler.utility.logging.utility import setup_logger
 from scaler.worker_manager_adapter.common import format_capabilities
 
 Status = WorkerManagerCommandResponse.Status
-logger = logging.getLogger(__name__)
 
 
 # Polling configuration for ORB AWS EC2 machine requests
@@ -139,10 +138,10 @@ class ORBAWSEC2WorkerAdapter:
             key_name=key_name,
             user_data=user_data,
         )
-        logger.info(f"create_template result: {create_result}")
+        logging.info(f"create_template result: {create_result}")
 
         validate_result = await self._sdk.validate_template(template_id=self._template_id)
-        logger.info(f"validate_template result: {validate_result}")
+        logging.info(f"validate_template result: {validate_result}")
 
         self._context = create_async_simple_context()
         self._name = "worker_manager_orb_aws_ec2"
@@ -163,12 +162,12 @@ class ORBAWSEC2WorkerAdapter:
         if not self._workers or self._sdk is None:
             return
         instance_ids = list(self._workers.values())
-        logger.info(f"Terminating {len(instance_ids)} worker group(s)...")
+        logging.info(f"Terminating {len(instance_ids)} worker group(s)...")
         try:
             await self._sdk.create_return_request(machine_ids=instance_ids)
-            logger.info(f"Successfully requested termination of instances: {instance_ids}")
+            logging.info(f"Successfully requested termination of instances: {instance_ids}")
         except Exception as e:
-            logger.warning(f"Failed to terminate instances during cleanup: {e}")
+            logging.warning(f"Failed to terminate instances during cleanup: {e}")
         self._workers.clear()
 
     async def __on_receive_external(self, message: Message):
@@ -177,7 +176,7 @@ class ORBAWSEC2WorkerAdapter:
         elif isinstance(message, WorkerManagerHeartbeatEcho):
             pass
         else:
-            logger.warning(f"Received unknown message type: {type(message)}")
+            logging.warning(f"Received unknown message type: {type(message)}")
 
     async def _handle_command(self, command: WorkerManagerCommand):
         cmd_type = command.command
@@ -192,7 +191,7 @@ class ORBAWSEC2WorkerAdapter:
         elif cmd_type == WorkerManagerCommandType.ShutdownWorkers:
             worker_ids, response_status = await self.shutdown_workers(list(command.worker_ids))
         else:
-            logger.error(f"Received unknown command type: {cmd_type!r}")
+            logging.error(f"Received unknown command type: {cmd_type!r}")
             raise ValueError(f"Unknown Command: {cmd_type!r}")
 
         assert self._connector_external is not None
@@ -217,7 +216,7 @@ class ORBAWSEC2WorkerAdapter:
         run_task_forever(self._loop, self._run(), cleanup_callback=self._cleanup)
 
     def __destroy(self):
-        logger.info(f"Worker adapter {self._ident!r} received signal, shutting down")
+        logging.info(f"Worker adapter {self._ident!r} received signal, shutting down")
         self._task.cancel()
 
     def __register_signal(self):
@@ -259,7 +258,7 @@ class ORBAWSEC2WorkerAdapter:
             if e.code == ymq.ErrorCode.ConnectorSocketClosedByRemoteEnd:
                 pass
             else:
-                logger.exception(f"{self._ident!r}: failed with unhandled exception:\n{e}")
+                logging.exception(f"{self._ident!r}: failed with unhandled exception:\n{e}")
 
     def _create_user_data(self) -> str:
         worker_config = self._config.worker_config
@@ -348,7 +347,7 @@ nohup /usr/local/bin/scaler_worker_manager baremetal_native {self._worker_schedu
             raise RuntimeError("No AL2023 AMI found in the current region.")
         images.sort(key=lambda img: img["CreationDate"], reverse=True)
         ami_id = images[0]["ImageId"]
-        logger.info(f"Auto-discovered latest AL2023 AMI: {ami_id}")
+        logging.info(f"Auto-discovered latest AL2023 AMI: {ami_id}")
         return ami_id
 
     def _discover_default_subnet(self) -> str:
@@ -362,7 +361,7 @@ nohup /usr/local/bin/scaler_worker_manager baremetal_native {self._worker_schedu
             raise RuntimeError(f"No subnets found in default VPC {default_vpc_id}.")
 
         subnet_id = subnets["Subnets"][0]["SubnetId"]
-        logger.info(f"Auto-discovered subnet_id: {subnet_id}")
+        logging.info(f"Auto-discovered subnet_id: {subnet_id}")
         return subnet_id
 
     def _create_security_group(self):
@@ -378,13 +377,13 @@ nohup /usr/local/bin/scaler_worker_manager baremetal_native {self._worker_schedu
             VpcId=vpc_id,
         )
         self._created_security_group_id = sg_response["GroupId"]
-        logger.info(f"Created security group with ID: {self._created_security_group_id}")
+        logging.info(f"Created security group with ID: {self._created_security_group_id}")
 
     def _create_key_pair(self):
         key_name = f"opengris-orb-key-{self._template_id}"
         self._ec2.create_key_pair(KeyName=key_name)
         self._created_key_name = key_name
-        logger.info(f"Created key pair: {key_name}")
+        logging.info(f"Created key pair: {key_name}")
 
     def _cleanup(self):
         if self._cleaned_up:
@@ -394,30 +393,30 @@ nohup /usr/local/bin/scaler_worker_manager baremetal_native {self._worker_schedu
         if self._connector_external is not None:
             self._connector_external.destroy()
 
-        logger.info("Starting cleanup of AWS resources...")
+        logging.info("Starting cleanup of AWS resources...")
 
         if self._created_security_group_id is not None:
             try:
-                logger.info(f"Deleting AWS security group: {self._created_security_group_id}")
+                logging.info(f"Deleting AWS security group: {self._created_security_group_id}")
                 self._ec2.delete_security_group(GroupId=self._created_security_group_id)
             except Exception as e:
-                logger.warning(f"Failed to delete security group {self._created_security_group_id}: {e}")
+                logging.warning(f"Failed to delete security group {self._created_security_group_id}: {e}")
 
         if self._created_key_name is not None:
             try:
-                logger.info(f"Deleting AWS key pair: {self._created_key_name}")
+                logging.info(f"Deleting AWS key pair: {self._created_key_name}")
                 self._ec2.delete_key_pair(KeyName=self._created_key_name)
             except Exception as e:
-                logger.warning(f"Failed to delete key pair {self._created_key_name}: {e}")
+                logging.warning(f"Failed to delete key pair {self._created_key_name}: {e}")
 
-        logger.info("Cleanup completed.")
+        logging.info("Cleanup completed.")
 
     def __del__(self):
         self._cleanup()
 
     async def start_worker(self) -> Tuple[List[bytes], Status]:
         if len(self._workers) >= self._max_task_concurrency != -1:
-            logger.warning(
+            logging.warning(
                 f"Worker start rejected: at capacity ({len(self._workers)}/{self._max_task_concurrency} workers)"
             )
             return [], Status.TooManyWorkers
@@ -430,10 +429,10 @@ nohup /usr/local/bin/scaler_worker_manager baremetal_native {self._worker_schedu
         )
 
         if not request_id:
-            logger.error(f"ORB machine request failed to return a request ID. Response: {response}")
+            logging.error(f"ORB machine request failed to return a request ID. Response: {response}")
             return [], Status.UnknownAction
 
-        logger.info(f"ORB machine request {request_id} submitted, waiting for instance IDs...")
+        logging.info(f"ORB machine request {request_id} submitted, waiting for instance IDs...")
 
         timeout = float(ORB_AWS_EC2_MAX_POLLING_ATTEMPTS * ORB_AWS_EC2_POLLING_INTERVAL_SECONDS)
         try:
@@ -441,7 +440,7 @@ nohup /usr/local/bin/scaler_worker_manager baremetal_native {self._worker_schedu
                 request_id, timeout=timeout, poll_interval=float(ORB_AWS_EC2_POLLING_INTERVAL_SECONDS)
             )
         except TimeoutError:
-            logger.error(f"ORB machine request {request_id} timed out after {timeout:.0f}s.")
+            logging.error(f"ORB machine request {request_id} timed out after {timeout:.0f}s.")
             return [], Status.UnknownAction
 
         machines = final.get("machines", []) if isinstance(final, dict) else []
@@ -451,13 +450,13 @@ nohup /usr/local/bin/scaler_worker_manager baremetal_native {self._worker_schedu
 
         if not instance_id:
             status = final.get("status", "") if isinstance(final, dict) else ""
-            logger.error(f"ORB request {request_id} completed with status '{status}' but no instance ID found.")
+            logging.error(f"ORB request {request_id} completed with status '{status}' but no instance ID found.")
             return [], Status.UnknownAction
 
         worker_name = get_orb_aws_ec2_worker_name(instance_id)
         worker_id = WorkerID(worker_name.encode())
         self._workers[worker_id] = instance_id
-        logger.info(f"ORB request {request_id} fulfilled: launched worker '{worker_name}' (instance {instance_id})")
+        logging.info(f"ORB request {request_id} fulfilled: launched worker '{worker_name}' (instance {instance_id})")
         return [bytes(worker_id)], Status.Success
 
     async def shutdown_workers(self, worker_ids: List[bytes]) -> Tuple[List[bytes], Status]:
@@ -469,20 +468,20 @@ nohup /usr/local/bin/scaler_worker_manager baremetal_native {self._worker_schedu
         for wid_bytes in worker_ids:
             worker_id = WorkerID(wid_bytes)
             if worker_id not in self._workers:
-                logger.warning(f"Worker with ID {wid_bytes!r} does not exist.")
+                logging.warning(f"Worker with ID {wid_bytes!r} does not exist.")
                 return [], Status.WorkerNotFound
             instance_ids.append(self._workers[worker_id])
             affected_worker_ids.append(wid_bytes)
 
-        logger.info(f"Stopping {len(instance_ids)} worker(s): instances {instance_ids}")
+        logging.info(f"Stopping {len(instance_ids)} worker(s): instances {instance_ids}")
         try:
             await self._sdk.create_return_request(machine_ids=instance_ids)
         except Exception as e:
-            logger.error(f"Failed to return instances {instance_ids} to ORB: {e}")
+            logging.error(f"Failed to return instances {instance_ids} to ORB: {e}")
             return [], Status.UnknownAction
 
         for wid_bytes in affected_worker_ids:
             del self._workers[WorkerID(wid_bytes)]
 
-        logger.info(f"Successfully stopped {len(affected_worker_ids)} worker(s): instances {instance_ids}")
+        logging.info(f"Successfully stopped {len(affected_worker_ids)} worker(s): instances {instance_ids}")
         return affected_worker_ids, Status.Success
