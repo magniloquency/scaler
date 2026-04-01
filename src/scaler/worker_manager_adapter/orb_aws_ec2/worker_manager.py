@@ -177,7 +177,7 @@ class ORBAWSEC2WorkerAdapter:
         elif isinstance(message, WorkerManagerHeartbeatEcho):
             pass
         else:
-            logging.warning(f"Received unknown message type: {type(message)}")
+            logger.warning(f"Received unknown message type: {type(message)}")
 
     async def _handle_command(self, command: WorkerManagerCommand):
         cmd_type = command.command
@@ -192,7 +192,8 @@ class ORBAWSEC2WorkerAdapter:
         elif cmd_type == WorkerManagerCommandType.ShutdownWorkers:
             worker_ids, response_status = await self.shutdown_workers(list(command.worker_ids))
         else:
-            raise ValueError("Unknown Command")
+            logger.error(f"Received unknown command type: {cmd_type!r}")
+            raise ValueError(f"Unknown Command: {cmd_type!r}")
 
         assert self._connector_external is not None
         await self._connector_external.send(
@@ -216,7 +217,7 @@ class ORBAWSEC2WorkerAdapter:
         run_task_forever(self._loop, self._run(), cleanup_callback=self._cleanup)
 
     def __destroy(self):
-        print(f"Worker adapter {self._ident!r} received signal, shutting down")
+        logger.info(f"Worker adapter {self._ident!r} received signal, shutting down")
         self._task.cancel()
 
     def __register_signal(self):
@@ -258,7 +259,7 @@ class ORBAWSEC2WorkerAdapter:
             if e.code == ymq.ErrorCode.ConnectorSocketClosedByRemoteEnd:
                 pass
             else:
-                logging.exception(f"{self._ident!r}: failed with unhandled exception:\n{e}")
+                logger.exception(f"{self._ident!r}: failed with unhandled exception:\n{e}")
 
     def _create_user_data(self) -> str:
         worker_config = self._config.worker_config
@@ -414,6 +415,9 @@ nohup /usr/local/bin/scaler_worker_manager baremetal_native {self._worker_schedu
 
     async def start_worker(self) -> Tuple[List[bytes], Status]:
         if len(self._workers) >= self._max_task_concurrency != -1:
+            logger.warning(
+                f"Worker start rejected: at capacity ({len(self._workers)}/{self._max_task_concurrency} workers)"
+            )
             return [], Status.TooManyWorkers
 
         response = await self._sdk.create_request(template_id=self._template_id, count=1)
@@ -448,9 +452,10 @@ nohup /usr/local/bin/scaler_worker_manager baremetal_native {self._worker_schedu
             logger.error(f"ORB request {request_id} completed with status '{status}' but no instance ID found.")
             return [], Status.UnknownAction
 
-        logger.info(f"ORB request {request_id} fulfilled with instance ID: {instance_id}")
-        worker_id = WorkerID(get_orb_aws_ec2_worker_name(instance_id).encode())
+        worker_name = get_orb_aws_ec2_worker_name(instance_id)
+        worker_id = WorkerID(worker_name.encode())
         self._workers[worker_id] = instance_id
+        logger.info(f"ORB request {request_id} fulfilled: launched worker '{worker_name}' (instance {instance_id})")
         return [bytes(worker_id)], Status.Success
 
     async def shutdown_workers(self, worker_ids: List[bytes]) -> Tuple[List[bytes], Status]:
@@ -467,9 +472,15 @@ nohup /usr/local/bin/scaler_worker_manager baremetal_native {self._worker_schedu
             instance_ids.append(self._workers[worker_id])
             affected_worker_ids.append(wid_bytes)
 
-        await self._sdk.create_return_request(machine_ids=instance_ids)
+        logger.info(f"Stopping {len(instance_ids)} worker(s): instances {instance_ids}")
+        try:
+            await self._sdk.create_return_request(machine_ids=instance_ids)
+        except Exception as e:
+            logger.error(f"Failed to return instances {instance_ids} to ORB: {e}")
+            return [], Status.UnknownAction
 
         for wid_bytes in affected_worker_ids:
             del self._workers[WorkerID(wid_bytes)]
 
+        logger.info(f"Successfully stopped {len(affected_worker_ids)} worker(s): instances {instance_ids}")
         return affected_worker_ids, Status.Success
