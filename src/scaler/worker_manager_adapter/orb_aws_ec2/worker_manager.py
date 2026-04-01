@@ -230,10 +230,12 @@ class ORBAWSEC2WorkerAdapter:
         from orb import ORBClient as orb
 
         register_event_loop(self._event_loop)
-        setup_logger(self._logging_paths, self._logging_config_file, self._logging_level)
 
         async with orb(app_config=self._build_app_config()) as sdk:
             self._sdk = sdk
+            # setup_logger is called after the ORB context is entered because ORB reconfigures
+            # the root logger during __aenter__, which would otherwise suppress scaler log output.
+            setup_logger(self._logging_paths, self._logging_config_file, self._logging_level)
             await self.__setup()
             self._task = self._loop.create_task(self.__get_loops())
             self.__register_signal()
