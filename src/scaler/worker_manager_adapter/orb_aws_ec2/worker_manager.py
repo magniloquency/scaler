@@ -270,13 +270,17 @@ class ORBAWSEC2WorkerAdapter:
     def _create_user_data(self) -> str:
         worker_config = self._config.worker_config
         adapter_config = self._config.worker_manager_config
-        python_version = self._config.python_version
-        scaler_version = self._config.scaler_version
-        requirements_file = self._config.requirements_file
 
         script = "#!/bin/bash\n"
 
         if self._config.image_id is None:
+            python_version = self._config.python_version
+            requirements_txt = self._config.requirements_txt
+
+            requirements_content = (
+                open(requirements_txt).read() if os.path.isfile(requirements_txt) else requirements_txt
+            )
+
             # Phase 1: install Python and dependencies. User data runs as root so no sudo is needed.
             # set -e ensures any install failure aborts the script rather than launching a broken worker.
             script += f"""set -e
@@ -284,21 +288,11 @@ dnf update -y
 dnf install -y python{python_version} python{python_version}-pip
 python{python_version} -m venv /opt/opengris-scaler
 /opt/opengris-scaler/bin/python -m pip install --upgrade pip
-"""
-
-            if requirements_file is not None:
-                with open(requirements_file) as f:
-                    requirements_content = f.read()
-                script += f"""cat > /tmp/requirements.txt << 'REQUIREMENTS_EOF'
+cat > /tmp/requirements.txt << 'REQUIREMENTS_EOF'
 {requirements_content}
 REQUIREMENTS_EOF
 /opt/opengris-scaler/bin/pip install -r /tmp/requirements.txt
-"""
-            else:
-                pip_package = f"opengris-scaler=={scaler_version}" if scaler_version else "opengris-scaler"
-                script += f"/opt/opengris-scaler/bin/pip install {pip_package}\n"
-
-            script += """ln -sf /opt/opengris-scaler/bin/scaler_* /usr/local/bin/
+ln -sf /opt/opengris-scaler/bin/scaler_* /usr/local/bin/
 set +e
 
 """

@@ -126,10 +126,11 @@ Equivalent configuration using a TOML file with ``scaler``:
     type = "orb_aws_ec2"
     scheduler_address = "tcp://<SCHEDULER_EXTERNAL_IP>:8516"
     object_storage_address = "tcp://<OSS_EXTERNAL_IP>:8517"
-    # image_id = "ami-..."              # optional: pin a specific AMI; skips Python/package install entirely
-    # python_version = "3.13"          # optional: Python version to install (default: 3.13)
-    # scaler_version = "1.15.0"        # optional: pin scaler version (default: latest on PyPI)
-    # requirements_file = "/path/to/requirements.txt"  # optional: custom deps; must include opengris-scaler
+    # Option A: pre-built AMI (skips Python/package install entirely)
+    # image_id = "ami-..."
+    # Option B: auto-install (both required)
+    # python_version = "3.13"
+    # requirements_txt = "/path/to/requirements.txt"  # path to file or literal string; must include opengris-scaler
     instance_type = "t3.medium"
     aws_region = "us-east-1"
     logging_level = "INFO"
@@ -145,46 +146,14 @@ Equivalent configuration using a TOML file with ``scaler``:
 Worker Environment Modes
 ------------------------
 
-The adapter supports two modes for preparing the worker environment on each EC2 instance, determined
-by whether ``--image-id`` is provided.
+The adapter supports two mutually exclusive modes for preparing the worker environment on each EC2
+instance. Exactly one mode must be selected.
 
-**Mode 1 — Auto-install (default)**
+**Mode 1 — Pre-built AMI**
 
-No ``--image-id`` is provided. The adapter:
-
-1. Discovers the latest Amazon Linux 2023 (AL2023) AMI in the configured region.
-2. Embeds a user data script that installs the requested Python version via ``dnf``, creates a ``venv``
-   at ``/opt/opengris-scaler``, and installs ``opengris-scaler``.
-
-By default, ``opengris-scaler`` is installed from PyPI at its latest version. Use ``--python-version``
-to control which Python is installed (default: ``3.13``) and ``--scaler-version`` to pin a specific
-release. Alternatively, provide ``--requirements-file`` to supply a ``requirements.txt`` whose contents
-are embedded in the user data script and installed via ``pip install -r`` — in this case
-``opengris-scaler`` must be listed in the file and ``--scaler-version`` is ignored.
-
-.. code-block:: bash
-
-    # Install latest scaler on Python 3.13 (defaults)
-    scaler_worker_manager orb_aws_ec2 tcp://<SCHEDULER_IP>:8516 \
-        --instance-type t3.medium
-
-    # Pin specific versions
-    scaler_worker_manager orb_aws_ec2 tcp://<SCHEDULER_IP>:8516 \
-        --instance-type t3.medium \
-        --python-version 3.13 \
-        --scaler-version 1.15.0
-
-    # Custom dependencies via requirements file
-    scaler_worker_manager orb_aws_ec2 tcp://<SCHEDULER_IP>:8516 \
-        --instance-type t3.medium \
-        --requirements-file /path/to/requirements.txt
-
-**Mode 2 — Pre-built AMI**
-
-``--image-id`` is provided. The install step is skipped entirely — no ``dnf``, no ``venv``, no ``pip``.
+Provide ``--image-id``. The install step is skipped entirely — no ``dnf``, no ``venv``, no ``pip``.
 The specified AMI is used as-is and must already have ``opengris-scaler`` installed with
-``scaler_worker_manager`` available on the ``PATH``. ``--python-version``, ``--scaler-version``, and
-``--requirements-file`` are all ignored in this mode.
+``scaler_worker_manager`` available on the ``PATH``.
 
 This mode is recommended for production deployments where startup latency matters or where the worker
 environment must be tightly controlled.
@@ -194,6 +163,32 @@ environment must be tightly controlled.
     scaler_worker_manager orb_aws_ec2 tcp://<SCHEDULER_IP>:8516 \
         --instance-type t3.medium \
         --image-id ami-0123456789abcdef0
+
+**Mode 2 — Auto-install**
+
+Provide both ``--python-version`` and ``--requirements-txt`` (neither may be omitted). The adapter:
+
+1. Discovers the latest Amazon Linux 2023 (AL2023) AMI in the configured region.
+2. Embeds a user data script that installs the requested Python version via ``dnf``, creates a ``venv``
+   at ``/opt/opengris-scaler``, and installs the packages from the requirements.
+
+``--requirements-txt`` can be either a path to a local ``requirements.txt`` file or a string literal
+(e.g. ``"opengris-scaler>=1.15.0\nboto3"``). In both cases the content is embedded in the EC2 user
+data script and installed via ``pip install -r``. ``opengris-scaler`` must be included.
+
+.. code-block:: bash
+
+    # Requirements as a file path
+    scaler_worker_manager orb_aws_ec2 tcp://<SCHEDULER_IP>:8516 \
+        --instance-type t3.medium \
+        --python-version 3.13 \
+        --requirements-txt /path/to/requirements.txt
+
+    # Requirements as a string literal
+    scaler_worker_manager orb_aws_ec2 tcp://<SCHEDULER_IP>:8516 \
+        --instance-type t3.medium \
+        --python-version 3.13 \
+        --requirements-txt "opengris-scaler>=1.15.0"
 
 Networking Configuration
 ------------------------
@@ -214,16 +209,14 @@ The ORB AWS EC2 worker manager supports ORB-specific configuration parameters as
 ORB AWS EC2 Template Configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-*   ``--image-id``: AMI ID for the worker instances. If not provided, the latest Amazon Linux 2023 (AL2023)
-    x86_64 HVM/EBS AMI in the configured region is discovered automatically.
-*   ``--python-version``: Python version to install on each worker instance (default: ``3.13``). Ignored
-    when ``--image-id`` is specified.
-*   ``--scaler-version``: Version of ``opengris-scaler`` to install (e.g. ``1.15.0``). Defaults to the latest
-    available version on PyPI. Ignored when ``--image-id`` is specified or ``--requirements-file`` is provided.
-*   ``--requirements-file``: Path to a ``requirements.txt`` file on the local machine. When provided, the file
-    is embedded in the EC2 user data script and installed via ``pip install -r`` instead of installing
-    ``opengris-scaler`` directly. ``opengris-scaler`` must be listed in the requirements file. Ignored when
-    ``--image-id`` is specified.
+*   ``--image-id``: AMI ID for the worker instances. Mutually exclusive with ``--python-version`` and
+    ``--requirements-txt``. When provided, the latest AL2023 AMI is not used and no packages are installed.
+*   ``--python-version``: Python version to install on each worker instance (e.g. ``3.13``). Required when
+    ``--image-id`` is not specified.
+*   ``--requirements-txt``: Requirements to install on each worker instance. Can be a path to a local
+    ``requirements.txt`` file or a string literal. The content is embedded in the EC2 user data script and
+    installed via ``pip install -r``. ``opengris-scaler`` must be included. Required when ``--image-id`` is
+    not specified.
 *   ``--instance-type``: EC2 instance type (default: ``t2.micro``).
 *   ``--aws-region``: AWS region (default: ``us-east-1``).
 *   ``--key-name``: AWS key pair name for the instances. If not provided, a temporary key pair will be created and deleted on cleanup.

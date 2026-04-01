@@ -22,25 +22,36 @@ class ORBAWSEC2WorkerAdapterConfig(ConfigClass):
             help="AMI ID for the worker instances. If not provided, the latest AL2023 AMI is discovered automatically."
         ),
     )
-    python_version: str = dataclasses.field(
-        default="3.13", metadata=dict(help="Python version to install on the worker instance (e.g. '3.13')")
-    )
-    scaler_version: Optional[str] = dataclasses.field(
-        default=None,
-        metadata=dict(
-            help="Version of opengris-scaler to install (e.g. '1.15.0'). Defaults to the latest version on PyPI."
-        ),
-    )
-    requirements_file: Optional[str] = dataclasses.field(
+    python_version: Optional[str] = dataclasses.field(
         default=None,
         metadata=dict(
             help=(
-                "Path to a requirements.txt to install on each worker instance. "
-                "When provided, opengris-scaler is NOT installed automatically — "
-                "it must be listed in the requirements file."
+                "Python version to install on the worker instance (e.g. '3.13'). "
+                "Required when --image-id is not provided."
             )
         ),
     )
+    requirements_txt: Optional[str] = dataclasses.field(
+        default=None,
+        metadata=dict(
+            help=(
+                "Requirements to install on each worker instance. "
+                "Can be a path to a requirements.txt file or a string literal. "
+                "Must include opengris-scaler. Required when --image-id is not provided."
+            )
+        ),
+    )
+
+    def __post_init__(self) -> None:
+        if self.image_id is not None:
+            if self.python_version is not None or self.requirements_txt is not None:
+                raise ValueError("--image-id is mutually exclusive with --python-version and --requirements-txt")
+        else:
+            if self.python_version is None or self.requirements_txt is None:
+                raise ValueError(
+                    "Both --python-version and --requirements-txt must be provided when --image-id is not specified"
+                )
+
     key_name: Optional[str] = dataclasses.field(
         default=None, metadata=dict(help="AWS key pair name for the instances (optional)")
     )
