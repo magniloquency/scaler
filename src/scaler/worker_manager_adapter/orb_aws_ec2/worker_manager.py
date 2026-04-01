@@ -265,10 +265,9 @@ class ORBAWSEC2WorkerAdapter:
         adapter_config = self._config.worker_manager_config
         python_version = self._config.python_version
         scaler_version = self._config.scaler_version
+        requirements_file = self._config.requirements_file
 
-        pip_package = f"opengris-scaler=={scaler_version}" if scaler_version else "opengris-scaler"
-
-        # Phase 1: install Python and scaler. User data runs as root so no sudo is needed.
+        # Phase 1: install Python and dependencies. User data runs as root so no sudo is needed.
         # set -e ensures any install failure aborts the script rather than launching a broken worker.
         script = f"""#!/bin/bash
 set -e
@@ -276,8 +275,21 @@ dnf update -y
 dnf install -y python{python_version} python{python_version}-pip
 python{python_version} -m venv /opt/opengris-scaler
 /opt/opengris-scaler/bin/python -m pip install --upgrade pip
-/opt/opengris-scaler/bin/pip install {pip_package}
-ln -sf /opt/opengris-scaler/bin/scaler_* /usr/local/bin/
+"""
+
+        if requirements_file is not None:
+            with open(requirements_file) as f:
+                requirements_content = f.read()
+            script += f"""cat > /tmp/requirements.txt << 'REQUIREMENTS_EOF'
+{requirements_content}
+REQUIREMENTS_EOF
+/opt/opengris-scaler/bin/pip install -r /tmp/requirements.txt
+"""
+        else:
+            pip_package = f"opengris-scaler=={scaler_version}" if scaler_version else "opengris-scaler"
+            script += f"/opt/opengris-scaler/bin/pip install {pip_package}\n"
+
+        script += """ln -sf /opt/opengris-scaler/bin/scaler_* /usr/local/bin/
 set +e
 
 """
@@ -285,14 +297,8 @@ set +e
         # Phase 2: launch the worker manager.
         # NOTE: --max-task-concurrency is not passed; scaler_worker_manager defaults to cpu_count - 1 workers,
         # where cpu_count is determined by the machine type configured by the user.
-<<<<<<< orb-ec2-userdata-install
         script += f"""INSTANCE_ID=$(ec2-metadata --instance-id --quiet)
-nohup /usr/local/bin/scaler_worker_manager baremetal_native {adapter_config.scheduler_address.to_address()} \
-=======
-        script = f"""#!/bin/bash
-INSTANCE_ID=$(ec2-metadata --instance-id --quiet)
 nohup /usr/local/bin/scaler_worker_manager baremetal_native {self._worker_scheduler_address.to_address()} \
->>>>>>> main
     --mode fixed \
     --worker-type ORB \
     --worker-manager-id "${{INSTANCE_ID}}" \

@@ -31,6 +31,16 @@ class ORBAWSEC2WorkerAdapterConfig(ConfigClass):
             help="Version of opengris-scaler to install (e.g. '1.15.0'). Defaults to the latest version on PyPI."
         ),
     )
+    requirements_file: Optional[str] = dataclasses.field(
+        default=None,
+        metadata=dict(
+            help=(
+                "Path to a requirements.txt to install on each worker instance. "
+                "When provided, opengris-scaler is NOT installed automatically — "
+                "it must be listed in the requirements file."
+            )
+        ),
+    )
     key_name: Optional[str] = dataclasses.field(
         default=None, metadata=dict(help="AWS key pair name for the instances (optional)")
     )

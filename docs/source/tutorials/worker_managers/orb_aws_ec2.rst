@@ -125,9 +125,10 @@ Equivalent configuration using a TOML file with ``scaler``:
     type = "orb_aws_ec2"
     scheduler_address = "tcp://<SCHEDULER_EXTERNAL_IP>:8516"
     object_storage_address = "tcp://<OSS_EXTERNAL_IP>:8517"
-    # image_id = "ami-..."        # optional: pin a specific AMI (skips the install step)
-    # python_version = "3.13"     # optional: Python version to install (default: 3.13)
-    # scaler_version = "1.15.0"   # optional: pin scaler version (default: latest on PyPI)
+    # image_id = "ami-..."              # optional: pin a specific AMI (skips the install step)
+    # python_version = "3.13"          # optional: Python version to install (default: 3.13)
+    # scaler_version = "1.15.0"        # optional: pin scaler version (default: latest on PyPI)
+    # requirements_file = "/path/to/requirements.txt"  # optional: custom deps; must include opengris-scaler
     instance_type = "t3.medium"
     aws_region = "us-east-1"
     logging_level = "INFO"
@@ -142,6 +143,8 @@ Equivalent configuration using a TOML file with ``scaler``:
 *   When ``--image-id`` is not provided, the adapter discovers the latest Amazon Linux 2023 AMI in the
     configured region and installs Python and ``opengris-scaler`` at instance startup via the EC2 user
     data script.
+*   When ``--requirements-file`` is provided, the adapter installs packages from that file instead of
+    installing ``opengris-scaler`` directly. ``opengris-scaler`` must be listed in the requirements file.
 
 Networking Configuration
 ------------------------
@@ -167,7 +170,11 @@ ORB AWS EC2 Template Configuration
 *   ``--python-version``: Python version to install on each worker instance (default: ``3.13``). Only applies
     when ``--image-id`` is not specified.
 *   ``--scaler-version``: Version of ``opengris-scaler`` to install (e.g. ``1.15.0``). Defaults to the latest
-    available version on PyPI. Only applies when ``--image-id`` is not specified.
+    available version on PyPI. Only applies when ``--image-id`` is not specified and ``--requirements-file`` is
+    not provided.
+*   ``--requirements-file``: Path to a ``requirements.txt`` file on the local machine. When provided, the file
+    is embedded in the EC2 user data script and installed via ``pip install -r`` instead of installing
+    ``opengris-scaler`` directly. ``opengris-scaler`` must be listed in the requirements file.
 *   ``--instance-type``: EC2 instance type (default: ``t2.micro``).
 *   ``--aws-region``: AWS region (default: ``us-east-1``).
 *   ``--key-name``: AWS key pair name for the instances. If not provided, a temporary key pair will be created and deleted on cleanup.
