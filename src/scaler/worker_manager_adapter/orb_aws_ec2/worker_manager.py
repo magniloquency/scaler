@@ -426,30 +426,56 @@ nohup /usr/local/bin/scaler_worker_manager baremetal_native {self._worker_schedu
             )
             return [], Status.TooManyWorkers
 
-        timeout_seconds = ORB_AWS_EC2_MAX_POLLING_ATTEMPTS * ORB_AWS_EC2_POLLING_INTERVAL_SECONDS
         logging.info(f"Submitting ORB machine request for template {self._template_id}...")
         try:
-            response = await self._sdk.request_machines(
-                self._template_id, 1, wait=True, timeout_seconds=timeout_seconds
-            )
+            create_response = await self._sdk.create_request(template_id=self._template_id, count=1)
         except Exception:
-            logging.exception("ORB machine request failed")
+            logging.exception("ORB create_request failed")
             return [], Status.UnknownAction
 
-        request_id = response.get("request_id", "<unknown>") if isinstance(response, dict) else "<unknown>"
-        status = response.get("status", "") if isinstance(response, dict) else ""
-        machine_ids = response.get("machine_ids", []) if isinstance(response, dict) else []
-        instance_id = machine_ids[0] if machine_ids else None
-
-        if not instance_id:
-            logging.error(f"ORB request {request_id} completed with status '{status}' but no instance ID found.")
+        request_id = create_response.get("created_request_id") if isinstance(create_response, dict) else None
+        if not request_id:
+            logging.error(f"ORB create_request returned no request ID. Response: {create_response}")
             return [], Status.UnknownAction
 
-        worker_name = get_orb_aws_ec2_worker_name(instance_id)
-        worker_id = WorkerID(worker_name.encode())
-        self._workers[worker_id] = instance_id
-        logging.info(f"ORB request {request_id} fulfilled: launched worker '{worker_name}' (instance {instance_id})")
-        return [bytes(worker_id)], Status.Success
+        logging.info(f"ORB request {request_id} submitted, polling for instance ID...")
+        timeout_seconds = ORB_AWS_EC2_MAX_POLLING_ATTEMPTS * ORB_AWS_EC2_POLLING_INTERVAL_SECONDS
+        elapsed = 0
+
+        while elapsed < timeout_seconds:
+            await asyncio.sleep(ORB_AWS_EC2_POLLING_INTERVAL_SECONDS)
+            elapsed += ORB_AWS_EC2_POLLING_INTERVAL_SECONDS
+
+            try:
+                status_response = await self._sdk.get_request_status(request_ids=[request_id])
+            except Exception:
+                logging.exception(f"ORB get_request_status failed for request {request_id}")
+                return [], Status.UnknownAction
+
+            requests = status_response.get("requests", []) if isinstance(status_response, dict) else []
+            if not requests:
+                continue
+
+            req = requests[0] if isinstance(requests[0], dict) else {}
+            status = req.get("status", "")
+            machine_ids = req.get("machine_ids", [])
+            instance_id = machine_ids[0] if machine_ids else None
+
+            if instance_id:
+                worker_name = get_orb_aws_ec2_worker_name(instance_id)
+                worker_id = WorkerID(worker_name.encode())
+                self._workers[worker_id] = instance_id
+                logging.info(
+                    f"ORB request {request_id} fulfilled: launched worker '{worker_name}' (instance {instance_id})"
+                )
+                return [bytes(worker_id)], Status.Success
+
+            if status.lower() in {"failed", "error", "cancelled", "canceled"}:
+                logging.error(f"ORB request {request_id} reached terminal status '{status}' with no instance ID.")
+                return [], Status.UnknownAction
+
+        logging.error(f"ORB request {request_id} timed out after {timeout_seconds:.0f}s waiting for instance ID.")
+        return [], Status.UnknownAction
 
     async def shutdown_workers(self, worker_ids: List[bytes]) -> Tuple[List[bytes], Status]:
         if not worker_ids:
