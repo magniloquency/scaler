@@ -128,9 +128,13 @@ Equivalent configuration using a TOML file with ``scaler``:
     object_storage_address = "tcp://<OSS_EXTERNAL_IP>:8517"
     # Option A: pre-built AMI (skips Python/package install entirely)
     # image_id = "ami-..."
-    # Option B: auto-install (both required)
+    # Option B: auto-install (both required) — requirements_txt can be a file path or an inline string
     # python_version = "3.13"
-    # requirements_txt = "/path/to/requirements.txt"  # path to file or literal string; must include opengris-scaler
+    # requirements_txt = "/path/to/requirements.txt"
+    # requirements_txt = """
+    # opengris-scaler>=1.15.0
+    # boto3
+    # """
     instance_type = "t3.medium"
     aws_region = "us-east-1"
     logging_level = "INFO"
