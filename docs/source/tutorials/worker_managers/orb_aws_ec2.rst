@@ -183,7 +183,7 @@ are embedded in the user data script and installed via ``pip install -r`` — in
 
 ``--image-id`` is provided. The install step is skipped entirely — no ``dnf``, no ``venv``, no ``pip``.
 The specified AMI is used as-is and must already have ``opengris-scaler`` installed with
-``scaler_worker_manager`` available at ``/usr/local/bin/scaler_worker_manager``. ``--python-version``, ``--scaler-version``, and
+``scaler_worker_manager`` available on the ``PATH``. ``--python-version``, ``--scaler-version``, and
 ``--requirements-file`` are all ignored in this mode.
 
 This mode is recommended for production deployments where startup latency matters or where the worker
