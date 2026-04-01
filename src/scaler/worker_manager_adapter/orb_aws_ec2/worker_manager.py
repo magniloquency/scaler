@@ -421,35 +421,22 @@ nohup /usr/local/bin/scaler_worker_manager baremetal_native {self._worker_schedu
             )
             return [], Status.TooManyWorkers
 
-        response = await self._sdk.create_request(template_id=self._template_id, count=1)
-        request_id = (
-            response.get("created_request_id") or response.get("request_id") or response.get("id")
-            if isinstance(response, dict)
-            else None
-        )
-
-        if not request_id:
-            logging.error(f"ORB machine request failed to return a request ID. Response: {response}")
-            return [], Status.UnknownAction
-
-        logging.info(f"ORB machine request {request_id} submitted, waiting for instance IDs...")
-
-        timeout = float(ORB_AWS_EC2_MAX_POLLING_ATTEMPTS * ORB_AWS_EC2_POLLING_INTERVAL_SECONDS)
+        timeout_seconds = ORB_AWS_EC2_MAX_POLLING_ATTEMPTS * ORB_AWS_EC2_POLLING_INTERVAL_SECONDS
+        logging.info(f"Submitting ORB machine request for template {self._template_id}...")
         try:
-            final = await self._sdk.wait_for_request(
-                request_id, timeout=timeout, poll_interval=float(ORB_AWS_EC2_POLLING_INTERVAL_SECONDS)
+            response = await self._sdk.request_machines(
+                self._template_id, 1, wait=True, timeout_seconds=timeout_seconds
             )
-        except TimeoutError:
-            logging.error(f"ORB machine request {request_id} timed out after {timeout:.0f}s.")
+        except Exception as e:
+            logging.error(f"ORB machine request failed: {e}")
             return [], Status.UnknownAction
 
-        machines = final.get("machines", []) if isinstance(final, dict) else []
-        instance_id = next(
-            (m.get("machine_id") or m.get("id") for m in machines if m.get("machine_id") or m.get("id")), None
-        )
+        request_id = response.get("request_id", "<unknown>") if isinstance(response, dict) else "<unknown>"
+        status = response.get("status", "") if isinstance(response, dict) else ""
+        machine_ids = response.get("machine_ids", []) if isinstance(response, dict) else []
+        instance_id = machine_ids[0] if machine_ids else None
 
         if not instance_id:
-            status = final.get("status", "") if isinstance(final, dict) else ""
             logging.error(f"ORB request {request_id} completed with status '{status}' but no instance ID found.")
             return [], Status.UnknownAction
 
