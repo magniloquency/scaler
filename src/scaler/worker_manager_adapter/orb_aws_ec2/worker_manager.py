@@ -171,12 +171,15 @@ class ORBAWSEC2WorkerAdapter:
         self._workers.clear()
 
     async def __on_receive_external(self, message: Message):
-        if isinstance(message, WorkerManagerCommand):
-            await self._handle_command(message)
-        elif isinstance(message, WorkerManagerHeartbeatEcho):
-            pass
-        else:
-            logging.warning(f"Received unknown message type: {type(message)}")
+        try:
+            if isinstance(message, WorkerManagerCommand):
+                await self._handle_command(message)
+            elif isinstance(message, WorkerManagerHeartbeatEcho):
+                pass
+            else:
+                logging.warning(f"Received unknown message type: {type(message)}")
+        except Exception:
+            logging.exception(f"Unhandled exception while processing message {type(message).__name__}")
 
     async def _handle_command(self, command: WorkerManagerCommand):
         cmd_type = command.command
@@ -259,6 +262,8 @@ class ORBAWSEC2WorkerAdapter:
                 pass
             else:
                 logging.exception(f"{self._ident!r}: failed with unhandled exception:\n{e}")
+        except Exception:
+            logging.exception(f"{self._ident!r}: failed with unhandled exception")
 
     def _create_user_data(self) -> str:
         worker_config = self._config.worker_config
@@ -427,8 +432,8 @@ nohup /usr/local/bin/scaler_worker_manager baremetal_native {self._worker_schedu
             response = await self._sdk.request_machines(
                 self._template_id, 1, wait=True, timeout_seconds=timeout_seconds
             )
-        except Exception as e:
-            logging.error(f"ORB machine request failed: {e}")
+        except Exception:
+            logging.exception("ORB machine request failed")
             return [], Status.UnknownAction
 
         request_id = response.get("request_id", "<unknown>") if isinstance(response, dict) else "<unknown>"
