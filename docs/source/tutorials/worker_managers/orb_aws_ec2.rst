@@ -132,7 +132,7 @@ Equivalent configuration using a TOML file with ``scaler``:
     # python_version = "3.13"
     # requirements_txt = "/path/to/requirements.txt"
     # requirements_txt = """
-    # opengris-scaler>=1.15.0
+    # opengris-scaler>=1.26.6
     # boto3
     # """
     instance_type = "t3.medium"
@@ -177,7 +177,7 @@ Provide both ``--python-version`` and ``--requirements-txt`` (neither may be omi
    at ``/opt/opengris-scaler``, and installs the packages from the requirements.
 
 ``--requirements-txt`` can be either a path to a local ``requirements.txt`` file or a string literal
-(e.g. ``"opengris-scaler>=1.15.0\nboto3"``). In both cases the content is embedded in the EC2 user
+(e.g. ``"opengris-scaler>=1.26.6\nboto3"``). In both cases the content is embedded in the EC2 user
 data script and installed via ``pip install -r``. ``opengris-scaler`` must be included.
 
 .. code-block:: bash
@@ -192,7 +192,7 @@ data script and installed via ``pip install -r``. ``opengris-scaler`` must be in
     scaler_worker_manager orb_aws_ec2 tcp://<SCHEDULER_IP>:8516 \
         --instance-type t3.medium \
         --python-version 3.13 \
-        --requirements-txt "opengris-scaler>=1.15.0"
+        --requirements-txt "opengris-scaler>=1.26.6"
 
 Networking Configuration
 ------------------------
