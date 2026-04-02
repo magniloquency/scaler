@@ -13,9 +13,7 @@ try:
     from packaging.requirements import Requirement
     from packaging.utils import canonicalize_name
 except ModuleNotFoundError as exc:
-    raise ModuleNotFoundError(
-        'execute "pip install opengris-scaler[orb]" to use ORB AWS EC2 worker Manager'
-    ) from exc
+    raise ModuleNotFoundError('execute "pip install opengris-scaler[orb]" to use ORB AWS EC2 worker Manager') from exc
 
 from scaler.config.section.orb_aws_ec2_worker_adapter import ORBAWSEC2WorkerAdapterConfig
 from scaler.io import ymq
