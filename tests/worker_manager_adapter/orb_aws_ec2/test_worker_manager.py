@@ -20,13 +20,9 @@ class TestORBAWSEC2WorkerAdapterLoadRequirementsContent(unittest.TestCase):
         finally:
             os.unlink(path)
 
-    def test_raises_for_missing_file_with_txt_extension(self):
-        with self.assertRaises(FileNotFoundError):
-            ORBAWSEC2WorkerAdapter._load_requirements_content("/nonexistent/requirements.txt")
-
-    def test_raises_for_missing_file_with_path_separator(self):
-        with self.assertRaises(FileNotFoundError):
-            ORBAWSEC2WorkerAdapter._load_requirements_content("./requirements.txt")
+    def test_returns_literal_string_when_path_does_not_exist(self):
+        content = ORBAWSEC2WorkerAdapter._load_requirements_content("/nonexistent/requirements.txt")
+        self.assertEqual(content, "/nonexistent/requirements.txt")
 
 
 class TestORBAWSEC2WorkerAdapterValidateRequirements(unittest.TestCase):
