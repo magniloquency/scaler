@@ -153,22 +153,7 @@ Worker Environment Modes
 The adapter supports two mutually exclusive modes for preparing the worker environment on each EC2
 instance. Exactly one mode must be selected.
 
-**Mode 1 — Pre-built AMI**
-
-Provide ``--image-id``. The install step is skipped entirely — no ``dnf``, no ``venv``, no ``pip``.
-The specified AMI is used as-is and must already have ``opengris-scaler`` installed with
-``scaler_worker_manager`` available on the ``PATH``.
-
-This mode is recommended for production deployments where startup latency matters or where the worker
-environment must be tightly controlled.
-
-.. code-block:: bash
-
-    scaler_worker_manager orb_aws_ec2 tcp://<SCHEDULER_IP>:8516 \
-        --instance-type t3.medium \
-        --image-id ami-0123456789abcdef0
-
-**Mode 2 — Auto-install**
+**Mode 1 — Auto-install**
 
 Provide both ``--python-version`` and ``--requirements-txt`` (neither may be omitted). The adapter:
 
@@ -193,6 +178,21 @@ data script and installed via ``pip install -r``. ``opengris-scaler`` must be in
         --instance-type t3.medium \
         --python-version 3.13 \
         --requirements-txt "opengris-scaler>=1.26.6"
+
+**Mode 2 — Pre-built AMI**
+
+Provide ``--image-id``. The install step is skipped entirely — no ``dnf``, no ``venv``, no ``pip``.
+The specified AMI is used as-is and must already have ``opengris-scaler`` installed with
+``scaler_worker_manager`` available on the ``PATH``.
+
+This mode is recommended for production deployments where startup latency matters or where the worker
+environment must be tightly controlled.
+
+.. code-block:: bash
+
+    scaler_worker_manager orb_aws_ec2 tcp://<SCHEDULER_IP>:8516 \
+        --instance-type t3.medium \
+        --image-id ami-0123456789abcdef0
 
 Networking Configuration
 ------------------------
