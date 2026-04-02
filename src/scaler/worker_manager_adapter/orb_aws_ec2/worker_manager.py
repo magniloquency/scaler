@@ -5,10 +5,17 @@ import signal
 import uuid
 from typing import Any, Dict, List, Optional, Tuple
 
-import boto3
 import zmq
-from packaging.requirements import Requirement
-from packaging.utils import canonicalize_name
+
+try:
+    import boto3
+    from packaging.requirements import Requirement
+    from packaging.utils import canonicalize_name
+except ModuleNotFoundError as exc:
+    raise ModuleNotFoundError(
+        "The 'orb' extra packages are required for the ORB AWS EC2 worker manager. "
+        "Install them with: pip install opengris-scaler[orb]"
+    ) from exc
 
 from scaler.config.section.orb_aws_ec2_worker_adapter import ORBAWSEC2WorkerAdapterConfig
 from scaler.io import ymq
