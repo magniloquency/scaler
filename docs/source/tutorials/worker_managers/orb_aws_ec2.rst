@@ -133,7 +133,8 @@ Equivalent configuration using a TOML file with ``scaler``:
     # requirements_txt = "/path/to/requirements.txt"
     # requirements_txt = """
     # opengris-scaler>=1.26.6
-    # boto3
+    # numpy
+    # pandas
     # """
     # Option B: pre-built AMI (skips Python/package install entirely)
     # image_id = "ami-..."
