@@ -155,15 +155,9 @@ instance. Exactly one mode must be selected.
 
 **Mode 1 — Auto-install**
 
-Provide both ``--python-version`` and ``--requirements-txt`` (neither may be omitted). The adapter:
-
-1. Discovers the latest Amazon Linux 2023 (AL2023) AMI in the configured region.
-2. Embeds a user data script that installs the requested Python version via ``dnf``, creates a ``venv``
-   at ``/opt/opengris-scaler``, and installs the packages from the requirements.
-
-``--requirements-txt`` can be either a path to a local ``requirements.txt`` file or a string literal
-(e.g. ``"opengris-scaler>=1.26.6\nboto3"``). In both cases the content is embedded in the EC2 user
-data script and installed via ``pip install -r``. ``opengris-scaler`` must be included.
+Provide both ``--python-version`` and ``--requirements-txt`` (neither may be omitted). Workers run on
+the latest Amazon Linux 2023 (AL2023) AMI. The packages listed in ``--requirements-txt`` will be
+installed on the worker; ``opengris-scaler`` must be included.
 
 .. code-block:: bash
 
