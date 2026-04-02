@@ -175,9 +175,8 @@ installed on the worker; ``opengris-scaler`` must be included.
 
 **Mode 2 — Pre-built AMI**
 
-Provide ``--image-id``. The install step is skipped entirely — no ``dnf``, no ``venv``, no ``pip``.
-The specified AMI is used as-is and must already have ``opengris-scaler`` installed with
-``scaler_worker_manager`` available on the ``PATH``.
+Provide ``--image-id``. The specified AMI is used as-is and must already have ``opengris-scaler``
+installed with ``scaler_worker_manager`` available on the ``PATH``.
 
 This mode is recommended for production deployments where startup latency matters or where the worker
 environment must be tightly controlled.
