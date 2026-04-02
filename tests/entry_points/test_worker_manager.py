@@ -1,12 +1,9 @@
 import dataclasses
-import importlib.util
 import unittest
 from typing import Optional
 from unittest.mock import mock_open, patch
 
 from scaler.config.config_class import ConfigClass
-
-_ORB_AVAILABLE = importlib.util.find_spec("orb") is not None
 
 
 @dataclasses.dataclass
@@ -377,7 +374,6 @@ def _make_orb_config(
     )
 
 
-@unittest.skipUnless(_ORB_AVAILABLE, "orb extra not installed")
 class TestORBAWSEC2CreateUserData(unittest.TestCase):
     """Tests for ORBAWSEC2WorkerAdapter._create_user_data covering the two environment modes."""
 

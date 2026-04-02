@@ -2,13 +2,9 @@ import os
 import tempfile
 import unittest
 
-try:
-    from scaler.worker_manager_adapter.orb_aws_ec2.worker_manager import ORBAWSEC2WorkerAdapter
-except ModuleNotFoundError:
-    ORBAWSEC2WorkerAdapter = None  # type: ignore[assignment,misc]
+from scaler.worker_manager_adapter.orb_aws_ec2.worker_manager import ORBAWSEC2WorkerAdapter
 
 
-@unittest.skipUnless(ORBAWSEC2WorkerAdapter is not None, "orb extra not installed")
 class TestORBAWSEC2WorkerAdapterLoadRequirementsContent(unittest.TestCase):
     def test_returns_literal_string(self):
         content = ORBAWSEC2WorkerAdapter._load_requirements_content("opengris-scaler>=1.0\nboto3\n")
@@ -29,7 +25,6 @@ class TestORBAWSEC2WorkerAdapterLoadRequirementsContent(unittest.TestCase):
         self.assertEqual(content, "/nonexistent/requirements.txt")
 
 
-@unittest.skipUnless(ORBAWSEC2WorkerAdapter is not None, "orb extra not installed")
 class TestORBAWSEC2WorkerAdapterValidateRequirements(unittest.TestCase):
     def test_raises_when_opengris_scaler_missing(self):
         requirements = "boto3\nrequests>=2.0\n"
