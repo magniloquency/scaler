@@ -80,10 +80,7 @@ class ORBAWSEC2WorkerAdapter:
         self._subnet_id: Optional[str] = None
 
         if config.image_id is None:
-            requirements_txt = config.requirements_txt
-            requirements_content = (
-                open(requirements_txt).read() if os.path.isfile(requirements_txt) else requirements_txt
-            )
+            requirements_content = self._load_requirements_content(config.requirements_txt)
             self._validate_requirements(requirements_content)
 
     def _build_app_config(self) -> dict:
@@ -277,23 +274,45 @@ class ORBAWSEC2WorkerAdapter:
             logging.exception(f"{self._ident!r}: failed with unhandled exception")
 
     @staticmethod
+    def _load_requirements_content(requirements_txt: str) -> str:
+        """Return requirements content from a file path or a literal string.
+
+        Raises FileNotFoundError if the value looks like a file path but does not exist.
+        """
+        looks_like_path = os.sep in requirements_txt or requirements_txt.strip().endswith(".txt")
+        if looks_like_path:
+            if not os.path.isfile(requirements_txt):
+                raise FileNotFoundError(f"Requirements file not found: {requirements_txt!r}")
+            with open(requirements_txt) as f:
+                return f.read()
+        return requirements_txt
+
+    @staticmethod
     def _validate_requirements(requirements_content: str) -> None:
-        """Raise ValueError if the requirements content does not include opengris-scaler."""
+        """Raise ValueError if the requirements content is invalid or does not include opengris-scaler.
+
+        Each non-comment, non-flag line must be parseable as a PEP 508 requirement or a direct URL
+        reference (containing '://'). Lines that fail both checks would cause `pip install` to fail
+        inside the EC2 userdata script.
+        """
+        found_scaler = False
         for line in requirements_content.splitlines():
             line = line.strip()
             if not line or line.startswith("#") or line.startswith("-"):
                 continue
             try:
                 req = Requirement(line)
+                if canonicalize_name(req.name) == "opengris-scaler":
+                    found_scaler = True
             except Exception:
-                continue
-            if canonicalize_name(req.name) == "opengris-scaler":
-                return
+                if "://" not in line:
+                    raise ValueError(f"Invalid requirement line that would cause pip to fail: {line!r}")
 
-        raise ValueError(
-            "The requirements file must include the 'opengris-scaler' package. "
-            "Workers will fail to start without it."
-        )
+        if not found_scaler:
+            raise ValueError(
+                "The requirements file must include the 'opengris-scaler' package. "
+                "Workers will fail to start without it."
+            )
 
     def _create_user_data(self) -> str:
         worker_config = self._config.worker_config
@@ -305,9 +324,7 @@ class ORBAWSEC2WorkerAdapter:
             python_version = self._config.python_version
             requirements_txt = self._config.requirements_txt
 
-            requirements_content = (
-                open(requirements_txt).read() if os.path.isfile(requirements_txt) else requirements_txt
-            )
+            requirements_content = self._load_requirements_content(requirements_txt)
 
             # Phase 1: install Python and dependencies. User data runs as root so no sudo is needed.
             # set -e ensures any install failure aborts the script rather than launching a broken worker.
