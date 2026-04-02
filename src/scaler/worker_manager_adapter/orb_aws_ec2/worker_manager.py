@@ -14,8 +14,7 @@ try:
     from packaging.utils import canonicalize_name
 except ModuleNotFoundError as exc:
     raise ModuleNotFoundError(
-        "The 'orb' extra packages are required for the ORB AWS EC2 worker manager. "
-        "Install them with: pip install opengris-scaler[orb]"
+        'execute "pip install opengris-scaler[orb]" to use ORB AWS EC2 worker Manager'
     ) from exc
 
 from scaler.config.section.orb_aws_ec2_worker_adapter import ORBAWSEC2WorkerAdapterConfig
