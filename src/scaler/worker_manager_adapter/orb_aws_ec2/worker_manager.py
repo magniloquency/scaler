@@ -7,6 +7,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import boto3
 import zmq
+from packaging.requirements import Requirement
+from packaging.utils import canonicalize_name
 
 from scaler.config.section.orb_aws_ec2_worker_adapter import ORBAWSEC2WorkerAdapterConfig
 from scaler.io import ymq
@@ -267,6 +269,25 @@ class ORBAWSEC2WorkerAdapter:
         except Exception:
             logging.exception(f"{self._ident!r}: failed with unhandled exception")
 
+    @staticmethod
+    def _validate_requirements(requirements_content: str) -> None:
+        """Raise ValueError if the requirements content does not include opengris-scaler."""
+        for line in requirements_content.splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or line.startswith("-"):
+                continue
+            try:
+                req = Requirement(line)
+            except Exception:
+                continue
+            if canonicalize_name(req.name) == "opengris-scaler":
+                return
+
+        raise ValueError(
+            "The requirements file must include the 'opengris-scaler' package. "
+            "Workers will fail to start without it."
+        )
+
     def _create_user_data(self) -> str:
         worker_config = self._config.worker_config
         adapter_config = self._config.worker_manager_config
@@ -280,6 +301,7 @@ class ORBAWSEC2WorkerAdapter:
             requirements_content = (
                 open(requirements_txt).read() if os.path.isfile(requirements_txt) else requirements_txt
             )
+            self._validate_requirements(requirements_content)
 
             # Phase 1: install Python and dependencies. User data runs as root so no sudo is needed.
             # set -e ensures any install failure aborts the script rather than launching a broken worker.
