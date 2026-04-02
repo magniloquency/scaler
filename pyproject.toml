@@ -50,6 +50,7 @@ graphblas = [
 ]
 aws = [
     "boto3",
+    "botocore[crt]",
 ]
 orb = [
     "orb-py~=1.5.1; python_version >= '3.10'",
