@@ -128,15 +128,15 @@ Equivalent configuration using a TOML file with ``scaler``:
     scheduler_address = "tcp://<SCHEDULER_IP>:8516"
     public_scheduler_address = "tcp://<SCHEDULER_EXTERNAL_IP>:8516"
     object_storage_address = "tcp://<OSS_EXTERNAL_IP>:8517"
-    # Option A: pre-built AMI (skips Python/package install entirely)
-    # image_id = "ami-..."
-    # Option B: auto-install (both required) — requirements_txt can be a file path or an inline string
+    # Option A: auto-install (both required) — requirements_txt can be a file path or an inline string
     # python_version = "3.13"
     # requirements_txt = "/path/to/requirements.txt"
     # requirements_txt = """
     # opengris-scaler>=1.26.6
     # boto3
     # """
+    # Option B: pre-built AMI (skips Python/package install entirely)
+    # image_id = "ami-..."
     instance_type = "t3.medium"
     aws_region = "us-east-1"
     logging_level = "INFO"
