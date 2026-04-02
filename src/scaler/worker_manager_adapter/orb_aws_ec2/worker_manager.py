@@ -9,6 +9,7 @@ import zmq
 
 try:
     import boto3
+    from orb import ORBClient as orb
     from packaging.requirements import Requirement
     from packaging.utils import canonicalize_name
 except ModuleNotFoundError as exc:
@@ -240,14 +241,6 @@ class ORBAWSEC2WorkerAdapter:
         self._loop.add_signal_handler(signal.SIGTERM, self.__destroy)
 
     async def _run(self) -> None:
-        try:
-            from orb import ORBClient as orb
-        except ModuleNotFoundError as exc:
-            raise ModuleNotFoundError(
-                "The 'orb' package is required for the ORB AWS EC2 worker manager. "
-                "Install it with: pip install opengris-scaler[orb]"
-            ) from exc
-
         register_event_loop(self._event_loop)
 
         async with orb(app_config=self._build_app_config()) as sdk:
