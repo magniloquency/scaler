@@ -2,6 +2,7 @@
 import dataclasses
 import multiprocessing
 import sys
+import time
 from typing import List, Optional
 
 from scaler.cluster.object_storage_server import ObjectStorageServerProcess
@@ -122,8 +123,16 @@ def main() -> None:
         processes.append(gui_process)
 
     try:
-        for process in processes:
-            process.join()
+        while True:
+            for process in processes:
+                if not process.is_alive():
+                    for other in processes:
+                        if other.is_alive():
+                            other.terminate()
+                    for other in processes:
+                        other.join()
+                    sys.exit(process.exitcode or 0)
+            time.sleep(1)
     except KeyboardInterrupt:
         for process in processes:
             process.terminate()
