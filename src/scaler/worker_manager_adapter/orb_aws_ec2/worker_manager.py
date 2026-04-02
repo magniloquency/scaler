@@ -79,6 +79,13 @@ class ORBAWSEC2WorkerAdapter:
         self._ident: bytes = b"worker_manager_orb_aws_ec2|uninitialized"
         self._subnet_id: Optional[str] = None
 
+        if config.image_id is None:
+            requirements_txt = config.requirements_txt
+            requirements_content = (
+                open(requirements_txt).read() if os.path.isfile(requirements_txt) else requirements_txt
+            )
+            self._validate_requirements(requirements_content)
+
     def _build_app_config(self) -> dict:
         region = self._config.aws_region or "us-east-1"
         return {
@@ -301,7 +308,6 @@ class ORBAWSEC2WorkerAdapter:
             requirements_content = (
                 open(requirements_txt).read() if os.path.isfile(requirements_txt) else requirements_txt
             )
-            self._validate_requirements(requirements_content)
 
             # Phase 1: install Python and dependencies. User data runs as root so no sudo is needed.
             # set -e ensures any install failure aborts the script rather than launching a broken worker.
