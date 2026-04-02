@@ -233,7 +233,13 @@ class ORBAWSEC2WorkerAdapter:
         self._loop.add_signal_handler(signal.SIGTERM, self.__destroy)
 
     async def _run(self) -> None:
-        from orb import ORBClient as orb
+        try:
+            from orb import ORBClient as orb
+        except ModuleNotFoundError as exc:
+            raise ModuleNotFoundError(
+                "The 'orb' package is required for the ORB AWS EC2 worker manager. "
+                "Install it with: pip install opengris-scaler[orb]"
+            ) from exc
 
         register_event_loop(self._event_loop)
 
