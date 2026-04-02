@@ -275,14 +275,8 @@ class ORBAWSEC2WorkerAdapter:
 
     @staticmethod
     def _load_requirements_content(requirements_txt: str) -> str:
-        """Return requirements content from a file path or a literal string.
-
-        Raises FileNotFoundError if the value looks like a file path but does not exist.
-        """
-        looks_like_path = os.sep in requirements_txt or requirements_txt.strip().endswith(".txt")
-        if looks_like_path:
-            if not os.path.isfile(requirements_txt):
-                raise FileNotFoundError(f"Requirements file not found: {requirements_txt!r}")
+        """Return requirements content from a file path or a literal string."""
+        if os.path.isfile(requirements_txt):
             with open(requirements_txt) as f:
                 return f.read()
         return requirements_txt
