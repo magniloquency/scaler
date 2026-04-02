@@ -5,10 +5,14 @@ import signal
 import uuid
 from typing import Any, Dict, List, Optional, Tuple
 
-import boto3
 import zmq
-from packaging.requirements import Requirement
-from packaging.utils import canonicalize_name
+
+try:
+    import boto3
+    from packaging.requirements import Requirement
+    from packaging.utils import canonicalize_name
+except ModuleNotFoundError as exc:
+    raise ModuleNotFoundError('execute "pip install opengris-scaler[orb]" to use ORB AWS EC2 worker Manager') from exc
 
 from scaler.config.section.orb_aws_ec2_worker_adapter import ORBAWSEC2WorkerAdapterConfig
 from scaler.io import ymq
@@ -67,6 +71,8 @@ class ORBAWSEC2WorkerAdapter:
         self._logging_paths = config.logging_config.paths
         self._logging_level = config.logging_config.level
         self._logging_config_file = config.logging_config.config_file
+
+        self._worker_manager_id = config.worker_manager_config.worker_manager_id.encode()
 
         self._sdk: Optional[Any] = None
         self._ec2: Optional[Any] = None
@@ -216,7 +222,7 @@ class ORBAWSEC2WorkerAdapter:
             WorkerManagerHeartbeat.new_msg(
                 max_task_concurrency=self._max_task_concurrency,
                 capabilities=self._capabilities,
-                worker_manager_id=self._ident,
+                worker_manager_id=self._worker_manager_id,
             )
         )
 
@@ -233,9 +239,14 @@ class ORBAWSEC2WorkerAdapter:
         self._loop.add_signal_handler(signal.SIGTERM, self.__destroy)
 
     async def _run(self) -> None:
-        from orb import ORBClient as orb
-
         register_event_loop(self._event_loop)
+
+        try:
+            from orb import ORBClient as orb
+        except ModuleNotFoundError as exc:
+            raise ModuleNotFoundError(
+                'execute "pip install opengris-scaler[orb]" to use ORB AWS EC2 worker Manager'
+            ) from exc
 
         async with orb(app_config=self._build_app_config()) as sdk:
             self._sdk = sdk
