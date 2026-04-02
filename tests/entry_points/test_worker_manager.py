@@ -4,9 +4,9 @@ import unittest
 from typing import Optional
 from unittest.mock import mock_open, patch
 
-_ORB_AVAILABLE = importlib.util.find_spec("orb") is not None
-
 from scaler.config.config_class import ConfigClass
+
+_ORB_AVAILABLE = importlib.util.find_spec("orb") is not None
 
 
 @dataclasses.dataclass

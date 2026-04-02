@@ -5,7 +5,7 @@ import unittest
 try:
     from scaler.worker_manager_adapter.orb_aws_ec2.worker_manager import ORBAWSEC2WorkerAdapter
 except ModuleNotFoundError:
-    ORBAWSEC2WorkerAdapter = None  # type: ignore[assignment]
+    ORBAWSEC2WorkerAdapter = None  # type: ignore[assignment,misc]
 
 
 @unittest.skipUnless(ORBAWSEC2WorkerAdapter is not None, "orb extra not installed")
