@@ -11,6 +11,9 @@ from scaler.protocol.python.object_storage import ObjectRequestHeader, ObjectRes
 from scaler.utility.exceptions import ObjectStorageException
 from scaler.utility.identifiers import ObjectID
 
+_CONNECT_RETRY_INTERVAL_SECONDS = 0.1
+_CONNECT_TIMEOUT_SECONDS = 30
+
 
 class PyAsyncObjectStorageConnector(AsyncObjectStorageConnector):
     """An asyncio connector that uses an raw TCP socket to connect to a Scaler's object storage instance."""
@@ -41,7 +44,16 @@ class PyAsyncObjectStorageConnector(AsyncObjectStorageConnector):
         if self.is_connected():
             raise ObjectStorageException("connector is already connected.")
 
-        self._reader, self._writer = await asyncio.open_connection(self._host, self._port)
+        deadline = asyncio.get_event_loop().time() + _CONNECT_TIMEOUT_SECONDS
+        while True:
+            try:
+                self._reader, self._writer = await asyncio.open_connection(self._host, self._port)
+                break
+            except ConnectionRefusedError:
+                if asyncio.get_event_loop().time() >= deadline:
+                    raise
+                await asyncio.sleep(_CONNECT_RETRY_INTERVAL_SECONDS)
+
         await self.__read_framed_message()
         self.__write_framed(self._identity)
 
