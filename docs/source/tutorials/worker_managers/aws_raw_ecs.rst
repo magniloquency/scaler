@@ -31,7 +31,7 @@ Paste the result into the TOML below and run the three commands:
    [[worker_manager]]
    type = "aws_raw_ecs"
    scheduler_address = "tcp://<SCHEDULER_PUBLIC_IP>:8516"
-   object_storage_address = "tcp://<SCHEDULER_PUBLIC_IP>:8517"
+   public_object_storage_address = "tcp://<SCHEDULER_PUBLIC_IP>:8517"
    worker_manager_id = "wm-ecs"
    ecs_subnets = "subnet-0abc1234def56789a"  # paste your subnet ID here
    aws_region = "us-east-1"
@@ -141,7 +141,7 @@ Or use a TOML configuration file:
    [[worker_manager]]
    type = "aws_raw_ecs"
    scheduler_address = "tcp://<SCHEDULER_PUBLIC_IP>:8516"
-   object_storage_address = "tcp://<SCHEDULER_PUBLIC_IP>:8517"
+   public_object_storage_address = "tcp://<SCHEDULER_PUBLIC_IP>:8517"
    worker_manager_id = "wm-ecs"
    ecs_subnets = "subnet-0abc1234def56789a"
    aws_region = "us-east-1"

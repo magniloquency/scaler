@@ -39,7 +39,7 @@ your AWS account ID):
    [[worker_manager]]
    type = "aws_hpc"
    scheduler_address = "tcp://127.0.0.1:8516"
-   object_storage_address = "tcp://127.0.0.1:8517"
+   public_object_storage_address = "tcp://127.0.0.1:8517"
    worker_manager_id = "wm-batch"
    job_queue = "scaler-batch-queue"
    job_definition = "scaler-batch-job"
@@ -190,7 +190,7 @@ Or use a TOML configuration file:
    [[worker_manager]]
    type = "aws_hpc"
    scheduler_address = "tcp://<SCHEDULER_IP>:8516"
-   object_storage_address = "tcp://<SCHEDULER_IP>:8517"
+   public_object_storage_address = "tcp://<SCHEDULER_IP>:8517"
    worker_manager_id = "wm-batch"
    job_queue = "scaler-batch-queue"
    job_definition = "scaler-batch-job"

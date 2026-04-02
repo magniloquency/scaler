@@ -45,7 +45,9 @@ class TestCapabilities(unittest.TestCase):
             gpu_manager = NativeWorkerManager(
                 NativeWorkerManagerConfig(
                     worker_manager_config=WorkerManagerConfig(
-                        scheduler_address=base_manager._address, object_storage_address=None, max_task_concurrency=1
+                        scheduler_address=base_manager._address,
+                        public_object_storage_address=None,
+                        max_task_concurrency=1,
                     ),
                     worker_manager_id="test_manager",
                     mode=NativeWorkerManagerMode.FIXED,
@@ -93,7 +95,9 @@ class TestCapabilities(unittest.TestCase):
             gpu_manager = NativeWorkerManager(
                 NativeWorkerManagerConfig(
                     worker_manager_config=WorkerManagerConfig(
-                        scheduler_address=base_manager._address, object_storage_address=None, max_task_concurrency=1
+                        scheduler_address=base_manager._address,
+                        public_object_storage_address=None,
+                        max_task_concurrency=1,
                     ),
                     worker_manager_id="test_manager",
                     mode=NativeWorkerManagerMode.FIXED,

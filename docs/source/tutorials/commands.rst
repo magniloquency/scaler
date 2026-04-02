@@ -110,7 +110,7 @@ Scaler examples
             [[worker_manager]]
             type = "aws_raw_ecs"
             scheduler_address = "tcp://127.0.0.1:6378"
-            object_storage_address = "tcp://127.0.0.1:6379"
+            public_object_storage_address = "tcp://127.0.0.1:6379"
             worker_manager_id = "wm-ecs"
             ecs_subnets = "subnet-0abc123,subnet-0def456"
             ecs_cluster = "scaler-cluster"
@@ -121,7 +121,7 @@ Scaler examples
             [[worker_manager]]
             type = "aws_hpc"
             scheduler_address = "tcp://127.0.0.1:6378"
-            object_storage_address = "tcp://127.0.0.1:6379"
+            public_object_storage_address = "tcp://127.0.0.1:6379"
             worker_manager_id = "wm-batch"
             job_queue = "scaler-job-queue"
             job_definition = "scaler-job-definition"
@@ -378,10 +378,10 @@ Arguments (shared by all subcommands)
      - Yes
      - -
      - Logical ID for this worker manager.
-   * - ``-osa``, ``--object-storage-address``
+   * - ``-posa``, ``--public-object-storage-address``
      - No
      - ``None``
-     - Object storage server address (required for some remote worker setups).
+     - Object storage server address forwarded to spawned workers (required for remote worker setups).
    * - ``-mtc``, ``--max-task-concurrency``
      - No
      - ``os.cpu_count() - 1``
@@ -591,7 +591,7 @@ AWS ECS (Fargate) worker manager.
             [[worker_manager]]
             type = "aws_raw_ecs"
             scheduler_address = "tcp://127.0.0.1:6378"
-            object_storage_address = "tcp://127.0.0.1:6379"
+            public_object_storage_address = "tcp://127.0.0.1:6379"
             worker_manager_id = "wm-ecs"
             ecs_subnets = "subnet-0abc123,subnet-0def456"
             ecs_cluster = "scaler-cluster"
@@ -609,7 +609,7 @@ AWS ECS (Fargate) worker manager.
         .. code-block:: bash
 
             $ scaler_worker_manager aws_raw_ecs tcp://127.0.0.1:6378 \
-                --object-storage-address tcp://127.0.0.1:6379 \
+                --public-object-storage-address tcp://127.0.0.1:6379 \
                 --worker-manager-id wm-ecs \
                 --ecs-subnets subnet-0abc123,subnet-0def456 \
                 --ecs-cluster scaler-cluster \
@@ -686,7 +686,7 @@ AWS Batch worker manager.
             [[worker_manager]]
             type = "aws_hpc"
             scheduler_address = "tcp://127.0.0.1:6378"
-            object_storage_address = "tcp://127.0.0.1:6379"
+            public_object_storage_address = "tcp://127.0.0.1:6379"
             worker_manager_id = "wm-batch"
             job_queue = "scaler-job-queue"
             job_definition = "scaler-job-definition"
@@ -704,7 +704,7 @@ AWS Batch worker manager.
         .. code-block:: bash
 
             $ scaler_worker_manager aws_hpc tcp://127.0.0.1:6378 \
-                --object-storage-address tcp://127.0.0.1:6379 \
+                --public-object-storage-address tcp://127.0.0.1:6379 \
                 --worker-manager-id wm-batch \
                 --job-queue scaler-job-queue \
                 --job-definition scaler-job-definition \
@@ -773,7 +773,7 @@ ORB (Open Resource Broker) worker manager — dynamically provisions workers on 
             [[worker_manager]]
             type = "orb_aws_ec2"
             scheduler_address = "tcp://127.0.0.1:6378"
-            object_storage_address = "tcp://127.0.0.1:6379"
+            public_object_storage_address = "tcp://127.0.0.1:6379"
             image_id = "ami-0528819f94f4f5fa5"
             instance_type = "t3.medium"
             aws_region = "us-east-1"
@@ -789,7 +789,7 @@ ORB (Open Resource Broker) worker manager — dynamically provisions workers on 
         .. code-block:: bash
 
             $ scaler_worker_manager orb_aws_ec2 tcp://127.0.0.1:6378 \
-                --object-storage-address tcp://127.0.0.1:6379 \
+                --public-object-storage-address tcp://127.0.0.1:6379 \
                 --image-id ami-0528819f94f4f5fa5 \
                 --instance-type t3.medium \
                 --aws-region us-east-1

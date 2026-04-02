@@ -107,7 +107,7 @@ To start the ORB AWS EC2 worker manager, use the ``scaler_worker_manager orb_aws
 
     scaler_worker_manager orb_aws_ec2 tcp://<SCHEDULER_IP>:8516 \
         --public-scheduler-address tcp://<SCHEDULER_EXTERNAL_IP>:8516 \
-        --object-storage-address tcp://<OSS_EXTERNAL_IP>:8517 \
+        --public-object-storage-address tcp://<OSS_EXTERNAL_IP>:8517 \
         --instance-type t3.medium \
         --aws-region us-east-1 \
         --logging-level INFO \
@@ -127,7 +127,7 @@ Equivalent configuration using a TOML file with ``scaler``:
     type = "orb_aws_ec2"
     scheduler_address = "tcp://<SCHEDULER_IP>:8516"
     public_scheduler_address = "tcp://<SCHEDULER_EXTERNAL_IP>:8516"
-    object_storage_address = "tcp://<OSS_EXTERNAL_IP>:8517"
+    public_object_storage_address = "tcp://<OSS_EXTERNAL_IP>:8517"
     # Option A: auto-install (both required) — requirements_txt can be a file path or an inline string
     # python_version = "3.13"
     # requirements_txt = "/path/to/requirements.txt"
@@ -167,7 +167,7 @@ installed on the worker; ``opengris-scaler`` must be included.
     # Requirements as a file path
     scaler_worker_manager orb_aws_ec2 tcp://<SCHEDULER_IP>:8516 \
         --public-scheduler-address tcp://<SCHEDULER_EXTERNAL_IP>:8516 \
-        --object-storage-address tcp://<OSS_EXTERNAL_IP>:8517 \
+        --public-object-storage-address tcp://<OSS_EXTERNAL_IP>:8517 \
         --instance-type t3.medium \
         --python-version 3.13 \
         --requirements-txt /path/to/requirements.txt
@@ -175,7 +175,7 @@ installed on the worker; ``opengris-scaler`` must be included.
     # Requirements as a string literal
     scaler_worker_manager orb_aws_ec2 tcp://<SCHEDULER_IP>:8516 \
         --public-scheduler-address tcp://<SCHEDULER_EXTERNAL_IP>:8516 \
-        --object-storage-address tcp://<OSS_EXTERNAL_IP>:8517 \
+        --public-object-storage-address tcp://<OSS_EXTERNAL_IP>:8517 \
         --instance-type t3.medium \
         --python-version 3.13 \
         --requirements-txt "opengris-scaler>=1.26.6"
@@ -188,7 +188,7 @@ Or equivalently in a TOML file:
     type = "orb_aws_ec2"
     scheduler_address = "tcp://<SCHEDULER_IP>:8516"
     public_scheduler_address = "tcp://<SCHEDULER_EXTERNAL_IP>:8516"
-    object_storage_address = "tcp://<OSS_EXTERNAL_IP>:8517"
+    public_object_storage_address = "tcp://<OSS_EXTERNAL_IP>:8517"
     instance_type = "t3.medium"
     python_version = "3.13"
     requirements_txt = """
@@ -209,7 +209,7 @@ environment must be tightly controlled.
 
     scaler_worker_manager orb_aws_ec2 tcp://<SCHEDULER_IP>:8516 \
         --public-scheduler-address tcp://<SCHEDULER_EXTERNAL_IP>:8516 \
-        --object-storage-address tcp://<OSS_EXTERNAL_IP>:8517 \
+        --public-object-storage-address tcp://<OSS_EXTERNAL_IP>:8517 \
         --instance-type t3.medium \
         --image-id ami-0123456789abcdef0
 

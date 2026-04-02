@@ -25,9 +25,16 @@ class WorkerManagerConfig(ConfigClass):
         ),
     )
 
-    object_storage_address: Optional[ObjectStorageAddressConfig] = dataclasses.field(
+    public_object_storage_address: Optional[ObjectStorageAddressConfig] = dataclasses.field(
         default=None,
-        metadata=dict(short="-osa", help="specify the object storage server address, e.g.: tcp://localhost:2346"),
+        metadata=dict(
+            short="-posa",
+            help=(
+                "specify the object storage server address forwarded to spawned workers, e.g.: tcp://localhost:2346. "
+                "Use this when the manager and workers are on different networks (e.g. NAT/EC2 setups) "
+                "and the manager's local address is not reachable from remote workers."
+            ),
+        ),
     )
 
     max_task_concurrency: int = dataclasses.field(

@@ -357,9 +357,9 @@ nohup scaler_worker_manager baremetal_native {self._worker_scheduler_address.to_
             script += " \
     --hard-processor-suspend"
 
-        if adapter_config.object_storage_address:
+        if adapter_config.public_object_storage_address:
             script += f" \
-    --object-storage-address {adapter_config.object_storage_address.to_string()}"
+    --public-object-storage-address {adapter_config.public_object_storage_address.to_string()}"
 
         capabilities = worker_config.per_worker_capabilities.capabilities
         if capabilities:

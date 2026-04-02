@@ -29,7 +29,7 @@ The example below starts a scheduler and one native worker manager using ``vanil
             [[worker_manager]]
             type = "baremetal_native"
             scheduler_address = "tcp://127.0.0.1:8516"
-            object_storage_address = "tcp://127.0.0.1:8517"
+            public_object_storage_address = "tcp://127.0.0.1:8517"
             worker_manager_id = "NAT|default"
             max_task_concurrency = 8
 
@@ -48,7 +48,7 @@ The example below starts a scheduler and one native worker manager using ``vanil
                 --policy-engine-type simple \
                 --policy-content "allocate=even_load; scaling=vanilla" &
             $ scaler_worker_manager baremetal_native tcp://127.0.0.1:8516 \
-                --object-storage-address tcp://127.0.0.1:8517 \
+                --public-object-storage-address tcp://127.0.0.1:8517 \
                 --worker-manager-id NAT|default \
                 --max-task-concurrency 8
 

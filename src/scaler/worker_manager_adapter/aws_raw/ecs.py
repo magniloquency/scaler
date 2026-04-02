@@ -38,7 +38,7 @@ class ECSWorkerManager:
     def __init__(self, config: ECSWorkerManagerConfig):
         self._address = config.worker_manager_config.scheduler_address
         self._worker_scheduler_address = config.worker_manager_config.effective_worker_scheduler_address
-        self._object_storage_address = config.worker_manager_config.object_storage_address
+        self._object_storage_address = config.worker_manager_config.public_object_storage_address
         self._capabilities = config.worker_config.per_worker_capabilities.capabilities
         self._worker_manager_id = config.worker_manager_id.encode()
         self._io_threads = config.worker_config.io_threads
@@ -232,7 +232,7 @@ class ECSWorkerManager:
             command += " --hard-processor-suspend"
 
         if self._object_storage_address:
-            command += f" --object-storage-address {self._object_storage_address.to_string()}"
+            command += f" --public-object-storage-address {self._object_storage_address.to_string()}"
 
         if format_capabilities(self._capabilities).strip():
             command += f" --per-worker-capabilities {format_capabilities(self._capabilities)}"

@@ -95,7 +95,7 @@ class SchedulerClusterCombo:
             NativeWorkerManagerConfig(
                 worker_manager_config=WorkerManagerConfig(
                     scheduler_address=self._address,
-                    object_storage_address=self._object_storage_address,
+                    public_object_storage_address=self._object_storage_address,
                     max_task_concurrency=n_workers,
                 ),
                 worker_manager_id=worker_manager_id,

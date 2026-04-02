@@ -31,14 +31,14 @@ This example uses two native worker managers to simulate two tiers.
             [[worker_manager]]
             type = "baremetal_native"
             scheduler_address = "tcp://127.0.0.1:8516"
-            object_storage_address = "tcp://127.0.0.1:8517"
+            public_object_storage_address = "tcp://127.0.0.1:8517"
             worker_manager_id = "NAT|local1"
             max_task_concurrency = 8
 
             [[worker_manager]]
             type = "baremetal_native"
             scheduler_address = "tcp://127.0.0.1:8516"
-            object_storage_address = "tcp://127.0.0.1:8517"
+            public_object_storage_address = "tcp://127.0.0.1:8517"
             worker_manager_id = "NAT|burst1"
             max_task_concurrency = 50
 
@@ -57,11 +57,11 @@ This example uses two native worker managers to simulate two tiers.
                 --policy-engine-type waterfall_v1 \
                 --policy-content $'1,NAT|local1,8\n2,NAT|burst1,50' &
             $ scaler_worker_manager baremetal_native tcp://127.0.0.1:8516 \
-                --object-storage-address tcp://127.0.0.1:8517 \
+                --public-object-storage-address tcp://127.0.0.1:8517 \
                 --worker-manager-id NAT|local1 \
                 --max-task-concurrency 8 &
             $ scaler_worker_manager baremetal_native tcp://127.0.0.1:8516 \
-                --object-storage-address tcp://127.0.0.1:8517 \
+                --public-object-storage-address tcp://127.0.0.1:8517 \
                 --worker-manager-id NAT|burst1 \
                 --max-task-concurrency 50
 
