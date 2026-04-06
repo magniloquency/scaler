@@ -156,7 +156,7 @@ to finish login.
 Step 4 — Configure and Start Services
 ---------------------------------------
 
-Create a ``config.toml`` on the EC2 instance. Replace ``<EC2_PUBLIC_IP>`` and
+Create a ``stack.toml`` on the EC2 instance. Replace ``<EC2_PUBLIC_IP>`` and
 ``<EC2_PRIVATE_IP>`` with the values printed in Step 2.
 
 The scheduler's ``object_storage_address`` is advertised to connecting clients,
@@ -167,7 +167,7 @@ network.
 
 .. tabs::
 
-   .. group-tab:: config.toml
+   .. group-tab:: stack.toml
 
       .. code-block:: toml
 
@@ -199,7 +199,7 @@ network.
 
       .. code-block:: bash
 
-         scaler config.toml
+         scaler stack.toml
 
    .. group-tab:: command line
 

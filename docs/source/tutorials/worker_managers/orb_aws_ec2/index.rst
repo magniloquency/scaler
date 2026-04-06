@@ -152,7 +152,7 @@ at startup. ``opengris-scaler`` must be included in ``requirements_txt``.
 
 .. tabs::
 
-   .. group-tab:: config.toml
+   .. group-tab:: stack.toml
 
       .. code-block:: toml
 
@@ -174,7 +174,7 @@ at startup. ``opengris-scaler`` must be included in ``requirements_txt``.
 
       .. code-block:: bash
 
-         scaler config.toml
+         scaler stack.toml
 
    .. group-tab:: command line
 
@@ -208,7 +208,7 @@ worker environment must be tightly controlled.
 
 .. tabs::
 
-   .. group-tab:: config.toml
+   .. group-tab:: stack.toml
 
       .. code-block:: toml
 
@@ -225,7 +225,7 @@ worker environment must be tightly controlled.
 
       .. code-block:: bash
 
-         scaler config.toml
+         scaler stack.toml
 
    .. group-tab:: command line
 
