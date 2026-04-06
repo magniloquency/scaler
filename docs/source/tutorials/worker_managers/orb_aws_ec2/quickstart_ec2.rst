@@ -235,20 +235,12 @@ will be installed on each worker instance automatically.
    from scaler import Client
 
 
-   def normalize(arr):
-       return (arr - arr.mean()) / arr.std()
-
-
-   def dot_product(pair):
-       a, b = pair
-       return float(np.dot(a, b))
+   def sum_array(arr):
+       return float(np.sum(arr))
 
 
    with Client(address="tcp://<EC2_PUBLIC_IP>:6788") as client:
-       arrays = [np.random.rand(1000) for _ in range(20)]
-       normalized = client.map(normalize, arrays)
+       arrays = [np.random.rand(1000) for _ in range(100)]
+       results = client.map(sum_array, arrays)
 
-       pairs = list(zip(normalized, normalized[1:]))
-       dots = client.map(dot_product, pairs)
-
-   print(dots)
+   print(results)
