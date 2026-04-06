@@ -190,6 +190,7 @@ network.
          python_version = "3.14"
          requirements_txt = """
          opengris-scaler>=1.27.0
+         numpy
          """
          instance_type = "t3.medium"
          aws_region = "us-east-1"
@@ -213,7 +214,7 @@ network.
              --public-scheduler-address tcp://<EC2_PRIVATE_IP>:6788 \
              --object-storage-address tcp://<EC2_PRIVATE_IP>:6789 \
              --python-version 3.14 \
-             --requirements-txt "opengris-scaler>=1.27.0" \
+             --requirements-txt "opengris-scaler>=1.27.0 numpy" \
              --instance-type t3.medium \
              --aws-region us-east-1 \
              --logging-level INFO
@@ -225,16 +226,29 @@ From your **local machine**, connect to the scheduler using the EC2 public IP.
 The client automatically receives the object storage address from the scheduler —
 no additional configuration is needed.
 
+The example below uses ``numpy``, which is included in ``requirements_txt`` and
+will be installed on each worker instance automatically.
+
 .. code-block:: python
 
+   import numpy as np
    from scaler import Client
 
 
-   def square(value):
-       return value * value
+   def normalize(arr):
+       return (arr - arr.mean()) / arr.std()
+
+
+   def dot_product(pair):
+       a, b = pair
+       return float(np.dot(a, b))
 
 
    with Client(address="tcp://<EC2_PUBLIC_IP>:6788") as client:
-       results = client.map(square, range(0, 100))
+       arrays = [np.random.rand(1000) for _ in range(20)]
+       normalized = client.map(normalize, arrays)
 
-   print(results)
+       pairs = list(zip(normalized, normalized[1:]))
+       dots = client.map(dot_product, pairs)
+
+   print(dots)
