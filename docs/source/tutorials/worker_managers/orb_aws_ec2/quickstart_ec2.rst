@@ -214,7 +214,7 @@ network.
              --public-scheduler-address tcp://<EC2_PRIVATE_IP>:6788 \
              --object-storage-address tcp://<EC2_PRIVATE_IP>:6789 \
              --python-version 3.14 \
-             --requirements-txt "opengris-scaler>=1.27.0 numpy" \
+             --requirements-txt $'opengris-scaler>=1.27.0\nnumpy' \
              --instance-type t3.medium \
              --aws-region us-east-1 \
              --logging-level INFO
