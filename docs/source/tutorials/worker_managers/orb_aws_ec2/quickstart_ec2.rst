@@ -149,15 +149,15 @@ Connect to the instance:
 
    ssh -i scaler-key.pem ec2-user@$PUBLIC_IP
 
-Then, on the EC2 instance, install Python 3.14 and Scaler:
+Then, on the EC2 instance, install Python 3.13 and Scaler:
 
 .. code-block:: bash
 
    # Install Python 3.14
-   sudo dnf install -y python3.14
+   sudo dnf install -y python3.13
 
    # Create a virtualenv and install Scaler with all extras
-   python3.14 -m venv .venv
+   python3.13 -m venv .venv
    source .venv/bin/activate
    pip install opengris-scaler[all]
 
@@ -247,6 +247,12 @@ Step 5 — Connect a Client
 From your **local machine**, connect to the scheduler using the EC2 public IP.
 The client automatically receives the object storage address from the scheduler —
 no additional configuration is needed.
+
+.. note::
+
+   The local client must use the same Python version (3.13) and the same version
+   of ``opengris-scaler`` as the EC2 instance. Version mismatches can cause
+   serialization errors at runtime.
 
 The example below uses ``numpy``, which is included in ``requirements_txt`` and
 will be installed on each worker instance automatically.
