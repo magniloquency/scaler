@@ -9,9 +9,9 @@ After installing ``opengris-scaler``, the following CLI commands are available:
    * - Command
      - Description
    * - :ref:`scaler <cmd-scaler>`
-     - Start a full stack from one TOML file (scheduler + one or more worker managers).
+     - Start a full stack from one TOML file (object storage server + scheduler + one or more worker managers).
    * - :ref:`scaler_scheduler <cmd-scaler-scheduler>`
-     - Start only the scheduler process (and auto-start object storage when needed).
+     - Start only the scheduler process (connects to an existing object storage server).
    * - :ref:`scaler_worker_manager <cmd-scaler-worker-manager>`
      - Start one worker manager using a subcommand (``baremetal_native``, ``symphony``, ``aws_raw_ecs``, ``aws_hpc``, ``orb_aws_ec2``).
    * - :ref:`scaler_object_storage_server <cmd-scaler-object-storage-server>`
@@ -65,9 +65,11 @@ scaler
 sections as separate processes.
 
 - ``[scheduler]`` starts the scheduler.
+- ``[object_storage_server]`` starts the object storage server.
 - ``[[worker_manager]]`` starts one worker manager per table entry.
-- If ``object_storage_address`` is omitted in ``[scheduler]``, the scheduler auto-starts
-  object storage at ``scheduler_address.port + 1``.
+- ``object_storage_address`` is required in ``[scheduler]`` and points to the object storage server.
+- ``advertised_object_storage_address`` is optional and lets scheduler advertise a
+  different public object storage endpoint to clients/workers.
 
 .. code-block:: bash
 
@@ -82,12 +84,14 @@ Scaler examples
 
         .. code-block:: toml
 
+            [object_storage_server]
+            bind_address = "tcp://127.0.0.1:6379"
+
             [scheduler]
-            scheduler_address = "tcp://127.0.0.1:6378"
-            # for following object_storage_address
-            # - if omitted, object storage is auto-started at scheduler port + 1
-            # - if specified, scheduler will connect to specified address without start one
-            # object_storage_address = "tcp://127.0.0.1:6379"
+            bind_address = "tcp://127.0.0.1:6378"
+            object_storage_address = "tcp://127.0.0.1:6379"
+            # optional public endpoint advertised to clients/workers
+            # advertised_object_storage_address = "tcp://203.0.113.10:6379"
             monitor_address = "tcp://127.0.0.1:6380"
             policy_engine_type = "simple"
             policy_content = "allocate=even_load; scaling=no"
@@ -161,12 +165,14 @@ If no recognized sections are present, ``scaler`` exits with an error.
 scaler_scheduler
 ----------------
 
-``scaler_scheduler`` starts only the scheduler process. If ``--object-storage-address`` is
-not supplied, object storage is created automatically on ``scheduler port + 1``.
+``scaler_scheduler`` starts only the scheduler process and requires two addresses:
+``<bind_address>`` to bind and ``--object-storage-address`` to connect.
+Use ``--advertised-object-storage-address`` when clients/workers should connect through a
+different public endpoint.
 
 .. code-block:: bash
 
-    scaler_scheduler [options] <scheduler_address>
+    scaler_scheduler [options] <bind_address>
 
 Scheduler examples
 ~~~~~~~~~~~~~~~~~~
@@ -178,11 +184,10 @@ Scheduler examples
         .. code-block:: toml
 
             [scheduler]
-            scheduler_address = "tcp://127.0.0.1:6378"
-            # for following object_storage_address
-            # - if omitted, object storage is auto-started at scheduler port + 1
-            # - if specified, scheduler will connect to specified address without start one
-            # object_storage_address = "tcp://127.0.0.1:6379"
+            bind_address = "tcp://127.0.0.1:6378"
+            object_storage_address = "tcp://127.0.0.1:6379"
+            # optional public endpoint advertised to clients/workers
+            # advertised_object_storage_address = "tcp://203.0.113.10:6379"
             monitor_address = "tcp://127.0.0.1:6380"
             policy_engine_type = "simple"
             policy_content = "allocate=even_load; scaling=no"
@@ -200,6 +205,7 @@ Scheduler examples
 
             scaler_scheduler tcp://127.0.0.1:6378 \
                 --object-storage-address tcp://127.0.0.1:6379 \
+                --advertised-object-storage-address tcp://203.0.113.10:6379 \
                 --monitor-address tcp://127.0.0.1:6380 \
                 --policy-engine-type simple \
                 --policy-content "allocate=even_load; scaling=no" \
@@ -215,18 +221,22 @@ Scheduler arguments
      - Required
      - Default
      - Description
-   * - ``scheduler_address``
+   * - ``bind_address``
      - Yes
      - -
      - Scheduler bind address (for example ``tcp://127.0.0.1:6378``).
    * - ``-osa``, ``--object-storage-address``
-     - No
-     - Auto from scheduler address
+     - Yes
+     - -
      - Object storage address (must be ``tcp://<ip>:<port>``).
+   * - ``-aosa``, ``--advertised-object-storage-address``
+     - No
+     - Same as ``object_storage_address``
+     - Public object storage address advertised to clients/workers.
    * - ``-ma``, ``--monitor-address``
      - No
-     - Auto from scheduler address
-     - Monitor endpoint, defaults to ``scheduler_address.port + 2``.
+     - Auto from bind address
+     - Monitor endpoint, defaults to ``bind_address.port + 2``.
    * - ``-p``, ``--protected``
      - No
      - ``False``
@@ -322,7 +332,7 @@ When ``--protected`` is enabled, client shutdown requests cannot stop the schedu
 
 .. code-block:: bash
 
-    scaler_scheduler tcp://127.0.0.1:8516 --protected
+    scaler_scheduler tcp://127.0.0.1:8516 --object-storage-address tcp://127.0.0.1:8517 --protected
 
 Event loop selection
 ^^^^^^^^^^^^^^^^^^^^
@@ -332,7 +342,7 @@ The scheduler uses ``builtin`` event loop by default. You can switch to ``uvloop
 .. code-block:: bash
 
     pip install uvloop
-    scaler_scheduler tcp://127.0.0.1:8516 -el uvloop
+    scaler_scheduler tcp://127.0.0.1:8516 --object-storage-address tcp://127.0.0.1:8517 -el uvloop
 
 
 .. _cmd-scaler-worker-manager:
@@ -373,7 +383,11 @@ Arguments (shared by all subcommands)
    * - ``scheduler_address``
      - Yes
      - -
-     - Scheduler address that workers connect to.
+     - Scheduler address that the worker manager process connects to.
+   * - ``-wsa``, ``--worker-scheduler-address``
+     - No
+     - Same as ``scheduler_address``
+     - Scheduler address advertised to spawned workers; use this when workers need a different/public endpoint.
    * - ``-wmi``, ``--worker-manager-id``
      - Yes
      - -
@@ -840,7 +854,7 @@ scaler_object_storage_server
 
 .. code-block:: bash
 
-    scaler_object_storage_server [options] <object_storage_address>
+    scaler_object_storage_server [options] <bind_address>
 
 Object storage examples
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -852,7 +866,7 @@ Object storage examples
         .. code-block:: toml
 
             [object_storage_server]
-            object_storage_address = "tcp://127.0.0.1:6379"
+            bind_address = "tcp://127.0.0.1:6379"
 
         Run command:
 
@@ -875,7 +889,7 @@ Object storage arguments
    * - Argument
      - Required
      - Description
-   * - ``object_storage_address``
+   * - ``bind_address``
      - Yes
      - Storage bind address in ``tcp://<ip>:<port>`` format.
    * - ``-c``, ``--config``

@@ -83,7 +83,7 @@ class SchedulerClusterCombo:
             self._monitor_address = ZMQConfig.from_string(monitor_address)
 
         self._object_storage = ObjectStorageServerProcess(
-            object_storage_address=self._object_storage_address,
+            bind_address=self._object_storage_address,
             logging_paths=logging_paths,
             logging_level=logging_level,
             logging_config_file=logging_config_file,
@@ -119,8 +119,9 @@ class SchedulerClusterCombo:
         self._worker_manager_process = multiprocessing.Process(target=self._worker_manager.run)
 
         self._scheduler = SchedulerProcess(
-            address=self._address,
+            bind_address=self._address,
             object_storage_address=self._object_storage_address,
+            advertised_object_storage_address=None,
             monitor_address=self._monitor_address,
             io_threads=scheduler_io_threads,
             max_number_of_tasks_waiting=max_number_of_tasks_waiting,

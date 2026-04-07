@@ -57,7 +57,7 @@ class TestScaling(unittest.TestCase):
 
     def test_scaling_basic(self):
         object_storage = ObjectStorageServerProcess(
-            object_storage_address=self.object_storage_config,
+            bind_address=self.object_storage_config,
             logging_paths=("/dev/stdout",),
             logging_config_file=None,
             logging_level="INFO",
@@ -66,8 +66,9 @@ class TestScaling(unittest.TestCase):
         object_storage.wait_until_ready()
 
         scheduler = SchedulerProcess(
-            address=ZMQConfig.from_string(self.scheduler_address),
+            bind_address=ZMQConfig.from_string(self.scheduler_address),
             object_storage_address=self.object_storage_config,
+            advertised_object_storage_address=None,
             monitor_address=None,
             policy=PolicyConfig(policy_content="allocate=even_load; scaling=vanilla"),
             io_threads=DEFAULT_IO_THREADS,
@@ -103,7 +104,7 @@ class TestScaling(unittest.TestCase):
     def test_capability_scaling_basic(self):
         """Test that capability scaling starts workers with the correct capabilities."""
         object_storage = ObjectStorageServerProcess(
-            object_storage_address=self.object_storage_config,
+            bind_address=self.object_storage_config,
             logging_paths=("/dev/stdout",),
             logging_config_file=None,
             logging_level="INFO",
@@ -112,8 +113,9 @@ class TestScaling(unittest.TestCase):
         object_storage.wait_until_ready()
 
         scheduler = SchedulerProcess(
-            address=ZMQConfig.from_string(self.scheduler_address),
+            bind_address=ZMQConfig.from_string(self.scheduler_address),
             object_storage_address=self.object_storage_config,
+            advertised_object_storage_address=None,
             monitor_address=None,
             io_threads=DEFAULT_IO_THREADS,
             max_number_of_tasks_waiting=DEFAULT_MAX_NUMBER_OF_TASKS_WAITING,
