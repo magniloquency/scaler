@@ -32,6 +32,8 @@ Before using the ORB AWS EC2 worker manager, make sure:
 * Python is installed on the machine that runs the worker manager.
 * The scheduler host can be reached from provisioned AWS workers. If your scheduler is behind a firewall/private network, set up NAT so workers can connect back to the scheduler.
 
+.. _orb_aws_ec2_permissions:
+
 AWS Permissions
 ~~~~~~~~~~~~~~~
 
@@ -43,7 +45,16 @@ AWS Permissions
 
    .. group-tab:: IAM User
 
-      If you are using the root account, first create an IAM user. Before running
+      If you are not using the root account, attach the ``SignInLocalDevelopmentAccess``
+      AWS managed policy to your IAM user so that ``aws login`` (SSO) works:
+
+      .. code-block:: bash
+
+         aws iam attach-user-policy \
+           --user-name <YOUR_USER> \
+           --policy-arn arn:aws:iam::aws:policy/SignInLocalDevelopmentAccess
+
+      Then create and attach the EC2 provisioning policy. Before running
       the commands below, prepare these values:
 
       * IAM user name (for ``--user-name``)

@@ -9,8 +9,16 @@ to the scheduler and object storage via private VPC addresses — no NAT or
 port-forwarding required. Your local machine connects to the EC2 instance using
 its public IP.
 
-Step 1 — Install AWS CLI (Local Machine)
------------------------------------------
+Step 1 — Install Prerequisites (Local Machine)
+-----------------------------------------------
+
+Install the Scaler client package on your local machine:
+
+.. code-block:: bash
+
+   pip install opengris-scaler
+
+Install AWS CLI v2:
 
 .. warning::
 
@@ -42,6 +50,12 @@ Then authenticate with AWS CLI:
 .. code-block:: bash
 
    aws login
+
+.. note::
+
+   If you are not using the root account, your IAM user must have the
+   ``SignInLocalDevelopmentAccess`` managed policy attached to use ``aws login``.
+   See :ref:`orb_aws_ec2_permissions` for full AWS permission requirements.
 
 Click the page link and proceed in your default browser to sign in, then
 follow the AWS CLI instructions in the terminal.
@@ -138,10 +152,10 @@ Then, on the EC2 instance, install Python 3.14 and Scaler:
    # Install Python 3.14
    sudo dnf install -y python3.14
 
-   # Create a virtualenv and install Scaler with ORB extras
+   # Create a virtualenv and install Scaler with all extras
    python3.14 -m venv .venv
    source .venv/bin/activate
-   pip install opengris-scaler[orb]
+   pip install opengris-scaler[all]
 
 Then authenticate with AWS from the remote instance:
 
@@ -159,8 +173,9 @@ Step 4 — Configure and Start Services
 Create a ``stack.toml`` on the EC2 instance. Replace ``<EC2_PUBLIC_IP>`` and
 ``<EC2_PRIVATE_IP>`` with the values printed in Step 2.
 
-The scheduler's ``object_storage_address`` is advertised to connecting clients,
-so it must be set to the EC2 **public** IP. The worker manager's
+The scheduler's ``advertised_object_storage_address`` is forwarded to connecting
+clients, so it must be set to the EC2 **public** IP. The ``object_storage_address``
+points to the local object storage server. The worker manager's
 ``object_storage_address`` and ``worker_scheduler_address`` use the EC2
 **private** IP so that ORB-provisioned workers stay on the faster internal VPC
 network.
@@ -172,13 +187,15 @@ network.
       .. code-block:: toml
 
          [object_storage_server]
-         object_storage_address = "tcp://0.0.0.0:6789"
+         bind_address = "tcp://0.0.0.0:6789"
 
          [scheduler]
          # bind on all interfaces so both the local client and workers can reach this instance
-         scheduler_address = "tcp://0.0.0.0:6788"
+         bind_address = "tcp://0.0.0.0:6788"
+         # connect to the local object storage server
+         object_storage_address = "tcp://localhost:6789"
          # advertise the public IP as the object storage address so clients can connect from outside AWS
-         object_storage_address = "tcp://<EC2_PUBLIC_IP>:6789"
+         advertised_object_storage_address = "tcp://<EC2_PUBLIC_IP>:6789"
 
          [[worker_manager]]
          type = "orb_aws_ec2"
@@ -208,7 +225,8 @@ network.
 
          scaler_object_storage_server tcp://0.0.0.0:6789 &
          scaler_scheduler tcp://0.0.0.0:6788 \
-             --object-storage-address tcp://<EC2_PUBLIC_IP>:6789 &
+             --object-storage-address tcp://localhost:6789 \
+             --advertised-object-storage-address tcp://<EC2_PUBLIC_IP>:6789 &
          scaler_worker_manager orb_aws_ec2 tcp://127.0.0.1:6788 \
              --worker-manager-id wm-orb \
              --public-scheduler-address tcp://<EC2_PRIVATE_IP>:6788 \
