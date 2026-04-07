@@ -76,6 +76,9 @@ Run on your **local machine**:
 
 .. code-block:: bash
 
+   # Disable the AWS CLI pager so all commands run without interruption
+   export AWS_PAGER=""
+
    # Discover the latest Amazon Linux 2023 AMI in your region
    AMI_ID=$(aws ec2 describe-images \
      --owners amazon \
@@ -119,6 +122,7 @@ Run on your **local machine**:
      --instance-type c5.xlarge \
      --key-name scaler-key \
      --security-group-ids $SG_ID \
+     --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=scaler-scheduler}]" \
      --query "Instances[0].InstanceId" \
      --output text)
 
@@ -193,7 +197,7 @@ network.
          # bind on all interfaces so both the local client and workers can reach this instance
          bind_address = "tcp://0.0.0.0:6788"
          # connect to the local object storage server
-         object_storage_address = "tcp://localhost:6789"
+         object_storage_address = "tcp://127.0.0.1:6789"
          # advertise the public IP as the object storage address so clients can connect from outside AWS
          advertised_object_storage_address = "tcp://<EC2_PUBLIC_IP>:6789"
 
@@ -225,7 +229,7 @@ network.
 
          scaler_object_storage_server tcp://0.0.0.0:6789 &
          scaler_scheduler tcp://0.0.0.0:6788 \
-             --object-storage-address tcp://localhost:6789 \
+             --object-storage-address tcp://127.0.0.1:6789 \
              --advertised-object-storage-address tcp://<EC2_PUBLIC_IP>:6789 &
          scaler_worker_manager orb_aws_ec2 tcp://127.0.0.1:6788 \
              --worker-manager-id wm-orb \
