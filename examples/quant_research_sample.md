@@ -31,33 +31,6 @@ cd quant-research-sample-using-amazon-ecs-and-aws-batch/samples/order_flow_ray
 The patches below add local-filesystem data access and a Scaler-native entry point.
 Apply each one in order.
 
-### `pyproject.toml` (new file — project root of the sample)
-
-Create `samples/order_flow_ray/pyproject.toml`:
-
-```toml
-[build-system]
-requires = ["setuptools>=68"]
-build-backend = "setuptools.build_meta"
-
-[project]
-name = "order_flow_ray"
-version = "0.1.0"
-requires-python = ">=3.10"
-dependencies = [
-    "polars",
-    "boto3",
-    "botocore",
-    "pyarrow",
-    "opengris-scaler",
-]
-
-[tool.setuptools.packages.find]
-where = ["src"]
-```
-
----
-
 ### `src/data_preprocessing/data_access/__init__.py`
 
 Lazy-load `S3TablesDataAccess` so `pyiceberg` is not required for local runs.
