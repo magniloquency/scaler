@@ -424,7 +424,6 @@ def remote(*args, **kwargs) -> Union[RayRemote, Callable]:
         A RayRemote instance that can be called with `.remote()`, or a decorator
         that produces a RayRemote instance.
     """
-    ensure_init()
 
     def _decorator(fn: Callable) -> RayRemote:
         if isinstance(fn, type):  # Check if 'fn' is a class
