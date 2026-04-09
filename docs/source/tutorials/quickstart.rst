@@ -26,7 +26,7 @@ Then create and activate a virtual environment with Python 3.13 and install Open
 
     uv venv --python 3.13
     source .venv/bin/activate
-    uv pip install opengris-scaler[all]
+    uv pip install 'opengris-scaler[all]'
 
 See :ref:`installation_options` for other install choices and optional dependencies.
 
