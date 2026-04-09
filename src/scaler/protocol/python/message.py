@@ -371,13 +371,9 @@ class WorkerManagerHeartbeat(Message):
     def worker_manager_id(self) -> bytes:
         return self._msg.workerManagerID
 
-    @property
-    def pending_workers(self) -> int:
-        return self._msg.pendingWorkers
-
     @staticmethod
     def new_msg(
-        max_task_concurrency: int, capabilities: Dict[str, int], worker_manager_id: bytes, pending_workers: int = 0
+        max_task_concurrency: int, capabilities: Dict[str, int], worker_manager_id: bytes
     ) -> "WorkerManagerHeartbeat":
         return WorkerManagerHeartbeat(
             _message.WorkerManagerHeartbeat(
@@ -386,7 +382,6 @@ class WorkerManagerHeartbeat(Message):
                     TaskCapability.new_msg(name, value).get_message() for name, value in capabilities.items()
                 ],
                 workerManagerID=worker_manager_id,
-                pendingWorkers=pending_workers,
             )
         )
 

@@ -90,7 +90,6 @@ struct WorkerManagerHeartbeat {
     maxTaskConcurrency @0 :UInt32;
     capabilities @1 :List(CommonType.TaskCapability);
     workerManagerID @2 :Data;
-    pendingWorkers @3 :UInt32;
 }
 
 struct WorkerManagerHeartbeatEcho {
