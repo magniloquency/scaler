@@ -1,22 +1,20 @@
+.. _orb_aws_ec2_ec2_quick_setup:
+
 ORB AWS EC2 Quickstart (EC2)
 ============================
 
-.. _orb_aws_ec2_ec2_quick_setup:
+.. image:: /_static/orb_aws_ec2_architecture.svg
+   :alt: ORB AWS EC2 architecture diagram
+   :align: center
 
-This quickstart runs the Scaler scheduler, object storage server, and ORB worker
-manager on a fresh EC2 instance. Because all services are in AWS, workers connect
-to the scheduler and object storage via private VPC addresses — no NAT or
-port-forwarding required. Your local machine connects to the EC2 instance using
-its public IP.
+|
 
-Step 1 — Install Prerequisites (Local Machine)
------------------------------------------------
+This quickstart deploys the Scaler scheduler, object storage server, and ORB worker
+manager on a single EC2 instance. Workers connect via the private VPC network; your
+local machine connects via the public IP.
 
-Install the Scaler client package on your local machine:
-
-.. code-block:: bash
-
-   pip install opengris-scaler
+Step 1 — Install AWS CLI (Local Machine)
+-----------------------------------------
 
 Install AWS CLI v2:
 
@@ -36,6 +34,12 @@ Install AWS CLI v2:
          sudo ./aws/install
 
          aws --version
+
+      Example output:
+
+      .. code-block:: text
+
+         aws-cli/2.17.0 Python/3.12.3 Linux/6.1.0 exe/x86_64.ubuntu.22
 
    .. group-tab:: Linux ARM64
 
@@ -59,6 +63,13 @@ Then authenticate with AWS CLI:
 
 Click the page link and proceed in your default browser to sign in, then
 follow the AWS CLI instructions in the terminal.
+
+Example output:
+
+.. code-block:: text
+
+   Opening browser to: https://device.sso.us-east-1.amazonaws.com/?user_code=ABCD-EFGH
+   Successfully logged into Start URL: https://my-org.awsapps.com/start
 
 Step 2 — Launch an EC2 Instance
 ---------------------------------
@@ -138,28 +149,42 @@ Run on your **local machine**:
    echo "Public IP:  $PUBLIC_IP"
    echo "Private IP: $PRIVATE_IP"
 
+Example output:
+
+.. code-block:: text
+
+   Public IP:  54.123.45.67
+   Private IP: 172.31.12.34
+
 Keep note of both IP addresses — you will use them in the configuration below.
 
 Step 3 — SSH In and Install Scaler
 ------------------------------------
 
-Connect to the instance:
+Connect to the instance (**local machine**):
 
 .. code-block:: bash
 
    ssh -i scaler-key.pem ec2-user@$PUBLIC_IP
 
-Then, on the EC2 instance, install Python 3.13 and Scaler:
+Then, on the **EC2 instance**, install uv and Scaler:
 
 .. code-block:: bash
 
-   # Install Python 3.14
-   sudo dnf install -y python3.13
+   # Install uv
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   source $HOME/.local/bin/env
 
-   # Create a virtualenv and install Scaler with all extras
-   python3.13 -m venv .venv
-   source .venv/bin/activate
-   pip install opengris-scaler[all]
+   # Install Scaler with all extras using Python 3.13
+   uv pip install opengris-scaler[all] --python 3.13
+
+Example output:
+
+.. code-block:: text
+
+   Resolved 42 packages in 1.23s
+   Installed 42 packages in 3.45s
+    + opengris-scaler[all]==2.0.9
 
 Then authenticate with AWS from the remote instance:
 
@@ -171,10 +196,17 @@ Open the URL printed by the command in your local browser, complete sign-in,
 then copy the returned code/token and paste it back into the remote terminal
 to finish login.
 
-Step 4 — Configure and Start Services
----------------------------------------
+Example output:
 
-Create a ``stack.toml`` on the EC2 instance. Replace ``<EC2_PUBLIC_IP>`` and
+.. code-block:: text
+
+   Opening browser to: https://device.sso.us-east-1.amazonaws.com/?user_code=WXYZ-1234
+   Successfully logged into Start URL: https://my-org.awsapps.com/start
+
+Step 4 — Start Services
+------------------------
+
+Create a ``config.toml`` on the **EC2 instance**. Replace ``<EC2_PUBLIC_IP>`` and
 ``<EC2_PRIVATE_IP>`` with the values printed in Step 2.
 
 The scheduler's ``advertised_object_storage_address`` is forwarded to connecting
@@ -186,7 +218,7 @@ network.
 
 .. tabs::
 
-   .. group-tab:: stack.toml
+   .. group-tab:: config.toml
 
       .. code-block:: toml
 
@@ -208,7 +240,7 @@ network.
          # workers run in the same VPC — use the private IP for lower latency
          worker_scheduler_address = "tcp://<EC2_PRIVATE_IP>:6788"
          object_storage_address = "tcp://<EC2_PRIVATE_IP>:6789"
-         python_version = "3.14"
+         python_version = "3.13"
          requirements_txt = """
          opengris-scaler>=1.27.0
          numpy
@@ -221,7 +253,15 @@ network.
 
       .. code-block:: bash
 
-         scaler stack.toml
+         scaler config.toml
+
+      Example output:
+
+      .. code-block:: text
+
+         [INFO] ObjectStorageServer listening on tcp://0.0.0.0:6789
+         [INFO] Scheduler listening on tcp://0.0.0.0:6788
+         [INFO] ORBWorkerManager started, worker_manager_id=wm-orb
 
    .. group-tab:: command line
 
@@ -235,7 +275,7 @@ network.
              --worker-manager-id wm-orb \
              --public-scheduler-address tcp://<EC2_PRIVATE_IP>:6788 \
              --object-storage-address tcp://<EC2_PRIVATE_IP>:6789 \
-             --python-version 3.14 \
+             --python-version 3.13 \
              --requirements-txt $'opengris-scaler>=1.27.0\nnumpy' \
              --instance-type t3.medium \
              --aws-region us-east-1 \
@@ -272,3 +312,5 @@ will be installed on each worker instance automatically.
        results = client.map(sum_array, arrays)
 
    print(results)
+
+Once connected, see :ref:`quickstart_start_compute_tasks` for more example workloads.

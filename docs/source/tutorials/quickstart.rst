@@ -4,82 +4,160 @@ Quickstart
 Quick Installation
 ------------------
 
-.. code:: bash
+Install `uv <https://docs.astral.sh/uv/getting-started/installation>`_:
 
-    pip install opengris-scaler[all]
+.. tabs::
+
+    .. group-tab:: Linux / macOS
+
+        .. code-block:: bash
+
+            curl -LsSf https://astral.sh/uv/install.sh | sh
+
+    .. group-tab:: Windows
+
+        .. code-block:: powershell
+
+            powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.sh | iex"
+
+Then create and activate a virtual environment with Python 3.13 and install OpenGRIS Scaler:
+
+.. code-block:: bash
+
+    uv venv --python 3.13
+    source .venv/bin/activate
+    uv pip install opengris-scaler[all]
 
 See :ref:`installation_options` for other install choices and optional dependencies.
 
 Start Services
 --------------
 
-The instructions below start a local scheduler with an elastic native worker
-manager (``baremetal_native``). If you want to run scheduler + worker manager
-locally but provision workers on cloud infrastructure, use these quick starts:
-
-* :ref:`Open Resource Broker AWS EC2 Quick Start (EC2) <orb_aws_ec2_ec2_quick_setup>`.
-* :ref:`AWS HPC Batch Quick Start <aws_hpc_batch_quick_start>`.
-
 .. tabs::
 
-    .. group-tab:: config.toml
+    .. group-tab:: Local Scaler Cluster
+
+        The instructions below start a local scheduler with an elastic native worker
+        manager (``baremetal_native``).
+
+        .. tabs::
+
+            .. group-tab:: config.toml
+
+                .. code-block:: toml
+
+                    [object_storage_server]
+                    bind_address = "tcp://127.0.0.1:8517"
+
+                    [scheduler]
+                    bind_address = "tcp://127.0.0.1:8516"
+                    object_storage_address = "tcp://127.0.0.1:8517"
+
+                    [[worker_manager]]
+                    type = "baremetal_native"
+                    scheduler_address = "tcp://127.0.0.1:8516"
+                    worker_manager_id = "wm-native"
+
+                Run command:
+
+                .. code-block:: bash
+
+                    scaler config.toml
+
+            .. group-tab:: command line
+
+                In terminal 1:
+
+                .. code-block:: bash
+
+                    scaler_object_storage_server tcp://127.0.0.1:8517
+
+                In terminal 2:
+
+                .. code-block:: bash
+
+                    scaler_scheduler tcp://127.0.0.1:8516 --object-storage-address tcp://127.0.0.1:8517
+
+                In terminal 3:
+
+                .. code-block:: bash
+
+                    scaler_worker_manager baremetal_native tcp://127.0.0.1:8516 --worker-manager-id wm-native
+
+    .. group-tab:: Remote AWS EC2 Cluster
+
+        Run the scheduler, object storage server, and ORB worker manager on an EC2
+        instance. Workers are provisioned automatically in the same VPC.
 
         .. code-block:: toml
+            :caption: config.toml (on the EC2 instance)
 
             [object_storage_server]
-            bind_address = "tcp://127.0.0.1:8517"
+            bind_address = "tcp://0.0.0.0:6789"
 
             [scheduler]
-            bind_address = "tcp://127.0.0.1:8516"
-            object_storage_address = "tcp://127.0.0.1:8517"
+            bind_address = "tcp://0.0.0.0:6788"
+            object_storage_address = "tcp://127.0.0.1:6789"
+            advertised_object_storage_address = "tcp://<EC2_PUBLIC_IP>:6789"
 
             [[worker_manager]]
-            type = "baremetal_native"
-            scheduler_address = "tcp://127.0.0.1:8516"
-            worker_manager_id = "wm-native"
-
-        Run command:
+            type = "orb_aws_ec2"
+            scheduler_address = "tcp://127.0.0.1:6788"
+            worker_manager_id = "wm-orb"
+            worker_scheduler_address = "tcp://<EC2_PRIVATE_IP>:6788"
+            object_storage_address = "tcp://<EC2_PRIVATE_IP>:6789"
+            python_version = "3.13"
+            requirements_txt = """
+            opengris-scaler>=1.27.0
+            numpy
+            """
+            instance_type = "t3.medium"
+            aws_region = "us-east-1"
 
         .. code-block:: bash
 
             scaler config.toml
 
-    .. group-tab:: command line
+        See :ref:`orb_aws_ec2_ec2_quick_setup` for full setup instructions.
 
-        In terminal 1:
+    .. group-tab:: Remote AWS HPC Batch Cluster
+
+        Run the scheduler and worker manager locally; tasks execute as AWS Batch jobs.
+
+        .. code-block:: toml
+            :caption: config.toml
+
+            [object_storage_server]
+            bind_address = "tcp://127.0.0.1:2346"
+
+            [scheduler]
+            bind_address = "tcp://127.0.0.1:2345"
+            object_storage_address = "tcp://127.0.0.1:2346"
+
+            [[worker_manager]]
+            type = "aws_hpc"
+            scheduler_address = "tcp://127.0.0.1:2345"
+            object_storage_address = "tcp://127.0.0.1:2346"
+            worker_manager_id = "wm-batch"
+            job_queue = "scaler-batch-queue"
+            job_definition = "scaler-batch-job"
+            s3_bucket = "scaler-batch-<account-id>-us-east-1"
+            aws_region = "us-east-1"
 
         .. code-block:: bash
 
-            scaler_object_storage_server tcp://127.0.0.1:8517
+            scaler config.toml
 
-        In terminal 2:
+        See :ref:`aws_hpc_batch_quick_start` for full setup instructions.
 
-        .. code-block:: bash
-
-            scaler_scheduler tcp://127.0.0.1:8516 --object-storage-address tcp://127.0.0.1:8517
-
-        In terminal 3:
-
-        .. code-block:: bash
-
-            scaler_worker_manager baremetal_native tcp://127.0.0.1:8516 --worker-manager-id wm-native
-
+.. _quickstart_start_compute_tasks:
 
 Start Compute Tasks
 -------------------
 
-Connect the Python client and submit tasks:
+See the application examples for real-world usage patterns:
 
-.. code:: python
-
-    from scaler import Client
-
-
-    def square(value):
-        return value * value
-
-
-    with Client(address="tcp://127.0.0.1:8516") as client:
-        results = client.map(square, range(0, 100))
-
-    print(results)
+* :doc:`Calculate Implied Volatility <application_examples/implied_volatility>`
+* :doc:`Option Close Price <application_examples/option_close_price>`
+* :doc:`Distributed Image Processing <application_examples/distributed_image_processing>`
+* :doc:`Parallel Timeseries Cross-Validation <application_examples/parallel_timeseries_cross_validation>`
