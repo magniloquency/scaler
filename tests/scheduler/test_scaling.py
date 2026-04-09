@@ -594,6 +594,22 @@ class TestVanillaScalingPolicy(unittest.TestCase):
         start_cmds = [c for c in commands if c.command == WorkerManagerCommandType.StartWorkers]
         self.assertEqual(len(start_cmds), 1)
 
+    # TODO: uncomment once finos/opengris-scaler#696 is resolved.
+    # maxTaskConcurrency is UInt32 in Cap'n Proto and cannot represent -1, so
+    # WorkerManagerHeartbeat.new_msg(max_task_concurrency=-1, ...) currently raises KjException.
+    # def test_unlimited_concurrency_ignores_pending(self):
+    #     """When max_concurrency == -1, StartWorkers is issued regardless of pending count."""
+    #     tid = TaskID.generate_task_id()
+    #     snapshot = InformationSnapshot(tasks={tid: _create_mock_task(tid, {})}, workers={})
+    #     heartbeat = _create_worker_manager_heartbeat(b"mgr", max_task_concurrency=-1)
+    #     manager_snapshot = WorkerManagerSnapshot(
+    #         worker_manager_id=b"mgr", max_task_concurrency=-1,
+    #         worker_count=0, last_seen_s=0.0, pending_worker_count=1000,
+    #     )
+    #     commands = self.policy.get_scaling_commands(snapshot, heartbeat, [], {}, {b"mgr": manager_snapshot})
+    #     start_cmds = [c for c in commands if c.command == WorkerManagerCommandType.StartWorkers]
+    #     self.assertEqual(len(start_cmds), 1)
+
 
 class TestWorkerManagerControllerPendingTracking(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
