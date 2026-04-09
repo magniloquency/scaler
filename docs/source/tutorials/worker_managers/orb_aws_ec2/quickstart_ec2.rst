@@ -255,7 +255,7 @@ network.
 
          scaler config.toml
 
-      Example output:
+      Example output (truncated):
 
       .. code-block:: text
 
