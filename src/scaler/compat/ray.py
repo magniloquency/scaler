@@ -216,7 +216,11 @@ patch("ray.is_initialized", new=is_initialized).start()
 def ensure_init():
     """
     This is an internal function that ensures the Scaler client is initialized, calling `init()` with
-    default parameters if it is not.
+    default parameters if it is not already initialized.
+
+    Called lazily at `.remote()` invocation time so that callers who need a custom configuration (via
+    `scaler_init()`) can apply decorators at module import time and still call `scaler_init()` before
+    submitting any tasks.
     """
     if not is_initialized():
         scaler_init()
@@ -353,8 +357,7 @@ class RayRemote(Generic[P, T]):
             A RayObjectReference that can be used to retrieve the result,
             or a list of RayObjectReferences if num_returns > 1.
         """
-        if not is_initialized():
-            raise RuntimeError("Scaler is not initialized")
+        ensure_init()
 
         # Ray supports passing object references into other remote functions
         # so we must take special care to get their values
