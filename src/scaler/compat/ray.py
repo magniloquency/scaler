@@ -408,6 +408,7 @@ def put(obj: Any) -> ObjectReference:
     Returns:
         An ObjectReference that can be used to retrieve the object.
     """
+    ensure_init()
     return client.send_object(obj)
 
 
