@@ -3,28 +3,28 @@
 Installation
 ============
 
-The ``opengris-scaler`` package is available on PyPI and can be installed using any compatible package manager.
+The ``opengris-scaler`` package is available on PyPI and can be installed using any compatible package manager. The examples below use `uv <https://docs.astral.sh/uv/getting-started/installation>`_.
 
 Base installation:
 
-.. code:: bash
+.. code-block:: bash
 
-    pip install opengris-scaler
+    uv pip install opengris-scaler
 
 If you need the web GUI:
 
-.. code:: bash
+.. code-block:: bash
 
-    pip install opengris-scaler[gui]
+    uv pip install opengris-scaler[gui]
 
 If you use GraphBLAS to solve DAG graph tasks:
 
-.. code:: bash
+.. code-block:: bash
 
-    pip install opengris-scaler[graphblas]
+    uv pip install opengris-scaler[graphblas]
 
 If you need all optional dependencies:
 
-.. code:: bash
+.. code-block:: bash
 
-    pip install opengris-scaler[all]
+    uv pip install opengris-scaler[all]

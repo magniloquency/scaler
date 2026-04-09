@@ -74,12 +74,12 @@ Start Services
 
 Before starting services, make sure NAT setup is complete. If this machine
 already has a public IP, you can ignore NAT setup. Then copy the
-``stack.toml`` below and replace ``PUBLIC_IP`` with your real public IP
+``config.toml`` below and replace ``PUBLIC_IP`` with your real public IP
 address.
 
 .. tabs::
 
-   .. group-tab:: stack.toml
+   .. group-tab:: config.toml
 
       .. code-block:: toml
 
@@ -117,7 +117,7 @@ address.
 
       .. code-block:: bash
 
-         scaler stack.toml
+         scaler config.toml
 
    .. group-tab:: command line
 
