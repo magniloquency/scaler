@@ -175,8 +175,10 @@ Then, on the **EC2 instance**, install uv and Scaler:
    curl -LsSf https://astral.sh/uv/install.sh | sh
    source $HOME/.local/bin/env
 
-   # Install Scaler with all extras using Python 3.13
-   uv pip install opengris-scaler[all] --python 3.13
+   # Create and activate a virtual environment with Python 3.13 and install Scaler
+   uv venv --python 3.13
+   source .venv/bin/activate
+   uv pip install 'opengris-scaler[all]'
 
 Example output:
 
