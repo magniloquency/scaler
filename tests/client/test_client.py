@@ -391,7 +391,7 @@ class TestClientPreload(unittest.TestCase):
                 ),
             )
         )
-        return multiprocessing.Process(target=preload_manager.run)
+        return multiprocessing.get_context("spawn").Process(target=preload_manager.run)
 
     def test_preload_success(self):
         preload_process = self._create_preload_cluster(

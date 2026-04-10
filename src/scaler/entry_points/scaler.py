@@ -80,6 +80,7 @@ def main() -> None:
         print("scaler: no any recognized section found in config file", file=sys.stderr)
         sys.exit(1)
 
+    _spawn_process = multiprocessing.get_context("spawn").Process
     processes: List[multiprocessing.Process] = []
 
     if config.object_storage is not None:
@@ -95,19 +96,19 @@ def main() -> None:
         processes.append(oss_process)
 
     if config.scheduler is not None:
-        sched_process = multiprocessing.Process(target=_run_scheduler, args=(config.scheduler,), name="scheduler")
+        sched_process = _spawn_process(target=_run_scheduler, args=(config.scheduler,), name="scheduler")
         sched_process.start()
-        processes.append(sched_process)
+        processes.append(sched_process)  # type: ignore[arg-type]
 
     for wm_config in config.worker_managers:
-        wm_process = multiprocessing.Process(target=_run_worker_manager, args=(wm_config,), name=wm_config._tag)
+        wm_process = _spawn_process(target=_run_worker_manager, args=(wm_config,), name=wm_config._tag)
         wm_process.start()
-        processes.append(wm_process)
+        processes.append(wm_process)  # type: ignore[arg-type]
 
     if config.gui is not None:
-        gui_process = multiprocessing.Process(target=_run_gui, args=(config.gui,), name="gui")
+        gui_process = _spawn_process(target=_run_gui, args=(config.gui,), name="gui")
         gui_process.start()
-        processes.append(gui_process)
+        processes.append(gui_process)  # type: ignore[arg-type]
 
     try:
         for process in processes:

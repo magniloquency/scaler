@@ -61,7 +61,7 @@ class TestClusterDisconnect(unittest.TestCase):
                 ),
             )
         )
-        dying_process = multiprocessing.Process(target=dying_manager.run)
+        dying_process = multiprocessing.get_context("spawn").Process(target=dying_manager.run)
         dying_process.start()
 
         client = Client(self.address)

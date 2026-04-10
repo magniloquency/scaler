@@ -48,7 +48,7 @@ class Processor(multiprocessing.get_context("spawn").Process):  # type: ignore
         logging_paths: Tuple[str, ...],
         logging_level: str,
     ):
-        multiprocessing.Process.__init__(self, name="Processor")
+        super().__init__(name="Processor")
 
         self._event_loop = event_loop
         self._agent_address = agent_address

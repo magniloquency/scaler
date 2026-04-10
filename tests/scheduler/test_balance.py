@@ -78,7 +78,7 @@ class TestBalance(unittest.TestCase):
                 ),
             )
         )
-        process = multiprocessing.Process(target=new_manager.run)
+        process = multiprocessing.get_context("spawn").Process(target=new_manager.run)
         process.start()
 
         pids = {f.result() for f in futures}

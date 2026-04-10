@@ -62,7 +62,7 @@ class TestDeathTimeout(unittest.TestCase):
                 ),
             )
         )
-        process = multiprocessing.Process(target=manager.run)
+        process = multiprocessing.get_context("spawn").Process(target=manager.run)
         process.start()
         process.join()
 

@@ -67,7 +67,7 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
         worker_manager_id: bytes,
         deterministic_worker_ids: bool = False,
     ):
-        multiprocessing.Process.__init__(self, name="Agent")
+        super().__init__(name="Agent")
 
         self._event_loop = event_loop
         self._name = name

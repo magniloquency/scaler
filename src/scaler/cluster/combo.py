@@ -116,7 +116,7 @@ class SchedulerClusterCombo:
             )
         )
 
-        self._worker_manager_process = multiprocessing.Process(target=self._worker_manager.run)
+        self._worker_manager_process = multiprocessing.get_context("spawn").Process(target=self._worker_manager.run)
 
         self._scheduler = SchedulerProcess(
             bind_address=self._address,

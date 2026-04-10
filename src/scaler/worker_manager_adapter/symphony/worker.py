@@ -57,7 +57,7 @@ class SymphonyWorker(multiprocessing.get_context("spawn").Process):  # type: ign
         event_loop: str,
         worker_manager_id: bytes,
     ):
-        multiprocessing.Process.__init__(self, name="Agent")
+        super().__init__(name="Agent")
 
         self._event_loop = event_loop
         self._name = name

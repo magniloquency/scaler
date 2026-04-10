@@ -33,7 +33,7 @@ class SchedulerProcess(multiprocessing.get_context("spawn").Process):  # type: i
         logging_config_file: Optional[str],
         logging_level: str,
     ):
-        multiprocessing.Process.__init__(self, name="Scheduler")
+        super().__init__(name="Scheduler")
         self._scheduler_config = SchedulerConfig(
             bind_address=bind_address,
             object_storage_address=object_storage_address,

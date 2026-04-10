@@ -76,7 +76,7 @@ class AWSBatchWorker(_SpawnProcess):  # type: ignore[valid-type, misc]
         event_loop: str = "builtin",
         job_timeout_seconds: int = 3600,
     ) -> None:
-        multiprocessing.Process.__init__(self, name="AWSBatchWorker")
+        super().__init__(name="AWSBatchWorker")
 
         self._event_loop = event_loop
         self._name = name

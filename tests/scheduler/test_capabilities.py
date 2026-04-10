@@ -70,7 +70,7 @@ class TestCapabilities(unittest.TestCase):
                     ),
                 )
             )
-            gpu_process = multiprocessing.Process(target=gpu_manager.run)
+            gpu_process = multiprocessing.get_context("spawn").Process(target=gpu_manager.run)
             gpu_process.start()
 
             self.assertEqual(future.result(), 3.0)
@@ -120,7 +120,7 @@ class TestCapabilities(unittest.TestCase):
                     ),
                 )
             )
-            gpu_process = multiprocessing.Process(target=gpu_manager.run)
+            gpu_process = multiprocessing.get_context("spawn").Process(target=gpu_manager.run)
             gpu_process.start()
 
             self.assertEqual(future.result(), 8)
