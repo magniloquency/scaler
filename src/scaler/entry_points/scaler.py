@@ -116,8 +116,7 @@ def main() -> None:
         done = multiprocessing.connection.wait(sentinel_to_process)
         exited = sentinel_to_process[cast(int, done[0])]
         for other in processes:
-            if other.is_alive():
-                other.terminate()
+            other.terminate()
         for other in processes:
             other.join()
         sys.exit(exited.exitcode or 0)
