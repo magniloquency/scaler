@@ -155,10 +155,25 @@ Start Services
 Start Compute Tasks
 -------------------
 
-Jupyter notebooks demonstrating real-world distributed computing use cases
-with Scaler, ParFun, and ParGraph.
+While Scaler :doc:`provides a lower level API for submitting tasks <scaler_client>`,
+it's most often used through its associated higher-level APIs:
+`parfun <https://github.com/finos/opengris-parfun>`_ and
+`pargraph <https://github.com/finos/opengris-pargraph>`_.
 
-- :doc:`Multi-Signal Alpha Research Platform with ParFun <../gallery/AlphaResearch>`
-- :doc:`Parallel Vol Surface Calibration & PDE Exotic Pricing with ParFun <../gallery/VolSurface>`
-- :doc:`Parallel Swap Portfolio CVA with ParGraph + ParFun <../gallery/SwapCVA>`
-- :doc:`Portfolio-Level XVA Risk Computation with ParGraph <../gallery/XVA>`
+Make sure you get these libraries installed before running the examples below:
+
+.. code-block:: bash
+
+    uv pip install numpy scipy pandas opengris-parfun pargraph
+
+Basic examples
+
+- :doc:`Task parallelism using parfun <../gallery/parfun>`
+- :doc:`Concurrent graph computation using pargraph <../gallery/pargraph>`
+
+Additional Jupyter notebooks demonstrating real-world distributed computing use cases with Scaler, parfun, and pargraph:
+
+- :doc:`Multi-Signal Alpha Research Platform with Parfun <../gallery/AlphaResearch>`
+- :doc:`Parallel Vol Surface Calibration & PDE Exotic Pricing with Parfun <../gallery/VolSurface>`
+- :doc:`Parallel Swap Portfolio CVA with Pargraph + Parfun <../gallery/SwapCVA>`
+- :doc:`Portfolio-Level XVA Risk Computation with Pargraph <../gallery/XVA>`

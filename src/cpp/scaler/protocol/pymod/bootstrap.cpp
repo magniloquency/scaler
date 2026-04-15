@@ -110,7 +110,9 @@ OwnedPyObject<> build_schema_descriptor(capnp::Schema schema)
 }
 
 OwnedPyObject<> make_builtin_function(const PyMethodDef* def)
-{ return OwnedPyObject<> {PyCFunction_NewEx(const_cast<PyMethodDef*>(def), nullptr, nullptr)}; }
+{
+    return OwnedPyObject<> {PyCFunction_NewEx(const_cast<PyMethodDef*>(def), nullptr, nullptr)};
+}
 
 OwnedPyObject<> make_class_method(const PyMethodDef* def)
 {
@@ -122,10 +124,14 @@ OwnedPyObject<> make_class_method(const PyMethodDef* def)
 }
 
 OwnedPyObject<> make_method_descriptor(PyObject* type, const PyMethodDef* def)
-{ return OwnedPyObject<> {PyDescr_NewMethod((PyTypeObject*)type, const_cast<PyMethodDef*>(def))}; }
+{
+    return OwnedPyObject<> {PyDescr_NewMethod((PyTypeObject*)type, const_cast<PyMethodDef*>(def))};
+}
 
 bool register_module(PyObject* module, const char* full_name)
-{ return PyDict_SetItemString(PyImport_GetModuleDict(), full_name, module) == 0; }
+{
+    return PyDict_SetItemString(PyImport_GetModuleDict(), full_name, module) == 0;
+}
 
 OwnedPyObject<> create_python_class(const char* name, PyObject* bases, PyObject* dict)
 {
@@ -138,28 +144,44 @@ OwnedPyObject<> create_python_class(const char* name, PyObject* bases, PyObject*
 }
 
 PyObject* py_capnp_struct_init_method(PyObject* self, PyObject* args, PyObject* kwargs)
-{ return ::scaler::protocol::pymod::capnp_struct_init_method(self, args, kwargs).take(); }
+{
+    return ::scaler::protocol::pymod::capnp_struct_init_method(self, args, kwargs).take();
+}
 
 PyObject* py_capnp_struct_to_bytes(PyObject* self, PyObject* /*unused*/)
-{ return ::scaler::protocol::pymod::capnp_struct_to_bytes(self).take(); }
+{
+    return ::scaler::protocol::pymod::capnp_struct_to_bytes(self).take();
+}
 
 PyObject* py_capnp_struct_from_bytes(PyObject* cls, PyObject* args, PyObject* kwargs)
-{ return ::scaler::protocol::pymod::capnp_struct_from_bytes(cls, args, kwargs).take(); }
+{
+    return ::scaler::protocol::pymod::capnp_struct_from_bytes(cls, args, kwargs).take();
+}
 
 PyObject* py_capnp_union_init_method(PyObject* self, PyObject* args, PyObject* kwargs)
-{ return ::scaler::protocol::pymod::capnp_union_init_method(self, args, kwargs).take(); }
+{
+    return ::scaler::protocol::pymod::capnp_union_init_method(self, args, kwargs).take();
+}
 
 PyObject* py_capnp_union_which(PyObject* self, PyObject* /*unused*/)
-{ return ::scaler::protocol::pymod::capnp_union_which(self).take(); }
+{
+    return ::scaler::protocol::pymod::capnp_union_which(self).take();
+}
 
 PyObject* py_capnp_union_get_attr(PyObject* self, PyObject* args)
-{ return ::scaler::protocol::pymod::capnp_union_get_attr(self, args).take(); }
+{
+    return ::scaler::protocol::pymod::capnp_union_get_attr(self, args).take();
+}
 
 PyObject* py_capnp_union_to_bytes(PyObject* self, PyObject* /*unused*/)
-{ return ::scaler::protocol::pymod::capnp_union_to_bytes(self).take(); }
+{
+    return ::scaler::protocol::pymod::capnp_union_to_bytes(self).take();
+}
 
 PyObject* py_capnp_union_from_bytes(PyObject* cls, PyObject* args, PyObject* kwargs)
-{ return ::scaler::protocol::pymod::capnp_union_from_bytes(cls, args, kwargs).take(); }
+{
+    return ::scaler::protocol::pymod::capnp_union_from_bytes(cls, args, kwargs).take();
+}
 
 static PyObject* enum_field_value_init(PyObject* self, PyObject* args)
 {
@@ -242,7 +264,9 @@ static PyObject* enum_field_value_hash(PyObject* self, PyObject* /*unused*/)
 }
 
 static PyObject* enum_field_value_int(PyObject* self, PyObject* /*unused*/)
-{ return PyObject_GetAttrString(self, "raw"); }
+{
+    return PyObject_GetAttrString(self, "raw");
+}
 
 static PyMethodDef ENUM_FIELD_VALUE_INIT_DEF = {"__init__", (PyCFunction)enum_field_value_init, METH_VARARGS, nullptr};
 static PyMethodDef ENUM_FIELD_VALUE_AS_STR_DEF = {
@@ -498,8 +522,8 @@ bool initialize_runtime_modules(PyObject* module)
         return false;
     }
 
-    OwnedPyObject<> base_module {PyModule_New("scaler.protocol.python._base")};
-    if (!base_module || !register_module(base_module.get(), "scaler.protocol.python._base")) {
+    OwnedPyObject<> base_module {PyModule_New("scaler.protocol._base")};
+    if (!base_module || !register_module(base_module.get(), "scaler.protocol._base")) {
         return false;
     }
 
@@ -514,7 +538,7 @@ bool initialize_runtime_modules(PyObject* module)
     PyDict_SetItemString(
         enum_field_value_dict.get(),
         "__module__",
-        OwnedPyObject<>(PyUnicode_FromString("scaler.protocol.python.capnp")).get());
+        OwnedPyObject<>(PyUnicode_FromString("scaler.protocol.capnp")).get());
     OwnedPyObject<> enum_field_value_type {
         create_python_class("EnumFieldValue", empty_bases.get(), enum_field_value_dict.get())};
     if (!enum_field_value_type) {
@@ -544,9 +568,7 @@ bool initialize_runtime_modules(PyObject* module)
         OwnedPyObject<>(make_method_descriptor(enum_field_value_type.get(), &ENUM_FIELD_VALUE_INT_DEF)).get());
 
     PyDict_SetItemString(
-        capnp_struct_dict.get(),
-        "__module__",
-        OwnedPyObject<>(PyUnicode_FromString("scaler.protocol.python.capnp")).get());
+        capnp_struct_dict.get(), "__module__", OwnedPyObject<>(PyUnicode_FromString("scaler.protocol.capnp")).get());
     PyDict_SetItemString(capnp_struct_dict.get(), "_enum_fields", OwnedPyObject<>(PyDict_New()).get());
     PyDict_SetItemString(capnp_struct_dict.get(), "_list_enum_fields", OwnedPyObject<>(PyDict_New()).get());
     PyDict_SetItemString(
@@ -570,7 +592,7 @@ bool initialize_runtime_modules(PyObject* module)
     PyDict_SetItemString(
         capnp_union_struct_dict.get(),
         "__module__",
-        OwnedPyObject<>(PyUnicode_FromString("scaler.protocol.python.capnp")).get());
+        OwnedPyObject<>(PyUnicode_FromString("scaler.protocol.capnp")).get());
     PyDict_SetItemString(capnp_union_struct_dict.get(), "_union_fields", OwnedPyObject<>(PySet_New(nullptr)).get());
     PyDict_SetItemString(
         capnp_union_struct_dict.get(),
@@ -603,16 +625,14 @@ bool initialize_runtime_modules(PyObject* module)
     PyModule_AddObjectRef(base_module.get(), "EnumFieldValue", enum_field_value_type.get());
     PyModule_AddObjectRef(base_module.get(), "CapnpStruct", capnp_struct_type.get());
     PyModule_AddObjectRef(base_module.get(), "CapnpUnionStruct", capnp_union_struct_type.get());
-    PyModule_AddObjectRef(module, "EnumFieldValue", enum_field_value_type.get());
-    PyModule_AddObjectRef(module, "CapnpStruct", capnp_struct_type.get());
-    PyModule_AddObjectRef(module, "CapnpUnionStruct", capnp_union_struct_type.get());
+    PyModule_AddObjectRef(module, "BaseMessage", capnp_struct_type.get());
 
     for (const char* short_module_name: {"common", "status", "object_storage", "message"}) {
         OwnedPyObject<> descriptors {get_module_descriptor(short_module_name)};
         if (!descriptors) {
             return false;
         }
-        std::string full_module_name = std::string("scaler.protocol.python._") + short_module_name;
+        std::string full_module_name = std::string("scaler.protocol._") + short_module_name;
         OwnedPyObject<> generated_module {PyModule_New(full_module_name.c_str())};
         if (!generated_module || !register_module(generated_module.get(), full_module_name.c_str())) {
             return false;
@@ -641,9 +661,7 @@ bool initialize_runtime_modules(PyObject* module)
         if (!finalize_pending_types(pending)) {
             return false;
         }
-        if (PyObject_SetAttrString(generated_module.get(), "__all__", all_list.get()) < 0 ||
-            PyObject_SetAttrString(module, (std::string("_") + short_module_name).c_str(), generated_module.get()) <
-                0) {
+        if (PyObject_SetAttrString(generated_module.get(), "__all__", all_list.get()) < 0) {
             return false;
         }
     }

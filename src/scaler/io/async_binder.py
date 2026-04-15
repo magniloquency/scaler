@@ -11,8 +11,7 @@ from zmq import Frame
 from scaler.config.types.zmq import ZMQConfig
 from scaler.io.mixins import AsyncBinder
 from scaler.io.utility import deserialize, serialize
-from scaler.protocol.python.mixins import Message
-from scaler.protocol.python.status import BinderStatus
+from scaler.protocol.capnp import BaseMessage, BinderStatus
 
 
 class ZMQAsyncBinder(AsyncBinder):
@@ -29,7 +28,7 @@ class ZMQAsyncBinder(AsyncBinder):
         assert isinstance(endpoint, bytes)
         self._address: ZMQConfig = ZMQConfig.from_string(endpoint.decode())
 
-        self._callback: Optional[Callable[[bytes, Message], Awaitable[None]]] = None
+        self._callback: Optional[Callable[[bytes, BaseMessage], Awaitable[None]]] = None
 
         self._received: Dict[str, int] = defaultdict(lambda: 0)
         self._sent: Dict[str, int] = defaultdict(lambda: 0)
@@ -45,7 +44,7 @@ class ZMQAsyncBinder(AsyncBinder):
     def destroy(self):
         self._context.destroy(linger=0)
 
-    def register(self, callback: Callable[[bytes, Message], Awaitable[None]]):
+    def register(self, callback: Callable[[bytes, BaseMessage], Awaitable[None]]):
         self._callback = callback
 
     async def routine(self):
@@ -55,7 +54,7 @@ class ZMQAsyncBinder(AsyncBinder):
 
         source, payload = frames
         try:
-            message: Optional[Message] = deserialize(payload.bytes)
+            message: Optional[BaseMessage] = deserialize(payload.bytes)
             if message is None:
                 logging.error(f"received unknown message from {source.bytes!r}: {payload!r}")
                 return
@@ -66,12 +65,12 @@ class ZMQAsyncBinder(AsyncBinder):
         self.__count_received(message.__class__.__name__)
         await self._callback(source.bytes, message)
 
-    async def send(self, to: bytes, message: Message):
+    async def send(self, to: bytes, message: BaseMessage):
         self.__count_sent(message.__class__.__name__)
         await self._socket.send_multipart([to, serialize(message)], copy=False)
 
     def get_status(self) -> BinderStatus:
-        return BinderStatus.new_msg(received=self._received, sent=self._sent)
+        return BinderStatus(received=self._received, sent=self._sent)
 
     def __set_socket_options(self):
         self._socket.setsockopt(zmq.IDENTITY, self._identity)

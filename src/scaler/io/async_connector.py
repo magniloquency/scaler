@@ -8,7 +8,7 @@ import zmq.asyncio
 from scaler.config.types.zmq import ZMQConfig
 from scaler.io.mixins import AsyncConnector
 from scaler.io.utility import deserialize, serialize
-from scaler.protocol.python.mixins import Message
+from scaler.protocol.capnp import BaseMessage
 
 
 class ZMQAsyncConnector(AsyncConnector):
@@ -19,7 +19,7 @@ class ZMQAsyncConnector(AsyncConnector):
         socket_type: int,
         address: ZMQConfig,
         bind_or_connect: Literal["bind", "connect"],
-        callback: Optional[Callable[[Message], Awaitable[None]]],
+        callback: Optional[Callable[[BaseMessage], Awaitable[None]]],
         identity: Optional[bytes],
     ):
         self._address = address
@@ -46,7 +46,7 @@ class ZMQAsyncConnector(AsyncConnector):
         else:
             raise TypeError("bind_or_connect has to be 'bind' or 'connect'")
 
-        self._callback: Optional[Callable[[Message], Awaitable[None]]] = callback
+        self._callback: Optional[Callable[[BaseMessage], Awaitable[None]]] = callback
 
     def __del__(self):
         self.destroy()
@@ -73,13 +73,13 @@ class ZMQAsyncConnector(AsyncConnector):
         if self._callback is None:
             return
 
-        message: Optional[Message] = await self.receive()
+        message: Optional[BaseMessage] = await self.receive()
         if message is None:
             return
 
         await self._callback(message)
 
-    async def receive(self) -> Optional[Message]:
+    async def receive(self) -> Optional[BaseMessage]:
         if self._context.closed:
             return None
 
@@ -87,12 +87,12 @@ class ZMQAsyncConnector(AsyncConnector):
             return None
 
         payload = await self._socket.recv(copy=False)
-        result: Optional[Message] = deserialize(payload.bytes)
+        result: Optional[BaseMessage] = deserialize(payload.bytes)
         if result is None:
             logging.error(f"received unknown message: {payload.bytes!r}")
             return None
 
         return result
 
-    async def send(self, message: Message):
+    async def send(self, message: BaseMessage):
         await self._socket.send(serialize(message), copy=False)

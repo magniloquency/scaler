@@ -4,87 +4,28 @@
 
 #include "scaler/protocol/pymod/bootstrap.h"
 #include "scaler/protocol/pymod/module_state.h"
-#include "scaler/protocol/pymod/serialize.h"
 #include "scaler/utility/pymod/compatibility.h"
 
 namespace scaler::protocol::pymod {
 
 int capnp_module_traverse(PyObject* module, visitproc visit, void* arg)
-{ return traverse_module_state(module, visit, arg); }
+{
+    return traverse_module_state(module, visit, arg);
+}
 
 int capnp_module_clear(PyObject* module)
-{ return clear_module_state(module); }
+{
+    return clear_module_state(module);
+}
 
 void capnp_module_free(void* module)
-{ clear_module_state(static_cast<PyObject*>(module)); }
+{
+    clear_module_state(static_cast<PyObject*>(module));
+}
 
 PyModuleDef MODULE_DEF;
 
 }  // namespace scaler::protocol::pymod
-
-namespace {
-
-PyObject* py_get_module_descriptor(PyObject* /*self*/, PyObject* args)
-{
-    const char* module_name = nullptr;
-    if (!PyArg_ParseTuple(args, "s", &module_name)) {
-        return nullptr;
-    }
-
-    return scaler::protocol::pymod::get_module_descriptor(module_name).take();
-}
-
-PyObject* py_message_to_bytes(PyObject* /*self*/, PyObject* args)
-{
-    const char* variant_name = nullptr;
-    PyObject* inner          = nullptr;
-    if (!PyArg_ParseTuple(args, "sO", &variant_name, &inner)) {
-        return nullptr;
-    }
-    return scaler::protocol::pymod::message_to_bytes(variant_name, inner).take();
-}
-
-PyObject* py_message_from_bytes(PyObject* /*self*/, PyObject* args)
-{
-    PyObject* data                     = nullptr;
-    unsigned long long traversal_limit = (1ull << 63);
-    if (!PyArg_ParseTuple(args, "O|K", &data, &traversal_limit)) {
-        return nullptr;
-    }
-    return scaler::protocol::pymod::message_from_bytes(data, traversal_limit).take();
-}
-
-PyObject* py_struct_to_bytes(PyObject* /*self*/, PyObject* args)
-{
-    const char* type_name = nullptr;
-    PyObject* obj         = nullptr;
-    if (!PyArg_ParseTuple(args, "sO", &type_name, &obj)) {
-        return nullptr;
-    }
-    return scaler::protocol::pymod::struct_to_bytes(type_name, obj).take();
-}
-
-PyObject* py_struct_from_bytes(PyObject* /*self*/, PyObject* args)
-{
-    const char* type_name              = nullptr;
-    PyObject* data                     = nullptr;
-    unsigned long long traversal_limit = (1ull << 63);
-    if (!PyArg_ParseTuple(args, "sO|K", &type_name, &data, &traversal_limit)) {
-        return nullptr;
-    }
-    return scaler::protocol::pymod::struct_from_bytes(type_name, data, traversal_limit).take();
-}
-
-static PyMethodDef MODULE_METHODS[] = {
-    {"get_module_descriptor", py_get_module_descriptor, METH_VARARGS, nullptr},
-    {"message_to_bytes", py_message_to_bytes, METH_VARARGS, nullptr},
-    {"message_from_bytes", py_message_from_bytes, METH_VARARGS, nullptr},
-    {"struct_to_bytes", py_struct_to_bytes, METH_VARARGS, nullptr},
-    {"struct_from_bytes", py_struct_from_bytes, METH_VARARGS, nullptr},
-    {nullptr, nullptr, 0, nullptr},
-};
-
-}  // namespace
 
 PyMODINIT_FUNC PyInit_capnp(void)
 {
@@ -95,7 +36,7 @@ PyMODINIT_FUNC PyInit_capnp(void)
         "capnp",
         nullptr,
         sizeof(scaler::protocol::pymod::CapnpModuleState),
-        MODULE_METHODS,
+        nullptr,
         nullptr,
         scaler::protocol::pymod::capnp_module_traverse,
         scaler::protocol::pymod::capnp_module_clear,

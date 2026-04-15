@@ -23,10 +23,14 @@ CapnpModuleState* get_module_state()
 }
 
 CapnpModuleState* get_module_state(PyObject* module)
-{ return static_cast<CapnpModuleState*>(PyModule_GetState(module)); }
+{
+    return static_cast<CapnpModuleState*>(PyModule_GetState(module));
+}
 
 void set_initializing_module(PyObject* module)
-{ INITIALIZING_MODULE = module; }
+{
+    INITIALIZING_MODULE = module;
+}
 
 int clear_module_state(PyObject* module)
 {

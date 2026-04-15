@@ -8,8 +8,7 @@ from scaler.config.types.zmq import ZMQConfig
 from scaler.io.mixins import AsyncBinder
 from scaler.io.utility import deserialize, serialize
 from scaler.io.ymq import BinderSocket, Bytes, IOContext
-from scaler.protocol.python.mixins import Message
-from scaler.protocol.python.status import BinderStatus
+from scaler.protocol.capnp import BaseMessage, BinderStatus
 
 
 class YMQAsyncBinder(AsyncBinder):
@@ -24,7 +23,7 @@ class YMQAsyncBinder(AsyncBinder):
         bound = self._socket.bind_to_sync(address.to_address())
         self._address: ZMQConfig = ZMQConfig.from_string(repr(bound))
 
-        self._callback: Optional[Callable[[bytes, Message], Awaitable[None]]] = None
+        self._callback: Optional[Callable[[bytes, BaseMessage], Awaitable[None]]] = None
 
         self._received: Dict[str, int] = defaultdict(lambda: 0)
         self._sent: Dict[str, int] = defaultdict(lambda: 0)
@@ -41,13 +40,13 @@ class YMQAsyncBinder(AsyncBinder):
         self._socket = None
         self._context = None
 
-    def register(self, callback: Callable[[bytes, Message], Awaitable[None]]):
+    def register(self, callback: Callable[[bytes, BaseMessage], Awaitable[None]]):
         self._callback = callback
 
     async def routine(self):
         ymq_msg = await self._socket.recv_message()
 
-        message: Optional[Message] = deserialize(ymq_msg.payload.data)
+        message: Optional[BaseMessage] = deserialize(ymq_msg.payload.data)
         if message is None:
             logging.error(f"received unknown message from {ymq_msg.address.data!r}: {ymq_msg.payload.data!r}")
             return
@@ -55,12 +54,12 @@ class YMQAsyncBinder(AsyncBinder):
         self.__count_received(message.__class__.__name__)
         await self._callback(ymq_msg.address.data, message)
 
-    async def send(self, to: bytes, message: Message):
+    async def send(self, to: bytes, message: BaseMessage):
         self.__count_sent(message.__class__.__name__)
         await self._socket.send_message(to.decode(), Bytes(serialize(message)))
 
     def get_status(self) -> BinderStatus:
-        return BinderStatus.new_msg(received=self._received, sent=self._sent)
+        return BinderStatus(received=self._received, sent=self._sent)
 
     def __count_received(self, message_type: str):
         self._received[message_type] += 1

@@ -1,5 +1,7 @@
 #include "scaler/protocol/pymod/schema_registry.h"
 
+#include <stdexcept>
+
 #include "protocol/common.capnp.h"
 #include "protocol/message.capnp.h"
 #include "protocol/object_storage.capnp.h"
@@ -92,13 +94,29 @@ capnp::Schema SchemaRegistry::getSchemaById(uint64_t schemaId)
 }
 
 capnp::StructSchema SchemaRegistry::getStructById(uint64_t schemaId)
-{ return getSchemaById(schemaId).asStruct(); }
+{
+    return getSchemaById(schemaId).asStruct();
+}
 
 capnp::EnumSchema SchemaRegistry::getEnumById(uint64_t schemaId)
-{ return getSchemaById(schemaId).asEnum(); }
+{
+    return getSchemaById(schemaId).asEnum();
+}
 
 capnp::StructSchema SchemaRegistry::getStructByName(const std::string& typeName)
-{ return getStructById(_topLevelTypeIds.at(typeName)); }
+{
+    auto type_id = _topLevelTypeIds.find(typeName);
+    if (type_id != _topLevelTypeIds.end()) {
+        return getStructById(type_id->second);
+    }
+
+    auto separator = typeName.rfind('.');
+    if (separator == std::string::npos) {
+        throw std::out_of_range("unknown Cap'n Proto struct type");
+    }
+
+    return getStructById(_topLevelTypeIds.at(typeName.substr(separator + 1)));
+}
 
 const std::vector<capnp::Schema>* SchemaRegistry::getModuleSchemas(const std::string& moduleName) const
 {

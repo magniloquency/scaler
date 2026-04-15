@@ -2,8 +2,7 @@ import abc
 from typing import Awaitable, Callable, Optional
 
 from scaler.config.types.zmq import ZMQConfig
-from scaler.protocol.python.mixins import Message
-from scaler.protocol.python.status import BinderStatus
+from scaler.protocol.capnp import BaseMessage, BinderStatus
 from scaler.utility.identifiers import ObjectID
 from scaler.utility.mixins import Looper, Reporter
 
@@ -24,11 +23,11 @@ class AsyncBinder(Looper, Reporter, metaclass=abc.ABCMeta):
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def register(self, callback: Callable[[bytes, Message], Awaitable[None]]):
+    def register(self, callback: Callable[[bytes, BaseMessage], Awaitable[None]]):
         raise NotImplementedError()
 
     @abc.abstractmethod
-    async def send(self, to: bytes, message: Message):
+    async def send(self, to: bytes, message: BaseMessage):
         raise NotImplementedError()
 
     @abc.abstractmethod
@@ -52,11 +51,11 @@ class AsyncConnector(Looper, metaclass=abc.ABCMeta):
         raise NotImplementedError()
 
     @abc.abstractmethod
-    async def send(self, message: Message):
+    async def send(self, message: BaseMessage):
         raise NotImplementedError()
 
     @abc.abstractmethod
-    async def receive(self) -> Optional[Message]:
+    async def receive(self) -> Optional[BaseMessage]:
         raise NotImplementedError()
 
 
@@ -76,11 +75,11 @@ class SyncConnector(metaclass=abc.ABCMeta):
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def send(self, message: Message):
+    def send(self, message: BaseMessage):
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def receive(self) -> Optional[Message]:
+    def receive(self) -> Optional[BaseMessage]:
         raise NotImplementedError()
 
 

@@ -10,7 +10,7 @@ import zmq
 from scaler.config.types.zmq import ZMQConfig
 from scaler.io.mixins import SyncConnector
 from scaler.io.utility import deserialize, serialize
-from scaler.protocol.python.mixins import Message
+from scaler.protocol.capnp import BaseMessage
 
 
 class ZMQSyncConnector(SyncConnector):
@@ -46,18 +46,18 @@ class ZMQSyncConnector(SyncConnector):
     def identity(self) -> bytes:
         return self._identity
 
-    def send(self, message: Message):
+    def send(self, message: BaseMessage):
         with self._lock:
             self._socket.send(serialize(message), copy=False)
 
-    def receive(self) -> Optional[Message]:
+    def receive(self) -> Optional[BaseMessage]:
         with self._lock:
             payload = self._socket.recv(copy=False)
 
         return self.__compose_message(payload.bytes)
 
-    def __compose_message(self, payload: bytes) -> Optional[Message]:
-        result: Optional[Message] = deserialize(payload)
+    def __compose_message(self, payload: bytes) -> Optional[BaseMessage]:
+        result: Optional[BaseMessage] = deserialize(payload)
         if result is None:
             logging.error(f"{self.__get_prefix()}: received unknown message: {payload!r}")
             return None

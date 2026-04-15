@@ -309,7 +309,9 @@ OwnedPyObject<> capnp_struct_init_method(PyObject* self, PyObject* args, PyObjec
 }
 
 OwnedPyObject<> capnp_struct_to_bytes(PyObject* self)
-{ return struct_to_bytes(Py_TYPE(self)->tp_name, self); }
+{
+    return struct_to_bytes(Py_TYPE(self)->tp_name, self);
+}
 
 OwnedPyObject<> capnp_struct_from_bytes(PyObject* cls, PyObject* args, PyObject* kwargs)
 {
@@ -338,7 +340,9 @@ OwnedPyObject<> capnp_struct_from_bytes(PyObject* cls, PyObject* args, PyObject*
 }
 
 OwnedPyObject<> capnp_union_which(PyObject* self)
-{ return PyObject_GetAttrString(self, "_variant_name"); }
+{
+    return PyObject_GetAttrString(self, "_variant_name");
+}
 
 OwnedPyObject<> capnp_union_get_attr(PyObject* self, PyObject* args)
 {
@@ -478,7 +482,9 @@ bool set_dynamic_field(capnp::DynamicStruct::Builder builder, capnp::StructSchem
 }
 
 bool set_dynamic_struct(capnp::DynamicStruct::Builder builder, PyObject* obj)
-{ return set_dynamic_struct_impl(builder, obj); }
+{
+    return set_dynamic_struct_impl(builder, obj);
+}
 
 OwnedPyObject<> dynamic_value_to_py_object(capnp::DynamicValue::Reader value, capnp::Type type)
 {

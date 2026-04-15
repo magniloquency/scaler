@@ -21,7 +21,8 @@ from scaler.io.utility import (
     create_async_object_storage_connector,
     get_scaler_network_backend_from_env,
 )
-from scaler.protocol.python.message import (
+from scaler.protocol.capnp import (
+    BaseMessage,
     ClientDisconnect,
     DisconnectRequest,
     DisconnectResponse,
@@ -33,7 +34,6 @@ from scaler.protocol.python.message import (
     TaskResult,
     WorkerHeartbeatEcho,
 )
-from scaler.protocol.python.mixins import Message
 from scaler.utility.event_loop import create_async_loop_routine, register_event_loop, run_task_forever
 from scaler.utility.exceptions import ClientShutdownException, ObjectStorageException
 from scaler.utility.identifiers import ProcessorID, WorkerID
@@ -192,7 +192,7 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
             connector_storage=self._connector_storage,
         )
 
-    async def __on_receive_external(self, message: Message):
+    async def __on_receive_external(self, message: BaseMessage):
         if isinstance(message, WorkerHeartbeatEcho):
             await self._heartbeat_manager.on_heartbeat_echo(message)
             return
@@ -210,7 +210,7 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
             return
 
         if isinstance(message, ClientDisconnect):
-            if message.disconnect_type == ClientDisconnect.DisconnectType.Shutdown:
+            if message.disconnectType == ClientDisconnect.DisconnectType.shutdown:
                 raise ClientShutdownException("received client shutdown, quitting")
             logging.error(f"Worker received invalid ClientDisconnect type, ignoring {message=}")
             return
@@ -222,7 +222,7 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
 
         raise TypeError(f"Unknown {message=}")
 
-    async def __on_receive_internal(self, processor_id_bytes: bytes, message: Message):
+    async def __on_receive_internal(self, processor_id_bytes: bytes, message: BaseMessage):
         processor_id = ProcessorID(processor_id_bytes)
 
         if isinstance(message, ProcessorInitialized):
@@ -298,7 +298,7 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
 
     async def __graceful_shutdown(self):
         try:
-            await self._connector_external.send(DisconnectRequest.new_msg(self.identity))
+            await self._connector_external.send(DisconnectRequest(worker=self.identity))
         except ymq.YMQException:
             pass
 

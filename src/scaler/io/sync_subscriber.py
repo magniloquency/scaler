@@ -7,14 +7,14 @@ import zmq
 from scaler.config.types.zmq import ZMQConfig
 from scaler.io.mixins import SyncSubscriber
 from scaler.io.utility import deserialize
-from scaler.protocol.python.mixins import Message
+from scaler.protocol.capnp import BaseMessage
 
 
 class ZMQSyncSubscriber(SyncSubscriber, threading.Thread):
     def __init__(
         self,
         address: ZMQConfig,
-        callback: Callable[[Message], None],
+        callback: Callable[[BaseMessage], None],
         topic: bytes,
         exit_callback: Optional[Callable[[], None]] = None,
         stop_event: threading.Event = threading.Event(),
@@ -75,7 +75,7 @@ class ZMQSyncSubscriber(SyncSubscriber, threading.Thread):
             raise TimeoutError(f"Cannot connect to {self._address.to_address()} in {self._timeout_seconds} seconds")
 
     def __routine_receive(self, payload: bytes):
-        result: Optional[Message] = deserialize(payload)
+        result: Optional[BaseMessage] = deserialize(payload)
         if result is None:
             logging.error(f"received unknown message: {payload!r}")
             return None
