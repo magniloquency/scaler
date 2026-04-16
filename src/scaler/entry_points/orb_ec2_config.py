@@ -22,6 +22,7 @@ def _build_config(
     private_ip: str,
     scheduler_port: int,
     oss_port: int,
+    gui_port: int,
     worker_manager_id: str,
     instance_type: str,
     aws_region: str,
@@ -33,6 +34,8 @@ def _build_config(
         worker_image_lines = f'image_id = "{image_id}"'
     else:
         worker_image_lines = f'python_version = "{python_version}"\n' 'requirements_txt = """\nopengris-scaler\n"""'
+
+    monitor_port = scheduler_port + 2
 
     return (
         f"[object_storage_server]\n"
@@ -53,6 +56,10 @@ def _build_config(
         f'aws_region = "{aws_region}"\n'
         f'logging_level = "{logging_level}"\n'
         f"{worker_image_lines}\n"
+        f"\n"
+        f"[gui]\n"
+        f'monitor_address = "tcp://127.0.0.1:{monitor_port}"\n'
+        f'gui_address = "0.0.0.0:{gui_port}"\n'
     )
 
 
@@ -77,6 +84,7 @@ def main() -> None:
         metavar="VERSION",
         help="Python version to install on workers (ignored when --image-id is given)",
     )
+    parser.add_argument("--gui-port", type=int, default=50001, metavar="PORT", help="port for the web GUI")
     args = parser.parse_args()
 
     public_ip = _ec2_metadata("--public-ipv4")
@@ -87,6 +95,7 @@ def main() -> None:
         private_ip=private_ip,
         scheduler_port=args.scheduler_port,
         oss_port=args.object_storage_port,
+        gui_port=args.gui_port,
         worker_manager_id=args.worker_manager_id,
         instance_type=args.instance_type,
         aws_region=args.aws_region,
@@ -107,3 +116,5 @@ def main() -> None:
     print("    from scaler import Client")
     print(f'    with Client(address="tcp://{public_ip}:{args.scheduler_port}") as client:')
     print("        ...")
+    print(f"\nOpen the web GUI in your browser (ensure port {args.gui_port} is open in the EC2 security group):")
+    print(f"    http://{public_ip}:{args.gui_port}")
