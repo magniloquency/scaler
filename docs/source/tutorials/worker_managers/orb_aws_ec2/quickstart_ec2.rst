@@ -114,13 +114,15 @@ Run on your **local machine**:
      --description "Scaler scheduler security group" \
      --query GroupId --output text)
 
-   # Allow SSH, scheduler (6788), and object storage (6789) from your IP
+   # Allow SSH, scheduler (6788), object storage (6789), and web GUI (50001) from your IP
    aws ec2 authorize-security-group-ingress --group-id $SG_ID \
      --protocol tcp --port 22 --cidr $MY_IP/32
    aws ec2 authorize-security-group-ingress --group-id $SG_ID \
      --protocol tcp --port 6788 --cidr $MY_IP/32
    aws ec2 authorize-security-group-ingress --group-id $SG_ID \
      --protocol tcp --port 6789 --cidr $MY_IP/32
+   aws ec2 authorize-security-group-ingress --group-id $SG_ID \
+     --protocol tcp --port 50001 --cidr $MY_IP/32
 
    # Allow all inbound traffic from EC2 private addresses (172.16.0.0/12)
    # so ORB-provisioned workers can connect back to this instance
@@ -236,6 +238,9 @@ Step 4 — Start Services
              with Client(address="tcp://54.123.45.67:6788") as client:
                  ...
 
+         Open the web GUI in your browser (ensure port 50001 is open in the EC2 security group):
+             http://54.123.45.67:50001
+
       The scheduler's ``advertised_object_storage_address`` (forwarded to connecting clients)
       is set to the EC2 **public** IP. Worker manager addresses use the EC2 **private** IP
       so that ORB-provisioned workers stay on the faster internal VPC network.
@@ -276,7 +281,8 @@ Step 4 — Start Services
              --requirements-txt $'opengris-scaler>=1.27.0\nnumpy' \
              --instance-type t3.medium \
              --aws-region us-east-1 \
-             --logging-level INFO
+             --logging-level INFO &
+         scaler_gui tcp://127.0.0.1:6790 --gui-address 0.0.0.0:50001
 
 Step 5 — Connect a Client
 --------------------------
@@ -311,3 +317,24 @@ will be installed on each worker instance automatically.
    print(results)
 
 Once connected, see :ref:`quickstart_start_compute_tasks` for more example workloads.
+
+Step 6 — Open the Web GUI
+--------------------------
+
+The generated ``config.toml`` includes a ``[gui]`` section so the web GUI starts
+automatically alongside the scheduler. Open the following URL in your browser,
+replacing ``<EC2_PUBLIC_IP>`` with your instance's public IP:
+
+.. code-block:: text
+
+   http://<EC2_PUBLIC_IP>:50001
+
+The GUI connects to the scheduler's monitor endpoint (``scheduler_port + 2``, i.e.
+port 6790 by default) to stream live metrics — active workers, task throughput, and
+object storage usage.
+
+.. note::
+
+   Make sure port 50001 is open in the EC2 security group (Step 2 above). If you used
+   a custom port via ``--gui-port``, substitute that value instead. You can also change
+   the port at any time by editing the ``gui_address`` field in ``config.toml``.
