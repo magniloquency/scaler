@@ -265,6 +265,46 @@ Step 4 — Start Services
          ``scaler_orb_ec2_config`` accepts flags to customize the instance type, region,
          ports, and more. Run ``scaler_orb_ec2_config --help`` for the full list.
 
+   .. group-tab:: config.toml
+
+      Create ``config.toml`` on the **EC2 instance**, replacing ``<EC2_PUBLIC_IP>``
+      and ``<EC2_PRIVATE_IP>`` with the addresses printed in Step 2:
+
+      .. code-block:: toml
+
+         [object_storage_server]
+         bind_address = "tcp://0.0.0.0:6789"
+
+         [scheduler]
+         bind_address = "tcp://0.0.0.0:6788"
+         object_storage_address = "tcp://127.0.0.1:6789"
+         advertised_object_storage_address = "tcp://<EC2_PUBLIC_IP>:6789"
+
+         [[worker_manager]]
+         type = "orb_aws_ec2"
+         scheduler_address = "tcp://127.0.0.1:6788"
+         worker_manager_id = "wm-orb"
+         worker_scheduler_address = "tcp://<EC2_PRIVATE_IP>:6788"
+         object_storage_address = "tcp://<EC2_PRIVATE_IP>:6789"
+         instance_type = "t3.medium"
+         aws_region = "us-east-1"
+         logging_level = "INFO"
+         python_version = "3.14"
+         requirements_txt = """
+         opengris-scaler
+         """
+
+         [gui]
+         monitor_address = "tcp://127.0.0.1:6790"
+         gui_address = "0.0.0.0:50001"
+
+      Edit the ``requirements_txt`` field to add any Python packages your workers need,
+      then start the cluster:
+
+      .. code-block:: bash
+
+         scaler config.toml
+
    .. group-tab:: command line
 
       .. code-block:: bash
