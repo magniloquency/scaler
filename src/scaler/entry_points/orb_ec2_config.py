@@ -32,10 +32,7 @@ def _build_config(
     if image_id:
         worker_image_lines = f'image_id = "{image_id}"'
     else:
-        worker_image_lines = (
-            f'python_version = "{python_version}"\n'
-            'requirements_txt = """\nopengris-scaler\n"""'
-        )
+        worker_image_lines = f'python_version = "{python_version}"\n' 'requirements_txt = """\nopengris-scaler\n"""'
 
     return (
         f"[object_storage_server]\n"
@@ -71,7 +68,9 @@ def main() -> None:
     parser.add_argument("--instance-type", default="t3.medium", metavar="TYPE", help="EC2 instance type for workers")
     parser.add_argument("--aws-region", default="us-east-1", metavar="REGION")
     parser.add_argument("--logging-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"])
-    parser.add_argument("--image-id", default="", metavar="AMI_ID", help="pre-built AMI for workers (skips Python install)")
+    parser.add_argument(
+        "--image-id", default="", metavar="AMI_ID", help="pre-built AMI for workers (skips Python install)"
+    )
     parser.add_argument(
         "--python-version",
         default="3.14",
@@ -101,12 +100,10 @@ def main() -> None:
 
     print(f"Config written to {output_path}")
     if not args.image_id:
-        print(
-            f"\nTo add Python packages for your workers, edit the requirements_txt field in {output_path}."
-        )
-    print(f"\nStart Scaler on this instance:")
+        print(f"\nTo add Python packages for your workers, edit the requirements_txt field in {output_path}.")
+    print("\nStart Scaler on this instance:")
     print(f"    scaler {output_path}")
     print(f"\nConnect from your local machine (scheduler port {args.scheduler_port}):")
-    print(f"    from scaler import Client")
+    print("    from scaler import Client")
     print(f'    with Client(address="tcp://{public_ip}:{args.scheduler_port}") as client:')
-    print(f"        ...")
+    print("        ...")
