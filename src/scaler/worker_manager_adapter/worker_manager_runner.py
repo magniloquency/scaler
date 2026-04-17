@@ -1,11 +1,15 @@
 import asyncio
 import logging
 import signal
-from abc import ABC, abstractmethod
+import uuid
 from typing import Dict, List, Optional, Tuple
 
+import zmq
+
+from scaler.config.types.zmq import ZMQConfig
 from scaler.io import ymq
 from scaler.io.mixins import AsyncConnector
+from scaler.io.utility import create_async_connector, create_async_simple_context
 from scaler.protocol.capnp import (
     BaseMessage,
     WorkerManagerCommand,
@@ -15,17 +19,45 @@ from scaler.protocol.capnp import (
     WorkerManagerHeartbeatEcho,
 )
 from scaler.utility.event_loop import create_async_loop_routine, run_task_forever
+from scaler.worker_manager_adapter.mixins import WorkerPool
 
 Status = WorkerManagerCommandResponse.Status
 
 
-class BaseWorkerManager(ABC):
-    _heartbeat_interval_seconds: int
-    _capabilities: Dict[str, int]
-    _max_task_concurrency: int
-    _worker_manager_id: bytes
-    _connector_external: Optional[AsyncConnector]
-    _ident: bytes
+class WorkerManagerRunner:
+    def __init__(
+        self,
+        address: ZMQConfig,
+        name: str,
+        heartbeat_interval_seconds: int,
+        capabilities: Dict[str, int],
+        max_task_concurrency: int,
+        worker_manager_id: bytes,
+        worker_pool: WorkerPool,
+    ) -> None:
+        self._address = address
+        self._name = name
+        self._heartbeat_interval_seconds = heartbeat_interval_seconds
+        self._capabilities = capabilities
+        self._max_task_concurrency = max_task_concurrency
+        self._worker_manager_id = worker_manager_id
+        self._worker_pool = worker_pool
+
+        self._connector_external: Optional[AsyncConnector] = None
+        self._ident: bytes = b""
+
+    def _setup_connector(self) -> None:
+        self._ident = f"{self._name}|{uuid.uuid4().bytes.hex()}".encode()
+        context = create_async_simple_context()
+        self._connector_external = create_async_connector(
+            context,
+            name=self._name,
+            socket_type=zmq.DEALER,
+            address=self._address,
+            bind_or_connect="connect",
+            callback=self._on_receive_external,
+            identity=self._ident,
+        )
 
     def run(self) -> None:
         self._loop = asyncio.new_event_loop()
@@ -44,6 +76,7 @@ class BaseWorkerManager(ABC):
         self._loop.add_signal_handler(signal.SIGTERM, self._destroy)
 
     async def _run(self) -> None:
+        self._setup_connector()
         self._task = self._loop.create_task(self._get_loops())
         self._register_signal()
         await self._task
@@ -90,11 +123,11 @@ class BaseWorkerManager(ABC):
         capabilities: Dict[str, int] = {}
 
         if cmd_type == WorkerManagerCommandType.startWorkers:
-            worker_ids, response_status = await self.start_worker()
+            worker_ids, response_status = await self._worker_pool.start_worker()
             if response_status == Status.success:
                 capabilities = self._capabilities
         elif cmd_type == WorkerManagerCommandType.shutdownWorkers:
-            worker_ids, response_status = await self.shutdown_workers(list(command.workerIDs))
+            worker_ids, response_status = await self._worker_pool.shutdown_workers(list(command.workerIDs))
         else:
             raise ValueError(f"Unknown WorkerManagerCommand: {cmd_type!r}")
 
@@ -104,8 +137,8 @@ class BaseWorkerManager(ABC):
             )
         )
 
-    @abstractmethod
-    async def start_worker(self) -> Tuple[List[bytes], Status]: ...
+    async def start_worker(self) -> Tuple[List[bytes], Status]:
+        return await self._worker_pool.start_worker()
 
-    @abstractmethod
-    async def shutdown_workers(self, worker_ids: List[bytes]) -> Tuple[List[bytes], Status]: ...
+    async def shutdown_workers(self, worker_ids: List[bytes]) -> Tuple[List[bytes], Status]:
+        return await self._worker_pool.shutdown_workers(worker_ids)

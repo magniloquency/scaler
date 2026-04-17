@@ -5,17 +5,15 @@ from dataclasses import dataclass
 from typing import Dict, List, Tuple
 
 import boto3
-import zmq
 
 from scaler.config.section.ecs_worker_manager import ECSWorkerManagerConfig
-from scaler.io.utility import create_async_connector, create_async_simple_context
 from scaler.protocol.capnp import WorkerManagerCommandResponse, WorkerManagerHeartbeat
-from scaler.worker_manager_adapter.base_manager import BaseWorkerManager
 from scaler.worker_manager_adapter.common import format_capabilities
+from scaler.worker_manager_adapter.mixins import WorkerPool
+from scaler.worker_manager_adapter.worker_manager_runner import WorkerManagerRunner
 
 Status = WorkerManagerCommandResponse.Status
 
-# Internal-only type for ECS task grouping (invisible to scheduler)
 _WorkerGroupID = bytes
 
 
@@ -24,13 +22,11 @@ class _WorkerGroupInfo:
     task_arn: str
 
 
-class ECSWorkerManager(BaseWorkerManager):
-    def __init__(self, config: ECSWorkerManagerConfig):
-        self._address = config.worker_manager_config.scheduler_address
+class ECSWorkerPool(WorkerPool):
+    def __init__(self, config: ECSWorkerManagerConfig) -> None:
         self._worker_scheduler_address = config.worker_manager_config.effective_worker_scheduler_address
         self._object_storage_address = config.worker_manager_config.object_storage_address
         self._capabilities = config.worker_config.per_worker_capabilities.capabilities
-        self._worker_manager_id = config.worker_manager_config.worker_manager_id.encode()
         self._io_threads = config.worker_config.io_threads
         self._per_worker_task_queue_size = config.worker_config.per_worker_task_queue_size
         self._max_task_concurrency = config.worker_manager_config.max_task_concurrency
@@ -43,10 +39,6 @@ class ECSWorkerManager(BaseWorkerManager):
         self._preload = config.worker_config.preload
         self._event_loop = config.worker_config.event_loop
 
-        self._aws_access_key_id = config.aws_access_key_id
-        self._aws_secret_access_key = config.aws_secret_access_key
-        self._aws_region = config.aws_region
-
         self._ecs_cluster = config.ecs_cluster
         self._ecs_task_image = config.ecs_task_image
         self._ecs_python_requirements = config.ecs_python_requirements
@@ -57,9 +49,9 @@ class ECSWorkerManager(BaseWorkerManager):
         self._ecs_subnets = config.ecs_subnets
 
         aws_session = boto3.Session(
-            aws_access_key_id=self._aws_access_key_id,
-            aws_secret_access_key=self._aws_secret_access_key,
-            region_name=self._aws_region,
+            aws_access_key_id=config.aws_access_key_id,
+            aws_secret_access_key=config.aws_secret_access_key,
+            region_name=config.aws_region,
         )
         self._ecs_client = aws_session.client("ecs")
 
@@ -69,6 +61,7 @@ class ECSWorkerManager(BaseWorkerManager):
             logging.info(f"ECS cluster '{self._ecs_cluster}' missing, creating it.")
             self._ecs_client.create_cluster(clusterName=self._ecs_cluster)
 
+        self._worker_manager_id = config.worker_manager_config.worker_manager_id.encode()
         self._worker_groups: Dict[_WorkerGroupID, _WorkerGroupInfo] = {}
 
         try:
@@ -105,29 +98,6 @@ class ECSWorkerManager(BaseWorkerManager):
                 executionRoleArn=execution_role_arn,
             )
         self._ecs_task_definition = resp["taskDefinition"]["taskDefinitionArn"]
-
-        context = create_async_simple_context()
-        self._name = "worker_manager_ecs"
-        self._ident = f"{self._name}|{uuid.uuid4().bytes.hex()}".encode()
-
-        self._connector_external = create_async_connector(
-            context,
-            name=self._name,
-            socket_type=zmq.DEALER,
-            address=self._address,
-            bind_or_connect="connect",
-            callback=self._on_receive_external,
-            identity=self._ident,
-        )
-
-    async def _send_heartbeat(self) -> None:
-        await self._connector_external.send(
-            WorkerManagerHeartbeat(
-                maxTaskConcurrency=self._max_task_concurrency * self._ecs_task_cpu,
-                capabilities=self._capabilities,
-                workerManagerID=self._worker_manager_id,
-            )
-        )
 
     async def start_worker(self) -> Tuple[List[bytes], Status]:
         if len(self._worker_groups) >= self._max_task_concurrency != -1:
@@ -195,11 +165,9 @@ class ECSWorkerManager(BaseWorkerManager):
         worker_group_id = f"ecs-{uuid.uuid4().hex}".encode()
         self._worker_groups[worker_group_id] = _WorkerGroupInfo(task_arn=task_arn)
 
-        # Workers self-assign UUIDs at startup; IDs are not known until they heartbeat.
         return [], Status.success
 
     async def shutdown_workers(self, worker_ids: List[bytes]) -> Tuple[List[bytes], Status]:
-        """Stop one ECS task. Worker-to-task mapping is unavailable; stops the first tracked task."""
         if not self._worker_groups:
             return [], Status.workerNotFound
 
@@ -215,3 +183,27 @@ class ECSWorkerManager(BaseWorkerManager):
 
         self._worker_groups.pop(group_id)
         return [], Status.success
+
+
+class ECSWorkerManager(WorkerManagerRunner):
+    def __init__(self, config: ECSWorkerManagerConfig) -> None:
+        pool = ECSWorkerPool(config)
+        super().__init__(
+            address=config.worker_manager_config.scheduler_address,
+            name="worker_manager_ecs",
+            heartbeat_interval_seconds=config.worker_config.heartbeat_interval_seconds,
+            capabilities=config.worker_config.per_worker_capabilities.capabilities,
+            max_task_concurrency=config.worker_manager_config.max_task_concurrency,
+            worker_manager_id=config.worker_manager_config.worker_manager_id.encode(),
+            worker_pool=pool,
+        )
+        self._ecs_task_cpu = config.ecs_task_cpu
+
+    async def _send_heartbeat(self) -> None:
+        await self._connector_external.send(
+            WorkerManagerHeartbeat(
+                maxTaskConcurrency=self._max_task_concurrency * self._ecs_task_cpu,
+                capabilities=self._capabilities,
+                workerManagerID=self._worker_manager_id,
+            )
+        )

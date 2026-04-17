@@ -1,6 +1,5 @@
 import asyncio
 import logging
-from abc import ABC, abstractmethod
 from typing import Dict, Optional, Set, cast
 
 import cloudpickle
@@ -23,15 +22,18 @@ from scaler.utility.metadata.task_flags import retrieve_task_flags_from_task
 from scaler.utility.mixins import Looper
 from scaler.utility.queues.async_priority_queue import AsyncPriorityQueue
 from scaler.utility.serialization import serialize_failure
-from scaler.worker.agent.mixins import HeartbeatManager, TaskManager
+from scaler.worker.agent.mixins import HeartbeatManager
+from scaler.worker.agent.mixins import TaskManager as TaskManagerMixin
+from scaler.worker_manager_adapter.mixins import ExecutionBackend
 
 
-class BaseTaskManager(Looper, TaskManager, ABC):
-    def __init__(self, base_concurrency: int) -> None:
+class TaskManager(Looper, TaskManagerMixin):
+    def __init__(self, base_concurrency: int, execution_backend: ExecutionBackend) -> None:
         if isinstance(base_concurrency, int) and base_concurrency <= 0:
             raise ValueError(f"base_concurrency must be a positive integer, got {base_concurrency}")
 
         self._base_concurrency = base_concurrency
+        self._execution_backend = execution_backend
 
         self._executor_semaphore = asyncio.Semaphore(value=self._base_concurrency)
 
@@ -60,6 +62,7 @@ class BaseTaskManager(Looper, TaskManager, ABC):
         self._connector_external = connector_external
         self._connector_storage = connector_storage
         self._heartbeat_manager = heartbeat_manager
+        self._execution_backend.register(self._load_task_inputs)
 
     async def on_object_instruction(self, instruction: ObjectInstruction) -> None:
         if instruction.instructionType == ObjectInstruction.ObjectInstructionType.delete:
@@ -81,7 +84,7 @@ class BaseTaskManager(Looper, TaskManager, ABC):
             else:
                 self._task_id_to_task[task.taskId] = task
                 self._processing_task_ids.add(task.taskId)
-                self._task_id_to_future[task.taskId] = await self._execute_task(task)
+                self._task_id_to_future[task.taskId] = await self._execution_backend.execute(task)
                 return
 
         self._task_id_to_task[task.taskId] = task
@@ -112,7 +115,7 @@ class BaseTaskManager(Looper, TaskManager, ABC):
         if task_processing:
             future = self._task_id_to_future[task_cancel.taskId]
             future.cancel()
-            await self._on_task_cancel(task_cancel)
+            await self._execution_backend.on_cancel(task_cancel)
             self._processing_task_ids.remove(task_cancel.taskId)
             self._canceled_task_ids.add(task_cancel.taskId)
 
@@ -127,7 +130,7 @@ class BaseTaskManager(Looper, TaskManager, ABC):
 
         self._processing_task_ids.remove(result.taskId)
         self._task_id_to_task.pop(result.taskId)
-        self._on_task_cleanup(result.taskId)
+        self._execution_backend.on_cleanup(result.taskId)
 
         await self._connector_external.send(result)
 
@@ -193,7 +196,10 @@ class BaseTaskManager(Looper, TaskManager, ABC):
                 self._executor_semaphore.release()
 
             self._task_id_to_task.pop(task_id)
-            self._on_task_cleanup(task_id)
+            self._execution_backend.on_cleanup(task_id)
+
+    async def routine(self) -> None:
+        pass
 
     async def process_task(self) -> None:
         await self._executor_semaphore.acquire()
@@ -203,10 +209,9 @@ class BaseTaskManager(Looper, TaskManager, ABC):
 
         self._acquiring_task_ids.add(task_id)
         self._processing_task_ids.add(task_id)
-        self._task_id_to_future[task.taskId] = await self._execute_task(task)
+        self._task_id_to_future[task.taskId] = await self._execution_backend.execute(task)
 
     async def _load_task_inputs(self, task: Task):
-        """Fetch serializer, function, and argument objects from storage."""
         serializer_id = ObjectID.generate_serializer_object_id(task.source)
 
         if serializer_id not in self._serializers:
@@ -226,15 +231,6 @@ class BaseTaskManager(Looper, TaskManager, ABC):
         function = serializer.deserialize(function_bytes)
         arg_objects = [serializer.deserialize(object_bytes) for object_bytes in arg_bytes]
         return function, arg_objects
-
-    @abstractmethod
-    async def _execute_task(self, task: Task) -> asyncio.Future: ...
-
-    async def _on_task_cancel(self, task_cancel: TaskCancel) -> None:
-        """Hook called when a processing task is cancelled. Override to add backend-specific cancel logic."""
-
-    def _on_task_cleanup(self, task_id: TaskID) -> None:
-        """Hook called after a task completes or is cancelled. Override to add backend-specific cleanup."""
 
     @staticmethod
     def _get_task_priority(task: Task) -> int:

@@ -1,67 +1,49 @@
 import logging
 import os
 import signal
-import uuid
 from typing import Dict, List, Tuple
 
-import zmq
-
 from scaler.config.section.symphony_worker_manager import SymphonyWorkerManagerConfig
-from scaler.io.utility import create_async_connector, create_async_simple_context
 from scaler.protocol.capnp import WorkerManagerCommandResponse
 from scaler.utility.identifiers import WorkerID
-from scaler.worker_manager_adapter.base_manager import BaseWorkerManager
-from scaler.worker_manager_adapter.symphony.worker import SymphonyWorker
+from scaler.worker_manager_adapter.mixins import WorkerPool
+from scaler.worker_manager_adapter.symphony.worker import create_symphony_worker
+from scaler.worker_manager_adapter.worker_manager_runner import WorkerManagerRunner
+from scaler.worker_manager_adapter.worker_process import WorkerProcess
 
 Status = WorkerManagerCommandResponse.Status
 
 
-class SymphonyWorkerManager(BaseWorkerManager):
-    def __init__(self, config: SymphonyWorkerManagerConfig):
-        self._address = config.worker_manager_config.scheduler_address
+class SymphonyWorkerPool(WorkerPool):
+    def __init__(self, config: SymphonyWorkerManagerConfig) -> None:
         self._worker_scheduler_address = config.worker_manager_config.effective_worker_scheduler_address
         self._object_storage_address = config.worker_manager_config.object_storage_address
         self._service_name = config.service_name
         self._max_task_concurrency = config.worker_manager_config.max_task_concurrency
-        self._worker_manager_id = config.worker_manager_config.worker_manager_id.encode()
         self._capabilities = config.worker_config.per_worker_capabilities.capabilities
         self._io_threads = config.worker_config.io_threads
         self._task_queue_size = config.worker_config.per_worker_task_queue_size
         self._heartbeat_interval_seconds = config.worker_config.heartbeat_interval_seconds
         self._death_timeout_seconds = config.worker_config.death_timeout_seconds
         self._event_loop = config.worker_config.event_loop
+        self._worker_manager_id = config.worker_manager_config.worker_manager_id.encode()
 
-        context = create_async_simple_context()
-        self._name = "worker_manager_symphony"
-        self._ident = f"{self._name}|{uuid.uuid4().bytes.hex()}".encode()
-
-        self._connector_external = create_async_connector(
-            context,
-            name="worker_manager_symphony",
-            socket_type=zmq.DEALER,
-            address=self._address,
-            bind_or_connect="connect",
-            callback=self._on_receive_external,
-            identity=self._ident,
-        )
-
-        self._workers: Dict[WorkerID, SymphonyWorker] = {}
+        self._workers: Dict[WorkerID, WorkerProcess] = {}
 
     async def start_worker(self) -> Tuple[List[bytes], Status]:
         if len(self._workers) >= self._max_task_concurrency != -1:
             return [], Status.tooManyWorkers
 
-        worker = SymphonyWorker(
-            name=f"SYM|{uuid.uuid4().hex}",
+        worker = create_symphony_worker(
             address=self._worker_scheduler_address,
             object_storage_address=self._object_storage_address,
             service_name=self._service_name,
-            base_concurrency=self._max_task_concurrency,
             capabilities=self._capabilities,
-            io_threads=self._io_threads,
-            task_queue_size=self._task_queue_size,
+            base_concurrency=self._max_task_concurrency,
             heartbeat_interval_seconds=self._heartbeat_interval_seconds,
             death_timeout_seconds=self._death_timeout_seconds,
+            task_queue_size=self._task_queue_size,
+            io_threads=self._io_threads,
             event_loop=self._event_loop,
             worker_manager_id=self._worker_manager_id,
         )
@@ -87,3 +69,20 @@ class SymphonyWorkerManager(BaseWorkerManager):
             worker.join()
 
         return list(worker_ids), Status.success
+
+
+class SymphonyWorkerManager:
+    def __init__(self, config: SymphonyWorkerManagerConfig) -> None:
+        pool = SymphonyWorkerPool(config)
+        self._runner = WorkerManagerRunner(
+            address=config.worker_manager_config.scheduler_address,
+            name="worker_manager_symphony",
+            heartbeat_interval_seconds=config.worker_config.heartbeat_interval_seconds,
+            capabilities=config.worker_config.per_worker_capabilities.capabilities,
+            max_task_concurrency=config.worker_manager_config.max_task_concurrency,
+            worker_manager_id=config.worker_manager_config.worker_manager_id.encode(),
+            worker_pool=pool,
+        )
+
+    def run(self) -> None:
+        self._runner.run()

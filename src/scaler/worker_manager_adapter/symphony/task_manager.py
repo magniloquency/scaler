@@ -5,7 +5,7 @@ from concurrent.futures import Future
 import cloudpickle
 
 from scaler.protocol.capnp import Task
-from scaler.worker_manager_adapter.base_task_manager import BaseTaskManager
+from scaler.worker_manager_adapter.mixins import ExecutionBackend
 from scaler.worker_manager_adapter.symphony.callback import SessionCallback
 from scaler.worker_manager_adapter.symphony.message import SoamMessage
 
@@ -15,10 +15,8 @@ except ImportError:
     raise ImportError("IBM Spectrum Symphony API not found, please install it with 'pip install soamapi'.")
 
 
-class SymphonyTaskManager(BaseTaskManager):
-    def __init__(self, base_concurrency: int, service_name: str):
-        super().__init__(base_concurrency=base_concurrency)
-
+class SymphonyExecutionBackend(ExecutionBackend):
+    def __init__(self, service_name: str):
         self._service_name = service_name
 
         soamapi.initialize()
@@ -38,10 +36,7 @@ class SymphonyTaskManager(BaseTaskManager):
         self._ibm_soam_session = self._ibm_soam_connection.create_session(ibm_soam_session_attr)
         logging.info(f"established IBM Spectrum Symphony session {self._ibm_soam_session.get_id()}")
 
-    async def routine(self) -> None:
-        pass
-
-    async def _execute_task(self, task: Task) -> asyncio.Future:
+    async def execute(self, task: Task) -> asyncio.Future:
         function, arg_objects = await self._load_task_inputs(task)
 
         input_message = SoamMessage()

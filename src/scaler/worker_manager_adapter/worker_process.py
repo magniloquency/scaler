@@ -2,9 +2,8 @@ import asyncio
 import logging
 import multiprocessing
 import signal
-from abc import ABC, abstractmethod
 from collections import deque
-from typing import Dict, List, Optional
+from typing import Callable, Dict, Optional
 
 import zmq.asyncio
 
@@ -33,13 +32,14 @@ from scaler.utility.exceptions import ClientShutdownException
 from scaler.utility.identifiers import WorkerID
 from scaler.utility.logging.utility import setup_logger
 from scaler.worker.agent.timeout_manager import VanillaTimeoutManager
-from scaler.worker_manager_adapter.base_heartbeat_manager import BaseHeartbeatManager
-from scaler.worker_manager_adapter.base_task_manager import BaseTaskManager
+from scaler.worker_manager_adapter.heartbeat_manager import HeartbeatManager
+from scaler.worker_manager_adapter.mixins import ExecutionBackend, ProcessorStatusProvider
+from scaler.worker_manager_adapter.task_manager import TaskManager
 
 _SpawnProcess = multiprocessing.get_context("spawn").Process
 
 
-class BaseWorker(_SpawnProcess, ABC):  # type: ignore[valid-type, misc]
+class WorkerProcess(_SpawnProcess):  # type: ignore[valid-type, misc]
     def __init__(
         self,
         name: str,
@@ -53,6 +53,8 @@ class BaseWorker(_SpawnProcess, ABC):  # type: ignore[valid-type, misc]
         io_threads: int,
         event_loop: str,
         worker_manager_id: bytes,
+        processor_status_provider_factory: Callable[[], ProcessorStatusProvider],
+        execution_backend_factory: Callable[[], ExecutionBackend],
     ) -> None:
         super().__init__(name="Agent")
 
@@ -72,11 +74,15 @@ class BaseWorker(_SpawnProcess, ABC):  # type: ignore[valid-type, misc]
         self._task_queue_size = task_queue_size
         self._worker_manager_id = worker_manager_id
 
+        self._processor_status_provider_factory = processor_status_provider_factory
+        self._execution_backend_factory = execution_backend_factory
+
         self._context: Optional[zmq.asyncio.Context] = None
         self._connector_external: Optional[AsyncConnector] = None
         self._connector_storage: Optional[AsyncObjectStorageConnector] = None
-        self._task_manager: Optional[BaseTaskManager] = None
-        self._heartbeat_manager: Optional[BaseHeartbeatManager] = None
+        self._execution_backend: Optional[ExecutionBackend] = None
+        self._task_manager: Optional[TaskManager] = None
+        self._heartbeat_manager: Optional[HeartbeatManager] = None
 
         self._heartbeat_received: bool = False
         self._backoff_message_queue: deque = deque()
@@ -117,8 +123,19 @@ class BaseWorker(_SpawnProcess, ABC):  # type: ignore[valid-type, misc]
 
         self._connector_storage = create_async_object_storage_connector()
 
-        self._heartbeat_manager = self._create_heartbeat_manager()
-        self._task_manager = self._create_task_manager()
+        self._execution_backend = self._execution_backend_factory()
+        processor_status_provider = self._processor_status_provider_factory()
+
+        self._heartbeat_manager = HeartbeatManager(
+            object_storage_address=self._object_storage_address,
+            capabilities=self._capabilities,
+            task_queue_size=self._task_queue_size,
+            worker_manager_id=self._worker_manager_id,
+            processor_status_provider=processor_status_provider,
+        )
+        self._task_manager = TaskManager(
+            base_concurrency=self._base_concurrency, execution_backend=self._execution_backend
+        )
         self._timeout_manager = VanillaTimeoutManager(death_timeout_seconds=self._death_timeout_seconds)
 
         self._heartbeat_manager.register(
@@ -183,7 +200,7 @@ class BaseWorker(_SpawnProcess, ABC):  # type: ignore[valid-type, misc]
                 create_async_loop_routine(self._connector_storage.routine, 0),
                 create_async_loop_routine(self._heartbeat_manager.routine, self._heartbeat_interval_seconds),
                 create_async_loop_routine(self._timeout_manager.routine, 1),
-                *self._get_extra_loops(),
+                create_async_loop_routine(self._execution_backend.routine, 0),
                 create_async_loop_routine(self._task_manager.process_task, 0),
                 create_async_loop_routine(self._task_manager.resolve_tasks, 0),
             )
@@ -217,13 +234,3 @@ class BaseWorker(_SpawnProcess, ABC):  # type: ignore[valid-type, misc]
 
     def __destroy(self) -> None:
         self._task.cancel()
-
-    @abstractmethod
-    def _create_heartbeat_manager(self) -> BaseHeartbeatManager: ...
-
-    @abstractmethod
-    def _create_task_manager(self) -> BaseTaskManager: ...
-
-    def _get_extra_loops(self) -> List:
-        """Return additional async loop routines to run alongside the standard loops."""
-        return []

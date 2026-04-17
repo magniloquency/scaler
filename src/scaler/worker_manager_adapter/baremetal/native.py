@@ -1,27 +1,21 @@
-import asyncio
 import logging
 import os
 import signal
 import uuid
-from typing import Any, Dict, List, Optional, Tuple
-
-import zmq
+from typing import Dict, List, Tuple
 
 from scaler.config.section.native_worker_manager import NativeWorkerManagerConfig, NativeWorkerManagerMode
-from scaler.io.mixins import AsyncConnector
-from scaler.io.utility import create_async_connector, create_async_simple_context
 from scaler.protocol.capnp import WorkerManagerCommandResponse
-from scaler.utility.event_loop import run_task_forever
 from scaler.utility.identifiers import WorkerID
 from scaler.worker.worker import Worker
-from scaler.worker_manager_adapter.base_manager import BaseWorkerManager
+from scaler.worker_manager_adapter.mixins import WorkerPool
+from scaler.worker_manager_adapter.worker_manager_runner import WorkerManagerRunner
 
 Status = WorkerManagerCommandResponse.Status
 
 
-class NativeWorkerManager(BaseWorkerManager):
-    def __init__(self, config: NativeWorkerManagerConfig):
-        self._address = config.worker_manager_config.scheduler_address
+class NativeWorkerPool(WorkerPool):
+    def __init__(self, config: NativeWorkerManagerConfig) -> None:
         self._worker_scheduler_address = config.worker_manager_config.effective_worker_scheduler_address
         self._object_storage_address = config.worker_manager_config.object_storage_address
         self._capabilities = config.worker_config.per_worker_capabilities.capabilities
@@ -40,39 +34,17 @@ class NativeWorkerManager(BaseWorkerManager):
         self._logging_paths = config.logging_config.paths
         self._logging_level = config.logging_config.level
         self._logging_config_file = config.logging_config.config_file
-        self._mode = config.mode
 
         if config.worker_type is not None:
             self._worker_prefix = config.worker_type
-        elif self._mode == NativeWorkerManagerMode.FIXED:
+        elif config.mode == NativeWorkerManagerMode.FIXED:
             self._worker_prefix = "FIX"
-        elif self._mode == NativeWorkerManagerMode.DYNAMIC:
+        elif config.mode == NativeWorkerManagerMode.DYNAMIC:
             self._worker_prefix = "NAT"
         else:
-            raise ValueError(f"worker_type is not set and mode is unrecognised: {self._mode!r}")
+            raise ValueError(f"worker_type is not set and mode is unrecognised: {config.mode!r}")
 
         self._workers: Dict[WorkerID, Worker] = {}
-
-        # ZMQ setup is deferred to _setup_zmq(), called at the start of run().
-        # This keeps the object picklable so callers can do Process(target=adapter.run).start().
-        self._context: Optional[Any] = None
-        self._connector_external: Optional[AsyncConnector] = None
-        self._ident: Optional[bytes] = None
-
-    def _setup_zmq(self) -> None:
-        self._name = "worker_manager_native"
-
-        self._ident = f"{self._name}|{uuid.uuid4().bytes.hex()}".encode()
-        self._context = create_async_simple_context()
-        self._connector_external = create_async_connector(
-            self._context,
-            name="worker_manager_native",
-            socket_type=zmq.DEALER,
-            address=self._address,
-            bind_or_connect="connect",
-            callback=self._on_receive_external,
-            identity=self._ident,
-        )
 
     def _create_worker(self) -> Worker:
         return Worker(
@@ -95,11 +67,23 @@ class NativeWorkerManager(BaseWorkerManager):
             worker_manager_id=self._worker_manager_id,
         )
 
-    def _spawn_initial_workers(self) -> None:
+    def run_fixed(self) -> None:
         for _ in range(self._max_task_concurrency):
             worker = self._create_worker()
             worker.start()
             self._workers[worker.identity] = worker
+
+        def _on_signal(sig: int, frame: object) -> None:
+            logging.info("NativeWorkerPool (FIXED): received signal %d, terminating workers", sig)
+            for worker in self._workers.values():
+                if worker.is_alive():
+                    worker.terminate()
+
+        signal.signal(signal.SIGTERM, _on_signal)
+        signal.signal(signal.SIGINT, _on_signal)
+
+        for worker in self._workers.values():
+            worker.join()
 
     async def start_worker(self) -> Tuple[List[bytes], Status]:
         if len(self._workers) >= self._max_task_concurrency != -1:
@@ -108,7 +92,7 @@ class NativeWorkerManager(BaseWorkerManager):
         worker = self._create_worker()
         worker.start()
         self._workers[worker.identity] = worker
-        logging.info(f"Start worker, {self._ident!r}")
+        logging.info(f"Started native worker {worker.identity!r}")
         return [bytes(worker.identity)], Status.success
 
     async def shutdown_workers(self, worker_ids: List[bytes]) -> Tuple[List[bytes], Status]:
@@ -129,26 +113,25 @@ class NativeWorkerManager(BaseWorkerManager):
 
         return list(worker_ids), Status.success
 
+
+class NativeWorkerManager:
+    def __init__(self, config: NativeWorkerManagerConfig) -> None:
+        self._config = config
+
     def run(self) -> None:
-        if self._mode == NativeWorkerManagerMode.FIXED:
-            self._run_fixed()
+        pool = NativeWorkerPool(self._config)
+
+        if self._config.mode == NativeWorkerManagerMode.FIXED:
+            pool.run_fixed()
             return
 
-        self._setup_zmq()
-        self._loop = asyncio.new_event_loop()
-        run_task_forever(self._loop, self._run(), cleanup_callback=self._cleanup)
-
-    def _run_fixed(self) -> None:
-        self._spawn_initial_workers()
-
-        def _on_signal(sig: int, frame: object) -> None:
-            logging.info("NativeWorkerManager (FIXED): received signal %d, terminating workers", sig)
-            for worker in self._workers.values():
-                if worker.is_alive():
-                    worker.terminate()
-
-        signal.signal(signal.SIGTERM, _on_signal)
-        signal.signal(signal.SIGINT, _on_signal)
-
-        for worker in self._workers.values():
-            worker.join()
+        runner = WorkerManagerRunner(
+            address=self._config.worker_manager_config.scheduler_address,
+            name="worker_manager_native",
+            heartbeat_interval_seconds=self._config.worker_config.heartbeat_interval_seconds,
+            capabilities=self._config.worker_config.per_worker_capabilities.capabilities,
+            max_task_concurrency=self._config.worker_manager_config.max_task_concurrency,
+            worker_manager_id=self._config.worker_manager_config.worker_manager_id.encode(),
+            worker_pool=pool,
+        )
+        runner.run()

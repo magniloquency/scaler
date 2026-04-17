@@ -1,10 +1,7 @@
 import asyncio
 import logging
 import os
-import uuid
 from typing import Any, Dict, List, Optional, Tuple
-
-import zmq
 
 try:
     import boto3
@@ -14,226 +11,36 @@ except ModuleNotFoundError as exc:
     raise ModuleNotFoundError('execute "pip install opengris-scaler[orb]" to use ORB AWS EC2 worker Manager') from exc
 
 from scaler.config.section.orb_aws_ec2_worker_adapter import ORBAWSEC2WorkerAdapterConfig
-from scaler.io.mixins import AsyncConnector
-from scaler.io.utility import create_async_connector, create_async_simple_context
 from scaler.protocol.capnp import WorkerManagerCommandResponse
 from scaler.utility.event_loop import register_event_loop
 from scaler.utility.identifiers import WorkerID
 from scaler.utility.logging.utility import setup_logger
-from scaler.worker_manager_adapter.base_manager import BaseWorkerManager
 from scaler.worker_manager_adapter.common import format_capabilities
+from scaler.worker_manager_adapter.mixins import WorkerPool
+from scaler.worker_manager_adapter.worker_manager_runner import WorkerManagerRunner
 
 Status = WorkerManagerCommandResponse.Status
 
-
-# Polling configuration for ORB AWS EC2 machine requests
 ORB_AWS_EC2_POLLING_INTERVAL_SECONDS = 5
 ORB_AWS_EC2_MAX_POLLING_ATTEMPTS = 60
 
 
 def get_orb_aws_ec2_worker_name(instance_id: str) -> str:
-    """
-    Returns the deterministic worker name for an ORB AWS EC2 instance.
-    If instance_id is the bash variable '${INSTANCE_ID}', it returns a bash-compatible string.
-    """
     if instance_id == "${INSTANCE_ID}":
         return "Worker|ORB|${INSTANCE_ID}|${INSTANCE_ID//i-/}"
     tag = instance_id.replace("i-", "")
     return f"Worker|ORB|{instance_id}|{tag}"
 
 
-class ORBAWSEC2WorkerAdapter(BaseWorkerManager):
-    _config: ORBAWSEC2WorkerAdapterConfig
-    _sdk: Optional[Any]
-    _workers: Dict[WorkerID, str]
-    _template_id: str
-    _created_security_group_id: Optional[str]
-    _created_key_name: Optional[str]
-    _ec2: Optional[Any]
-
-    def __init__(self, config: ORBAWSEC2WorkerAdapterConfig):
+class ORBWorkerPool(WorkerPool):
+    def __init__(self, config: ORBAWSEC2WorkerAdapterConfig) -> None:
         self._config = config
-        self._address = config.worker_manager_config.scheduler_address
-        self._worker_scheduler_address = config.worker_manager_config.effective_worker_scheduler_address
-        self._heartbeat_interval_seconds = config.worker_config.heartbeat_interval_seconds
-        self._capabilities = config.worker_config.per_worker_capabilities.capabilities
         self._max_task_concurrency = config.worker_manager_config.max_task_concurrency
-
-        self._event_loop = config.worker_config.event_loop
-        self._logging_paths = config.logging_config.paths
-        self._logging_level = config.logging_config.level
-        self._logging_config_file = config.logging_config.config_file
-
-        self._worker_manager_id = config.worker_manager_config.worker_manager_id.encode()
-
         self._sdk: Optional[Any] = None
-        self._ec2: Optional[Any] = None
-        self._connector_external: Optional[AsyncConnector] = None
-        self._created_security_group_id: Optional[str] = None
-        self._created_key_name: Optional[str] = None
-        self._cleaned_up = False
         self._workers: Dict[WorkerID, str] = {}
-        self._ident: bytes = b"worker_manager_orb_aws_ec2|uninitialized"
-        self._subnet_id: Optional[str] = None
 
-        if config.image_id is None:
-            requirements_content = self._load_requirements_content(config.requirements_txt)
-            self._validate_requirements(requirements_content)
-
-    def _build_app_config(self) -> dict:
-        region = self._config.aws_region or "us-east-1"
-        return {
-            "provider": {
-                "selection_policy": "FIRST_AVAILABLE",
-                "providers": [
-                    {"name": "aws-default", "type": "aws", "enabled": True, "priority": 1, "config": {"region": region}}
-                ],
-                # ORB skips loading strategy defaults (aws_defaults.json) when config_dict is
-                # provided, so provider_defaults must be included explicitly here. Without it,
-                # get_effective_handlers() returns {} and RunInstances is not in supported_apis.
-                "provider_defaults": {
-                    "aws": {
-                        "handlers": {
-                            "RunInstances": {
-                                "handler_class": "RunInstancesHandler",
-                                "supports_spot": False,
-                                "supports_ondemand": True,
-                            }
-                        }
-                    }
-                },
-            },
-            "storage": {"type": "json"},
-        }
-
-    async def _setup(self) -> None:
-        """Set up AWS resources and the ORB template after the SDK is initialised."""
-        region = self._config.aws_region or "us-east-1"
-        self._ec2 = boto3.client("ec2", region_name=region)
-        self._subnet_id = self._config.subnet_id or self._discover_default_subnet()
-        self._template_id = os.urandom(8).hex()
-
-        security_group_ids = self._config.security_group_ids
-        if not security_group_ids:
-            self._create_security_group()
-            security_group_ids = [self._created_security_group_id]
-
-        key_name = self._config.key_name
-        if not key_name:
-            self._create_key_pair()
-            key_name = self._created_key_name
-
-        user_data = self._create_user_data()
-
-        image_id = self._config.image_id or self._discover_latest_al2023_ami()
-
-        create_result = await self._sdk.create_template(
-            template_id=self._template_id,
-            name=f"opengris-orb-{self._template_id}",
-            image_id=image_id,
-            provider_api="RunInstances",
-            instance_type=self._config.instance_type,
-            max_instances=self._config.worker_manager_config.max_task_concurrency,
-            provider_name="aws-default",
-            machine_types={self._config.instance_type: 1},
-            subnet_ids=[self._subnet_id],
-            security_group_ids=security_group_ids,
-            key_name=key_name,
-            user_data=user_data,
-        )
-        logging.info(f"create_template result: {create_result}")
-
-        validate_result = await self._sdk.validate_template(template_id=self._template_id)
-        logging.info(f"validate_template result: {validate_result}")
-
-        context = create_async_simple_context()
-        self._name = "worker_manager_orb_aws_ec2"
-        self._ident = f"{self._name}|{uuid.uuid4().bytes.hex()}".encode()
-
-        self._connector_external = create_async_connector(
-            context,
-            name=self._name,
-            socket_type=zmq.DEALER,
-            address=self._address,
-            bind_or_connect="connect",
-            callback=self._on_receive_external,
-            identity=self._ident,
-        )
-
-    async def _terminate_all_workers(self) -> None:
-        """Return all active instances to ORB before the SDK context exits."""
-        if not self._workers or self._sdk is None:
-            return
-        instance_ids = list(self._workers.values())
-        logging.info(f"Terminating {len(instance_ids)} worker group(s)...")
-        try:
-            await self._sdk.create_return_request(machine_ids=instance_ids)
-            logging.info(f"Successfully requested termination of instances: {instance_ids}")
-        except Exception as e:
-            logging.warning(f"Failed to terminate instances during cleanup: {e}")
-        self._workers.clear()
-
-    async def _on_receive_external(self, message) -> None:
-        try:
-            await super()._on_receive_external(message)
-        except Exception:
-            logging.exception(f"Unhandled exception while processing message {type(message).__name__}")
-
-    async def _run(self) -> None:
-        register_event_loop(self._event_loop)
-
-        try:
-            from orb import ORBClient as orb
-        except ModuleNotFoundError as exc:
-            raise ModuleNotFoundError(
-                'execute "pip install opengris-scaler[orb]" to use ORB AWS EC2 worker Manager'
-            ) from exc
-
-        async with orb(app_config=self._build_app_config()) as sdk:
-            self._sdk = sdk
-            # setup_logger is called after the ORB context is entered because ORB reconfigures
-            # the root logger during __aenter__, which would otherwise suppress scaler log output.
-            setup_logger(self._logging_paths, self._logging_config_file, self._logging_level)
-            await self._setup()
-            self._task = self._loop.create_task(self._get_loops())
-            self._register_signal()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
-            finally:
-                await self._terminate_all_workers()
-
-        self._sdk = None
-
-    def _cleanup(self) -> None:
-        if self._cleaned_up:
-            return
-        self._cleaned_up = True
-
-        if self._connector_external is not None:
-            self._connector_external.destroy()
-
-        logging.info("Starting cleanup of AWS resources...")
-
-        if self._created_security_group_id is not None:
-            try:
-                logging.info(f"Deleting AWS security group: {self._created_security_group_id}")
-                self._ec2.delete_security_group(GroupId=self._created_security_group_id)
-            except Exception as e:
-                logging.warning(f"Failed to delete security group {self._created_security_group_id}: {e}")
-
-        if self._created_key_name is not None:
-            try:
-                logging.info(f"Deleting AWS key pair: {self._created_key_name}")
-                self._ec2.delete_key_pair(KeyName=self._created_key_name)
-            except Exception as e:
-                logging.warning(f"Failed to delete key pair {self._created_key_name}: {e}")
-
-        logging.info("Cleanup completed.")
-
-    def __del__(self) -> None:
-        self._cleanup()
+    def set_sdk(self, sdk: Optional[Any]) -> None:
+        self._sdk = sdk
 
     async def start_worker(self) -> Tuple[List[bytes], Status]:
         if len(self._workers) >= self._max_task_concurrency != -1:
@@ -320,40 +127,177 @@ class ORBAWSEC2WorkerAdapter(BaseWorkerManager):
         logging.info(f"Successfully stopped {len(affected_worker_ids)} worker(s): instances {instance_ids}")
         return affected_worker_ids, Status.success
 
-    @staticmethod
-    def _load_requirements_content(requirements_txt: str) -> str:
-        """Return requirements content from a file path or a literal string."""
-        if os.path.isfile(requirements_txt):
-            with open(requirements_txt) as f:
-                return f.read()
-        return requirements_txt
+    async def terminate_all_workers(self) -> None:
+        if not self._workers or self._sdk is None:
+            return
+        instance_ids = list(self._workers.values())
+        logging.info(f"Terminating {len(instance_ids)} worker group(s)...")
+        try:
+            await self._sdk.create_return_request(machine_ids=instance_ids)
+            logging.info(f"Successfully requested termination of instances: {instance_ids}")
+        except Exception as e:
+            logging.warning(f"Failed to terminate instances during cleanup: {e}")
+        self._workers.clear()
 
-    @staticmethod
-    def _validate_requirements(requirements_content: str) -> None:
-        """Raise ValueError if the requirements content is invalid or does not include opengris-scaler.
+    def set_template_id(self, template_id: str) -> None:
+        self._template_id = template_id
 
-        Each non-comment, non-flag line must be parseable as a PEP 508 requirement or a direct URL
-        reference (containing '://'). Lines that fail both checks would cause `pip install` to fail
-        inside the EC2 userdata script.
-        """
-        found_scaler = False
-        for line in requirements_content.splitlines():
-            line = line.strip()
-            if not line or line.startswith("#") or line.startswith("-"):
-                continue
+
+class ORBAWSEC2WorkerAdapter(WorkerManagerRunner):
+    def __init__(self, config: ORBAWSEC2WorkerAdapterConfig) -> None:
+        self._config = config
+        self._address = config.worker_manager_config.scheduler_address
+        self._worker_scheduler_address = config.worker_manager_config.effective_worker_scheduler_address
+        self._event_loop = config.worker_config.event_loop
+        self._logging_paths = config.logging_config.paths
+        self._logging_level = config.logging_config.level
+        self._logging_config_file = config.logging_config.config_file
+
+        self._orb_pool = ORBWorkerPool(config)
+        self._ec2: Optional[Any] = None
+        self._created_security_group_id: Optional[str] = None
+        self._created_key_name: Optional[str] = None
+        self._cleaned_up = False
+        self._subnet_id: Optional[str] = None
+
+        if config.image_id is None:
+            requirements_content = self._load_requirements_content(config.requirements_txt)
+            self._validate_requirements(requirements_content)
+
+        super().__init__(
+            address=config.worker_manager_config.scheduler_address,
+            name="worker_manager_orb_aws_ec2",
+            heartbeat_interval_seconds=config.worker_config.heartbeat_interval_seconds,
+            capabilities=config.worker_config.per_worker_capabilities.capabilities,
+            max_task_concurrency=config.worker_manager_config.max_task_concurrency,
+            worker_manager_id=config.worker_manager_config.worker_manager_id.encode(),
+            worker_pool=self._orb_pool,
+        )
+
+    def _build_app_config(self) -> dict:
+        region = self._config.aws_region or "us-east-1"
+        return {
+            "provider": {
+                "selection_policy": "FIRST_AVAILABLE",
+                "providers": [
+                    {"name": "aws-default", "type": "aws", "enabled": True, "priority": 1, "config": {"region": region}}
+                ],
+                "provider_defaults": {
+                    "aws": {
+                        "handlers": {
+                            "RunInstances": {
+                                "handler_class": "RunInstancesHandler",
+                                "supports_spot": False,
+                                "supports_ondemand": True,
+                            }
+                        }
+                    }
+                },
+            },
+            "storage": {"type": "json"},
+        }
+
+    async def _setup(self) -> None:
+        region = self._config.aws_region or "us-east-1"
+        self._ec2 = boto3.client("ec2", region_name=region)
+        self._subnet_id = self._config.subnet_id or self._discover_default_subnet()
+        template_id = os.urandom(8).hex()
+        self._orb_pool.set_template_id(template_id)
+
+        security_group_ids = self._config.security_group_ids
+        if not security_group_ids:
+            self._create_security_group()
+            security_group_ids = [self._created_security_group_id]
+
+        key_name = self._config.key_name
+        if not key_name:
+            self._create_key_pair()
+            key_name = self._created_key_name
+
+        user_data = self._create_user_data()
+
+        image_id = self._config.image_id or self._discover_latest_al2023_ami()
+
+        sdk = self._orb_pool._sdk
+        create_result = await sdk.create_template(
+            template_id=template_id,
+            name=f"opengris-orb-{template_id}",
+            image_id=image_id,
+            provider_api="RunInstances",
+            instance_type=self._config.instance_type,
+            max_instances=self._config.worker_manager_config.max_task_concurrency,
+            provider_name="aws-default",
+            machine_types={self._config.instance_type: 1},
+            subnet_ids=[self._subnet_id],
+            security_group_ids=security_group_ids,
+            key_name=key_name,
+            user_data=user_data,
+        )
+        logging.info(f"create_template result: {create_result}")
+
+        validate_result = await sdk.validate_template(template_id=template_id)
+        logging.info(f"validate_template result: {validate_result}")
+
+    async def _run(self) -> None:
+        register_event_loop(self._event_loop)
+
+        try:
+            from orb import ORBClient as orb
+        except ModuleNotFoundError as exc:
+            raise ModuleNotFoundError(
+                'execute "pip install opengris-scaler[orb]" to use ORB AWS EC2 worker Manager'
+            ) from exc
+
+        async with orb(app_config=self._build_app_config()) as sdk:
+            self._orb_pool.set_sdk(sdk)
+            setup_logger(self._logging_paths, self._logging_config_file, self._logging_level)
+            await self._setup()
+            self._setup_connector()
+            self._task = self._loop.create_task(self._get_loops())
+            self._register_signal()
             try:
-                req = Requirement(line)
-                if canonicalize_name(req.name) == "opengris-scaler":
-                    found_scaler = True
-            except Exception:
-                if "://" not in line:
-                    raise ValueError(f"Invalid requirement line that would cause pip to fail: {line!r}")
+                await self._task
+            except asyncio.CancelledError:
+                pass
+            finally:
+                await self._orb_pool.terminate_all_workers()
 
-        if not found_scaler:
-            raise ValueError(
-                "The requirements file must include the 'opengris-scaler' package. "
-                "Workers will fail to start without it."
-            )
+        self._orb_pool.set_sdk(None)
+
+    async def _on_receive_external(self, message) -> None:
+        try:
+            await super()._on_receive_external(message)
+        except Exception:
+            logging.exception(f"Unhandled exception while processing message {type(message).__name__}")
+
+    def _cleanup(self) -> None:
+        if self._cleaned_up:
+            return
+        self._cleaned_up = True
+
+        if self._connector_external is not None:
+            self._connector_external.destroy()
+
+        logging.info("Starting cleanup of AWS resources...")
+
+        if self._created_security_group_id is not None:
+            try:
+                logging.info(f"Deleting AWS security group: {self._created_security_group_id}")
+                self._ec2.delete_security_group(GroupId=self._created_security_group_id)
+            except Exception as e:
+                logging.warning(f"Failed to delete security group {self._created_security_group_id}: {e}")
+
+        if self._created_key_name is not None:
+            try:
+                logging.info(f"Deleting AWS key pair: {self._created_key_name}")
+                self._ec2.delete_key_pair(KeyName=self._created_key_name)
+            except Exception as e:
+                logging.warning(f"Failed to delete key pair {self._created_key_name}: {e}")
+
+        logging.info("Cleanup completed.")
+
+    def __del__(self) -> None:
+        self._cleanup()
 
     def _create_user_data(self) -> str:
         worker_config = self._config.worker_config
@@ -412,7 +356,6 @@ nohup scaler_worker_manager baremetal_native {self._worker_scheduler_address.to_
         return script
 
     def _discover_latest_al2023_ami(self) -> str:
-        """Discover the most recent Amazon Linux 2023 x86_64 EBS HVM AMI in the configured region."""
         response = self._ec2.describe_images(
             Filters=[
                 {"Name": "name", "Values": ["al2023-ami-2023.*-kernel-*-x86_64"]},
@@ -447,7 +390,7 @@ nohup scaler_worker_manager baremetal_native {self._worker_scheduler_address.to_
         subnet_response = self._ec2.describe_subnets(SubnetIds=[self._subnet_id])
         vpc_id = subnet_response["Subnets"][0]["VpcId"]
 
-        group_name = f"opengris-orb-sg-{self._template_id}"
+        group_name = f"opengris-orb-sg-{self._orb_pool._template_id}"
         sg_response = self._ec2.create_security_group(
             Description="Temporary security group created for OpenGRIS ORB worker adapter",
             GroupName=group_name,
@@ -457,7 +400,35 @@ nohup scaler_worker_manager baremetal_native {self._worker_scheduler_address.to_
         logging.info(f"Created security group with ID: {self._created_security_group_id}")
 
     def _create_key_pair(self) -> None:
-        key_name = f"opengris-orb-key-{self._template_id}"
+        key_name = f"opengris-orb-key-{self._orb_pool._template_id}"
         self._ec2.create_key_pair(KeyName=key_name)
         self._created_key_name = key_name
         logging.info(f"Created key pair: {key_name}")
+
+    @staticmethod
+    def _load_requirements_content(requirements_txt: str) -> str:
+        if os.path.isfile(requirements_txt):
+            with open(requirements_txt) as f:
+                return f.read()
+        return requirements_txt
+
+    @staticmethod
+    def _validate_requirements(requirements_content: str) -> None:
+        found_scaler = False
+        for line in requirements_content.splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or line.startswith("-"):
+                continue
+            try:
+                req = Requirement(line)
+                if canonicalize_name(req.name) == "opengris-scaler":
+                    found_scaler = True
+            except Exception:
+                if "://" not in line:
+                    raise ValueError(f"Invalid requirement line that would cause pip to fail: {line!r}")
+
+        if not found_scaler:
+            raise ValueError(
+                "The requirements file must include the 'opengris-scaler' package. "
+                "Workers will fail to start without it."
+            )

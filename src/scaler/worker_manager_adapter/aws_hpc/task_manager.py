@@ -1,32 +1,30 @@
 """
-AWS HPC Task Manager.
+AWS Batch Execution Backend.
 
-Handles task queuing, priority, semaphore, and execution via AWS Batch.
-Supports array jobs for batching multiple tasks into a single Batch submission.
+Handles task execution via AWS Batch, including array job batching, S3 payload
+storage, job monitoring, and result fetching.
 """
 
 import asyncio
 import logging
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Callable, Dict, List, Set, Tuple
 
 import cloudpickle
 
 from scaler.protocol.capnp import Task, TaskCancel
 from scaler.utility.identifiers import TaskID
-from scaler.worker_manager_adapter.base_task_manager import BaseTaskManager
+from scaler.worker_manager_adapter.mixins import ExecutionBackend
 
-# Array job batching constants
 ARRAY_JOB_BATCH_WINDOW_SECONDS: float = 0.5
 ARRAY_JOB_MIN_BATCH_SIZE: int = 2
-ARRAY_JOB_MAX_BATCH_SIZE: int = 10000  # AWS Batch limit
+ARRAY_JOB_MAX_BATCH_SIZE: int = 10000
 
 
-class AWSHPCTaskManager(BaseTaskManager):
+class AWSBatchExecutionBackend(ExecutionBackend):
     def __init__(
         self,
-        base_concurrency: int,
         job_queue: str,
         job_definition: str,
         aws_region: str,
@@ -34,8 +32,6 @@ class AWSHPCTaskManager(BaseTaskManager):
         s3_prefix: str = "scaler-tasks",
         job_timeout_seconds: int = 3600,
     ) -> None:
-        super().__init__(base_concurrency=base_concurrency)
-
         self._job_queue = job_queue
         self._job_definition = job_definition
         self._aws_region = aws_region
@@ -53,6 +49,10 @@ class AWSHPCTaskManager(BaseTaskManager):
         self._batch_pending: List[Tuple[Task, Any, List[Any], Future]] = []
         self._batch_window_start: float = 0.0
 
+    def register(self, load_task_inputs: Callable) -> None:
+        super().register(load_task_inputs)
+        self._initialize_aws_clients()
+
     def _initialize_aws_clients(self) -> None:
         import boto3
 
@@ -60,10 +60,6 @@ class AWSHPCTaskManager(BaseTaskManager):
         self._batch_client = session.client("batch")
         self._s3_client = session.client("s3")
         logging.info(f"AWS HPC task manager initialized: region={self._aws_region}, queue={self._job_queue}")
-
-    def register(self, connector_external, connector_storage, heartbeat_manager) -> None:
-        super().register(connector_external, connector_storage, heartbeat_manager)
-        self._initialize_aws_clients()
 
     async def routine(self) -> None:
         if not self._batch_pending:
@@ -73,15 +69,15 @@ class AWSHPCTaskManager(BaseTaskManager):
         if elapsed >= ARRAY_JOB_BATCH_WINDOW_SECONDS:
             await self._flush_pending_batch()
 
-    def _on_task_cleanup(self, task_id: TaskID) -> None:
+    def on_cleanup(self, task_id: TaskID) -> None:
         self._task_id_to_batch_job_id.pop(task_id, None)
 
-    async def _on_task_cancel(self, task_cancel: TaskCancel) -> None:
+    async def on_cancel(self, task_cancel: TaskCancel) -> None:
         if task_cancel.taskId in self._task_id_to_batch_job_id:
             batch_job_id = self._task_id_to_batch_job_id[task_cancel.taskId]
             await self._cancel_batch_job(batch_job_id)
 
-    async def _execute_task(self, task: Task) -> asyncio.Future:
+    async def execute(self, task: Task) -> asyncio.Future:
         function, arg_objects = await self._load_task_inputs(task)
 
         future: Future = Future()
