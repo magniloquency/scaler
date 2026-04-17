@@ -1,7 +1,5 @@
-import asyncio
 import logging
 import shlex
-import signal
 import uuid
 from dataclasses import dataclass
 from typing import Dict, List, Tuple
@@ -10,17 +8,9 @@ import boto3
 import zmq
 
 from scaler.config.section.ecs_worker_manager import ECSWorkerManagerConfig
-from scaler.io import ymq
 from scaler.io.utility import create_async_connector, create_async_simple_context
-from scaler.protocol.capnp import (
-    BaseMessage,
-    WorkerManagerCommand,
-    WorkerManagerCommandResponse,
-    WorkerManagerCommandType,
-    WorkerManagerHeartbeat,
-    WorkerManagerHeartbeatEcho,
-)
-from scaler.utility.event_loop import create_async_loop_routine, run_task_forever
+from scaler.protocol.capnp import WorkerManagerCommandResponse, WorkerManagerHeartbeat
+from scaler.worker_manager_adapter.base_manager import BaseWorkerManager
 from scaler.worker_manager_adapter.common import format_capabilities
 
 Status = WorkerManagerCommandResponse.Status
@@ -34,7 +24,7 @@ class _WorkerGroupInfo:
     task_arn: str
 
 
-class ECSWorkerManager:
+class ECSWorkerManager(BaseWorkerManager):
     def __init__(self, config: ECSWorkerManagerConfig):
         self._address = config.worker_manager_config.scheduler_address
         self._worker_scheduler_address = config.worker_manager_config.effective_worker_scheduler_address
@@ -43,7 +33,7 @@ class ECSWorkerManager:
         self._worker_manager_id = config.worker_manager_config.worker_manager_id.encode()
         self._io_threads = config.worker_config.io_threads
         self._per_worker_task_queue_size = config.worker_config.per_worker_task_queue_size
-        self._max_instances = config.worker_manager_config.max_task_concurrency
+        self._max_task_concurrency = config.worker_manager_config.max_task_concurrency
         self._heartbeat_interval_seconds = config.worker_config.heartbeat_interval_seconds
         self._task_timeout_seconds = config.worker_config.task_timeout_seconds
         self._death_timeout_seconds = config.worker_config.death_timeout_seconds
@@ -79,7 +69,6 @@ class ECSWorkerManager:
             logging.info(f"ECS cluster '{self._ecs_cluster}' missing, creating it.")
             self._ecs_client.create_cluster(clusterName=self._ecs_cluster)
 
-        # Internal worker group tracking (invisible to scheduler)
         self._worker_groups: Dict[_WorkerGroupID, _WorkerGroupInfo] = {}
 
         try:
@@ -117,100 +106,31 @@ class ECSWorkerManager:
             )
         self._ecs_task_definition = resp["taskDefinition"]["taskDefinitionArn"]
 
-        self._context = create_async_simple_context()
+        context = create_async_simple_context()
         self._name = "worker_manager_ecs"
         self._ident = f"{self._name}|{uuid.uuid4().bytes.hex()}".encode()
 
         self._connector_external = create_async_connector(
-            self._context,
+            context,
             name=self._name,
             socket_type=zmq.DEALER,
             address=self._address,
             bind_or_connect="connect",
-            callback=self.__on_receive_external,
+            callback=self._on_receive_external,
             identity=self._ident,
         )
 
-    async def __on_receive_external(self, message: BaseMessage):
-        if isinstance(message, WorkerManagerCommand):
-            await self._handle_command(message)
-        elif isinstance(message, WorkerManagerHeartbeatEcho):
-            pass
-        else:
-            logging.warning(f"Received unknown message type: {type(message)}")
-
-    async def _handle_command(self, command: WorkerManagerCommand):
-        cmd_type = command.command
-        response_status: Status = Status.success
-        worker_ids: List[bytes] = []
-        capabilities: Dict[str, int] = {}
-
-        if cmd_type == WorkerManagerCommandType.startWorkers:
-            new_worker_ids, response_status = await self._start_ecs_task()
-            if response_status == Status.success:
-                worker_ids = new_worker_ids
-                capabilities = self._capabilities
-        elif cmd_type == WorkerManagerCommandType.shutdownWorkers:
-            affected_worker_ids, response_status = await self._shutdown_by_worker_ids(list(command.workerIDs))
-            if response_status == Status.success:
-                worker_ids = affected_worker_ids
-        else:
-            raise ValueError("Unknown Command")
-
-        await self._connector_external.send(
-            WorkerManagerCommandResponse(
-                command=cmd_type, status=response_status, workerIDs=worker_ids, capabilities=capabilities
-            )
-        )
-
-    async def __send_heartbeat(self):
+    async def _send_heartbeat(self) -> None:
         await self._connector_external.send(
             WorkerManagerHeartbeat(
-                maxTaskConcurrency=self._max_instances * self._ecs_task_cpu,
+                maxTaskConcurrency=self._max_task_concurrency * self._ecs_task_cpu,
                 capabilities=self._capabilities,
                 workerManagerID=self._worker_manager_id,
             )
         )
 
-    def run(self) -> None:
-        self._loop = asyncio.new_event_loop()
-        run_task_forever(self._loop, self._run(), cleanup_callback=self._cleanup)
-
-    def _cleanup(self):
-        if self._connector_external is not None:
-            self._connector_external.destroy()
-
-    def __destroy(self):
-        print(f"Worker manager {self._ident!r} received signal, shutting down")
-        self._task.cancel()
-
-    def __register_signal(self):
-        self._loop.add_signal_handler(signal.SIGINT, self.__destroy)
-        self._loop.add_signal_handler(signal.SIGTERM, self.__destroy)
-
-    async def _run(self) -> None:
-        self._task = self._loop.create_task(self.__get_loops())
-        self.__register_signal()
-        await self._task
-
-    async def __get_loops(self):
-        loops = [
-            create_async_loop_routine(self._connector_external.routine, 0),
-            create_async_loop_routine(self.__send_heartbeat, self._heartbeat_interval_seconds),
-        ]
-
-        try:
-            await asyncio.gather(*loops)
-        except asyncio.CancelledError:
-            pass
-        except ymq.YMQException as e:
-            if e.code == ymq.ErrorCode.ConnectorSocketClosedByRemoteEnd:
-                pass
-            else:
-                logging.exception(f"{self._ident!r}: failed with unhandled exception:\n{e}")
-
-    async def _start_ecs_task(self) -> Tuple[List[bytes], Status]:
-        if len(self._worker_groups) >= self._max_instances != -1:
+    async def start_worker(self) -> Tuple[List[bytes], Status]:
+        if len(self._worker_groups) >= self._max_task_concurrency != -1:
             return [], Status.tooManyWorkers
 
         command = (
@@ -276,10 +196,9 @@ class ECSWorkerManager:
         self._worker_groups[worker_group_id] = _WorkerGroupInfo(task_arn=task_arn)
 
         # Workers self-assign UUIDs at startup; IDs are not known until they heartbeat.
-        # The scheduler tracks worker-to-manager mapping via worker_manager_id in heartbeats.
         return [], Status.success
 
-    async def _shutdown_by_worker_ids(self, worker_ids: List[bytes]) -> Tuple[List[bytes], Status]:
+    async def shutdown_workers(self, worker_ids: List[bytes]) -> Tuple[List[bytes], Status]:
         """Stop one ECS task. Worker-to-task mapping is unavailable; stops the first tracked task."""
         if not self._worker_groups:
             return [], Status.workerNotFound
