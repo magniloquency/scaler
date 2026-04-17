@@ -56,7 +56,7 @@ def main():
             ),
         )
     )
-    gpu_manager_process = multiprocessing.Process(target=gpu_manager.run)
+    gpu_manager_process = multiprocessing.get_context("spawn").Process(target=gpu_manager.run)
     gpu_manager_process.start()
 
     with Client(address=cluster.get_address()) as client:
