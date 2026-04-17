@@ -499,6 +499,8 @@ nohup scaler_worker_manager baremetal_native {self._worker_scheduler_address.to_
             if instance_id:
                 worker_id = WorkerID.generate_worker_id("ORB", unique_worker_tag=f"{instance_id}|0")
                 self._workers[worker_id] = instance_id
+                # Only the first worker (index 0) is tracked here; the instance launches
+                # os.cpu_count() workers in total. This will be resolved by issue #699.
                 logging.info(
                     f"ORB request {request_id} fulfilled: launched worker {worker_id!r} (instance {instance_id})"
                 )
