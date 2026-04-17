@@ -65,6 +65,7 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
         logging_paths: Tuple[str, ...],
         logging_level: str,
         worker_manager_id: bytes,
+        unique_worker_tag: Optional[str] = None,
         deterministic_worker_ids: bool = False,
     ):
         super().__init__(name="Agent")
@@ -81,7 +82,7 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
         if deterministic_worker_ids:
             self._ident = WorkerID(name.encode())
         else:
-            self._ident = WorkerID.generate_worker_id(name)
+            self._ident = WorkerID.generate_worker_id(name, unique_worker_tag)
 
         self._address_path_internal = os.path.join(tempfile.gettempdir(), f"scaler_worker_{uuid.uuid4().hex}")
         self._address_internal = ZMQConfig(ZMQType.ipc, host=self._address_path_internal)

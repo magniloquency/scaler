@@ -39,17 +39,6 @@ ORB_AWS_EC2_POLLING_INTERVAL_SECONDS = 5
 ORB_AWS_EC2_MAX_POLLING_ATTEMPTS = 60
 
 
-def get_orb_aws_ec2_worker_name(instance_id: str) -> str:
-    """
-    Returns the deterministic worker name for an ORB AWS EC2 instance.
-    If instance_id is the bash variable '${INSTANCE_ID}', it returns a bash-compatible string.
-    """
-    if instance_id == "${INSTANCE_ID}":
-        return "Worker|ORB|${INSTANCE_ID}|${INSTANCE_ID//i-/}"
-    tag = instance_id.replace("i-", "")
-    return f"Worker|ORB|{instance_id}|{tag}"
-
-
 class ORBAWSEC2WorkerAdapter:
     _config: ORBAWSEC2WorkerAdapterConfig
     _sdk: Optional[Any]
@@ -508,11 +497,10 @@ nohup scaler_worker_manager baremetal_native {self._worker_scheduler_address.to_
             instance_id = machine_ids[0] if machine_ids else None
 
             if instance_id:
-                worker_name = get_orb_aws_ec2_worker_name(instance_id)
-                worker_id = WorkerID(worker_name.encode())
+                worker_id = WorkerID.generate_worker_id("ORB", unique_worker_tag=f"{instance_id}|0")
                 self._workers[worker_id] = instance_id
                 logging.info(
-                    f"ORB request {request_id} fulfilled: launched worker '{worker_name}' (instance {instance_id})"
+                    f"ORB request {request_id} fulfilled: launched worker {worker_id!r} (instance {instance_id})"
                 )
                 return [bytes(worker_id)], Status.success
 

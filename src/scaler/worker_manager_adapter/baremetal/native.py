@@ -59,6 +59,7 @@ class NativeWorkerManager:
             raise ValueError(f"worker_type is not set and mode is unrecognised: {self._mode!r}")
 
         self._workers: Dict[WorkerID, Worker] = {}
+        self._worker_index: int = 0
 
         # ZMQ setup is deferred to _setup_zmq(), called at the start of run().
         # This keeps the object picklable so callers can do Process(target=adapter.run).start().
@@ -82,8 +83,16 @@ class NativeWorkerManager:
         )
 
     def _create_worker(self) -> Worker:
+        if self._worker_manager_id:
+            name = self._worker_prefix
+            unique_worker_tag = f"{self._worker_manager_id.decode()}|{self._worker_index}"
+            self._worker_index += 1
+        else:
+            name = f"{self._worker_prefix}|{uuid.uuid4().hex}"
+            unique_worker_tag = None
+
         return Worker(
-            name=f"{self._worker_prefix}|{uuid.uuid4().hex}",
+            name=name,
             address=self._worker_scheduler_address,
             object_storage_address=self._object_storage_address,
             preload=self._preload,
@@ -100,6 +109,7 @@ class NativeWorkerManager:
             logging_paths=self._logging_paths,
             logging_level=self._logging_level,
             worker_manager_id=self._worker_manager_id,
+            unique_worker_tag=unique_worker_tag,
         )
 
     def _spawn_initial_workers(self) -> None:

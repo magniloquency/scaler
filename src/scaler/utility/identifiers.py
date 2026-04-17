@@ -36,8 +36,9 @@ class WorkerID(Identifier):
         return _INVALID_WORKER_ID
 
     @staticmethod
-    def generate_worker_id(name: str) -> "WorkerID":
-        unique_worker_tag = uuid.uuid4().bytes.hex()
+    def generate_worker_id(name: str, unique_worker_tag: Optional[str] = None) -> "WorkerID":
+        if unique_worker_tag is None:
+            unique_worker_tag = uuid.uuid4().bytes.hex()
         return WorkerID(f"Worker|{name}|{unique_worker_tag}".encode())
 
 
