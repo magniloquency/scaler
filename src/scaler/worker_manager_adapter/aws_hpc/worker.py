@@ -8,16 +8,15 @@ import uuid
 from functools import partial
 from typing import Dict, Optional
 
-from scaler.config.types.object_storage_server import ObjectStorageAddressConfig
-from scaler.config.types.zmq import ZMQConfig
+from scaler.config.types.address import AddressConfig
 from scaler.worker_manager_adapter.aws_hpc.heartbeat_manager import AWSProcessorStatusProvider
 from scaler.worker_manager_adapter.aws_hpc.task_manager import AWSBatchExecutionBackend
 from scaler.worker_manager_adapter.worker_process import WorkerProcess
 
 
 def create_aws_batch_worker(
-    address: ZMQConfig,
-    object_storage_address: Optional[ObjectStorageAddressConfig],
+    address: AddressConfig,
+    object_storage_address: Optional[AddressConfig],
     job_queue: str,
     job_definition: str,
     aws_region: str,

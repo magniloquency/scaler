@@ -2,16 +2,15 @@ import uuid
 from functools import partial
 from typing import Dict, Optional
 
-from scaler.config.types.object_storage_server import ObjectStorageAddressConfig
-from scaler.config.types.zmq import ZMQConfig
+from scaler.config.types.address import AddressConfig
 from scaler.worker_manager_adapter.symphony.heartbeat_manager import SymphonyProcessorStatusProvider
 from scaler.worker_manager_adapter.symphony.task_manager import SymphonyExecutionBackend
 from scaler.worker_manager_adapter.worker_process import WorkerProcess
 
 
 def create_symphony_worker(
-    address: ZMQConfig,
-    object_storage_address: Optional[ObjectStorageAddressConfig],
+    address: AddressConfig,
+    object_storage_address: Optional[AddressConfig],
     service_name: str,
     capabilities: Dict[str, int],
     base_concurrency: int,

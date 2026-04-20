@@ -252,9 +252,7 @@ class ORBAWSEC2WorkerAdapter(WorkerManagerRunner):
             self._orb_pool.set_sdk(sdk)
             setup_logger(self._logging_paths, self._logging_config_file, self._logging_level)
             await self._setup()
-            self._setup_connector()
             self._task = self._loop.create_task(self._get_loops())
-            self._register_signal()
             try:
                 await self._task
             except asyncio.CancelledError:
@@ -326,7 +324,7 @@ set +e
 """
 
         script += f"""INSTANCE_ID=$(ec2-metadata --instance-id --quiet)
-nohup scaler_worker_manager baremetal_native {self._worker_scheduler_address.to_address()} \\
+nohup scaler_worker_manager baremetal_native {self._worker_scheduler_address!r} \\
     --mode fixed \\
     --worker-type ORB \\
     --worker-manager-id "${{INSTANCE_ID}}" \\
@@ -343,7 +341,7 @@ nohup scaler_worker_manager baremetal_native {self._worker_scheduler_address.to_
             script += " \\\n    --hard-processor-suspend"
 
         if adapter_config.object_storage_address:
-            script += f" \\\n    --object-storage-address {adapter_config.object_storage_address.to_string()}"
+            script += f" \\\n    --object-storage-address {adapter_config.object_storage_address!r}"
 
         capabilities = worker_config.per_worker_capabilities.capabilities
         if capabilities:

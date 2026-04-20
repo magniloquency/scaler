@@ -1,15 +1,13 @@
 import asyncio
 import logging
 import signal
-import uuid
 from typing import Dict, List, Optional, Tuple
 
-import zmq
-
-from scaler.config.types.zmq import ZMQConfig
+from scaler.config.types.address import AddressConfig
 from scaler.io import ymq
-from scaler.io.mixins import AsyncConnector
-from scaler.io.utility import create_async_connector, create_async_simple_context
+from scaler.io.mixins import AsyncConnector, ConnectorRemoteType, NetworkBackend
+from scaler.io.network_backends import YMQNetworkBackend, ZMQNetworkBackend, get_network_backend_from_env
+from scaler.io.utility import generate_identity_from_name
 from scaler.protocol.capnp import (
     BaseMessage,
     WorkerManagerCommand,
@@ -27,13 +25,14 @@ Status = WorkerManagerCommandResponse.Status
 class WorkerManagerRunner:
     def __init__(
         self,
-        address: ZMQConfig,
+        address: AddressConfig,
         name: str,
         heartbeat_interval_seconds: int,
         capabilities: Dict[str, int],
         max_task_concurrency: int,
         worker_manager_id: bytes,
         worker_pool: WorkerPool,
+        io_threads: int = 1,
     ) -> None:
         self._address = address
         self._name = name
@@ -42,21 +41,17 @@ class WorkerManagerRunner:
         self._max_task_concurrency = max_task_concurrency
         self._worker_manager_id = worker_manager_id
         self._worker_pool = worker_pool
+        self._io_threads = io_threads
 
+        self._backend: Optional[NetworkBackend] = None
         self._connector_external: Optional[AsyncConnector] = None
         self._ident: bytes = b""
 
-    def _setup_connector(self) -> None:
-        self._ident = f"{self._name}|{uuid.uuid4().bytes.hex()}".encode()
-        context = create_async_simple_context()
-        self._connector_external = create_async_connector(
-            context,
-            name=self._name,
-            socket_type=zmq.DEALER,
-            address=self._address,
-            bind_or_connect="connect",
-            callback=self._on_receive_external,
-            identity=self._ident,
+    async def _initialize_network(self) -> None:
+        self._ident = generate_identity_from_name(self._name)
+        self._backend = get_network_backend_from_env(io_threads=self._io_threads)
+        self._connector_external = self._backend.create_async_connector(
+            identity=self._ident, callback=self._on_receive_external
         )
 
     def run(self) -> None:
@@ -72,13 +67,15 @@ class WorkerManagerRunner:
         self._task.cancel()
 
     def _register_signal(self) -> None:
-        self._loop.add_signal_handler(signal.SIGINT, self._destroy)
-        self._loop.add_signal_handler(signal.SIGTERM, self._destroy)
+        if isinstance(self._backend, ZMQNetworkBackend):
+            self._loop.add_signal_handler(signal.SIGINT, self._destroy)
+            self._loop.add_signal_handler(signal.SIGTERM, self._destroy)
+        elif isinstance(self._backend, YMQNetworkBackend):
+            self._loop.add_signal_handler(signal.SIGINT, self._destroy)
+            self._loop.add_signal_handler(signal.SIGTERM, self._destroy)
 
     async def _run(self) -> None:
-        self._setup_connector()
         self._task = self._loop.create_task(self._get_loops())
-        self._register_signal()
         await self._task
 
     async def _send_heartbeat(self) -> None:
@@ -91,6 +88,10 @@ class WorkerManagerRunner:
         )
 
     async def _get_loops(self) -> None:
+        await self._initialize_network()
+        await self._connector_external.connect(self._address, ConnectorRemoteType.Binder)
+        self._register_signal()
+
         loops = [
             create_async_loop_routine(self._connector_external.routine, 0),
             create_async_loop_routine(self._send_heartbeat, self._heartbeat_interval_seconds),

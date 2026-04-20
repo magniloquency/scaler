@@ -104,7 +104,7 @@ class ECSWorkerPool(WorkerPool):
             return [], Status.tooManyWorkers
 
         command = (
-            f"scaler_worker_manager baremetal_native {self._worker_scheduler_address.to_address()} "
+            f"scaler_worker_manager baremetal_native {self._worker_scheduler_address!r} "
             f"--mode fixed "
             f"--worker-type ECS "
             f"--max-task-concurrency {self._ecs_task_cpu} "
@@ -122,7 +122,7 @@ class ECSWorkerPool(WorkerPool):
             command += " --hard-processor-suspend"
 
         if self._object_storage_address:
-            command += f" --object-storage-address {self._object_storage_address.to_string()}"
+            command += f" --object-storage-address {self._object_storage_address!r}"
 
         if format_capabilities(self._capabilities).strip():
             command += f" --per-worker-capabilities {format_capabilities(self._capabilities)}"
