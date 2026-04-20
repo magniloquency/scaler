@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Dict, Optional, Set, cast
+from typing import Any, Dict, List, Optional, Set, Tuple, cast
 
 import cloudpickle
 from bidict import bidict
@@ -130,7 +130,6 @@ class TaskManager(Looper, TaskManagerMixin):
 
         self._processing_task_ids.remove(result.taskId)
         self._task_id_to_task.pop(result.taskId)
-        self._execution_backend.on_cleanup(result.taskId)
 
         await self._connector_external.send(result)
 
@@ -211,7 +210,11 @@ class TaskManager(Looper, TaskManagerMixin):
         self._processing_task_ids.add(task_id)
         self._task_id_to_future[task.taskId] = await self._execution_backend.execute(task)
 
-    async def _load_task_inputs(self, task: Task):
+    @property
+    def processing_task_count(self) -> int:
+        return len(self._processing_task_ids)
+
+    async def _load_task_inputs(self, task: Task) -> Tuple[Any, List[Any]]:
         serializer_id = ObjectID.generate_serializer_object_id(task.source)
 
         if serializer_id not in self._serializers:

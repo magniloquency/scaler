@@ -461,4 +461,4 @@ class TestTaskManagerOnTaskResult(unittest.IsolatedAsyncioTestCase):
         self.connector_external.send.assert_called_once_with(result)
         self.assertNotIn(task.taskId, self.tm._processing_task_ids)
         self.assertNotIn(task.taskId, self.tm._task_id_to_task)
-        self.backend.on_cleanup.assert_called_once_with(task.taskId)
+        self.backend.on_cleanup.assert_not_called()

@@ -142,6 +142,10 @@ class ORBWorkerPool(WorkerPool):
     def set_template_id(self, template_id: str) -> None:
         self._template_id = template_id
 
+    @property
+    def template_id(self) -> str:
+        return self._template_id
+
 
 class ORBAWSEC2WorkerAdapter(WorkerManagerRunner):
     def __init__(self, config: ORBAWSEC2WorkerAdapterConfig) -> None:
@@ -388,7 +392,7 @@ nohup scaler_worker_manager baremetal_native {self._worker_scheduler_address!r} 
         subnet_response = self._ec2.describe_subnets(SubnetIds=[self._subnet_id])
         vpc_id = subnet_response["Subnets"][0]["VpcId"]
 
-        group_name = f"opengris-orb-sg-{self._orb_pool._template_id}"
+        group_name = f"opengris-orb-sg-{self._orb_pool.template_id}"
         sg_response = self._ec2.create_security_group(
             Description="Temporary security group created for OpenGRIS ORB worker adapter",
             GroupName=group_name,
@@ -398,7 +402,7 @@ nohup scaler_worker_manager baremetal_native {self._worker_scheduler_address!r} 
         logging.info(f"Created security group with ID: {self._created_security_group_id}")
 
     def _create_key_pair(self) -> None:
-        key_name = f"opengris-orb-key-{self._orb_pool._template_id}"
+        key_name = f"opengris-orb-key-{self._orb_pool.template_id}"
         self._ec2.create_key_pair(KeyName=key_name)
         self._created_key_name = key_name
         logging.info(f"Created key pair: {key_name}")

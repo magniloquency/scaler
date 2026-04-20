@@ -1,8 +1,8 @@
 import asyncio
 from abc import ABC, abstractmethod
-from typing import Any, Callable, List, Tuple
+from typing import Any, Awaitable, Callable, List, Optional, Tuple
 
-from scaler.protocol.capnp import Task, TaskCancel, WorkerManagerCommandResponse
+from scaler.protocol.capnp import ProcessorStatus, Task, TaskCancel, WorkerManagerCommandResponse
 from scaler.utility.identifiers import TaskID
 
 Status = WorkerManagerCommandResponse.Status
@@ -13,11 +13,14 @@ class ProcessorStatusProvider(ABC):
         pass
 
     @abstractmethod
-    def get_processor_statuses(self) -> List: ...
+    def get_processor_statuses(self) -> List[ProcessorStatus]: ...
 
 
 class ExecutionBackend(ABC):
-    def register(self, load_task_inputs: Callable) -> None:
+    def __init__(self) -> None:
+        self._load_task_inputs: Optional[Callable[[Task], Awaitable[Tuple[Any, List[Any]]]]] = None
+
+    def register(self, load_task_inputs: Callable[[Task], Awaitable[Tuple[Any, List[Any]]]]) -> None:
         self._load_task_inputs = load_task_inputs
 
     @abstractmethod

@@ -63,7 +63,7 @@ class WorkerManagerRunner:
             self._connector_external.destroy()
 
     def _destroy(self) -> None:
-        print(f"Worker manager {self._ident!r} received signal, shutting down")
+        logging.info(f"Worker manager {self._ident!r} received signal, shutting down")
         self._task.cancel()
 
     def _register_signal(self) -> None:

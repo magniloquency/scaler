@@ -11,11 +11,11 @@ class AWSProcessorStatusProvider(ProcessorStatusProvider):
     def set_task_manager(self, task_manager: Any) -> None:
         self._task_manager = task_manager
 
-    def get_processor_statuses(self) -> List:
+    def get_processor_statuses(self) -> List[ProcessorStatus]:
         if self._task_manager is None:
             return []
 
-        processing_tasks = len(self._task_manager._processing_task_ids)
+        processing_tasks = self._task_manager.processing_task_count
         return [
             ProcessorStatus(
                 pid=0, initialized=True, hasTask=processing_tasks > 0, suspended=False, resource=Resource(cpu=0, rss=0)

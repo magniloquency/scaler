@@ -83,7 +83,7 @@ class HeartbeatManager(Looper, HeartbeatManagerMixin):
                 queueSize=self._task_queue_size,
                 queuedTasks=self._task_manager.get_queued_size(),
                 latencyUS=self._latency_us,
-                taskLock=self._task_manager.can_accept_task(),
+                taskLock=not self._task_manager.can_accept_task(),
                 processors=self._processor_status_provider.get_processor_statuses(),
                 capabilities=self._capabilities,
                 workerManagerID=self._worker_manager_id,
