@@ -33,6 +33,8 @@ class TestClusterDisconnect(unittest.TestCase):
 
     def test_cluster_disconnect(self):
         base_config = self.combo._worker_manager.config
+        base_worker_config = base_config.worker_config
+        base_logging_config = base_config.logging_config
         dying_manager = NativeWorkerManager(
             NativeWorkerManagerConfig(
                 worker_manager_config=WorkerManagerConfig(
@@ -44,20 +46,20 @@ class TestClusterDisconnect(unittest.TestCase):
                 mode=NativeWorkerManagerMode.FIXED,
                 worker_config=WorkerConfig(
                     per_worker_capabilities=WorkerCapabilities({}),
-                    per_worker_task_queue_size=base_config.worker_config.per_worker_task_queue_size,
-                    heartbeat_interval_seconds=base_config.worker_config.heartbeat_interval_seconds,
-                    task_timeout_seconds=base_config.worker_config.task_timeout_seconds,
-                    death_timeout_seconds=base_config.worker_config.death_timeout_seconds,
-                    garbage_collect_interval_seconds=base_config.worker_config.garbage_collect_interval_seconds,
-                    trim_memory_threshold_bytes=base_config.worker_config.trim_memory_threshold_bytes,
-                    hard_processor_suspend=base_config.worker_config.hard_processor_suspend,
-                    io_threads=base_config.worker_config.io_threads,
-                    event_loop=base_config.worker_config.event_loop,
+                    per_worker_task_queue_size=base_worker_config.per_worker_task_queue_size,
+                    heartbeat_interval_seconds=base_worker_config.heartbeat_interval_seconds,
+                    task_timeout_seconds=base_worker_config.task_timeout_seconds,
+                    death_timeout_seconds=base_worker_config.death_timeout_seconds,
+                    garbage_collect_interval_seconds=base_worker_config.garbage_collect_interval_seconds,
+                    trim_memory_threshold_bytes=base_worker_config.trim_memory_threshold_bytes,
+                    hard_processor_suspend=base_worker_config.hard_processor_suspend,
+                    io_threads=base_worker_config.io_threads,
+                    event_loop=base_worker_config.event_loop,
                 ),
                 logging_config=LoggingConfig(
                     paths=DEFAULT_LOGGING_PATHS,
-                    level=base_config.logging_config.level,
-                    config_file=base_config.logging_config.config_file,
+                    level=base_logging_config.level,
+                    config_file=base_logging_config.config_file,
                 ),
             )
         )

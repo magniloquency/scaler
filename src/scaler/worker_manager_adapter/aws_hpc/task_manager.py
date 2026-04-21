@@ -62,6 +62,7 @@ class AWSBatchExecutionBackend(ExecutionBackend):
         logging.info(f"AWS HPC task manager initialized: region={self._aws_region}, queue={self._job_queue}")
 
     async def routine(self) -> None:
+        """Flush pending batch when the collection window has expired."""
         if not self._batch_pending:
             return
 
@@ -122,12 +123,14 @@ class AWSBatchExecutionBackend(ExecutionBackend):
                     f.set_exception(e)
 
     async def _run_in_executor(self, func: Any, *args: Any, **kwargs: Any) -> Any:
+        """Run a blocking AWS SDK call in the thread pool to avoid starving the event loop."""
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(self._executor, lambda: func(*args, **kwargs))
 
     async def _submit_array_job(
         self, batch: List[Tuple[Task, Any, List[Any]]], futures_map: Dict[TaskID, Future]
     ) -> None:
+        """Submit multiple tasks as a single AWS Batch array job and monitor child results."""
         import gzip
         import re
         import uuid
@@ -205,14 +208,15 @@ class AWSBatchExecutionBackend(ExecutionBackend):
         futures_map: Dict[TaskID, Future],
         s3_prefix_array: str,
     ) -> None:
+        """Poll child job statuses and resolve each task future as jobs complete or fail."""
         import gzip
 
-        poll_interval = 3.0
+        poll_interval_seconds = 3.0
         resolved: Set[int] = set()
         total = len(index_to_task_id)
 
         while len(resolved) < total:
-            await asyncio.sleep(poll_interval)
+            await asyncio.sleep(poll_interval_seconds)
 
             try:
                 unresolved_indices = [i for i in index_to_task_id if i not in resolved]
@@ -349,12 +353,13 @@ class AWSBatchExecutionBackend(ExecutionBackend):
         return response["jobId"]
 
     async def _monitor_batch_job(self, job_id: str, future: Future, task_id: TaskID) -> None:
+        """Poll a single Batch job until it succeeds or fails, then resolve the future."""
         import gzip
 
-        poll_interval = 2.0
+        poll_interval_seconds = 2.0
 
         while True:
-            await asyncio.sleep(poll_interval)
+            await asyncio.sleep(poll_interval_seconds)
 
             try:
                 response = await self._run_in_executor(self._batch_client.describe_jobs, jobs=[job_id])

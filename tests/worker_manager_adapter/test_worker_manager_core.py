@@ -28,47 +28,6 @@ from tests.utility.utility import logging_test_name
 Status = WorkerManagerCommandResponse.Status
 
 
-# ─── helpers ─────────────────────────────────────────────────────────────────
-
-
-def _make_task(source: Optional[ClientID] = None) -> Task:
-    source = source or ClientID.generate_client_id()
-    return Task(
-        taskId=TaskID.generate_task_id(),
-        source=source,
-        metadata=TaskFlags(priority=0).serialize(),
-        funcObjectId=ObjectID.generate_object_id(source),
-        functionArgs=[],
-        capabilities={},
-    )
-
-
-def _make_task_cancel() -> TaskCancel:
-    return TaskCancel(taskId=TaskID.generate_task_id(), flags=TaskCancel.TaskCancelFlags(force=False))
-
-
-def _make_object_instruction() -> ObjectInstruction:
-    client_id = ClientID.generate_client_id()
-    return ObjectInstruction(
-        instructionType=ObjectInstruction.ObjectInstructionType.delete,
-        objectUser=client_id,
-        objectMetadata=ObjectMetadata(
-            objectIds=(ObjectID.generate_object_id(client_id),), objectTypes=(), objectNames=()
-        ),
-    )
-
-
-def _make_native_pool(max_workers: int = 2) -> NativeWorkerPool:
-    config = MagicMock()
-    config.worker_manager_config.max_task_concurrency = max_workers
-    config.worker_manager_config.worker_manager_id.encode.return_value = b"mgr"
-    config.worker_type = "NAT"
-    return NativeWorkerPool(config)
-
-
-# ─── WorkerManagerRunner._handle_command ─────────────────────────────────────
-
-
 class TestWorkerManagerHandleCommand(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         setup_logger()
@@ -142,9 +101,6 @@ class TestWorkerManagerHandleCommand(unittest.IsolatedAsyncioTestCase):
 
         with self.assertRaises(ValueError):
             await self.runner._handle_command(cmd)
-
-
-# ─── WorkerProcess.__on_receive_external ─────────────────────────────────────
 
 
 class TestWorkerProcessOnReceiveExternal(unittest.IsolatedAsyncioTestCase):
@@ -252,9 +208,6 @@ class TestWorkerProcessOnReceiveExternal(unittest.IsolatedAsyncioTestCase):
             await self._dispatch(_Unknown())
 
 
-# ─── NativeWorkerPool.start_worker / shutdown_workers ────────────────────────
-
-
 class TestNativeWorkerPool(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         setup_logger()
@@ -307,3 +260,38 @@ class TestNativeWorkerPool(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(ids, [worker_id_bytes])
         self.assertEqual(status, Status.success)
         self.assertNotIn(worker_id, pool._workers)
+
+
+def _make_task(source: Optional[ClientID] = None) -> Task:
+    source = source or ClientID.generate_client_id()
+    return Task(
+        taskId=TaskID.generate_task_id(),
+        source=source,
+        metadata=TaskFlags(priority=0).serialize(),
+        funcObjectId=ObjectID.generate_object_id(source),
+        functionArgs=[],
+        capabilities={},
+    )
+
+
+def _make_task_cancel() -> TaskCancel:
+    return TaskCancel(taskId=TaskID.generate_task_id(), flags=TaskCancel.TaskCancelFlags(force=False))
+
+
+def _make_object_instruction() -> ObjectInstruction:
+    client_id = ClientID.generate_client_id()
+    return ObjectInstruction(
+        instructionType=ObjectInstruction.ObjectInstructionType.delete,
+        objectUser=client_id,
+        objectMetadata=ObjectMetadata(
+            objectIds=(ObjectID.generate_object_id(client_id),), objectTypes=(), objectNames=()
+        ),
+    )
+
+
+def _make_native_pool(max_workers: int = 2) -> NativeWorkerPool:
+    config = MagicMock()
+    config.worker_manager_config.max_task_concurrency = max_workers
+    config.worker_manager_config.worker_manager_id.encode.return_value = b"mgr"
+    config.worker_type = "NAT"
+    return NativeWorkerPool(config)
