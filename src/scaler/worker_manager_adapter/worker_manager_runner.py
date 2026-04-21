@@ -33,6 +33,7 @@ class WorkerManagerRunner:
         worker_manager_id: bytes,
         worker_pool: WorkerPool,
         io_threads: int = 1,
+        heartbeat_concurrency_multiplier: int = 1,
     ) -> None:
         self._address = address
         self._name = name
@@ -42,6 +43,7 @@ class WorkerManagerRunner:
         self._worker_manager_id = worker_manager_id
         self._worker_pool = worker_pool
         self._io_threads = io_threads
+        self._heartbeat_concurrency_multiplier = heartbeat_concurrency_multiplier
 
         self._backend: Optional[NetworkBackend] = None
         self._connector_external: Optional[AsyncConnector] = None
@@ -58,9 +60,18 @@ class WorkerManagerRunner:
         self._loop = asyncio.new_event_loop()
         run_task_forever(self._loop, self._run(), cleanup_callback=self._cleanup)
 
+    async def run_in_loop(self, loop: asyncio.AbstractEventLoop) -> None:
+        """Run all event loops using an externally-managed loop. For use when the caller controls the loop lifecycle."""
+        self._loop = loop
+        self._task = loop.create_task(self._get_loops())
+        await self._task
+
     def _cleanup(self) -> None:
         if self._connector_external is not None:
             self._connector_external.destroy()
+
+    def cleanup(self) -> None:
+        self._cleanup()
 
     def _destroy(self) -> None:
         logging.info(f"Worker manager {self._ident!r} received signal, shutting down")
@@ -81,7 +92,7 @@ class WorkerManagerRunner:
     async def _send_heartbeat(self) -> None:
         await self._connector_external.send(
             WorkerManagerHeartbeat(
-                maxTaskConcurrency=self._max_task_concurrency,
+                maxTaskConcurrency=self._max_task_concurrency * self._heartbeat_concurrency_multiplier,
                 capabilities=self._capabilities,
                 workerManagerID=self._worker_manager_id,
             )
@@ -110,12 +121,15 @@ class WorkerManagerRunner:
             logging.exception(f"{self._ident!r}: failed with unhandled exception")
 
     async def _on_receive_external(self, message: BaseMessage) -> None:
-        if isinstance(message, WorkerManagerCommand):
-            await self._handle_command(message)
-        elif isinstance(message, WorkerManagerHeartbeatEcho):
-            pass
-        else:
-            logging.warning(f"Received unknown message type: {type(message)}")
+        try:
+            if isinstance(message, WorkerManagerCommand):
+                await self._handle_command(message)
+            elif isinstance(message, WorkerManagerHeartbeatEcho):
+                pass
+            else:
+                logging.warning(f"Received unknown message type: {type(message)}")
+        except Exception:
+            logging.exception(f"Unhandled exception while processing message {type(message).__name__}")
 
     async def _handle_command(self, command: WorkerManagerCommand) -> None:
         cmd_type = command.command

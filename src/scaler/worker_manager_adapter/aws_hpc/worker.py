@@ -22,6 +22,7 @@ def create_aws_batch_worker(
     aws_region: str,
     s3_bucket: str,
     worker_manager_id: bytes,
+    name: Optional[str] = None,
     s3_prefix: str = "scaler-tasks",
     capabilities: Optional[Dict[str, int]] = None,
     base_concurrency: int = 100,
@@ -33,7 +34,7 @@ def create_aws_batch_worker(
     job_timeout_seconds: int = 3600,
 ) -> WorkerProcess:
     return WorkerProcess(
-        name=f"AWS|{uuid.uuid4().hex}",
+        name=name or f"AWS|{uuid.uuid4().hex}",
         address=address,
         object_storage_address=object_storage_address,
         capabilities=capabilities or {},

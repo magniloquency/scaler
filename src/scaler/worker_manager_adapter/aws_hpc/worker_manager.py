@@ -15,6 +15,7 @@ class AWSHPCWorkerManager:
             raise NotImplementedError(f"backend {config.backend.name!r} is not yet implemented")
 
         worker = create_aws_batch_worker(
+            name=config.name,
             address=config.worker_manager_config.effective_worker_scheduler_address,
             object_storage_address=config.worker_manager_config.object_storage_address,
             job_queue=config.job_queue,

@@ -7,7 +7,7 @@ from typing import Dict, List, Tuple
 import boto3
 
 from scaler.config.section.ecs_worker_manager import ECSWorkerManagerConfig
-from scaler.protocol.capnp import WorkerManagerCommandResponse, WorkerManagerHeartbeat
+from scaler.protocol.capnp import WorkerManagerCommandResponse
 from scaler.worker_manager_adapter.common import format_capabilities
 from scaler.worker_manager_adapter.mixins import WorkerPool
 from scaler.worker_manager_adapter.worker_manager_runner import WorkerManagerRunner
@@ -188,7 +188,7 @@ class ECSWorkerPool(WorkerPool):
 class ECSWorkerManager:
     def __init__(self, config: ECSWorkerManagerConfig) -> None:
         pool = ECSWorkerPool(config)
-        self._runner = _ECSWorkerManagerRunner(
+        self._runner = WorkerManagerRunner(
             address=config.worker_manager_config.scheduler_address,
             name="worker_manager_ecs",
             heartbeat_interval_seconds=config.worker_config.heartbeat_interval_seconds,
@@ -196,23 +196,8 @@ class ECSWorkerManager:
             max_task_concurrency=config.worker_manager_config.max_task_concurrency,
             worker_manager_id=config.worker_manager_config.worker_manager_id.encode(),
             worker_pool=pool,
-            ecs_task_cpu=config.ecs_task_cpu,
+            heartbeat_concurrency_multiplier=config.ecs_task_cpu,
         )
 
     def run(self) -> None:
         self._runner.run()
-
-
-class _ECSWorkerManagerRunner(WorkerManagerRunner):
-    def __init__(self, *, ecs_task_cpu: int, **kwargs) -> None:
-        super().__init__(**kwargs)
-        self._ecs_task_cpu = ecs_task_cpu
-
-    async def _send_heartbeat(self) -> None:
-        await self._connector_external.send(
-            WorkerManagerHeartbeat(
-                maxTaskConcurrency=self._max_task_concurrency * self._ecs_task_cpu,
-                capabilities=self._capabilities,
-                workerManagerID=self._worker_manager_id,
-            )
-        )

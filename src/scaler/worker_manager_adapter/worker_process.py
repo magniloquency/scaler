@@ -48,7 +48,7 @@ class WorkerProcess(_SpawnProcess):  # type: ignore[valid-type, misc]
         processor_status_provider_factory: Callable[[], ProcessorStatusProvider],
         execution_backend_factory: Callable[[], ExecutionBackend],
     ) -> None:
-        super().__init__(name="Agent")
+        super().__init__(name=name)
 
         self._event_loop = event_loop
         self._name = name

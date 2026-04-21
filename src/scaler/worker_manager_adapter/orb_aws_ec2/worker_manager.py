@@ -12,7 +12,7 @@ except ModuleNotFoundError as exc:
 
 from scaler.config.section.orb_aws_ec2_worker_adapter import ORBAWSEC2WorkerAdapterConfig
 from scaler.protocol.capnp import WorkerManagerCommandResponse
-from scaler.utility.event_loop import register_event_loop
+from scaler.utility.event_loop import register_event_loop, run_task_forever
 from scaler.utility.identifiers import WorkerID
 from scaler.utility.logging.utility import setup_logger
 from scaler.worker_manager_adapter.common import format_capabilities
@@ -147,11 +147,14 @@ class ORBWorkerPool(WorkerPool):
     def template_id(self) -> Optional[str]:
         return self._template_id
 
+    @property
+    def sdk(self) -> Optional[Any]:
+        return self._sdk
 
-class ORBAWSEC2WorkerAdapter(WorkerManagerRunner):
+
+class ORBAWSEC2WorkerAdapter:
     def __init__(self, config: ORBAWSEC2WorkerAdapterConfig) -> None:
         self._config = config
-        self._address = config.worker_manager_config.scheduler_address
         self._worker_scheduler_address = config.worker_manager_config.effective_worker_scheduler_address
         self._event_loop = config.worker_config.event_loop
         self._logging_paths = config.logging_config.paths
@@ -159,6 +162,16 @@ class ORBAWSEC2WorkerAdapter(WorkerManagerRunner):
         self._logging_config_file = config.logging_config.config_file
 
         self._orb_pool = ORBWorkerPool(config)
+        self._runner = WorkerManagerRunner(
+            address=config.worker_manager_config.scheduler_address,
+            name="worker_manager_orb_aws_ec2",
+            heartbeat_interval_seconds=config.worker_config.heartbeat_interval_seconds,
+            capabilities=config.worker_config.per_worker_capabilities.capabilities,
+            max_task_concurrency=config.worker_manager_config.max_task_concurrency,
+            worker_manager_id=config.worker_manager_config.worker_manager_id.encode(),
+            worker_pool=self._orb_pool,
+        )
+
         self._ec2: Optional[Any] = None
         self._created_security_group_id: Optional[str] = None
         self._created_key_name: Optional[str] = None
@@ -168,16 +181,6 @@ class ORBAWSEC2WorkerAdapter(WorkerManagerRunner):
         if config.image_id is None:
             requirements_content = self._load_requirements_content(config.requirements_txt)
             self._validate_requirements(requirements_content)
-
-        super().__init__(
-            address=config.worker_manager_config.scheduler_address,
-            name="worker_manager_orb_aws_ec2",
-            heartbeat_interval_seconds=config.worker_config.heartbeat_interval_seconds,
-            capabilities=config.worker_config.per_worker_capabilities.capabilities,
-            max_task_concurrency=config.worker_manager_config.max_task_concurrency,
-            worker_manager_id=config.worker_manager_config.worker_manager_id.encode(),
-            worker_pool=self._orb_pool,
-        )
 
     def _build_app_config(self) -> dict:
         region = self._config.aws_region or "us-east-1"
@@ -223,7 +226,7 @@ class ORBAWSEC2WorkerAdapter(WorkerManagerRunner):
 
         image_id = self._config.image_id or self._discover_latest_al2023_ami()
 
-        sdk = self._orb_pool._sdk
+        sdk = self._orb_pool.sdk
         create_result = await sdk.create_template(
             template_id=template_id,
             name=f"opengris-orb-{template_id}",
@@ -243,6 +246,10 @@ class ORBAWSEC2WorkerAdapter(WorkerManagerRunner):
         validate_result = await sdk.validate_template(template_id=template_id)
         logging.info(f"validate_template result: {validate_result}")
 
+    def run(self) -> None:
+        self._loop = asyncio.new_event_loop()
+        run_task_forever(self._loop, self._run(), cleanup_callback=self._cleanup)
+
     async def _run(self) -> None:
         register_event_loop(self._event_loop)
 
@@ -257,9 +264,8 @@ class ORBAWSEC2WorkerAdapter(WorkerManagerRunner):
             self._orb_pool.set_sdk(sdk)
             setup_logger(self._logging_paths, self._logging_config_file, self._logging_level)
             await self._setup()
-            self._task = self._loop.create_task(self._get_loops())
             try:
-                await self._task
+                await self._runner.run_in_loop(self._loop)
             except asyncio.CancelledError:
                 pass
             finally:
@@ -267,19 +273,12 @@ class ORBAWSEC2WorkerAdapter(WorkerManagerRunner):
 
         self._orb_pool.set_sdk(None)
 
-    async def _on_receive_external(self, message) -> None:
-        try:
-            await super()._on_receive_external(message)
-        except Exception:
-            logging.exception(f"Unhandled exception while processing message {type(message).__name__}")
-
     def _cleanup(self) -> None:
         if self._cleaned_up:
             return
         self._cleaned_up = True
 
-        if self._connector_external is not None:
-            self._connector_external.destroy()
+        self._runner.cleanup()
 
         logging.info("Starting cleanup of AWS resources...")
 

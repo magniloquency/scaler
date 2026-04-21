@@ -141,7 +141,7 @@ class TaskManager(Looper, TaskManagerMixin):
 
     async def resolve_tasks(self) -> None:
         if not self._task_id_to_future:
-            await asyncio.sleep(0)
+            await asyncio.sleep(0.1)
             return
 
         done, _ = await asyncio.wait(self._task_id_to_future.values(), return_when=asyncio.FIRST_COMPLETED)
