@@ -9,7 +9,7 @@ import boto3
 from scaler.config.section.ecs_worker_manager import ECSWorkerManagerConfig
 from scaler.protocol.capnp import WorkerManagerCommandResponse
 from scaler.worker_manager_adapter.common import format_capabilities
-from scaler.worker_manager_adapter.mixins import WorkerPool
+from scaler.worker_manager_adapter.mixins import WorkerProvisioner
 from scaler.worker_manager_adapter.worker_manager_runner import WorkerManagerRunner
 
 Status = WorkerManagerCommandResponse.Status
@@ -22,7 +22,7 @@ class _WorkerGroupInfo:
     task_arn: str
 
 
-class ECSWorkerPool(WorkerPool):
+class ECSWorkerPool(WorkerProvisioner):
     def __init__(self, config: ECSWorkerManagerConfig) -> None:
         self._worker_scheduler_address = config.worker_manager_config.effective_worker_scheduler_address
         self._object_storage_address = config.worker_manager_config.object_storage_address

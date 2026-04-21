@@ -42,7 +42,7 @@ class ExecutionBackend(ABC):
         pass
 
 
-class WorkerPool(ABC):
+class WorkerProvisioner(ABC):
     @abstractmethod
     async def start_worker(self) -> Tuple[List[bytes], Status]: ...
 

@@ -6,7 +6,7 @@ from typing import Dict, List, Tuple
 from scaler.config.section.symphony_worker_manager import SymphonyWorkerManagerConfig
 from scaler.protocol.capnp import WorkerManagerCommandResponse
 from scaler.utility.identifiers import WorkerID
-from scaler.worker_manager_adapter.mixins import WorkerPool
+from scaler.worker_manager_adapter.mixins import WorkerProvisioner
 from scaler.worker_manager_adapter.symphony.worker import create_symphony_worker
 from scaler.worker_manager_adapter.worker_manager_runner import WorkerManagerRunner
 from scaler.worker_manager_adapter.worker_process import WorkerProcess
@@ -14,7 +14,7 @@ from scaler.worker_manager_adapter.worker_process import WorkerProcess
 Status = WorkerManagerCommandResponse.Status
 
 
-class SymphonyWorkerPool(WorkerPool):
+class SymphonyWorkerPool(WorkerProvisioner):
     def __init__(self, config: SymphonyWorkerManagerConfig) -> None:
         self._worker_scheduler_address = config.worker_manager_config.effective_worker_scheduler_address
         self._object_storage_address = config.worker_manager_config.object_storage_address

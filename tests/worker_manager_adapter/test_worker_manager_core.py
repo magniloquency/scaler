@@ -20,7 +20,7 @@ from scaler.utility.identifiers import ClientID, ObjectID, TaskID, WorkerID
 from scaler.utility.logging.utility import setup_logger
 from scaler.utility.metadata.task_flags import TaskFlags
 from scaler.worker_manager_adapter.baremetal.native import NativeWorkerPool
-from scaler.worker_manager_adapter.mixins import WorkerPool
+from scaler.worker_manager_adapter.mixins import WorkerProvisioner
 from scaler.worker_manager_adapter.worker_manager_runner import WorkerManagerRunner
 from scaler.worker_manager_adapter.worker_process import WorkerProcess
 from tests.utility.utility import logging_test_name
@@ -33,7 +33,7 @@ class TestWorkerManagerHandleCommand(unittest.IsolatedAsyncioTestCase):
         setup_logger()
         logging_test_name(self)
         self.capabilities = {"cpu": 4}
-        self.pool = MagicMock(spec=WorkerPool)
+        self.pool = MagicMock(spec=WorkerProvisioner)
         self.pool.start_worker = AsyncMock()
         self.pool.shutdown_workers = AsyncMock()
         self.send_mock = AsyncMock()

@@ -17,7 +17,7 @@ from scaler.protocol.capnp import (
     WorkerManagerHeartbeatEcho,
 )
 from scaler.utility.event_loop import create_async_loop_routine, run_task_forever
-from scaler.worker_manager_adapter.mixins import WorkerPool
+from scaler.worker_manager_adapter.mixins import WorkerProvisioner
 
 Status = WorkerManagerCommandResponse.Status
 
@@ -31,7 +31,7 @@ class WorkerManagerRunner:
         capabilities: Dict[str, int],
         max_task_concurrency: int,
         worker_manager_id: bytes,
-        worker_pool: WorkerPool,
+        worker_pool: WorkerProvisioner,
         io_threads: int = 1,
         heartbeat_concurrency_multiplier: int = 1,
     ) -> None:

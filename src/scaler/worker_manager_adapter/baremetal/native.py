@@ -8,13 +8,13 @@ from scaler.config.section.native_worker_manager import NativeWorkerManagerConfi
 from scaler.protocol.capnp import WorkerManagerCommandResponse
 from scaler.utility.identifiers import WorkerID
 from scaler.worker.worker import Worker
-from scaler.worker_manager_adapter.mixins import WorkerPool
+from scaler.worker_manager_adapter.mixins import WorkerProvisioner
 from scaler.worker_manager_adapter.worker_manager_runner import WorkerManagerRunner
 
 Status = WorkerManagerCommandResponse.Status
 
 
-class NativeWorkerPool(WorkerPool):
+class NativeWorkerPool(WorkerProvisioner):
     def __init__(self, config: NativeWorkerManagerConfig) -> None:
         self._worker_scheduler_address = config.worker_manager_config.effective_worker_scheduler_address
         self._object_storage_address = config.worker_manager_config.object_storage_address

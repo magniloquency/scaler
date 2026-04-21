@@ -16,7 +16,7 @@ from scaler.utility.event_loop import register_event_loop, run_task_forever
 from scaler.utility.identifiers import WorkerID
 from scaler.utility.logging.utility import setup_logger
 from scaler.worker_manager_adapter.common import format_capabilities
-from scaler.worker_manager_adapter.mixins import WorkerPool
+from scaler.worker_manager_adapter.mixins import WorkerProvisioner
 from scaler.worker_manager_adapter.worker_manager_runner import WorkerManagerRunner
 
 Status = WorkerManagerCommandResponse.Status
@@ -32,7 +32,7 @@ def get_orb_aws_ec2_worker_name(instance_id: str) -> str:
     return f"Worker|ORB|{instance_id}|{tag}"
 
 
-class ORBWorkerPool(WorkerPool):
+class ORBWorkerPool(WorkerProvisioner):
     def __init__(self, config: ORBAWSEC2WorkerAdapterConfig) -> None:
         self._config = config
         self._max_task_concurrency = config.worker_manager_config.max_task_concurrency
