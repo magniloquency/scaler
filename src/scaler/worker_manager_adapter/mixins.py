@@ -20,10 +20,11 @@ class ProcessorStatusProvider(ABC):
 
 
 class ExecutionBackend(ABC):
-    _load_task_inputs: Callable[[Task], Awaitable[Tuple[Any, List[Any]]]]
+    async def _load_task_inputs(self, task: Task) -> Tuple[Any, List[Any]]:
+        raise RuntimeError(f"{type(self).__name__}.register() must be called before execute()")
 
     def register(self, load_task_inputs: Callable[[Task], Awaitable[Tuple[Any, List[Any]]]]) -> None:
-        self._load_task_inputs = load_task_inputs
+        self._load_task_inputs = load_task_inputs  # type: ignore[method-assign]
 
     @abstractmethod
     async def execute(self, task: Task) -> asyncio.Future: ...
