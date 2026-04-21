@@ -60,6 +60,7 @@ Both C++ and Python code share these standards:
 - Maximum line length is 120 characters
 - Traditional OOP inheritance is highly discouraged, composition is preferred. Prefer interfaces, abstract classes
   and/or mixins
+- Abstract classes must not contain any non-abstract methods
 - Explicit naming is preferred. Avoid abbreviations unless widely understood (e.g., `msg`)
 - Avoid single letter variables (e.g. `c`), except for `i`, `j` and `n` when used as iteration variables/boundaries
 - Avoid magic numbers, prefer constants
