@@ -27,7 +27,7 @@ def main():
         n_workers=2, scaler_policy=PolicyConfig(policy_content="allocate=capability; scaling=no")
     )
 
-    base_config = cluster._worker_manager._config
+    base_config = cluster._worker_manager.config
     gpu_manager = NativeWorkerManager(
         NativeWorkerManagerConfig(
             worker_manager_config=WorkerManagerConfig(

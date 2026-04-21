@@ -47,6 +47,8 @@ class ECSWorkerPool(WorkerPool):
         self._ecs_task_cpu = config.ecs_task_cpu
         self._ecs_task_memory = config.ecs_task_memory
         self._ecs_subnets = config.ecs_subnets
+        self._worker_manager_id = config.worker_manager_config.worker_manager_id.encode()
+        self._worker_groups: Dict[_WorkerGroupID, _WorkerGroupInfo] = {}
 
         aws_session = boto3.Session(
             aws_access_key_id=config.aws_access_key_id,
@@ -60,9 +62,6 @@ class ECSWorkerPool(WorkerPool):
         if not clusters or clusters[0]["status"] != "ACTIVE":
             logging.info(f"ECS cluster '{self._ecs_cluster}' missing, creating it.")
             self._ecs_client.create_cluster(clusterName=self._ecs_cluster)
-
-        self._worker_manager_id = config.worker_manager_config.worker_manager_id.encode()
-        self._worker_groups: Dict[_WorkerGroupID, _WorkerGroupInfo] = {}
 
         try:
             resp = self._ecs_client.describe_task_definition(taskDefinition=self._ecs_task_definition)
@@ -196,6 +195,7 @@ class ECSWorkerManager:
             max_task_concurrency=config.worker_manager_config.max_task_concurrency,
             worker_manager_id=config.worker_manager_config.worker_manager_id.encode(),
             worker_pool=pool,
+            io_threads=config.worker_config.io_threads,
             heartbeat_concurrency_multiplier=config.ecs_task_cpu,
         )
 

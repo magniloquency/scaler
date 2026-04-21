@@ -361,7 +361,7 @@ class TestClientPreload(unittest.TestCase):
         self.combo.shutdown()
 
     def _create_preload_cluster(self, preload: str, logging_paths: tuple = ("/dev/stdout",)):
-        base_config = self.combo._worker_manager._config
+        base_config = self.combo._worker_manager.config
         preload_manager = NativeWorkerManager(
             NativeWorkerManagerConfig(
                 worker_manager_config=WorkerManagerConfig(

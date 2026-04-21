@@ -30,7 +30,7 @@ class TestCapabilities(unittest.TestCase):
         self.combo.shutdown()
 
     def test_capabilities(self):
-        base_config = self.combo._worker_manager._config
+        base_config = self.combo._worker_manager.config
 
         with Client(self.address) as client:
             client.submit(round, 3.14).result()  # Ensures the cluster is ready
@@ -79,7 +79,7 @@ class TestCapabilities(unittest.TestCase):
             gpu_process.join()
 
     def test_graph_capabilities(self):
-        base_config = self.combo._worker_manager._config
+        base_config = self.combo._worker_manager.config
 
         with Client(self.address) as client:
             client.submit(round, 3.14).result()  # Ensures the cluster is ready

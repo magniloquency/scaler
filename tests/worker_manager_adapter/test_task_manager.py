@@ -60,6 +60,14 @@ class TestTaskManagerInit(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ValueError):
             TaskManager(-1, self.backend)
 
+    def test_idle_sleep_defaults_to_zero(self) -> None:
+        tm = TaskManager(1, self.backend)
+        self.assertEqual(tm._idle_sleep_seconds, 0.0)
+
+    def test_idle_sleep_custom_value_stored(self) -> None:
+        tm = TaskManager(1, self.backend, idle_sleep_seconds=0.1)
+        self.assertEqual(tm._idle_sleep_seconds, 0.1)
+
     def test_valid_concurrency_empty_state(self) -> None:
         tm = TaskManager(2, self.backend)
         self.assertEqual(len(tm._task_id_to_task), 0)
@@ -343,8 +351,6 @@ class TestTaskManagerProcessTask(unittest.IsolatedAsyncioTestCase):
         self.assertIn(task.taskId, self.tm._acquiring_task_ids)
         self.assertIs(self.tm._task_id_to_future[task.taskId], fut)
         self.assertEqual(self.tm.get_queued_size(), 0)
-        # _queued_task_ids set is NOT cleared by process_task; it persists as a
-        # cancellation-lookup flag until on_cancel_task or on_task_result clears it.
         self.assertIn(task.taskId, self.tm._queued_task_ids)
         self.assertTrue(self.tm._executor_semaphore.locked())
 

@@ -118,6 +118,10 @@ class NativeWorkerManager:
     def __init__(self, config: NativeWorkerManagerConfig) -> None:
         self._config = config
 
+    @property
+    def config(self) -> NativeWorkerManagerConfig:
+        return self._config
+
     def run(self) -> None:
         pool = NativeWorkerPool(self._config)
 
@@ -133,5 +137,6 @@ class NativeWorkerManager:
             max_task_concurrency=self._config.worker_manager_config.max_task_concurrency,
             worker_manager_id=self._config.worker_manager_config.worker_manager_id.encode(),
             worker_pool=pool,
+            io_threads=self._config.worker_config.io_threads,
         )
         runner.run()

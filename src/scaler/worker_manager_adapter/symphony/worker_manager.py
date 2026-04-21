@@ -82,6 +82,7 @@ class SymphonyWorkerManager:
             max_task_concurrency=config.worker_manager_config.max_task_concurrency,
             worker_manager_id=config.worker_manager_config.worker_manager_id.encode(),
             worker_pool=pool,
+            io_threads=config.worker_config.io_threads,
         )
 
     def run(self) -> None:

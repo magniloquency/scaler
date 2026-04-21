@@ -49,7 +49,7 @@ class TestBalance(unittest.TestCase):
 
         time.sleep(3)
 
-        base_config = combo._worker_manager._config
+        base_config = combo._worker_manager.config
         new_manager = NativeWorkerManager(
             NativeWorkerManagerConfig(
                 worker_manager_config=WorkerManagerConfig(

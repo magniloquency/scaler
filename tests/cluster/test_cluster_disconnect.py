@@ -32,7 +32,7 @@ class TestClusterDisconnect(unittest.TestCase):
         pass
 
     def test_cluster_disconnect(self):
-        base_config = self.combo._worker_manager._config
+        base_config = self.combo._worker_manager.config
         dying_manager = NativeWorkerManager(
             NativeWorkerManagerConfig(
                 worker_manager_config=WorkerManagerConfig(

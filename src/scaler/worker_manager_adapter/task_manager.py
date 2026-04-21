@@ -28,12 +28,15 @@ from scaler.worker_manager_adapter.mixins import ExecutionBackend
 
 
 class TaskManager(Looper, TaskManagerMixin):
-    def __init__(self, base_concurrency: int, execution_backend: ExecutionBackend) -> None:
+    def __init__(
+        self, base_concurrency: int, execution_backend: ExecutionBackend, idle_sleep_seconds: float = 0.0
+    ) -> None:
         if isinstance(base_concurrency, int) and base_concurrency <= 0:
             raise ValueError(f"base_concurrency must be a positive integer, got {base_concurrency}")
 
         self._base_concurrency = base_concurrency
         self._execution_backend = execution_backend
+        self._idle_sleep_seconds = idle_sleep_seconds
 
         self._executor_semaphore = asyncio.Semaphore(value=self._base_concurrency)
 
@@ -141,7 +144,7 @@ class TaskManager(Looper, TaskManagerMixin):
 
     async def resolve_tasks(self) -> None:
         if not self._task_id_to_future:
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(self._idle_sleep_seconds)
             return
 
         done, _ = await asyncio.wait(self._task_id_to_future.values(), return_when=asyncio.FIRST_COMPLETED)
@@ -208,6 +211,7 @@ class TaskManager(Looper, TaskManagerMixin):
 
         self._acquiring_task_ids.add(task_id)
         self._processing_task_ids.add(task_id)
+        # _queued_task_ids intentionally not cleared here; on_cancel_task and on_task_result clear it.
         self._task_id_to_future[task.taskId] = await self._execution_backend.execute(task)
 
     @property

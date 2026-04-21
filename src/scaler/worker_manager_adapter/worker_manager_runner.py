@@ -48,6 +48,7 @@ class WorkerManagerRunner:
         self._backend: Optional[NetworkBackend] = None
         self._connector_external: Optional[AsyncConnector] = None
         self._ident: bytes = b""
+        self._task: Optional[asyncio.Task] = None
 
     async def _initialize_network(self) -> None:
         self._ident = generate_identity_from_name(self._name)
