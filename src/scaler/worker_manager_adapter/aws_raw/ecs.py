@@ -185,10 +185,10 @@ class ECSWorkerPool(WorkerPool):
         return [], Status.success
 
 
-class ECSWorkerManager(WorkerManagerRunner):
+class ECSWorkerManager:
     def __init__(self, config: ECSWorkerManagerConfig) -> None:
         pool = ECSWorkerPool(config)
-        super().__init__(
+        self._runner = _ECSWorkerManagerRunner(
             address=config.worker_manager_config.scheduler_address,
             name="worker_manager_ecs",
             heartbeat_interval_seconds=config.worker_config.heartbeat_interval_seconds,
@@ -196,8 +196,17 @@ class ECSWorkerManager(WorkerManagerRunner):
             max_task_concurrency=config.worker_manager_config.max_task_concurrency,
             worker_manager_id=config.worker_manager_config.worker_manager_id.encode(),
             worker_pool=pool,
+            ecs_task_cpu=config.ecs_task_cpu,
         )
-        self._ecs_task_cpu = config.ecs_task_cpu
+
+    def run(self) -> None:
+        self._runner.run()
+
+
+class _ECSWorkerManagerRunner(WorkerManagerRunner):
+    def __init__(self, *, ecs_task_cpu: int, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._ecs_task_cpu = ecs_task_cpu
 
     async def _send_heartbeat(self) -> None:
         await self._connector_external.send(

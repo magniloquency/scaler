@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import signal
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 from scaler.config.types.address import AddressConfig
 from scaler.io import ymq
@@ -137,9 +137,3 @@ class WorkerManagerRunner:
                 command=cmd_type, status=response_status, workerIDs=worker_ids, capabilities=capabilities
             )
         )
-
-    async def start_worker(self) -> Tuple[List[bytes], Status]:
-        return await self._worker_pool.start_worker()
-
-    async def shutdown_workers(self, worker_ids: List[bytes]) -> Tuple[List[bytes], Status]:
-        return await self._worker_pool.shutdown_workers(worker_ids)

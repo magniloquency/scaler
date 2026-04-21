@@ -38,6 +38,7 @@ class ORBWorkerPool(WorkerPool):
         self._max_task_concurrency = config.worker_manager_config.max_task_concurrency
         self._sdk: Optional[Any] = None
         self._workers: Dict[WorkerID, str] = {}
+        self._template_id: Optional[str] = None
 
     def set_sdk(self, sdk: Optional[Any]) -> None:
         self._sdk = sdk
@@ -143,7 +144,7 @@ class ORBWorkerPool(WorkerPool):
         self._template_id = template_id
 
     @property
-    def template_id(self) -> str:
+    def template_id(self) -> Optional[str]:
         return self._template_id
 
 

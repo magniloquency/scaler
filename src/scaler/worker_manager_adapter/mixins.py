@@ -1,15 +1,18 @@
 import asyncio
 from abc import ABC, abstractmethod
-from typing import Any, Awaitable, Callable, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, List, Optional, Tuple
 
 from scaler.protocol.capnp import ProcessorStatus, Task, TaskCancel, WorkerManagerCommandResponse
 from scaler.utility.identifiers import TaskID
+
+if TYPE_CHECKING:
+    from scaler.worker_manager_adapter.task_manager import TaskManager
 
 Status = WorkerManagerCommandResponse.Status
 
 
 class ProcessorStatusProvider(ABC):
-    def set_task_manager(self, task_manager: Any) -> None:
+    def set_task_manager(self, task_manager: "TaskManager") -> None:
         pass
 
     @abstractmethod

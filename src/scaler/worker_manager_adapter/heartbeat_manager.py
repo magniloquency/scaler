@@ -74,11 +74,16 @@ class HeartbeatManager(Looper, HeartbeatManagerMixin):
         if self._start_timestamp_ns != 0:
             return
 
+        try:
+            agent_cpu = int(self._agent_process.cpu_percent() * 10)
+            agent_rss = self._agent_process.memory_info().rss
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            agent_cpu = 0
+            agent_rss = 0
+
         await self._connector_external.send(
             WorkerHeartbeat(
-                agent=Resource(
-                    cpu=int(self._agent_process.cpu_percent() * 10), rss=self._agent_process.memory_info().rss
-                ),
+                agent=Resource(cpu=agent_cpu, rss=agent_rss),
                 rssFree=psutil.virtual_memory().available,
                 queueSize=self._task_queue_size,
                 queuedTasks=self._task_manager.get_queued_size(),
