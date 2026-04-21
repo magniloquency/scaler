@@ -44,6 +44,8 @@ class ORBWorkerPool(WorkerPool):
         self._sdk = sdk
 
     async def start_worker(self) -> Tuple[List[bytes], Status]:
+        assert self._template_id is not None, "set_template_id() must be called before start_worker()"
+
         if len(self._workers) >= self._max_task_concurrency != -1:
             logging.warning(
                 f"Worker start rejected: at capacity ({len(self._workers)}/{self._max_task_concurrency} workers)"
@@ -190,6 +192,10 @@ class ORBAWSEC2WorkerAdapter:
                 "providers": [
                     {"name": "aws-default", "type": "aws", "enabled": True, "priority": 1, "config": {"region": region}}
                 ],
+                # ORB skips loading strategy defaults (aws_defaults.json) when config_dict is
+                # provided, so provider_defaults must be included explicitly here. Without it,
+                # get_effective_handlers() returns {} and RunInstances is not in supported_apis.
+                # This may be fixed in a more recent version of the ORB SDK.
                 "provider_defaults": {
                     "aws": {
                         "handlers": {
@@ -262,6 +268,8 @@ class ORBAWSEC2WorkerAdapter:
 
         async with orb(app_config=self._build_app_config()) as sdk:
             self._orb_pool.set_sdk(sdk)
+            # setup_logger is called after the ORB context is entered because ORB reconfigures
+            # the root logger during __aenter__, which would otherwise suppress scaler log output.
             setup_logger(self._logging_paths, self._logging_config_file, self._logging_level)
             await self._setup()
             try:
@@ -313,6 +321,8 @@ class ORBAWSEC2WorkerAdapter:
 
             requirements_content = self._load_requirements_content(requirements_txt)
 
+            # User data runs as root so no sudo is needed.
+            # set -e ensures any install failure aborts the script rather than launching a broken worker.
             script += f"""set -e
 dnf update -y
 dnf install -y python{python_version} python{python_version}-pip
@@ -327,6 +337,8 @@ set +e
 
 """
 
+        # --max-task-concurrency is not passed: scaler_worker_manager defaults to cpu_count - 1 workers,
+        # where cpu_count is determined by the machine type the user configured in the ORB template.
         script += f"""INSTANCE_ID=$(ec2-metadata --instance-id --quiet)
 nohup scaler_worker_manager baremetal_native {self._worker_scheduler_address!r} \\
     --mode fixed \\

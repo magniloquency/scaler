@@ -15,9 +15,7 @@ class AWSProcessorStatusProvider(ProcessorStatusProvider):
         self._task_manager = task_manager
 
     def get_processor_statuses(self) -> List[ProcessorStatus]:
-        if self._task_manager is None:
-            return []
-
+        assert self._task_manager is not None, "set_task_manager() must be called before get_processor_statuses()"
         processing_tasks = self._task_manager.processing_task_count
         return [
             ProcessorStatus(

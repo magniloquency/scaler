@@ -6,7 +6,7 @@ from typing import Dict, List, Optional
 from scaler.config.types.address import AddressConfig
 from scaler.io import ymq
 from scaler.io.mixins import AsyncConnector, ConnectorRemoteType, NetworkBackend
-from scaler.io.network_backends import YMQNetworkBackend, ZMQNetworkBackend, get_network_backend_from_env
+from scaler.io.network_backends import get_network_backend_from_env
 from scaler.io.utility import generate_identity_from_name
 from scaler.protocol.capnp import (
     BaseMessage,
@@ -78,12 +78,8 @@ class WorkerManagerRunner:
         self._task.cancel()
 
     def _register_signal(self) -> None:
-        if isinstance(self._backend, ZMQNetworkBackend):
-            self._loop.add_signal_handler(signal.SIGINT, self._destroy)
-            self._loop.add_signal_handler(signal.SIGTERM, self._destroy)
-        elif isinstance(self._backend, YMQNetworkBackend):
-            self._loop.add_signal_handler(signal.SIGINT, self._destroy)
-            self._loop.add_signal_handler(signal.SIGTERM, self._destroy)
+        self._loop.add_signal_handler(signal.SIGINT, self._destroy)
+        self._loop.add_signal_handler(signal.SIGTERM, self._destroy)
 
     async def _run(self) -> None:
         self._task = self._loop.create_task(self._get_loops())

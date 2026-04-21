@@ -1,6 +1,6 @@
 import asyncio
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, List, Tuple
 
 from scaler.protocol.capnp import ProcessorStatus, Task, TaskCancel, WorkerManagerCommandResponse
 from scaler.utility.identifiers import TaskID
@@ -21,7 +21,10 @@ class ProcessorStatusProvider(ABC):
 
 class ExecutionBackend(ABC):
     def __init__(self) -> None:
-        self._load_task_inputs: Optional[Callable[[Task], Awaitable[Tuple[Any, List[Any]]]]] = None
+        async def _not_registered(task: Task) -> Tuple[Any, List[Any]]:
+            raise RuntimeError(f"{type(self).__name__}.register() must be called before execute()")
+
+        self._load_task_inputs: Callable[[Task], Awaitable[Tuple[Any, List[Any]]]] = _not_registered
 
     def register(self, load_task_inputs: Callable[[Task], Awaitable[Tuple[Any, List[Any]]]]) -> None:
         self._load_task_inputs = load_task_inputs
