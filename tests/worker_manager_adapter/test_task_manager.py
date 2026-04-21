@@ -17,7 +17,7 @@ from scaler.utility.identifiers import ClientID, ObjectID, TaskID
 from scaler.utility.logging.utility import setup_logger
 from scaler.utility.metadata.task_flags import TaskFlags
 from scaler.worker.agent.mixins import HeartbeatManager
-from scaler.worker_manager_adapter.mixins import ExecutionBackend
+from scaler.worker_manager_adapter.mixins import ExecutionBackend, TaskInputLoaderMixin
 from scaler.worker_manager_adapter.task_manager import TaskManager
 from tests.utility.utility import logging_test_name
 
@@ -452,9 +452,18 @@ class TestExecutionBackendSentinel(unittest.IsolatedAsyncioTestCase):
         logging_test_name(self)
 
     async def test_load_task_inputs_before_register_raises_runtime_error(self) -> None:
-        class _ConcreteBackend(ExecutionBackend):
+        class _ConcreteBackend(ExecutionBackend, TaskInputLoaderMixin):
             async def execute(self, task: Task) -> asyncio.Future:
                 return asyncio.get_running_loop().create_future()
+
+            async def on_cancel(self, task_cancel: TaskCancel) -> None:
+                pass
+
+            def on_cleanup(self, task_id: TaskID) -> None:
+                pass
+
+            async def routine(self) -> None:
+                pass
 
         backend = _ConcreteBackend()
         with self.assertRaises(RuntimeError):
@@ -464,9 +473,18 @@ class TestExecutionBackendSentinel(unittest.IsolatedAsyncioTestCase):
         async def _loader(task: Task):
             return None, []
 
-        class _ConcreteBackend(ExecutionBackend):
+        class _ConcreteBackend(ExecutionBackend, TaskInputLoaderMixin):
             async def execute(self, task: Task) -> asyncio.Future:
                 return asyncio.get_running_loop().create_future()
+
+            async def on_cancel(self, task_cancel: TaskCancel) -> None:
+                pass
+
+            def on_cleanup(self, task_id: TaskID) -> None:
+                pass
+
+            async def routine(self) -> None:
+                pass
 
         backend = _ConcreteBackend()
         backend.register(_loader)

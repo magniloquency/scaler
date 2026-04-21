@@ -12,31 +12,33 @@ Status = WorkerManagerCommandResponse.Status
 
 
 class ProcessorStatusProvider(ABC):
-    def set_task_manager(self, task_manager: "TaskManager") -> None:
-        pass
+    @abstractmethod
+    def set_task_manager(self, task_manager: "TaskManager") -> None: ...
 
     @abstractmethod
     def get_processor_statuses(self) -> List[ProcessorStatus]: ...
 
 
-class ExecutionBackend(ABC):
+class TaskInputLoaderMixin:
     async def _load_task_inputs(self, task: Task) -> Tuple[Any, List[Any]]:
         raise RuntimeError(f"{type(self).__name__}.register() must be called before execute()")
 
     def register(self, load_task_inputs: Callable[[Task], Awaitable[Tuple[Any, List[Any]]]]) -> None:
-        self._load_task_inputs = load_task_inputs  # type: ignore[method-assign]
+        self._load_task_inputs = load_task_inputs  # type: ignore[assignment]
 
+
+class ExecutionBackend(ABC):
     @abstractmethod
     async def execute(self, task: Task) -> asyncio.Future: ...
 
-    async def on_cancel(self, task_cancel: TaskCancel) -> None:
-        pass
+    @abstractmethod
+    async def on_cancel(self, task_cancel: TaskCancel) -> None: ...
 
-    def on_cleanup(self, task_id: TaskID) -> None:
-        pass
+    @abstractmethod
+    def on_cleanup(self, task_id: TaskID) -> None: ...
 
-    async def routine(self) -> None:
-        pass
+    @abstractmethod
+    async def routine(self) -> None: ...
 
 
 class WorkerProvisioner(ABC):

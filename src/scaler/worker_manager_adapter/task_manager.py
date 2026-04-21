@@ -24,7 +24,7 @@ from scaler.utility.queues.async_priority_queue import AsyncPriorityQueue
 from scaler.utility.serialization import serialize_failure
 from scaler.worker.agent.mixins import HeartbeatManager
 from scaler.worker.agent.mixins import TaskManager as TaskManagerMixin
-from scaler.worker_manager_adapter.mixins import ExecutionBackend
+from scaler.worker_manager_adapter.mixins import ExecutionBackend, TaskInputLoaderMixin
 
 
 class TaskManager(Looper, TaskManagerMixin):
@@ -65,7 +65,7 @@ class TaskManager(Looper, TaskManagerMixin):
         self._connector_external = connector_external
         self._connector_storage = connector_storage
         self._heartbeat_manager = heartbeat_manager
-        self._execution_backend.register(self._load_task_inputs)
+        cast(TaskInputLoaderMixin, self._execution_backend).register(self._load_task_inputs)
 
     async def on_object_instruction(self, instruction: ObjectInstruction) -> None:
         if instruction.instructionType == ObjectInstruction.ObjectInstructionType.delete:
