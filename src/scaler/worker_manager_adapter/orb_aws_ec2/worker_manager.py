@@ -172,6 +172,7 @@ class ORBAWSEC2WorkerAdapter:
             max_task_concurrency=config.worker_manager_config.max_task_concurrency,
             worker_manager_id=config.worker_manager_config.worker_manager_id.encode(),
             worker_pool=self._orb_pool,
+            io_threads=config.worker_config.io_threads,
         )
 
         self._ec2: Optional[Any] = None

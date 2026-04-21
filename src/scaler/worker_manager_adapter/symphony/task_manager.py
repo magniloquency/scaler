@@ -16,7 +16,7 @@ except ImportError:
     raise ImportError("IBM Spectrum Symphony API not found, please install it with 'pip install soamapi'.")
 
 
-class SymphonyExecutionBackend(ExecutionBackend, TaskInputLoaderMixin):
+class SymphonyExecutionBackend(TaskInputLoaderMixin, ExecutionBackend):
     def __init__(self, service_name: str):
         self._service_name = service_name
 

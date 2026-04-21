@@ -22,7 +22,7 @@ ARRAY_JOB_MIN_BATCH_SIZE: int = 2
 ARRAY_JOB_MAX_BATCH_SIZE: int = 10000
 
 
-class AWSBatchExecutionBackend(ExecutionBackend, TaskInputLoaderMixin):
+class AWSBatchExecutionBackend(TaskInputLoaderMixin, ExecutionBackend):
     def __init__(
         self,
         job_queue: str,

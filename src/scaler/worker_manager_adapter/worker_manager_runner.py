@@ -59,20 +59,16 @@ class WorkerManagerRunner:
 
     def run(self) -> None:
         self._loop = asyncio.new_event_loop()
-        run_task_forever(self._loop, self._run(), cleanup_callback=self._cleanup)
+        run_task_forever(self._loop, self._run(), cleanup_callback=self.cleanup)
 
     async def run_in_loop(self, loop: asyncio.AbstractEventLoop) -> None:
         """Run using an externally-managed loop. The caller is responsible for catching asyncio.CancelledError."""
         self._loop = loop
-        self._task = loop.create_task(self._get_loops())
-        await self._task
-
-    def _cleanup(self) -> None:
-        if self._connector_external is not None:
-            self._connector_external.destroy()
+        await self._run()
 
     def cleanup(self) -> None:
-        self._cleanup()
+        if self._connector_external is not None:
+            self._connector_external.destroy()
 
     def _destroy(self) -> None:
         logging.info(f"Worker manager {self._ident!r} received signal, shutting down")

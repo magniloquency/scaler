@@ -452,7 +452,7 @@ class TestExecutionBackendSentinel(unittest.IsolatedAsyncioTestCase):
         logging_test_name(self)
 
     async def test_load_task_inputs_before_register_raises_runtime_error(self) -> None:
-        class _ConcreteBackend(ExecutionBackend, TaskInputLoaderMixin):
+        class _ConcreteBackend(TaskInputLoaderMixin, ExecutionBackend):
             async def execute(self, task: Task) -> asyncio.Future:
                 return asyncio.get_running_loop().create_future()
 
@@ -473,7 +473,7 @@ class TestExecutionBackendSentinel(unittest.IsolatedAsyncioTestCase):
         async def _loader(task: Task):
             return None, []
 
-        class _ConcreteBackend(ExecutionBackend, TaskInputLoaderMixin):
+        class _ConcreteBackend(TaskInputLoaderMixin, ExecutionBackend):
             async def execute(self, task: Task) -> asyncio.Future:
                 return asyncio.get_running_loop().create_future()
 

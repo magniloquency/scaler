@@ -40,6 +40,9 @@ class ExecutionBackend(ABC):
     @abstractmethod
     async def routine(self) -> None: ...
 
+    @abstractmethod
+    def register(self, load_task_inputs: Callable[[Task], Awaitable[Tuple[Any, List[Any]]]]) -> None: ...
+
 
 class WorkerProvisioner(ABC):
     @abstractmethod
