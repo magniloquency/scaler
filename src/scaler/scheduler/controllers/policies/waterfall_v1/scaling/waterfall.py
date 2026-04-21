@@ -11,6 +11,7 @@ from scaler.protocol.capnp import (
 from scaler.scheduler.controllers.policies.simple_policy.scaling.mixins import ScalingPolicy
 from scaler.scheduler.controllers.policies.simple_policy.scaling.types import WorkerManagerSnapshot
 from scaler.scheduler.controllers.policies.waterfall_v1.scaling.types import WaterfallRule
+from scaler.scheduler.controllers.worker_manager_utilties import build_scaling_manager_status
 from scaler.utility.identifiers import WorkerID
 from scaler.utility.snapshot import InformationSnapshot
 
@@ -79,7 +80,7 @@ class WaterfallScalingPolicy(ScalingPolicy):
         return []
 
     def get_status(self, managed_workers: Dict[bytes, List[WorkerID]]) -> ScalingManagerStatus:
-        return ScalingManagerStatus(managedWorkers=managed_workers)
+        return build_scaling_manager_status(managed_workers)
 
     def _create_capability_start_commands(
         self,

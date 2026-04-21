@@ -17,6 +17,7 @@ from scaler.protocol.helpers import capabilities_to_dict
 from scaler.scheduler.controllers.config_controller import VanillaConfigController
 from scaler.scheduler.controllers.mixins import PolicyController, TaskController, WorkerController
 from scaler.scheduler.controllers.policies.simple_policy.scaling.types import WorkerManagerSnapshot
+from scaler.scheduler.controllers.worker_manager_utilties import build_scaling_manager_status
 from scaler.utility.identifiers import WorkerID
 from scaler.utility.mixins import Looper, Reporter
 from scaler.utility.snapshot import InformationSnapshot
@@ -127,13 +128,12 @@ class WorkerManagerController(Looper, Reporter):
 
     def get_status(self) -> ScalingManagerStatus:
         managed_workers = self.get_managed_workers()
-        base_status = self._policy_controller.get_scaling_status(managed_workers)
 
         now = time.time()
         details = []
         for source, (last_seen, heartbeat) in self._manager_alive_since.items():
             caps = heartbeat.capabilities
-            caps_str = " ".join(sorted(caps.keys())) if caps else ""
+            caps_str = " ".join(sorted(capabilities_to_dict(caps).keys())) if caps else ""
             details.append(
                 {
                     "worker_manager_id": heartbeat.workerManagerID,
@@ -145,7 +145,7 @@ class WorkerManagerController(Looper, Reporter):
                 }
             )
 
-        return ScalingManagerStatus(managedWorkers=base_status.managedWorkers, workerManagerDetails=details)
+        return build_scaling_manager_status(managed_workers, details)
 
     def get_managed_workers(self) -> Dict[bytes, List[WorkerID]]:
         """Return managed workers keyed by worker_manager_id (from heartbeat)."""

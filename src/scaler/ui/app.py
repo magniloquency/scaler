@@ -25,6 +25,7 @@ from scaler.protocol.capnp import (
     TaskState,
     WorkerState,
 )
+from scaler.protocol.helpers import capabilities_to_dict
 from scaler.utility.formatter import format_bytes, format_microseconds, format_percentage, format_seconds
 from scaler.utility.identifiers import WorkerID
 from scaler.utility.metadata.profile_result import ProfileResult
@@ -34,15 +35,15 @@ _logger = logging.getLogger(__name__)
 STATIC_DIR = Path(__file__).parent / "static"
 
 BATCH_INTERVAL_SECONDS = 0.1
-TASK_LOG_MAX_SIZE = 100
+TASK_LOG_MAX_SIZE = 500
 
-COMPLETED_TASK_STATUSES = {
+COMPLETED_TASK_STATUSES = (
     TaskState.success,
     TaskState.canceled,
     TaskState.canceledNotFound,
     TaskState.failed,
     TaskState.failedWorkerDied,
-}
+)
 
 SLIDING_WINDOW_OPTIONS = {
     5: datetime.timedelta(minutes=5),
@@ -57,13 +58,65 @@ def _format_worker_name(worker_name: str, cutoff: int = 15) -> str:
     return worker_name[:cutoff] + "+"
 
 
+# Minimum angular distance (degrees) between any two assigned hues.
+# 30° allows ~12 maximally-distinct slots; beyond that the algorithm
+# degrades gracefully by placing new hues in the largest available gap.
+_MIN_HUE_DISTANCE = 30
+
+
+def _hue_distance(a: float, b: float) -> float:
+    """Angular distance between two hues on the 360° wheel."""
+    d = abs(a - b) % 360
+    return min(d, 360 - d)
+
+
+def _extract_hue(hsl_str: str) -> Optional[float]:
+    """Extract hue from an ``hsl(H,S%,L%)`` string. Returns *None* for non-HSL values."""
+    if not hsl_str.startswith("hsl("):
+        return None
+    try:
+        return float(hsl_str[4 : hsl_str.index(",")])
+    except (ValueError, IndexError):
+        return None
+
+
+def _find_best_hue(preferred_hue: float, existing_hues: List[float]) -> float:
+    """Return *preferred_hue* if it is far enough from every existing hue,
+    otherwise place the new hue at the midpoint of the largest angular gap."""
+    if not existing_hues:
+        return preferred_hue
+
+    # Check whether the preferred hue has enough distance from all existing ones.
+    if all(_hue_distance(preferred_hue, h) >= _MIN_HUE_DISTANCE for h in existing_hues):
+        return preferred_hue
+
+    # Find the largest gap on the hue wheel and place the new hue at its midpoint.
+    sorted_hues = sorted(existing_hues)
+    best_gap = 0.0
+    best_mid = preferred_hue  # fallback
+
+    for i in range(len(sorted_hues)):
+        next_hue = sorted_hues[(i + 1) % len(sorted_hues)]
+        prev_hue = sorted_hues[i]
+        gap = (next_hue - prev_hue) % 360
+        if gap > best_gap:
+            best_gap = gap
+            best_mid = (prev_hue + gap / 2) % 360
+
+    return best_mid
+
+
 def _capabilities_color(capabilities_str: str, color_map: Dict[str, str]) -> str:
     if capabilities_str not in color_map:
         h = hashlib.md5(capabilities_str.encode()).hexdigest()
-        hue = int(h[:4], 16) % 360
+        preferred_hue = int(h[:4], 16) % 360
         sat = 55 + (int(h[4:6], 16) % 20)  # 55-75%
         lit = 45 + (int(h[6:8], 16) % 15)  # 45-60%
-        color_map[capabilities_str] = f"hsl({hue},{sat}%,{lit}%)"
+
+        existing_hues = [eh for v in color_map.values() if (eh := _extract_hue(v)) is not None]
+        hue = _find_best_hue(preferred_hue, existing_hues)
+
+        color_map[capabilities_str] = f"hsl({hue:.0f},{sat}%,{lit}%)"
     return color_map[capabilities_str]
 
 
@@ -129,7 +182,7 @@ class TaskStreamState:
         with self._lock:
             if worker_state == WorkerState.connected:
                 self._ensure_worker(worker_id, now)
-                self._worker_capabilities[worker_id] = set(state_worker.capabilities.keys())
+                self._worker_capabilities[worker_id] = set(capabilities_to_dict(state_worker.capabilities).keys())
             elif worker_state == WorkerState.disconnected:
                 self._current_tasks.pop(worker_id, None)
                 self._dead_workers.append((now, worker_id))
@@ -139,7 +192,7 @@ class TaskStreamState:
         now = datetime.datetime.now()
 
         with self._lock:
-            if task_state in COMPLETED_TASK_STATUSES:
+            if any(task_state == s for s in COMPLETED_TASK_STATUSES):
                 self._handle_task_result(state_task, now)
                 return
 
@@ -157,19 +210,16 @@ class TaskStreamState:
 
     def _handle_running_task(self, state_task: StateTask, worker: str, now: datetime.datetime) -> None:
         task_id = state_task.taskId
-        caps = _display_capabilities(set(state_task.capabilities.keys()))
+        caps = _display_capabilities(set(capabilities_to_dict(state_task.capabilities).keys()))
         self._task_id_to_capabilities[task_id] = caps
         func_name = state_task.functionName.decode()
         if func_name:
             self._task_id_to_function[task_id] = func_name
 
-        # if reassigned from another worker, cancel old assignment
+        # if reassigned from another worker, clean up old worker tracking
         prev_worker = self._task_id_to_worker.get(task_id)
         if prev_worker and prev_worker != worker:
             task_map = self._current_tasks.get(prev_worker, {})
-            start_time = task_map.get(task_id)
-            if start_time:
-                self._add_bar(prev_worker, task_id, start_time, now, TaskState.canceled)
             task_map.pop(task_id, None)
             self._worker_to_task_ids.get(prev_worker, set()).discard(task_id)
 
@@ -195,7 +245,9 @@ class TaskStreamState:
 
         # store capabilities/function from completion message if not already known
         if task_id not in self._task_id_to_capabilities and state.capabilities:
-            self._task_id_to_capabilities[task_id] = _display_capabilities(set(state.capabilities.keys()))
+            self._task_id_to_capabilities[task_id] = _display_capabilities(
+                set(capabilities_to_dict(state.capabilities).keys())
+            )
         func_name = state.functionName.decode() if state.functionName else ""
         if func_name and task_id not in self._task_id_to_function:
             self._task_id_to_function[task_id] = func_name
@@ -704,7 +756,11 @@ class WebUIApp:
         }
 
         # Update persistent worker-to-manager mapping with latest data
-        for manager_id_bytes, worker_ids in data.scalingManager.managedWorkers.items():
+        managed_workers_lookup: Dict[bytes, list] = {}
+        for pair in data.scalingManager.managedWorkers:
+            manager_id_bytes = pair.workerManagerID
+            worker_ids = pair.workerIDs
+            managed_workers_lookup[bytes(manager_id_bytes)] = worker_ids
             manager_name = manager_id_bytes.decode() if manager_id_bytes else "unknown"
             for wid in worker_ids:
                 self._worker_manager_map[bytes(wid).decode()] = manager_name
@@ -712,17 +768,17 @@ class WebUIApp:
         # Update worker manager details from scaling_manager
         current_managers: Set[str] = set()
         for detail in data.scalingManager.workerManagerDetails:
-            manager_id = detail["worker_manager_id"].decode() if detail["worker_manager_id"] else "unknown"
+            manager_id = detail.workerManagerID.decode() if detail.workerManagerID else "unknown"
             current_managers.add(manager_id)
-            worker_ids_for_manager = data.scalingManager.managedWorkers.get(detail["worker_manager_id"], [])
+            worker_ids_for_manager = managed_workers_lookup.get(bytes(detail.workerManagerID), [])
             self._worker_managers_data[manager_id] = {
                 "manager_id": manager_id,
-                "identity": detail["identity"],
-                "last_seen": format_seconds(detail["last_seen_s"]),
-                "max_task_concurrency": detail["max_task_concurrency"],
+                "identity": detail.identity,
+                "last_seen": format_seconds(detail.lastSeenS),
+                "max_task_concurrency": detail.maxTaskConcurrency,
                 "worker_count": len(worker_ids_for_manager),
-                "pending_workers": detail.get("pending_workers", 0),
-                "capabilities": detail["capabilities"],
+                "pending_workers": detail.pendingWorkers,
+                "capabilities": detail.capabilities,
             }
         # Mark newly-disappeared managers with a disconnect timestamp instead of
         # removing immediately, so the UI keeps showing them for a grace period.
@@ -852,7 +908,7 @@ class WebUIApp:
         return {
             "worker_id": worker_id,
             "state": state._as_str(),
-            "capabilities": list(state_worker.capabilities.keys()),
+            "capabilities": list(capabilities_to_dict(state_worker.capabilities).keys()),
         }
 
     def _process_task_state(self, state_task: StateTask) -> Optional[Dict[str, Any]]:
@@ -875,10 +931,10 @@ class WebUIApp:
             full_worker = state_task.worker.decode()
             worker_str = _format_worker_name(full_worker)
 
-        caps_str = _display_capabilities(set(state_task.capabilities.keys()))
+        caps_str = _display_capabilities(set(capabilities_to_dict(state_task.capabilities).keys()))
         now = datetime.datetime.now()
 
-        if state_task.state in COMPLETED_TASK_STATUSES:
+        if any(state_task.state == s for s in COMPLETED_TASK_STATUSES):
             # preserve worker/time from active entry if completion message lacks them
             prev_entry = self._active_tasks.pop(task_id_hex, None)
             if not worker_str and prev_entry:
