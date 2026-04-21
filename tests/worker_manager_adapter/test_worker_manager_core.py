@@ -1,5 +1,6 @@
 import signal
 import unittest
+from typing import Optional
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from scaler.protocol.capnp import (
@@ -30,7 +31,7 @@ Status = WorkerManagerCommandResponse.Status
 # ─── helpers ─────────────────────────────────────────────────────────────────
 
 
-def _make_task(source: ClientID | None = None) -> Task:
+def _make_task(source: Optional[ClientID] = None) -> Task:
     source = source or ClientID.generate_client_id()
     return Task(
         taskId=TaskID.generate_task_id(),
