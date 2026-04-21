@@ -46,7 +46,7 @@ class TaskManager(Looper, TaskManagerMixin):
         self._serializers: Dict[bytes, Serializer] = dict()
 
         self._queued_task_id_queue = AsyncPriorityQueue()
-        self._queued_task_ids: Set[bytes] = set()
+        self._queued_task_ids: Set[TaskID] = set()
 
         self._acquiring_task_ids: Set[TaskID] = set()
         self._processing_task_ids: Set[TaskID] = set()

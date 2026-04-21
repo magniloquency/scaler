@@ -210,7 +210,6 @@ class WorkerProcess(_SpawnProcess):  # type: ignore[valid-type, misc]
         if isinstance(self._backend, ZMQNetworkBackend):
             await self.__graceful_shutdown()
 
-        self._connector_external.destroy()
         logging.info(f"{self.identity!r}: quit")
 
     def __register_signal(self) -> None:

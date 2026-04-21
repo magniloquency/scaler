@@ -446,6 +446,35 @@ class TestTaskManagerResolveTasks(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.tm._executor_semaphore.locked())
 
 
+class TestExecutionBackendSentinel(unittest.IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        setup_logger()
+        logging_test_name(self)
+
+    async def test_load_task_inputs_before_register_raises_runtime_error(self) -> None:
+        class _ConcreteBackend(ExecutionBackend):
+            async def execute(self, task: Task) -> asyncio.Future:
+                return asyncio.get_running_loop().create_future()
+
+        backend = _ConcreteBackend()
+        with self.assertRaises(RuntimeError):
+            await backend._load_task_inputs(_make_task())
+
+    async def test_load_task_inputs_after_register_does_not_raise(self) -> None:
+        async def _loader(task: Task):
+            return None, []
+
+        class _ConcreteBackend(ExecutionBackend):
+            async def execute(self, task: Task) -> asyncio.Future:
+                return asyncio.get_running_loop().create_future()
+
+        backend = _ConcreteBackend()
+        backend.register(_loader)
+        func, args = await backend._load_task_inputs(_make_task())
+        self.assertIsNone(func)
+        self.assertEqual(args, [])
+
+
 class TestTaskManagerOnTaskResult(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         setup_logger()

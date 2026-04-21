@@ -62,7 +62,7 @@ class WorkerManagerRunner:
         run_task_forever(self._loop, self._run(), cleanup_callback=self._cleanup)
 
     async def run_in_loop(self, loop: asyncio.AbstractEventLoop) -> None:
-        """Run all event loops using an externally-managed loop. For use when the caller controls the loop lifecycle."""
+        """Run using an externally-managed loop. The caller is responsible for catching asyncio.CancelledError."""
         self._loop = loop
         self._task = loop.create_task(self._get_loops())
         await self._task
