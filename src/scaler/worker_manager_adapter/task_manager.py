@@ -127,6 +127,11 @@ class TaskManager(Looper, TaskManagerMixin):
         )
 
     async def on_task_result(self, result: TaskResult) -> None:
+        # Required by TaskManagerMixin but not dispatched from WorkerProcess.__on_receive_external.
+        # WorkerProcess drives result handling via resolve_tasks() instead.
+        # NOTE: _queued_task_ids is not cleaned up by resolve_tasks(), so completed tasks whose IDs
+        # are still in _queued_task_ids will be cleared here if this method is ever called, but in
+        # normal operation those IDs accumulate until the WorkerProcess exits.
         if result.taskId in self._queued_task_ids:
             self._queued_task_ids.remove(result.taskId)
             self._queued_task_id_queue.remove(result.taskId)
