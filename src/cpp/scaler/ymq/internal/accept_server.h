@@ -48,7 +48,14 @@ private:
 
         std::optional<Server> _server;
 
-        State(scaler::wrapper::uv::Loop& loop, ConnectionCallback onConnectionCallback, Server server) noexcept;
+        // Original address passed to the constructor, used to reconstruct the address() return value.
+        Address _originalAddress;
+
+        State(
+            scaler::wrapper::uv::Loop& loop,
+            ConnectionCallback onConnectionCallback,
+            Server server,
+            Address originalAddress) noexcept;
     };
 
     std::shared_ptr<State> _state;

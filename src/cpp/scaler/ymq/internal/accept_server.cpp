@@ -11,6 +11,7 @@
 #include "scaler/wrapper/uv/socket_address.h"
 #include "scaler/wrapper/uv/tcp.h"
 #include "scaler/ymq/configuration.h"
+#include "scaler/ymq/internal/websocket_stream.h"
 
 namespace scaler {
 namespace ymq {
@@ -25,34 +26,47 @@ AcceptServer::AcceptServer(
         case Address::Type::TCP: {
             auto tcpServer = UV_EXIT_ON_ERROR(scaler::wrapper::uv::TCPServer::init(loop));
             UV_EXIT_ON_ERROR(tcpServer.bind(address.asTCP(), uv_tcp_flags(0)));
-
             server = std::move(tcpServer);
             break;
         }
         case Address::Type::IPC: {
             auto pipeServer = UV_EXIT_ON_ERROR(scaler::wrapper::uv::PipeServer::init(loop, false));
             UV_EXIT_ON_ERROR(pipeServer.bind(address.asIPC()));
-
             server = std::move(pipeServer);
+            break;
+        }
+        case Address::Type::WebSocket: {
+            // WebSocket runs over TCP; bind a TCPServer to the resolved TCP address.
+            auto tcpServer = UV_EXIT_ON_ERROR(scaler::wrapper::uv::TCPServer::init(loop));
+            UV_EXIT_ON_ERROR(tcpServer.bind(address.asWebSocket().tcpAddress, uv_tcp_flags(0)));
+            server = std::move(tcpServer);
             break;
         }
         default: std::unreachable();
     }
 
-    _state = std::make_shared<State>(loop, std::move(onConnectionCallback), std::move(server.value()));
+    _state =
+        std::make_shared<State>(loop, std::move(onConnectionCallback), std::move(server.value()), address);
 
     if (auto* tcpServer = std::get_if<scaler::wrapper::uv::TCPServer>(&_state->_server.value())) {
         UV_EXIT_ON_ERROR(tcpServer->listen(serverListenBacklog, std::bind_front(&AcceptServer::onConnection, _state)));
     } else if (auto* pipeServer = std::get_if<scaler::wrapper::uv::PipeServer>(&_state->_server.value())) {
-        UV_EXIT_ON_ERROR(pipeServer->listen(serverListenBacklog, std::bind_front(&AcceptServer::onConnection, _state)));
+        UV_EXIT_ON_ERROR(
+            pipeServer->listen(serverListenBacklog, std::bind_front(&AcceptServer::onConnection, _state)));
     } else {
         std::unreachable();
     }
 }
 
 AcceptServer::State::State(
-    scaler::wrapper::uv::Loop& loop, ConnectionCallback onConnectionCallback, Server server) noexcept
-    : _loop(loop), _onConnectionCallback(std::move(onConnectionCallback)), _server(std::move(server))
+    scaler::wrapper::uv::Loop& loop,
+    ConnectionCallback onConnectionCallback,
+    Server server,
+    Address originalAddress) noexcept
+    : _loop(loop)
+    , _onConnectionCallback(std::move(onConnectionCallback))
+    , _server(std::move(server))
+    , _originalAddress(std::move(originalAddress))
 {
 }
 
@@ -68,7 +82,18 @@ AcceptServer::~AcceptServer() noexcept
 Address AcceptServer::address() const noexcept
 {
     if (auto* tcpServer = std::get_if<scaler::wrapper::uv::TCPServer>(&_state->_server.value())) {
-        return Address {UV_EXIT_ON_ERROR(tcpServer->getSockName())};
+        const scaler::wrapper::uv::SocketAddress actualAddr =
+            UV_EXIT_ON_ERROR(tcpServer->getSockName());
+
+        if (_state->_originalAddress.type() == Address::Type::WebSocket) {
+            // Reconstruct the WebSocket address with the actual bound port (handles port 0 auto-assignment).
+            WebSocketAddress reconstructed = _state->_originalAddress.asWebSocket();
+            reconstructed.port             = static_cast<uint16_t>(actualAddr.port());
+            reconstructed.tcpAddress       = actualAddr;
+            return Address {std::move(reconstructed)};
+        }
+
+        return Address {actualAddr};
     } else if (auto* pipeServer = std::get_if<scaler::wrapper::uv::PipeServer>(&_state->_server.value())) {
         return Address {UV_EXIT_ON_ERROR(pipeServer->getSockName())};
     } else {
@@ -105,11 +130,27 @@ void AcceptServer::onConnection(
     }
 
     if (auto* tcpServer = std::get_if<scaler::wrapper::uv::TCPServer>(&state->_server.value())) {
-        scaler::wrapper::uv::TCPSocket tcpClient = UV_EXIT_ON_ERROR(scaler::wrapper::uv::TCPSocket::init(state->_loop));
+        scaler::wrapper::uv::TCPSocket tcpClient =
+            UV_EXIT_ON_ERROR(scaler::wrapper::uv::TCPSocket::init(state->_loop));
         UV_EXIT_ON_ERROR(tcpServer->accept(tcpClient));
+
+        if (state->_originalAddress.type() == Address::Type::WebSocket) {
+            WebSocketStream::upgradeAsServer(
+                std::move(tcpClient),
+                [state](std::expected<WebSocketStream, scaler::wrapper::uv::Error> wsResult) mutable {
+                    if (!wsResult.has_value()) {
+                        // Reject this connection silently; the server keeps running.
+                        return;
+                    }
+                    state->_onConnectionCallback(Client(std::move(wsResult.value())));
+                });
+            return;
+        }
+
         return state->_onConnectionCallback(Client(std::move(tcpClient)));
     } else if (auto* pipeServer = std::get_if<scaler::wrapper::uv::PipeServer>(&state->_server.value())) {
-        scaler::wrapper::uv::Pipe pipeClient = UV_EXIT_ON_ERROR(scaler::wrapper::uv::Pipe::init(state->_loop, false));
+        scaler::wrapper::uv::Pipe pipeClient =
+            UV_EXIT_ON_ERROR(scaler::wrapper::uv::Pipe::init(state->_loop, false));
         UV_EXIT_ON_ERROR(pipeServer->accept(pipeClient));
         return state->_onConnectionCallback(Client(std::move(pipeClient)));
     } else {

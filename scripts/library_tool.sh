@@ -2,7 +2,7 @@
 # This script builds and installs the required 3rd party C++ libraries.
 #
 # Usage:
-#    	./scripts/library_tool.sh [boost|capnp|uv] [compile|install] [--prefix=PREFIX]
+#    	./scripts/library_tool.sh [boost|capnp|libuv|libwebsockets] [compile|install] [--prefix=PREFIX]
 
 # Remember:
 #	Update the usage string when you are add/remove dependency
@@ -11,6 +11,7 @@
 BOOST_VERSION="1.88.0"
 CAPNP_VERSION="1.0.1"
 UV_VERSION="1.51.0"
+LWS_VERSION="4.3.3"
 
 THIRD_PARTY_DIRECTORY="./thirdparties"
 
@@ -116,6 +117,42 @@ elif [ "$1" == "libuv" ]; then
         cd "${THIRD_PARTY_COMPILED}/${UV_FOLDER_NAME}"
         cmake --install build
         echo "Installed libuv into ${PREFIX}"
+
+    else
+        show_help
+    fi
+elif [ "$1" == "libwebsockets" ]; then
+    LWS_FOLDER_NAME="libwebsockets-${LWS_VERSION}"
+
+    if [ "$2" == "download" ]; then
+        mkdir -p "${THIRD_PARTY_DOWNLOADED}"
+        curl --retry 100 --retry-max-time 3600 \
+            -L "https://github.com/warmcat/libwebsockets/archive/refs/tags/v${LWS_VERSION}.tar.gz" \
+            -o "${THIRD_PARTY_DOWNLOADED}/${LWS_FOLDER_NAME}.tar.gz"
+        echo "Downloaded libwebsockets into ${THIRD_PARTY_DOWNLOADED}/${LWS_FOLDER_NAME}.tar.gz"
+
+    elif [ "$2" == "compile" ]; then
+        mkdir -p "${THIRD_PARTY_COMPILED}"
+        rm -rf "${THIRD_PARTY_COMPILED}/${LWS_FOLDER_NAME}"
+        tar -xzf "${THIRD_PARTY_DOWNLOADED}/${LWS_FOLDER_NAME}.tar.gz" -C "${THIRD_PARTY_COMPILED}"
+
+        cd "${THIRD_PARTY_COMPILED}/${LWS_FOLDER_NAME}"
+        cmake -B build \
+            -DCMAKE_INSTALL_PREFIX="${PREFIX}" \
+            -DLWS_WITH_LIBUV=ON \
+            -DLWS_WITH_SSL=OFF \
+            -DLWS_WITHOUT_TESTAPPS=ON \
+            -DLWS_WITHOUT_TEST_SERVER=ON \
+            -DLWS_WITHOUT_TEST_PING=ON \
+            -DLWS_WITHOUT_TEST_CLIENT=ON \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+        cmake --build build --config Release -j "${NUM_CORES}"
+        echo "Compiled libwebsockets to ${THIRD_PARTY_COMPILED}/${LWS_FOLDER_NAME}"
+
+    elif [ "$2" == "install" ]; then
+        cd "${THIRD_PARTY_COMPILED}/${LWS_FOLDER_NAME}"
+        cmake --install build
+        echo "Installed libwebsockets into ${PREFIX}"
 
     else
         show_help
