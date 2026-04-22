@@ -46,7 +46,7 @@ class ORBWorkerPool(WorkerProvisioner):
     async def start_worker(self) -> Tuple[List[bytes], Status]:
         assert self._template_id is not None, "set_template_id() must be called before start_worker()"
 
-        if len(self._workers) >= self._max_task_concurrency != -1:
+        if self._max_task_concurrency != -1 and len(self._workers) >= self._max_task_concurrency:
             logging.warning(
                 f"Worker start rejected: at capacity ({len(self._workers)}/{self._max_task_concurrency} workers)"
             )

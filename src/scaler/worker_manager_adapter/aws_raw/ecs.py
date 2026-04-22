@@ -99,7 +99,7 @@ class ECSWorkerPool(WorkerProvisioner):
         self._ecs_task_definition = resp["taskDefinition"]["taskDefinitionArn"]
 
     async def start_worker(self) -> Tuple[List[bytes], Status]:
-        if len(self._worker_groups) >= self._max_task_concurrency != -1:
+        if self._max_task_concurrency != -1 and len(self._worker_groups) >= self._max_task_concurrency:
             return [], Status.tooManyWorkers
 
         command = (
