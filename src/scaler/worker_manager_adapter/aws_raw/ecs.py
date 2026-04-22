@@ -186,7 +186,7 @@ class ECSWorkerProvisioner(WorkerProvisioner):
 
 class ECSWorkerManager:
     def __init__(self, config: ECSWorkerManagerConfig) -> None:
-        pool = ECSWorkerProvisioner(config)
+        provisioner = ECSWorkerProvisioner(config)
         self._runner = WorkerManagerRunner(
             address=config.worker_manager_config.scheduler_address,
             name="worker_manager_ecs",
@@ -194,7 +194,7 @@ class ECSWorkerManager:
             capabilities=config.worker_config.per_worker_capabilities.capabilities,
             max_task_concurrency=config.worker_manager_config.max_task_concurrency,
             worker_manager_id=config.worker_manager_config.worker_manager_id.encode(),
-            worker_provisioner=pool,
+            worker_provisioner=provisioner,
             io_threads=config.worker_config.io_threads,
             heartbeat_concurrency_multiplier=config.ecs_task_cpu,
         )

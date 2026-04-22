@@ -123,10 +123,10 @@ class NativeWorkerManager:
         return self._config
 
     def run(self) -> None:
-        pool = NativeWorkerProvisioner(self._config)
+        provisioner = NativeWorkerProvisioner(self._config)
 
         if self._config.mode == NativeWorkerManagerMode.FIXED:
-            pool.run_fixed()
+            provisioner.run_fixed()
             return
 
         runner = WorkerManagerRunner(
@@ -136,7 +136,7 @@ class NativeWorkerManager:
             capabilities=self._config.worker_config.per_worker_capabilities.capabilities,
             max_task_concurrency=self._config.worker_manager_config.max_task_concurrency,
             worker_manager_id=self._config.worker_manager_config.worker_manager_id.encode(),
-            worker_provisioner=pool,
+            worker_provisioner=provisioner,
             io_threads=self._config.worker_config.io_threads,
         )
         runner.run()
