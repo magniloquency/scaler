@@ -32,7 +32,7 @@ def get_orb_aws_ec2_worker_name(instance_id: str) -> str:
     return f"Worker|ORB|{instance_id}|{tag}"
 
 
-class ORBWorkerPool(WorkerProvisioner):
+class ORBWorkerProvisioner(WorkerProvisioner):
     def __init__(self, config: ORBAWSEC2WorkerAdapterConfig) -> None:
         self._config = config
         self._max_task_concurrency = config.worker_manager_config.max_task_concurrency
@@ -163,7 +163,7 @@ class ORBAWSEC2WorkerAdapter:
         self._logging_level = config.logging_config.level
         self._logging_config_file = config.logging_config.config_file
 
-        self._orb_pool = ORBWorkerPool(config)
+        self._orb_pool = ORBWorkerProvisioner(config)
         self._runner = WorkerManagerRunner(
             address=config.worker_manager_config.scheduler_address,
             name="worker_manager_orb_aws_ec2",
@@ -171,7 +171,7 @@ class ORBAWSEC2WorkerAdapter:
             capabilities=config.worker_config.per_worker_capabilities.capabilities,
             max_task_concurrency=config.worker_manager_config.max_task_concurrency,
             worker_manager_id=config.worker_manager_config.worker_manager_id.encode(),
-            worker_pool=self._orb_pool,
+            worker_provisioner=self._orb_pool,
             io_threads=config.worker_config.io_threads,
         )
 

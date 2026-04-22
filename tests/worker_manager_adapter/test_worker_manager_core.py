@@ -19,7 +19,7 @@ from scaler.utility.exceptions import ClientShutdownException
 from scaler.utility.identifiers import ClientID, ObjectID, TaskID, WorkerID
 from scaler.utility.logging.utility import setup_logger
 from scaler.utility.metadata.task_flags import TaskFlags
-from scaler.worker_manager_adapter.baremetal.native import NativeWorkerPool
+from scaler.worker_manager_adapter.baremetal.native import NativeWorkerProvisioner
 from scaler.worker_manager_adapter.mixins import WorkerProvisioner
 from scaler.worker_manager_adapter.worker_manager_runner import WorkerManagerRunner
 from scaler.worker_manager_adapter.worker_process import WorkerProcess
@@ -44,7 +44,7 @@ class TestWorkerManagerHandleCommand(unittest.IsolatedAsyncioTestCase):
             capabilities=self.capabilities,
             max_task_concurrency=4,
             worker_manager_id=b"mgr",
-            worker_pool=self.pool,
+            worker_provisioner=self.pool,
         )
         connector = AsyncMock()
         connector.send = self.send_mock
@@ -208,7 +208,7 @@ class TestWorkerProcessOnReceiveExternal(unittest.IsolatedAsyncioTestCase):
             await self._dispatch(_Unknown())
 
 
-class TestNativeWorkerPool(unittest.IsolatedAsyncioTestCase):
+class TestNativeWorkerProvisioner(unittest.IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         setup_logger()
         logging_test_name(self)
@@ -289,9 +289,9 @@ def _make_object_instruction() -> ObjectInstruction:
     )
 
 
-def _make_native_pool(max_workers: int = 2) -> NativeWorkerPool:
+def _make_native_pool(max_workers: int = 2) -> NativeWorkerProvisioner:
     config = MagicMock()
     config.worker_manager_config.max_task_concurrency = max_workers
     config.worker_manager_config.worker_manager_id.encode.return_value = b"mgr"
     config.worker_type = "NAT"
-    return NativeWorkerPool(config)
+    return NativeWorkerProvisioner(config)

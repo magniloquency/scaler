@@ -14,7 +14,7 @@ from scaler.worker_manager_adapter.worker_manager_runner import WorkerManagerRun
 Status = WorkerManagerCommandResponse.Status
 
 
-class NativeWorkerPool(WorkerProvisioner):
+class NativeWorkerProvisioner(WorkerProvisioner):
     def __init__(self, config: NativeWorkerManagerConfig) -> None:
         self._worker_scheduler_address = config.worker_manager_config.effective_worker_scheduler_address
         self._object_storage_address = config.worker_manager_config.object_storage_address
@@ -74,7 +74,7 @@ class NativeWorkerPool(WorkerProvisioner):
             self._workers[worker.identity] = worker
 
         def _on_signal(sig: int, frame: object) -> None:
-            logging.info("NativeWorkerPool (FIXED): received signal %d, terminating workers", sig)
+            logging.info("NativeWorkerProvisioner (FIXED): received signal %d, terminating workers", sig)
             for worker in self._workers.values():
                 if worker.is_alive():
                     worker.terminate()
@@ -123,7 +123,7 @@ class NativeWorkerManager:
         return self._config
 
     def run(self) -> None:
-        pool = NativeWorkerPool(self._config)
+        pool = NativeWorkerProvisioner(self._config)
 
         if self._config.mode == NativeWorkerManagerMode.FIXED:
             pool.run_fixed()
@@ -136,7 +136,7 @@ class NativeWorkerManager:
             capabilities=self._config.worker_config.per_worker_capabilities.capabilities,
             max_task_concurrency=self._config.worker_manager_config.max_task_concurrency,
             worker_manager_id=self._config.worker_manager_config.worker_manager_id.encode(),
-            worker_pool=pool,
+            worker_provisioner=pool,
             io_threads=self._config.worker_config.io_threads,
         )
         runner.run()

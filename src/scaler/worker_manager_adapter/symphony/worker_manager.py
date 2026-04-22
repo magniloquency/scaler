@@ -14,7 +14,7 @@ from scaler.worker_manager_adapter.worker_process import WorkerProcess
 Status = WorkerManagerCommandResponse.Status
 
 
-class SymphonyWorkerPool(WorkerProvisioner):
+class SymphonyWorkerProvisioner(WorkerProvisioner):
     def __init__(self, config: SymphonyWorkerManagerConfig) -> None:
         self._worker_scheduler_address = config.worker_manager_config.effective_worker_scheduler_address
         self._object_storage_address = config.worker_manager_config.object_storage_address
@@ -73,7 +73,7 @@ class SymphonyWorkerPool(WorkerProvisioner):
 
 class SymphonyWorkerManager:
     def __init__(self, config: SymphonyWorkerManagerConfig) -> None:
-        pool = SymphonyWorkerPool(config)
+        pool = SymphonyWorkerProvisioner(config)
         self._runner = WorkerManagerRunner(
             address=config.worker_manager_config.scheduler_address,
             name="worker_manager_symphony",
@@ -81,7 +81,7 @@ class SymphonyWorkerManager:
             capabilities=config.worker_config.per_worker_capabilities.capabilities,
             max_task_concurrency=config.worker_manager_config.max_task_concurrency,
             worker_manager_id=config.worker_manager_config.worker_manager_id.encode(),
-            worker_pool=pool,
+            worker_provisioner=pool,
             io_threads=config.worker_config.io_threads,
         )
 

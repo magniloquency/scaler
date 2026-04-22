@@ -31,7 +31,7 @@ class WorkerManagerRunner:
         capabilities: Dict[str, int],
         max_task_concurrency: int,
         worker_manager_id: bytes,
-        worker_pool: WorkerProvisioner,
+        worker_provisioner: WorkerProvisioner,
         io_threads: int = 1,
         heartbeat_concurrency_multiplier: int = 1,
     ) -> None:
@@ -41,7 +41,7 @@ class WorkerManagerRunner:
         self._capabilities = capabilities
         self._max_task_concurrency = max_task_concurrency
         self._worker_manager_id = worker_manager_id
-        self._worker_pool = worker_pool
+        self._worker_provisioner = worker_provisioner
         self._io_threads = io_threads
         self._heartbeat_concurrency_multiplier = heartbeat_concurrency_multiplier
 
@@ -131,11 +131,11 @@ class WorkerManagerRunner:
         capabilities: Dict[str, int] = {}
 
         if cmd_type == WorkerManagerCommandType.startWorkers:
-            worker_ids, response_status = await self._worker_pool.start_worker()
+            worker_ids, response_status = await self._worker_provisioner.start_worker()
             if response_status == Status.success:
                 capabilities = self._capabilities
         elif cmd_type == WorkerManagerCommandType.shutdownWorkers:
-            worker_ids, response_status = await self._worker_pool.shutdown_workers(list(command.workerIDs))
+            worker_ids, response_status = await self._worker_provisioner.shutdown_workers(list(command.workerIDs))
         else:
             raise ValueError(f"Unknown WorkerManagerCommand: {cmd_type!r}")
 
