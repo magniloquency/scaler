@@ -1,5 +1,5 @@
 """
-AWS Batch Worker factory.
+AWS HPC Batch Worker factory.
 
 Creates a WorkerProcess configured to submit tasks to AWS Batch for execution.
 """
