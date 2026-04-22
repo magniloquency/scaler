@@ -461,7 +461,7 @@ class TestExecutionBackendSentinel(unittest.IsolatedAsyncioTestCase):
             def register(self, load_task_inputs: Callable[[Task], Awaitable[Tuple[Any, List[Any]]]]) -> None:
                 self._loader = load_task_inputs
 
-            async def _load_task_inputs(self, task: Task) -> Tuple[Any, List[Any]]:
+            async def load_task_inputs(self, task: Task) -> Tuple[Any, List[Any]]:
                 return await self._loader(task)
 
             async def execute(self, task: Task) -> asyncio.Future:
@@ -478,7 +478,7 @@ class TestExecutionBackendSentinel(unittest.IsolatedAsyncioTestCase):
 
         backend = _ConcreteBackend()
         backend.register(_loader)
-        func, args = await backend._load_task_inputs(_make_task())
+        func, args = await backend.load_task_inputs(_make_task())
         self.assertIsNone(func)
         self.assertEqual(args, [])
 

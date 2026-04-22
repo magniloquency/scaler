@@ -65,7 +65,7 @@ class TaskManager(Looper, TaskManagerMixin):
         self._connector_external = connector_external
         self._connector_storage = connector_storage
         self._heartbeat_manager = heartbeat_manager
-        self._execution_backend.register(self._load_task_inputs)
+        self._execution_backend.register(self.load_task_inputs)
 
     async def on_object_instruction(self, instruction: ObjectInstruction) -> None:
         if instruction.instructionType == ObjectInstruction.ObjectInstructionType.delete:
@@ -224,7 +224,7 @@ class TaskManager(Looper, TaskManagerMixin):
     def processing_task_count(self) -> int:
         return len(self._processing_task_ids)
 
-    async def _load_task_inputs(self, task: Task) -> Tuple[Any, List[Any]]:
+    async def load_task_inputs(self, task: Task) -> Tuple[Any, List[Any]]:
         serializer_id = ObjectID.generate_serializer_object_id(task.source)
 
         if serializer_id not in self._serializers:

@@ -43,7 +43,7 @@ class SymphonyExecutionBackend(TaskInputLoaderMixin, ExecutionBackend):
     def register(self, load_task_inputs: Callable[[Task], Awaitable[Tuple[Any, List[Any]]]]) -> None:
         self._loader = load_task_inputs
 
-    async def _load_task_inputs(self, task: Task) -> Tuple[Any, List[Any]]:
+    async def load_task_inputs(self, task: Task) -> Tuple[Any, List[Any]]:
         return await self._loader(task)
 
     async def on_cancel(self, task_cancel: TaskCancel) -> None:
@@ -56,7 +56,7 @@ class SymphonyExecutionBackend(TaskInputLoaderMixin, ExecutionBackend):
         pass
 
     async def execute(self, task: Task) -> asyncio.Future:
-        function, arg_objects = await self._load_task_inputs(task)
+        function, arg_objects = await self.load_task_inputs(task)
 
         input_message = SoamMessage()
         input_message.set_payload(cloudpickle.dumps((function, *arg_objects)))

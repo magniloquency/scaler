@@ -55,7 +55,7 @@ class AWSBatchExecutionBackend(TaskInputLoaderMixin, ExecutionBackend):
         self._loader = load_task_inputs
         self._initialize_aws_clients()
 
-    async def _load_task_inputs(self, task: Task) -> Tuple[Any, List[Any]]:
+    async def load_task_inputs(self, task: Task) -> Tuple[Any, List[Any]]:
         return await self._loader(task)
 
     def _initialize_aws_clients(self) -> None:
@@ -84,7 +84,7 @@ class AWSBatchExecutionBackend(TaskInputLoaderMixin, ExecutionBackend):
             await self._cancel_batch_job(batch_job_id)
 
     async def execute(self, task: Task) -> asyncio.Future:
-        function, arg_objects = await self._load_task_inputs(task)
+        function, arg_objects = await self.load_task_inputs(task)
 
         future: Future = Future()
         future.set_running_or_notify_cancel()
