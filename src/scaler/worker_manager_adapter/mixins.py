@@ -19,7 +19,7 @@ class ProcessorStatusProvider(ABC):
     def get_processor_statuses(self) -> List[ProcessorStatus]: ...
 
 
-class TaskInputLoaderMixin(ABC):
+class TaskInputLoader(ABC):
     @abstractmethod
     async def load_task_inputs(self, task: Task) -> Tuple[Any, List[Any]]: ...
 

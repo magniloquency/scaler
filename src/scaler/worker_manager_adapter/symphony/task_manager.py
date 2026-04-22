@@ -7,7 +7,7 @@ import cloudpickle
 
 from scaler.protocol.capnp import Task, TaskCancel
 from scaler.utility.identifiers import TaskID
-from scaler.worker_manager_adapter.mixins import ExecutionBackend, TaskInputLoaderMixin
+from scaler.worker_manager_adapter.mixins import ExecutionBackend, TaskInputLoader
 from scaler.worker_manager_adapter.symphony.callback import SessionCallback
 from scaler.worker_manager_adapter.symphony.message import SoamMessage
 
@@ -17,7 +17,7 @@ except ImportError:
     raise ImportError("IBM Spectrum Symphony API not found, please install it with 'pip install soamapi'.")
 
 
-class SymphonyExecutionBackend(TaskInputLoaderMixin, ExecutionBackend):
+class SymphonyExecutionBackend(TaskInputLoader, ExecutionBackend):
     _loader: Callable[[Task], Awaitable[Tuple[Any, List[Any]]]]
 
     def __init__(self, service_name: str):

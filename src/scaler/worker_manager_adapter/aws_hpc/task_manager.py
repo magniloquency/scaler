@@ -15,14 +15,14 @@ import cloudpickle
 
 from scaler.protocol.capnp import Task, TaskCancel
 from scaler.utility.identifiers import TaskID
-from scaler.worker_manager_adapter.mixins import ExecutionBackend, TaskInputLoaderMixin
+from scaler.worker_manager_adapter.mixins import ExecutionBackend, TaskInputLoader
 
 ARRAY_JOB_BATCH_WINDOW_SECONDS: float = 0.5
 ARRAY_JOB_MIN_BATCH_SIZE: int = 2
 ARRAY_JOB_MAX_BATCH_SIZE: int = 10000
 
 
-class AWSBatchExecutionBackend(TaskInputLoaderMixin, ExecutionBackend):
+class AWSBatchExecutionBackend(TaskInputLoader, ExecutionBackend):
     _loader: Callable[[Task], Awaitable[Tuple[Any, List[Any]]]]
 
     def __init__(
