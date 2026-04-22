@@ -33,9 +33,9 @@ class TestWorkerManagerHandleCommand(unittest.IsolatedAsyncioTestCase):
         setup_logger()
         logging_test_name(self)
         self.capabilities = {"cpu": 4}
-        self.pool = MagicMock(spec=WorkerProvisioner)
-        self.pool.start_worker = AsyncMock()
-        self.pool.shutdown_workers = AsyncMock()
+        self.provisioner = MagicMock(spec=WorkerProvisioner)
+        self.provisioner.start_worker = AsyncMock()
+        self.provisioner.shutdown_workers = AsyncMock()
         self.send_mock = AsyncMock()
         self.runner = WorkerManagerRunner(
             address=MagicMock(),
@@ -44,7 +44,7 @@ class TestWorkerManagerHandleCommand(unittest.IsolatedAsyncioTestCase):
             capabilities=self.capabilities,
             max_task_concurrency=4,
             worker_manager_id=b"mgr",
-            worker_provisioner=self.pool,
+            worker_provisioner=self.provisioner,
         )
         connector = AsyncMock()
         connector.send = self.send_mock
@@ -56,7 +56,7 @@ class TestWorkerManagerHandleCommand(unittest.IsolatedAsyncioTestCase):
 
     async def test_start_workers_success_populates_capabilities_and_worker_ids(self) -> None:
         worker_id = bytes(WorkerID.generate_worker_id("w0"))
-        self.pool.start_worker.return_value = ([worker_id], Status.success)
+        self.provisioner.start_worker.return_value = ([worker_id], Status.success)
 
         cmd = MagicMock(spec=WorkerManagerCommand)
         cmd.command = WorkerManagerCommandType.startWorkers
@@ -69,7 +69,7 @@ class TestWorkerManagerHandleCommand(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(dict(response.capabilities), self.capabilities)
 
     async def test_start_workers_failure_returns_empty_capabilities_and_ids(self) -> None:
-        self.pool.start_worker.return_value = ([], Status.tooManyWorkers)
+        self.provisioner.start_worker.return_value = ([], Status.tooManyWorkers)
 
         cmd = MagicMock(spec=WorkerManagerCommand)
         cmd.command = WorkerManagerCommandType.startWorkers
@@ -82,7 +82,7 @@ class TestWorkerManagerHandleCommand(unittest.IsolatedAsyncioTestCase):
 
     async def test_shutdown_workers_echoes_ids_with_empty_capabilities(self) -> None:
         worker_ids = [bytes(WorkerID.generate_worker_id(f"w{i}")) for i in range(2)]
-        self.pool.shutdown_workers.return_value = (worker_ids, Status.success)
+        self.provisioner.shutdown_workers.return_value = (worker_ids, Status.success)
 
         cmd = MagicMock(spec=WorkerManagerCommand)
         cmd.command = WorkerManagerCommandType.shutdownWorkers
@@ -93,7 +93,7 @@ class TestWorkerManagerHandleCommand(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status, Status.success)
         self.assertEqual(list(response.workerIDs), worker_ids)
         self.assertEqual(dict(response.capabilities), {})
-        self.pool.shutdown_workers.assert_called_once_with(worker_ids)
+        self.provisioner.shutdown_workers.assert_called_once_with(worker_ids)
 
     async def test_unknown_command_type_raises_value_error(self) -> None:
         cmd = MagicMock(spec=WorkerManagerCommand)
@@ -214,52 +214,52 @@ class TestNativeWorkerProvisioner(unittest.IsolatedAsyncioTestCase):
         logging_test_name(self)
 
     async def test_start_worker_at_capacity_returns_too_many_workers(self) -> None:
-        pool = _make_native_pool(max_workers=1)
-        pool._workers[WorkerID.generate_worker_id("existing")] = MagicMock()
+        provisioner = _make_native_provisioner(max_workers=1)
+        provisioner._workers[WorkerID.generate_worker_id("existing")] = MagicMock()
 
-        ids, status = await pool.start_worker()
+        ids, status = await provisioner.start_worker()
 
         self.assertEqual(ids, [])
         self.assertEqual(status, Status.tooManyWorkers)
 
     async def test_start_worker_success_starts_and_registers_worker(self) -> None:
-        pool = _make_native_pool(max_workers=2)
+        provisioner = _make_native_provisioner(max_workers=2)
         mock_worker = MagicMock()
         mock_worker.identity = WorkerID.generate_worker_id("w0")
 
-        with patch.object(pool, "_create_worker", return_value=mock_worker):
-            ids, status = await pool.start_worker()
+        with patch.object(provisioner, "_create_worker", return_value=mock_worker):
+            ids, status = await provisioner.start_worker()
 
         mock_worker.start.assert_called_once()
         self.assertEqual(status, Status.success)
         self.assertEqual(ids, [bytes(mock_worker.identity)])
-        self.assertIn(mock_worker.identity, pool._workers)
+        self.assertIn(mock_worker.identity, provisioner._workers)
 
     async def test_shutdown_workers_unknown_id_returns_worker_not_found(self) -> None:
-        pool = _make_native_pool()
+        provisioner = _make_native_provisioner()
         unknown_bytes = bytes(WorkerID.generate_worker_id("ghost"))
 
-        ids, status = await pool.shutdown_workers([unknown_bytes])
+        ids, status = await provisioner.shutdown_workers([unknown_bytes])
 
         self.assertEqual(ids, [])
         self.assertEqual(status, Status.workerNotFound)
 
     async def test_shutdown_workers_kills_joins_and_returns_id(self) -> None:
-        pool = _make_native_pool()
+        provisioner = _make_native_provisioner()
         worker_id = WorkerID.generate_worker_id("w0")
         mock_worker = MagicMock()
         mock_worker.pid = 99999
-        pool._workers[worker_id] = mock_worker
+        provisioner._workers[worker_id] = mock_worker
         worker_id_bytes = bytes(worker_id)
 
         with patch("os.kill") as mock_kill:
-            ids, status = await pool.shutdown_workers([worker_id_bytes])
+            ids, status = await provisioner.shutdown_workers([worker_id_bytes])
 
         mock_kill.assert_called_once_with(99999, signal.SIGINT)
         mock_worker.join.assert_called_once()
         self.assertEqual(ids, [worker_id_bytes])
         self.assertEqual(status, Status.success)
-        self.assertNotIn(worker_id, pool._workers)
+        self.assertNotIn(worker_id, provisioner._workers)
 
 
 def _make_task(source: Optional[ClientID] = None) -> Task:
@@ -289,7 +289,7 @@ def _make_object_instruction() -> ObjectInstruction:
     )
 
 
-def _make_native_pool(max_workers: int = 2) -> NativeWorkerProvisioner:
+def _make_native_provisioner(max_workers: int = 2) -> NativeWorkerProvisioner:
     config = MagicMock()
     config.worker_manager_config.max_task_concurrency = max_workers
     config.worker_manager_config.worker_manager_id.encode.return_value = b"mgr"
