@@ -60,11 +60,11 @@ std::array<uint8_t, 20> sha1(std::string_view input) noexcept
                 k = 0xCA62C1D6;
             }
             const uint32_t temp = std::rotl(a, 5) + f + e + k + w[i];
-            e = d;
-            d = c;
-            c = std::rotl(b, 30);
-            b = a;
-            a = temp;
+            e                   = d;
+            d                   = c;
+            c                   = std::rotl(b, 30);
+            b                   = a;
+            a                   = temp;
         }
         h[0] += a;
         h[1] += b;
@@ -85,12 +85,11 @@ std::array<uint8_t, 20> sha1(std::string_view input) noexcept
 
 std::string base64Encode(std::span<const uint8_t> data) noexcept
 {
-    static constexpr std::string_view kAlphabet =
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    static constexpr std::string_view kAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     std::string result;
     result.reserve(((data.size() + 2) / 3) * 4);
     int val = 0, valb = -6;
-    for (uint8_t c : data) {
+    for (uint8_t c: data) {
         val = (val << 8) | c;
         valb += 8;
         while (valb >= 0) {
@@ -120,30 +119,37 @@ std::string generateWebSocketKey() noexcept
 std::string computeWebSocketAccept(const std::string& key) noexcept
 {
     const std::string_view magic = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-    const std::string input = key + std::string(magic);
-    const auto digest = sha1(input);
+    const std::string input      = key + std::string(magic);
+    const auto digest            = sha1(input);
     return base64Encode(std::span<const uint8_t>(digest));
 }
 
 std::string buildClientUpgradeRequest(
     const std::string& host, uint16_t port, const std::string& path, const std::string& key) noexcept
 {
-    return "GET " + path + " HTTP/1.1\r\n"
-        "Host: " + host + ":" + std::to_string(port) + "\r\n"
-        "Upgrade: websocket\r\n"
-        "Connection: Upgrade\r\n"
-        "Sec-WebSocket-Key: " + key + "\r\n"
-        "Sec-WebSocket-Version: 13\r\n"
-        "\r\n";
+    return "GET " + path +
+           " HTTP/1.1\r\n"
+           "Host: " +
+           host + ":" + std::to_string(port) +
+           "\r\n"
+           "Upgrade: websocket\r\n"
+           "Connection: Upgrade\r\n"
+           "Sec-WebSocket-Key: " +
+           key +
+           "\r\n"
+           "Sec-WebSocket-Version: 13\r\n"
+           "\r\n";
 }
 
 std::string buildServerUpgradeResponse(const std::string& key) noexcept
 {
     return "HTTP/1.1 101 Switching Protocols\r\n"
-        "Upgrade: websocket\r\n"
-        "Connection: Upgrade\r\n"
-        "Sec-WebSocket-Accept: " + computeWebSocketAccept(key) + "\r\n"
-        "\r\n";
+           "Upgrade: websocket\r\n"
+           "Connection: Upgrade\r\n"
+           "Sec-WebSocket-Accept: " +
+           computeWebSocketAccept(key) +
+           "\r\n"
+           "\r\n";
 }
 
 // Case-insensitive header value extraction.
@@ -151,8 +157,10 @@ std::optional<std::string> extractHeader(std::string_view headers, std::string_v
 {
     std::string lowerHeaders(headers);
     std::string lowerName(name);
-    for (char& c : lowerHeaders) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    for (char& c : lowerName) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    for (char& c: lowerHeaders)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    for (char& c: lowerName)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     lowerName += ": ";
 
     const size_t pos = lowerHeaders.find(lowerName);
@@ -213,8 +221,8 @@ std::pair<std::vector<uint8_t>, std::vector<uint8_t>> buildClientFrame(
     std::vector<uint8_t> masked;
     masked.reserve(totalSize);
     size_t pos = 0;
-    for (const auto& buf : buffers) {
-        for (uint8_t byte : buf)
+    for (const auto& buf: buffers) {
+        for (uint8_t byte: buf)
             masked.push_back(byte ^ maskKey[pos++ % 4]);
     }
     return {std::move(header), std::move(masked)};
@@ -274,8 +282,7 @@ std::optional<std::vector<uint8_t>> tryDecodeFrame(std::vector<uint8_t>& buffer)
     }
 
     buffer.erase(
-        buffer.begin(),
-        buffer.begin() + static_cast<std::ptrdiff_t>(headerSize + static_cast<size_t>(payloadLen)));
+        buffer.begin(), buffer.begin() + static_cast<std::ptrdiff_t>(headerSize + static_cast<size_t>(payloadLen)));
     return payload;
 }
 
@@ -289,16 +296,14 @@ struct ClientUpgradeContext {
     std::optional<scaler::wrapper::uv::TCPSocket> socket {};
     std::string key {};
     std::vector<uint8_t> recvBuffer {};
-    scaler::utility::MoveOnlyFunction<void(std::expected<WebSocketStream, scaler::wrapper::uv::Error>)>
-        callback {};
+    scaler::utility::MoveOnlyFunction<void(std::expected<WebSocketStream, scaler::wrapper::uv::Error>)> callback {};
 };
 
 // Shared state used during the async HTTP upgrade phase on the server side.
 struct ServerUpgradeContext {
     std::optional<scaler::wrapper::uv::TCPSocket> socket {};
     std::vector<uint8_t> recvBuffer {};
-    scaler::utility::MoveOnlyFunction<void(std::expected<WebSocketStream, scaler::wrapper::uv::Error>)>
-        callback {};
+    scaler::utility::MoveOnlyFunction<void(std::expected<WebSocketStream, scaler::wrapper::uv::Error>)> callback {};
 };
 
 // ─── WebSocketStream implementation ─────────────────────────────────────────
@@ -315,8 +320,8 @@ WebSocketStream::WebSocketStream(std::shared_ptr<State> state) noexcept: _state(
 WebSocketStream WebSocketStream::fromUpgradedSocket(
     scaler::wrapper::uv::TCPSocket socket, bool isServer, std::vector<uint8_t> leftover) noexcept
 {
-    auto state            = std::make_shared<State>(std::move(socket), isServer);
-    state->_recvBuffer    = std::move(leftover);
+    auto state         = std::make_shared<State>(std::move(socket), isServer);
+    state->_recvBuffer = std::move(leftover);
     return WebSocketStream(std::move(state));
 }
 
@@ -325,8 +330,7 @@ static void finishClientUpgrade(std::shared_ptr<ClientUpgradeContext> ctx) noexc
 {
     ctx->socket->readStop();
 
-    const std::string_view response(
-        reinterpret_cast<const char*>(ctx->recvBuffer.data()), ctx->recvBuffer.size());
+    const std::string_view response(reinterpret_cast<const char*>(ctx->recvBuffer.data()), ctx->recvBuffer.size());
 
     const size_t headersEnd = response.find("\r\n\r\n");
     assert(headersEnd != std::string_view::npos);
@@ -345,8 +349,8 @@ static void finishClientUpgrade(std::shared_ptr<ClientUpgradeContext> ctx) noexc
     }
 
     // Preserve any data that arrived after the HTTP headers (should be empty in practice).
-    std::vector<uint8_t> leftover(ctx->recvBuffer.begin() + static_cast<std::ptrdiff_t>(headersEnd + 4),
-                                  ctx->recvBuffer.end());
+    std::vector<uint8_t> leftover(
+        ctx->recvBuffer.begin() + static_cast<std::ptrdiff_t>(headersEnd + 4), ctx->recvBuffer.end());
 
     ctx->callback(
         WebSocketStream::fromUpgradedSocket(std::move(ctx->socket.value()), false /* client */, std::move(leftover)));
@@ -357,8 +361,7 @@ static void finishServerUpgrade(std::shared_ptr<ServerUpgradeContext> ctx) noexc
 {
     ctx->socket->readStop();
 
-    const std::string_view request(
-        reinterpret_cast<const char*>(ctx->recvBuffer.data()), ctx->recvBuffer.size());
+    const std::string_view request(reinterpret_cast<const char*>(ctx->recvBuffer.data()), ctx->recvBuffer.size());
 
     const size_t headersEnd = request.find("\r\n\r\n");
     assert(headersEnd != std::string_view::npos);
@@ -375,7 +378,7 @@ static void finishServerUpgrade(std::shared_ptr<ServerUpgradeContext> ctx) noexc
 
     // Verify it's a WebSocket upgrade (case-insensitive)
     std::string upgradeValue = *upgradeHeader;
-    for (char& c : upgradeValue)
+    for (char& c: upgradeValue)
         c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     if (upgradeValue != "websocket") {
         ctx->callback(std::unexpected(scaler::wrapper::uv::Error {UV_EPROTO}));
@@ -389,8 +392,7 @@ static void finishServerUpgrade(std::shared_ptr<ServerUpgradeContext> ctx) noexc
 
     auto writeResult = ctx->socket->write(
         std::span<const std::span<const uint8_t>>(&responseSpan, 1),
-        [ctx, responseData = std::move(responseData)](
-            std::expected<void, scaler::wrapper::uv::Error> result) mutable {
+        [ctx, responseData = std::move(responseData)](std::expected<void, scaler::wrapper::uv::Error> result) mutable {
             if (!result.has_value()) {
                 ctx->callback(std::unexpected(result.error()));
                 return;
@@ -411,21 +413,19 @@ void WebSocketStream::upgradeAsClient(
     scaler::utility::MoveOnlyFunction<void(std::expected<WebSocketStream, scaler::wrapper::uv::Error>)>
         callback) noexcept
 {
-    auto ctx     = std::make_shared<ClientUpgradeContext>();
-    ctx->socket  = std::move(socket);
-    ctx->key     = generateWebSocketKey();
+    auto ctx      = std::make_shared<ClientUpgradeContext>();
+    ctx->socket   = std::move(socket);
+    ctx->key      = generateWebSocketKey();
     ctx->callback = std::move(callback);
 
-    const std::string request =
-        buildClientUpgradeRequest(address.host, address.port, address.path, ctx->key);
-    auto requestData = std::make_shared<std::string>(request);
+    const std::string request = buildClientUpgradeRequest(address.host, address.port, address.path, ctx->key);
+    auto requestData          = std::make_shared<std::string>(request);
     const std::span<const uint8_t> requestSpan(
         reinterpret_cast<const uint8_t*>(requestData->data()), requestData->size());
 
     auto writeResult = ctx->socket->write(
         std::span<const std::span<const uint8_t>>(&requestSpan, 1),
-        [ctx, requestData = std::move(requestData)](
-            std::expected<void, scaler::wrapper::uv::Error> result) mutable {
+        [ctx, requestData = std::move(requestData)](std::expected<void, scaler::wrapper::uv::Error> result) mutable {
             if (!result.has_value()) {
                 ctx->callback(std::unexpected(result.error()));
                 return;
@@ -480,8 +480,7 @@ void WebSocketStream::upgradeAsServer(
             const auto& data = readResult.value();
             ctx->recvBuffer.insert(ctx->recvBuffer.end(), data.begin(), data.end());
 
-            const std::string_view view(
-                reinterpret_cast<const char*>(ctx->recvBuffer.data()), ctx->recvBuffer.size());
+            const std::string_view view(reinterpret_cast<const char*>(ctx->recvBuffer.data()), ctx->recvBuffer.size());
             if (view.find("\r\n\r\n") != std::string_view::npos) {
                 finishServerUpgrade(std::move(ctx));
             }
@@ -496,21 +495,20 @@ void WebSocketStream::upgradeAsServer(
 // ─── Data path ───────────────────────────────────────────────────────────────
 
 std::expected<void, scaler::wrapper::uv::Error> WebSocketStream::write(
-    std::span<const std::span<const uint8_t>> buffers,
-    scaler::wrapper::uv::WriteCallback callback) noexcept
+    std::span<const std::span<const uint8_t>> buffers, scaler::wrapper::uv::WriteCallback callback) noexcept
 {
     size_t totalSize = 0;
-    for (const auto& buf : buffers)
+    for (const auto& buf: buffers)
         totalSize += buf.size();
 
     if (_state->_isServer) {
-        auto header    = std::make_shared<std::vector<uint8_t>>(buildServerFrameHeader(totalSize));
+        auto header     = std::make_shared<std::vector<uint8_t>>(buildServerFrameHeader(totalSize));
         auto headerSpan = std::span<const uint8_t>(*header);
 
         std::vector<std::span<const uint8_t>> writeBuffers;
         writeBuffers.reserve(buffers.size() + 1);
         writeBuffers.push_back(headerSpan);
-        for (const auto& buf : buffers)
+        for (const auto& buf: buffers)
             writeBuffers.push_back(buf);
 
         auto result = _state->_socket.write(
@@ -533,10 +531,8 @@ std::expected<void, scaler::wrapper::uv::Error> WebSocketStream::write(
 
     auto result = _state->_socket.write(
         std::span<const std::span<const uint8_t>>(writeBuffers),
-        [headerData = std::move(headerData), maskedData = std::move(maskedData),
-         callback = std::move(callback)](std::expected<void, scaler::wrapper::uv::Error> err) mutable {
-            callback(err);
-        });
+        [headerData = std::move(headerData), maskedData = std::move(maskedData), callback = std::move(callback)](
+            std::expected<void, scaler::wrapper::uv::Error> err) mutable { callback(err); });
 
     if (!result.has_value())
         return std::unexpected(result.error());
@@ -546,7 +542,7 @@ std::expected<void, scaler::wrapper::uv::Error> WebSocketStream::write(
 std::expected<void, scaler::wrapper::uv::Error> WebSocketStream::readStart(
     scaler::wrapper::uv::ReadCallback callback) noexcept
 {
-    auto state = _state;
+    auto state           = _state;
     state->_readCallback = std::move(callback);
     state->_readActive   = true;
 
@@ -565,7 +561,7 @@ std::expected<void, scaler::wrapper::uv::Error> WebSocketStream::readStart(
             while (state->_readActive && !state->_recvBuffer.empty()) {
                 auto frame = tryDecodeFrame(state->_recvBuffer);
                 if (!frame.has_value())
-                    break;   // need more data
+                    break;  // need more data
                 if (frame->empty())
                     continue;  // control frame, skip
 

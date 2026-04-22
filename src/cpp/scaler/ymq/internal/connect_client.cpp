@@ -86,8 +86,7 @@ void ConnectClient::tryConnect(std::shared_ptr<State> state) noexcept
             auto tcpClient = UV_EXIT_ON_ERROR(scaler::wrapper::uv::TCPSocket::init(state->_loop));
 
             state->_connectRequest = UV_EXIT_ON_ERROR(tcpClient.connect(
-                state->_address.asWebSocket().tcpAddress,
-                std::bind_front(&ConnectClient::onConnectWS, state)));
+                state->_address.asWebSocket().tcpAddress, std::bind_front(&ConnectClient::onConnectWS, state)));
 
             state->_upgradeSocket = std::move(tcpClient);
             break;

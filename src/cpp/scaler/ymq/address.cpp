@@ -45,7 +45,7 @@ std::expected<Address, Error> fromTCPString(std::string_view addrPart) noexcept
 std::expected<Address, Error> fromWSString(std::string_view addrPart, bool secure) noexcept
 {
     // Split authority (host:port) from path
-    const size_t slashPos = addrPart.find('/');
+    const size_t slashPos            = addrPart.find('/');
     const std::string_view authority = addrPart.substr(0, slashPos);
     const std::string path = slashPos == std::string_view::npos ? "/" : std::string(addrPart.substr(slashPos));
 
@@ -89,14 +89,12 @@ std::expected<Address, Error> fromWSString(std::string_view addrPart, bool secur
 
 }  // namespace details
 
-Address::Address(
-    std::variant<scaler::wrapper::uv::SocketAddress, std::string, WebSocketAddress> value) noexcept
+Address::Address(std::variant<scaler::wrapper::uv::SocketAddress, std::string, WebSocketAddress> value) noexcept
     : _value(std::move(value))
 {
 }
 
-const std::variant<scaler::wrapper::uv::SocketAddress, std::string, WebSocketAddress>&
-Address::value() const noexcept
+const std::variant<scaler::wrapper::uv::SocketAddress, std::string, WebSocketAddress>& Address::value() const noexcept
 {
     return _value;
 }
@@ -145,7 +143,7 @@ std::expected<std::string, Error> Address::toString() const noexcept
         }
         case Type::IPC: return std::string {_ipcPrefix} + asIPC();
         case Type::WebSocket: {
-            const auto& ws            = asWebSocket();
+            const auto& ws                = asWebSocket();
             const std::string_view prefix = ws.secure ? _wssPrefix : _wsPrefix;
             return std::string(prefix) + ws.host + ":" + std::to_string(ws.port) + ws.path;
         }
@@ -172,8 +170,7 @@ std::expected<Address, Error> Address::fromString(std::string_view address) noex
     }
 
     return std::unexpected {Error {
-        Error::ErrorCode::InvalidAddressFormat,
-        "Address must start with 'tcp://', 'ipc://', 'ws://', or 'wss://'"}};
+        Error::ErrorCode::InvalidAddressFormat, "Address must start with 'tcp://', 'ipc://', 'ws://', or 'wss://'"}};
 }
 
 }  // namespace ymq

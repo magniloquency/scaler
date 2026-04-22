@@ -15,10 +15,10 @@ namespace ymq {
 // Parsed representation of a ws:// or wss:// address.
 struct WebSocketAddress {
     scaler::wrapper::uv::SocketAddress tcpAddress;  // resolved TCP address for the underlying connection
-    std::string host;                                // original hostname (for the HTTP Host header)
-    uint16_t port;                                   // port number
-    std::string path;                                // request path, always starts with '/'
-    bool secure;                                     // true for wss://, false for ws://
+    std::string host;                               // original hostname (for the HTTP Host header)
+    uint16_t port;                                  // port number
+    std::string path;                               // request path, always starts with '/'
+    bool secure;                                    // true for wss://, false for ws://
 };
 
 // A socket address, can either be a SocketAddress (IPv4/6), an IPC path, or a WebSocket address.
@@ -38,8 +38,7 @@ public:
     Address(Address&&) noexcept            = default;
     Address& operator=(Address&&) noexcept = default;
 
-    const std::variant<scaler::wrapper::uv::SocketAddress, std::string, WebSocketAddress>&
-    value() const noexcept;
+    const std::variant<scaler::wrapper::uv::SocketAddress, std::string, WebSocketAddress>& value() const noexcept;
 
     Type type() const noexcept;
 

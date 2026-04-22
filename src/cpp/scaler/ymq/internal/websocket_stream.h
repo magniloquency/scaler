@@ -49,22 +49,17 @@ public:
     // Create a ready-to-use WebSocketStream from an already-upgraded TCP socket.
     // Used internally by the upgrade helpers; not part of the public transport API.
     static WebSocketStream fromUpgradedSocket(
-        scaler::wrapper::uv::TCPSocket socket,
-        bool isServer,
-        std::vector<uint8_t> leftover = {}) noexcept;
+        scaler::wrapper::uv::TCPSocket socket, bool isServer, std::vector<uint8_t> leftover = {}) noexcept;
 
     // The buffers' content must remain valid until the callback is called.
     std::expected<void, scaler::wrapper::uv::Error> write(
-        std::span<const std::span<const uint8_t>> buffers,
-        scaler::wrapper::uv::WriteCallback callback) noexcept;
+        std::span<const std::span<const uint8_t>> buffers, scaler::wrapper::uv::WriteCallback callback) noexcept;
 
-    std::expected<void, scaler::wrapper::uv::Error> readStart(
-        scaler::wrapper::uv::ReadCallback callback) noexcept;
+    std::expected<void, scaler::wrapper::uv::Error> readStart(scaler::wrapper::uv::ReadCallback callback) noexcept;
 
     void readStop() noexcept;
 
-    std::expected<void, scaler::wrapper::uv::Error> shutdown(
-        scaler::wrapper::uv::ShutdownCallback callback) noexcept;
+    std::expected<void, scaler::wrapper::uv::Error> shutdown(scaler::wrapper::uv::ShutdownCallback callback) noexcept;
 
     std::expected<void, scaler::wrapper::uv::Error> closeReset() noexcept;
 

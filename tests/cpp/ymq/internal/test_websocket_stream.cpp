@@ -52,7 +52,7 @@ TEST_F(WebSocketStreamTest, WSSAddress)
 
 TEST_F(WebSocketStreamTest, InvalidAddresses)
 {
-    EXPECT_FALSE(scaler::ymq::Address::fromString("ws://127.0.0.1").has_value());  // missing port
+    EXPECT_FALSE(scaler::ymq::Address::fromString("ws://127.0.0.1").has_value());       // missing port
     EXPECT_FALSE(scaler::ymq::Address::fromString("ws://127.0.0.1:abc/").has_value());  // bad port
 }
 
@@ -70,20 +70,16 @@ TEST_F(WebSocketStreamTest, ClientServerHandshake)
     std::optional<scaler::ymq::internal::Client> serverClient {};
 
     // ── Server ──────────────────────────────────────────────────────────────
-    scaler::ymq::internal::AcceptServer server(
-        loop,
-        listenAddress,
-        [&](scaler::ymq::internal::Client client) {
-            ASSERT_TRUE(client.isWebSocket());
-            serverClient.emplace(std::move(client));
-            UV_EXIT_ON_ERROR(serverClient->readStart(
-                [&serverReceived](
-                    std::expected<std::span<const uint8_t>, scaler::wrapper::uv::Error> result) {
-                    if (!result.has_value())
-                        return;
-                    serverReceived.insert(serverReceived.end(), result->begin(), result->end());
-                }));
-        });
+    scaler::ymq::internal::AcceptServer server(loop, listenAddress, [&](scaler::ymq::internal::Client client) {
+        ASSERT_TRUE(client.isWebSocket());
+        serverClient.emplace(std::move(client));
+        UV_EXIT_ON_ERROR(serverClient->readStart(
+            [&serverReceived](std::expected<std::span<const uint8_t>, scaler::wrapper::uv::Error> result) {
+                if (!result.has_value())
+                    return;
+                serverReceived.insert(serverReceived.end(), result->begin(), result->end());
+            }));
+    });
 
     const scaler::ymq::Address boundAddress = server.address();
     ASSERT_EQ(boundAddress.type(), scaler::ymq::Address::Type::WebSocket);
@@ -95,9 +91,7 @@ TEST_F(WebSocketStreamTest, ClientServerHandshake)
     const std::vector<uint8_t> msg {'H', 'e', 'l', 'l', 'o'};
 
     scaler::ymq::internal::ConnectClient connector(
-        loop,
-        boundAddress,
-        [&](std::expected<scaler::ymq::internal::Client, scaler::ymq::Error> result) {
+        loop, boundAddress, [&](std::expected<scaler::ymq::internal::Client, scaler::ymq::Error> result) {
             ASSERT_TRUE(result.has_value());
             ASSERT_TRUE(result->isWebSocket());
             clientConnected = true;

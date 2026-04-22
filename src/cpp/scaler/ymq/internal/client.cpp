@@ -51,8 +51,7 @@ std::expected<void, scaler::wrapper::uv::Error> Client::write(
     return {};
 }
 
-std::expected<void, scaler::wrapper::uv::Error> Client::readStart(
-    scaler::wrapper::uv::ReadCallback callback) noexcept
+std::expected<void, scaler::wrapper::uv::Error> Client::readStart(scaler::wrapper::uv::ReadCallback callback) noexcept
 {
     if (auto* tcp = std::get_if<scaler::wrapper::uv::TCPSocket>(&_socket)) {
         return tcp->readStart(std::move(callback));
