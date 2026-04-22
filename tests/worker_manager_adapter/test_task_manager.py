@@ -1,6 +1,6 @@
 import asyncio
 import unittest
-from typing import Optional
+from typing import Any, Awaitable, Callable, List, Optional, Tuple
 from unittest.mock import AsyncMock, MagicMock
 
 from scaler.io.mixins import AsyncConnector, AsyncObjectStorageConnector
@@ -451,29 +451,19 @@ class TestExecutionBackendSentinel(unittest.IsolatedAsyncioTestCase):
         setup_logger()
         logging_test_name(self)
 
-    async def test_load_task_inputs_before_register_raises_runtime_error(self) -> None:
-        class _ConcreteBackend(TaskInputLoaderMixin, ExecutionBackend):
-            async def execute(self, task: Task) -> asyncio.Future:
-                return asyncio.get_running_loop().create_future()
-
-            async def on_cancel(self, task_cancel: TaskCancel) -> None:
-                pass
-
-            def on_cleanup(self, task_id: TaskID) -> None:
-                pass
-
-            async def routine(self) -> None:
-                pass
-
-        backend = _ConcreteBackend()
-        with self.assertRaises(RuntimeError):
-            await backend._load_task_inputs(_make_task())
-
     async def test_load_task_inputs_after_register_does_not_raise(self) -> None:
-        async def _loader(task: Task):
+        async def _loader(task: Task) -> Tuple[Any, List[Any]]:
             return None, []
 
         class _ConcreteBackend(TaskInputLoaderMixin, ExecutionBackend):
+            _loader: Callable[[Task], Awaitable[Tuple[Any, List[Any]]]]
+
+            def register(self, load_task_inputs: Callable[[Task], Awaitable[Tuple[Any, List[Any]]]]) -> None:
+                self._loader = load_task_inputs
+
+            async def _load_task_inputs(self, task: Task) -> Tuple[Any, List[Any]]:
+                return await self._loader(task)
+
             async def execute(self, task: Task) -> asyncio.Future:
                 return asyncio.get_running_loop().create_future()
 

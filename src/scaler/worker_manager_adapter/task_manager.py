@@ -87,6 +87,7 @@ class TaskManager(Looper, TaskManagerMixin):
             else:
                 self._task_id_to_task[task.taskId] = task
                 self._processing_task_ids.add(task.taskId)
+                # Bypass tasks intentionally exceed base_concurrency to service higher-priority requests immediately.
                 self._task_id_to_future[task.taskId] = await self._execution_backend.execute(task)
                 return
 

@@ -19,12 +19,12 @@ class ProcessorStatusProvider(ABC):
     def get_processor_statuses(self) -> List[ProcessorStatus]: ...
 
 
-class TaskInputLoaderMixin:
-    async def _load_task_inputs(self, task: Task) -> Tuple[Any, List[Any]]:
-        raise RuntimeError(f"{type(self).__name__}.register() must be called before execute()")
+class TaskInputLoaderMixin(ABC):
+    @abstractmethod
+    async def _load_task_inputs(self, task: Task) -> Tuple[Any, List[Any]]: ...
 
-    def register(self, load_task_inputs: Callable[[Task], Awaitable[Tuple[Any, List[Any]]]]) -> None:
-        self._load_task_inputs = load_task_inputs  # type: ignore[assignment]
+    @abstractmethod
+    def register(self, load_task_inputs: Callable[[Task], Awaitable[Tuple[Any, List[Any]]]]) -> None: ...
 
 
 class ExecutionBackend(ABC):

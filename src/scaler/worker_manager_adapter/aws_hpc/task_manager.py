@@ -9,7 +9,7 @@ import asyncio
 import logging
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
-from typing import Any, Callable, Dict, List, Set, Tuple
+from typing import Any, Awaitable, Callable, Dict, List, Set, Tuple
 
 import cloudpickle
 
@@ -23,6 +23,8 @@ ARRAY_JOB_MAX_BATCH_SIZE: int = 10000
 
 
 class AWSBatchExecutionBackend(TaskInputLoaderMixin, ExecutionBackend):
+    _loader: Callable[[Task], Awaitable[Tuple[Any, List[Any]]]]
+
     def __init__(
         self,
         job_queue: str,
@@ -49,9 +51,12 @@ class AWSBatchExecutionBackend(TaskInputLoaderMixin, ExecutionBackend):
         self._batch_pending: List[Tuple[Task, Any, List[Any], Future]] = []
         self._batch_window_start: float = 0.0
 
-    def register(self, load_task_inputs: Callable) -> None:
-        TaskInputLoaderMixin.register(self, load_task_inputs)
+    def register(self, load_task_inputs: Callable[[Task], Awaitable[Tuple[Any, List[Any]]]]) -> None:
+        self._loader = load_task_inputs
         self._initialize_aws_clients()
+
+    async def _load_task_inputs(self, task: Task) -> Tuple[Any, List[Any]]:
+        return await self._loader(task)
 
     def _initialize_aws_clients(self) -> None:
         import boto3
@@ -124,7 +129,7 @@ class AWSBatchExecutionBackend(TaskInputLoaderMixin, ExecutionBackend):
 
     async def _run_in_executor(self, func: Any, *args: Any, **kwargs: Any) -> Any:
         """Run a blocking AWS SDK call in the thread pool to avoid starving the event loop."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(self._executor, lambda: func(*args, **kwargs))
 
     async def _submit_array_job(
@@ -428,7 +433,7 @@ class AWSBatchExecutionBackend(TaskInputLoaderMixin, ExecutionBackend):
 
             log_group = "/aws/batch/job"
 
-            job_response = self._batch_client.describe_jobs(jobs=[job_id])
+            job_response = await self._run_in_executor(self._batch_client.describe_jobs, jobs=[job_id])
             if not job_response.get("jobs"):
                 return "(Job not found)"
 
@@ -449,8 +454,12 @@ class AWSBatchExecutionBackend(TaskInputLoaderMixin, ExecutionBackend):
             await asyncio.sleep(2)
 
             try:
-                response = logs_client.get_log_events(
-                    logGroupName=log_group, logStreamName=log_stream, limit=100, startFromHead=True
+                response = await self._run_in_executor(
+                    logs_client.get_log_events,
+                    logGroupName=log_group,
+                    logStreamName=log_stream,
+                    limit=100,
+                    startFromHead=True,
                 )
 
                 events = response.get("events", [])
