@@ -34,23 +34,14 @@ def get_orb_aws_ec2_worker_name(instance_id: str) -> str:
 
 
 class ORBWorkerProvisioner(WorkerProvisioner):
-    def __init__(self, config: ORBAWSEC2WorkerAdapterConfig) -> None:
+    def __init__(self, config: ORBAWSEC2WorkerAdapterConfig, max_instances: int, sdk: Any, template_id: str) -> None:
         self._config = config
-        self._max_task_concurrency = config.worker_manager_config.max_task_concurrency
-        self._max_instances: int = self._max_task_concurrency
-        self._sdk: Optional[Any] = None
-        self._workers: Dict[WorkerID, str] = {}
-        self._template_id: Optional[str] = None
-
-    def set_sdk(self, sdk: Optional[Any]) -> None:
-        self._sdk = sdk
-
-    def set_max_instances(self, max_instances: int) -> None:
         self._max_instances = max_instances
+        self._sdk = sdk
+        self._template_id = template_id
+        self._workers: Dict[WorkerID, str] = {}
 
     async def start_worker(self) -> Tuple[List[bytes], Status]:
-        assert self._template_id is not None, "set_template_id() must be called before start_worker()"
-
         if self._max_instances != -1 and len(self._workers) >= self._max_instances:
             logging.warning(
                 f"Worker start rejected: at capacity ({len(self._workers)}/{self._max_instances} instances)"
@@ -136,7 +127,7 @@ class ORBWorkerProvisioner(WorkerProvisioner):
         return affected_worker_ids, Status.success
 
     async def terminate_all_workers(self) -> None:
-        if not self._workers or self._sdk is None:
+        if not self._workers:
             return
         instance_ids = list(self._workers.values())
         logging.info(f"Terminating {len(instance_ids)} worker group(s)...")
@@ -146,17 +137,6 @@ class ORBWorkerProvisioner(WorkerProvisioner):
         except Exception as e:
             logging.warning(f"Failed to terminate instances during cleanup: {e}")
         self._workers.clear()
-
-    def set_template_id(self, template_id: str) -> None:
-        self._template_id = template_id
-
-    @property
-    def template_id(self) -> Optional[str]:
-        return self._template_id
-
-    @property
-    def sdk(self) -> Optional[Any]:
-        return self._sdk
 
 
 class ORBAWSEC2WorkerAdapter:
@@ -168,17 +148,8 @@ class ORBAWSEC2WorkerAdapter:
         self._logging_level = config.logging_config.level
         self._logging_config_file = config.logging_config.config_file
 
-        self._orb_pool = ORBWorkerProvisioner(config)
-        self._runner = WorkerManagerRunner(
-            address=config.worker_manager_config.scheduler_address,
-            name="worker_manager_orb_aws_ec2",
-            heartbeat_interval_seconds=config.worker_config.heartbeat_interval_seconds,
-            capabilities=config.worker_config.per_worker_capabilities.capabilities,
-            max_task_concurrency=config.worker_manager_config.max_task_concurrency,
-            worker_manager_id=config.worker_manager_config.worker_manager_id.encode(),
-            worker_provisioner=self._orb_pool,
-            io_threads=config.worker_config.io_threads,
-        )
+        self._orb_pool: Optional[ORBWorkerProvisioner] = None
+        self._runner: Optional[WorkerManagerRunner] = None
 
         self._ec2: Optional[Any] = None
         self._created_security_group_id: Optional[str] = None
@@ -217,40 +188,49 @@ class ORBAWSEC2WorkerAdapter:
             "storage": {"type": "json"},
         }
 
-    async def _setup(self) -> None:
+    async def _setup(self, sdk: Any) -> None:
         region = self._config.aws_region or "us-east-1"
         self._ec2 = boto3.client("ec2", region_name=region)
         self._subnet_id = self._config.subnet_id or self._discover_default_subnet()
-        template_id = os.urandom(8).hex()
-        self._orb_pool.set_template_id(template_id)
 
         workers_per_instance = self._discover_vcpu_count(self._config.instance_type)
         mtc = self._config.worker_manager_config.max_task_concurrency
         max_instances = math.ceil(mtc / workers_per_instance) if mtc != -1 else -1
-        self._orb_pool.set_max_instances(max_instances)
-        self._runner.set_heartbeat_capacity(
-            max_task_concurrency=max_instances, heartbeat_concurrency_multiplier=workers_per_instance
-        )
         logging.info(
             f"ORB instance type {self._config.instance_type!r}: {workers_per_instance} vCPUs/instance, "
             f"max_task_concurrency={mtc} → max_instances={max_instances}"
         )
 
+        template_id = os.urandom(8).hex()
+
         security_group_ids = self._config.security_group_ids
         if not security_group_ids:
-            self._create_security_group()
+            self._create_security_group(template_id)
             security_group_ids = [self._created_security_group_id]
 
         key_name = self._config.key_name
         if not key_name:
-            self._create_key_pair()
+            self._create_key_pair(template_id)
             key_name = self._created_key_name
 
         user_data = self._create_user_data()
-
         image_id = self._config.image_id or self._discover_latest_al2023_ami()
 
-        sdk = self._orb_pool.sdk
+        self._orb_pool = ORBWorkerProvisioner(
+            config=self._config, max_instances=max_instances, sdk=sdk, template_id=template_id
+        )
+        self._runner = WorkerManagerRunner(
+            address=self._config.worker_manager_config.scheduler_address,
+            name="worker_manager_orb_aws_ec2",
+            heartbeat_interval_seconds=self._config.worker_config.heartbeat_interval_seconds,
+            capabilities=self._config.worker_config.per_worker_capabilities.capabilities,
+            max_task_concurrency=max_instances,
+            worker_manager_id=self._config.worker_manager_config.worker_manager_id.encode(),
+            worker_provisioner=self._orb_pool,
+            io_threads=self._config.worker_config.io_threads,
+            heartbeat_concurrency_multiplier=workers_per_instance,
+        )
+
         create_result = await sdk.create_template(
             template_id=template_id,
             name=f"opengris-orb-{template_id}",
@@ -285,11 +265,10 @@ class ORBAWSEC2WorkerAdapter:
             ) from exc
 
         async with orb(app_config=self._build_app_config()) as sdk:
-            self._orb_pool.set_sdk(sdk)
             # setup_logger is called after the ORB context is entered because ORB reconfigures
             # the root logger during __aenter__, which would otherwise suppress scaler log output.
             setup_logger(self._logging_paths, self._logging_config_file, self._logging_level)
-            await self._setup()
+            await self._setup(sdk)
             try:
                 await self._runner.run_in_loop(self._loop)
             except asyncio.CancelledError:
@@ -297,14 +276,13 @@ class ORBAWSEC2WorkerAdapter:
             finally:
                 await self._orb_pool.terminate_all_workers()
 
-        self._orb_pool.set_sdk(None)
-
     def _cleanup(self) -> None:
         if self._cleaned_up:
             return
         self._cleaned_up = True
 
-        self._runner.cleanup()
+        if self._runner is not None:
+            self._runner.cleanup()
 
         logging.info("Starting cleanup of AWS resources...")
 
@@ -425,11 +403,11 @@ nohup scaler_worker_manager baremetal_native {self._worker_scheduler_address!r} 
         logging.info(f"Auto-discovered subnet_id: {subnet_id}")
         return subnet_id
 
-    def _create_security_group(self) -> None:
+    def _create_security_group(self, template_id: str) -> None:
         subnet_response = self._ec2.describe_subnets(SubnetIds=[self._subnet_id])
         vpc_id = subnet_response["Subnets"][0]["VpcId"]
 
-        group_name = f"opengris-orb-sg-{self._orb_pool.template_id}"
+        group_name = f"opengris-orb-sg-{template_id}"
         sg_response = self._ec2.create_security_group(
             Description="Temporary security group created for OpenGRIS ORB worker adapter",
             GroupName=group_name,
@@ -438,8 +416,8 @@ nohup scaler_worker_manager baremetal_native {self._worker_scheduler_address!r} 
         self._created_security_group_id = sg_response["GroupId"]
         logging.info(f"Created security group with ID: {self._created_security_group_id}")
 
-    def _create_key_pair(self) -> None:
-        key_name = f"opengris-orb-key-{self._orb_pool.template_id}"
+    def _create_key_pair(self, template_id: str) -> None:
+        key_name = f"opengris-orb-key-{template_id}"
         self._ec2.create_key_pair(KeyName=key_name)
         self._created_key_name = key_name
         logging.info(f"Created key pair: {key_name}")
