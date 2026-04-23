@@ -79,7 +79,7 @@ class SymphonyWorkerManager:
             name="worker_manager_symphony",
             heartbeat_interval_seconds=config.worker_config.heartbeat_interval_seconds,
             capabilities=config.worker_config.per_worker_capabilities.capabilities,
-            max_task_concurrency=config.worker_manager_config.max_task_concurrency,
+            max_provisioner_units=config.worker_manager_config.max_task_concurrency,
             worker_manager_id=config.worker_manager_config.worker_manager_id.encode(),
             worker_provisioner=provisioner,
             io_threads=config.worker_config.io_threads,

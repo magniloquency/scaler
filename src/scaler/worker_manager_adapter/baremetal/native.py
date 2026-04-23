@@ -134,7 +134,7 @@ class NativeWorkerManager:
             name="worker_manager_native",
             heartbeat_interval_seconds=self._config.worker_config.heartbeat_interval_seconds,
             capabilities=self._config.worker_config.per_worker_capabilities.capabilities,
-            max_task_concurrency=self._config.worker_manager_config.max_task_concurrency,
+            max_provisioner_units=self._config.worker_manager_config.max_task_concurrency,
             worker_manager_id=self._config.worker_manager_config.worker_manager_id.encode(),
             worker_provisioner=provisioner,
             io_threads=self._config.worker_config.io_threads,

@@ -42,7 +42,7 @@ class TestWorkerManagerHandleCommand(unittest.IsolatedAsyncioTestCase):
             name="test_runner",
             heartbeat_interval_seconds=5,
             capabilities=self.capabilities,
-            max_task_concurrency=4,
+            max_provisioner_units=4,
             worker_manager_id=b"mgr",
             worker_provisioner=self.provisioner,
         )

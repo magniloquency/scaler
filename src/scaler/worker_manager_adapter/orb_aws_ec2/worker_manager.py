@@ -224,7 +224,7 @@ class ORBAWSEC2WorkerAdapter:
             name="worker_manager_orb_aws_ec2",
             heartbeat_interval_seconds=self._config.worker_config.heartbeat_interval_seconds,
             capabilities=self._config.worker_config.per_worker_capabilities.capabilities,
-            max_task_concurrency=max_instances,
+            max_provisioner_units=max_instances,
             worker_manager_id=self._config.worker_manager_config.worker_manager_id.encode(),
             worker_provisioner=self._orb_pool,
             io_threads=self._config.worker_config.io_threads,

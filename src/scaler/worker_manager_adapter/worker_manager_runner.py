@@ -29,7 +29,7 @@ class WorkerManagerRunner:
         name: str,
         heartbeat_interval_seconds: int,
         capabilities: Dict[str, int],
-        max_task_concurrency: int,
+        max_provisioner_units: int,
         worker_manager_id: bytes,
         worker_provisioner: WorkerProvisioner,
         io_threads: int = 1,
@@ -39,7 +39,7 @@ class WorkerManagerRunner:
         self._name = name
         self._heartbeat_interval_seconds = heartbeat_interval_seconds
         self._capabilities = capabilities
-        self._max_task_concurrency = max_task_concurrency
+        self._max_provisioner_units = max_provisioner_units
         self._worker_manager_id = worker_manager_id
         self._worker_provisioner = worker_provisioner
         self._io_threads = io_threads
@@ -85,7 +85,7 @@ class WorkerManagerRunner:
     async def _send_heartbeat(self) -> None:
         await self._connector_external.send(
             WorkerManagerHeartbeat(
-                maxTaskConcurrency=self._max_task_concurrency * self._heartbeat_concurrency_multiplier,
+                maxTaskConcurrency=self._max_provisioner_units * self._heartbeat_concurrency_multiplier,
                 capabilities=self._capabilities,
                 workerManagerID=self._worker_manager_id,
             )
