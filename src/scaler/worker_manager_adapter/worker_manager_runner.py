@@ -66,6 +66,10 @@ class WorkerManagerRunner:
         self._loop = loop
         await self._run()
 
+    def set_heartbeat_capacity(self, max_task_concurrency: int, heartbeat_concurrency_multiplier: int) -> None:
+        self._max_task_concurrency = max_task_concurrency
+        self._heartbeat_concurrency_multiplier = heartbeat_concurrency_multiplier
+
     def cleanup(self) -> None:
         if self._connector_external is not None:
             self._connector_external.destroy()

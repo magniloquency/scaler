@@ -12,7 +12,7 @@ Networking
 * ``scheduler_address`` (positional, required): The address of the scheduler (e.g., ``tcp://127.0.0.1:8516``).
 * ``--worker-scheduler-address`` (``-wsa``): Scheduler address used by spawned workers. If omitted, it defaults to ``scheduler_address``.
 * ``--worker-manager-id`` (``-wmi``, required): A stable identifier for this worker manager instance. Must be unique across all managers connected to the same scheduler. The scheduler uses this ID to associate workers with their manager and to detect duplicate connections.
-* ``--max-task-concurrency`` (``-mtc``): Maximum number of workers that can be started (default: number of CPUs − 1). Set to ``-1`` for no limit.
+* ``--max-task-concurrency`` (``-mtc``): Maximum total number of workers that can be active across all spawned instances or containers (default: number of CPUs). Set to ``-1`` for no limit. For worker managers that spawn multi-worker machines (e.g. ORB AWS EC2, AWS Raw ECS), the number of instances spawned is ``ceil(max_task_concurrency / workers_per_instance)``, so the actual worker count may exceed ``max_task_concurrency`` by up to ``workers_per_instance - 1`` due to rounding up to the nearest whole instance.
 * ``--object-storage-address`` (``-osa``): Optional object storage server address override (e.g., ``tcp://127.0.0.1:8517``). If omitted, workers use the address advertised by scheduler heartbeats.
 * ``--config`` (``-c``): Path to a TOML configuration file.
 

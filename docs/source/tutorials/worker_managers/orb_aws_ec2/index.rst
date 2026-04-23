@@ -287,6 +287,9 @@ Common Parameters
 
 For a full list of common parameters including networking (``--worker-manager-id``, ``--max-task-concurrency``, ``--object-storage-address``, etc.), worker configuration, and logging, see :doc:`../common_parameters`.
 
+.. note::
+    For the ORB AWS EC2 manager, ``--max-task-concurrency`` is the total number of workers, not the number of instances. Each EC2 instance runs one worker per vCPU, so the number of instances launched is ``ceil(max_task_concurrency / vcpus_per_instance)``. The vCPU count is retrieved automatically from the AWS EC2 API for the configured ``--instance-type``.
+
 Cleanup
 -------
 

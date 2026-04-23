@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import math
 import os
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -36,6 +37,7 @@ class ORBWorkerProvisioner(WorkerProvisioner):
     def __init__(self, config: ORBAWSEC2WorkerAdapterConfig) -> None:
         self._config = config
         self._max_task_concurrency = config.worker_manager_config.max_task_concurrency
+        self._max_instances: int = self._max_task_concurrency
         self._sdk: Optional[Any] = None
         self._workers: Dict[WorkerID, str] = {}
         self._template_id: Optional[str] = None
@@ -43,12 +45,15 @@ class ORBWorkerProvisioner(WorkerProvisioner):
     def set_sdk(self, sdk: Optional[Any]) -> None:
         self._sdk = sdk
 
+    def set_max_instances(self, max_instances: int) -> None:
+        self._max_instances = max_instances
+
     async def start_worker(self) -> Tuple[List[bytes], Status]:
         assert self._template_id is not None, "set_template_id() must be called before start_worker()"
 
-        if self._max_task_concurrency != -1 and len(self._workers) >= self._max_task_concurrency:
+        if self._max_instances != -1 and len(self._workers) >= self._max_instances:
             logging.warning(
-                f"Worker start rejected: at capacity ({len(self._workers)}/{self._max_task_concurrency} workers)"
+                f"Worker start rejected: at capacity ({len(self._workers)}/{self._max_instances} instances)"
             )
             return [], Status.tooManyWorkers
 
@@ -219,6 +224,18 @@ class ORBAWSEC2WorkerAdapter:
         template_id = os.urandom(8).hex()
         self._orb_pool.set_template_id(template_id)
 
+        workers_per_instance = self._discover_vcpu_count(self._config.instance_type)
+        mtc = self._config.worker_manager_config.max_task_concurrency
+        max_instances = math.ceil(mtc / workers_per_instance) if mtc != -1 else -1
+        self._orb_pool.set_max_instances(max_instances)
+        self._runner.set_heartbeat_capacity(
+            max_task_concurrency=max_instances, heartbeat_concurrency_multiplier=workers_per_instance
+        )
+        logging.info(
+            f"ORB instance type {self._config.instance_type!r}: {workers_per_instance} vCPUs/instance, "
+            f"max_task_concurrency={mtc} → max_instances={max_instances}"
+        )
+
         security_group_ids = self._config.security_group_ids
         if not security_group_ids:
             self._create_security_group()
@@ -240,7 +257,7 @@ class ORBAWSEC2WorkerAdapter:
             image_id=image_id,
             provider_api="RunInstances",
             instance_type=self._config.instance_type,
-            max_instances=self._config.worker_manager_config.max_task_concurrency,
+            max_instances=max_instances,
             provider_name="aws-default",
             machine_types={self._config.instance_type: 1},
             subnet_ids=[self._subnet_id],
@@ -369,6 +386,13 @@ nohup scaler_worker_manager baremetal_native {self._worker_scheduler_address!r} 
         script += " > /var/log/opengris-scaler.log 2>&1 &\n"
 
         return script
+
+    def _discover_vcpu_count(self, instance_type: str) -> int:
+        response = self._ec2.describe_instance_types(InstanceTypes=[instance_type])
+        instance_types = response.get("InstanceTypes", [])
+        if not instance_types:
+            raise RuntimeError(f"Could not retrieve instance type info for {instance_type!r}.")
+        return instance_types[0]["VCpuInfo"]["DefaultVCpus"]
 
     def _discover_latest_al2023_ami(self) -> str:
         response = self._ec2.describe_images(
