@@ -33,7 +33,7 @@ class WorkerManagerRunner:
         worker_manager_id: bytes,
         worker_provisioner: WorkerProvisioner,
         io_threads: int = 1,
-        heartbeat_concurrency_multiplier: int = 1,
+        workers_per_provisioner_unit: int = 1,
     ) -> None:
         self._address = address
         self._name = name
@@ -43,7 +43,7 @@ class WorkerManagerRunner:
         self._worker_manager_id = worker_manager_id
         self._worker_provisioner = worker_provisioner
         self._io_threads = io_threads
-        self._heartbeat_concurrency_multiplier = heartbeat_concurrency_multiplier
+        self._workers_per_provisioner_unit = workers_per_provisioner_unit
 
         self._backend: Optional[NetworkBackend] = None
         self._connector_external: Optional[AsyncConnector] = None
@@ -85,7 +85,7 @@ class WorkerManagerRunner:
     async def _send_heartbeat(self) -> None:
         await self._connector_external.send(
             WorkerManagerHeartbeat(
-                maxTaskConcurrency=self._max_provisioner_units * self._heartbeat_concurrency_multiplier,
+                maxTaskConcurrency=self._max_provisioner_units * self._workers_per_provisioner_unit,
                 capabilities=self._capabilities,
                 workerManagerID=self._worker_manager_id,
             )

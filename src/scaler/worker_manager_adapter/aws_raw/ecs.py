@@ -202,7 +202,7 @@ class ECSWorkerManager:
             worker_manager_id=config.worker_manager_config.worker_manager_id.encode(),
             worker_provisioner=provisioner,
             io_threads=config.worker_config.io_threads,
-            heartbeat_concurrency_multiplier=config.ecs_task_cpu,
+            workers_per_provisioner_unit=config.ecs_task_cpu,
         )
 
     def run(self) -> None:

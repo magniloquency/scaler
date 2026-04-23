@@ -228,7 +228,7 @@ class ORBAWSEC2WorkerAdapter:
             worker_manager_id=self._config.worker_manager_config.worker_manager_id.encode(),
             worker_provisioner=self._orb_pool,
             io_threads=self._config.worker_config.io_threads,
-            heartbeat_concurrency_multiplier=workers_per_instance,
+            workers_per_provisioner_unit=workers_per_instance,
         )
 
         create_result = await sdk.create_template(
