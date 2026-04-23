@@ -21,6 +21,7 @@ AcceptServer::AcceptServer(
     scaler::wrapper::uv::Loop& loop, Address address, ConnectionCallback onConnectionCallback) noexcept
 {
     std::optional<Server> server;
+    std::optional<WebSocketAddress> webSocketAddress;
 
     switch (address.type()) {
         case Address::Type::TCP: {
@@ -37,15 +38,17 @@ AcceptServer::AcceptServer(
         }
         case Address::Type::WebSocket: {
             // WebSocket runs over TCP; bind a TCPServer to the resolved TCP address.
-            auto tcpServer = UV_EXIT_ON_ERROR(scaler::wrapper::uv::TCPServer::init(loop));
-            UV_EXIT_ON_ERROR(tcpServer.bind(address.asWebSocket().tcpAddress, uv_tcp_flags(0)));
+            webSocketAddress = address.asWebSocket();
+            auto tcpServer   = UV_EXIT_ON_ERROR(scaler::wrapper::uv::TCPServer::init(loop));
+            UV_EXIT_ON_ERROR(tcpServer.bind(webSocketAddress->tcpAddress, uv_tcp_flags(0)));
             server = std::move(tcpServer);
             break;
         }
         default: std::unreachable();
     }
 
-    _state = std::make_shared<State>(loop, std::move(onConnectionCallback), std::move(server.value()), address);
+    _state = std::make_shared<State>(
+        loop, std::move(onConnectionCallback), std::move(server.value()), std::move(webSocketAddress));
 
     if (auto* tcpServer = std::get_if<scaler::wrapper::uv::TCPServer>(&_state->_server.value())) {
         UV_EXIT_ON_ERROR(tcpServer->listen(serverListenBacklog, std::bind_front(&AcceptServer::onConnection, _state)));
@@ -60,11 +63,11 @@ AcceptServer::State::State(
     scaler::wrapper::uv::Loop& loop,
     ConnectionCallback onConnectionCallback,
     Server server,
-    Address originalAddress) noexcept
+    std::optional<WebSocketAddress> webSocketAddress) noexcept
     : _loop(loop)
     , _onConnectionCallback(std::move(onConnectionCallback))
     , _server(std::move(server))
-    , _originalAddress(std::move(originalAddress))
+    , _webSocketAddress(std::move(webSocketAddress))
 {
 }
 
@@ -82,9 +85,9 @@ Address AcceptServer::address() const noexcept
     if (auto* tcpServer = std::get_if<scaler::wrapper::uv::TCPServer>(&_state->_server.value())) {
         const scaler::wrapper::uv::SocketAddress actualAddr = UV_EXIT_ON_ERROR(tcpServer->getSockName());
 
-        if (_state->_originalAddress.type() == Address::Type::WebSocket) {
+        if (_state->_webSocketAddress.has_value()) {
             // Reconstruct the WebSocket address with the actual bound port (handles port 0 auto-assignment).
-            WebSocketAddress reconstructed = _state->_originalAddress.asWebSocket();
+            WebSocketAddress reconstructed = _state->_webSocketAddress.value();
             reconstructed.port             = static_cast<uint16_t>(actualAddr.port());
             reconstructed.tcpAddress       = actualAddr;
             return Address {std::move(reconstructed)};
@@ -130,7 +133,7 @@ void AcceptServer::onConnection(
         scaler::wrapper::uv::TCPSocket tcpClient = UV_EXIT_ON_ERROR(scaler::wrapper::uv::TCPSocket::init(state->_loop));
         UV_EXIT_ON_ERROR(tcpServer->accept(tcpClient));
 
-        if (state->_originalAddress.type() == Address::Type::WebSocket) {
+        if (state->_webSocketAddress.has_value()) {
             WebSocketStream::upgradeAsServer(
                 std::move(tcpClient),
                 [state](std::expected<WebSocketStream, scaler::wrapper::uv::Error> wsResult) mutable {

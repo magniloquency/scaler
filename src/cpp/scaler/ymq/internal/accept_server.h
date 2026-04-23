@@ -48,14 +48,14 @@ private:
 
         std::optional<Server> _server;
 
-        // Original address passed to the constructor, used to reconstruct the address() return value.
-        Address _originalAddress;
+        // Set when the transport is WebSocket; used to reconstruct the address() return value.
+        std::optional<WebSocketAddress> _webSocketAddress;
 
         State(
             scaler::wrapper::uv::Loop& loop,
             ConnectionCallback onConnectionCallback,
             Server server,
-            Address originalAddress) noexcept;
+            std::optional<WebSocketAddress> webSocketAddress) noexcept;
     };
 
     std::shared_ptr<State> _state;
