@@ -68,6 +68,7 @@ private:
         scaler::wrapper::uv::TCPSocket _socket;
         bool _isServer;
         std::vector<uint8_t> _recvBuffer {};
+        std::vector<uint8_t> _fragmentBuffer {};
         bool _readActive {false};
         scaler::wrapper::uv::ReadCallback _readCallback {};
 
