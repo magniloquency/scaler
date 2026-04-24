@@ -25,13 +25,6 @@ ORB_AWS_EC2_POLLING_INTERVAL_SECONDS = 5
 ORB_AWS_EC2_MAX_POLLING_ATTEMPTS = 60
 
 
-def get_orb_aws_ec2_worker_name(instance_id: str) -> str:
-    if instance_id == "${INSTANCE_ID}":
-        return "Worker|ORB|${INSTANCE_ID}|${INSTANCE_ID//i-/}"
-    tag = instance_id.replace("i-", "")
-    return f"Worker|ORB|{instance_id}|{tag}"
-
-
 class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
     def __init__(self, config: ORBAWSEC2WorkerAdapterConfig, max_instances: int, sdk: Any, template_id: str) -> None:
         self._config = config
@@ -53,14 +46,14 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
         async with self._reconcile_lock:
             delta = self._desired_count - len(self._units)
             if delta > 0:
-                await asyncio.gather(*[self.start_unit() for _ in range(delta)], return_exceptions=True)
+                await self.start_units(delta)
             elif delta < 0:
                 await self.stop_units(abs(delta))
 
-    async def start_unit(self) -> None:
-        logging.info(f"Submitting ORB machine request for template {self._template_id}...")
+    async def start_units(self, count: int) -> None:
+        logging.info(f"Submitting ORB batch machine request for template {self._template_id} (count={count})...")
         try:
-            create_response = await self._sdk.create_request(template_id=self._template_id, count=1)
+            create_response = await self._sdk.create_request(template_id=self._template_id, count=count)
         except Exception:
             logging.exception("ORB create_request failed")
             return
@@ -70,7 +63,7 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
             logging.error(f"ORB create_request returned no request ID. Response: {create_response}")
             return
 
-        logging.info(f"ORB request {request_id} submitted, polling for instance ID...")
+        logging.info(f"ORB request {request_id} submitted, polling for {count} instance ID(s)...")
         timeout_seconds = ORB_AWS_EC2_MAX_POLLING_ATTEMPTS * ORB_AWS_EC2_POLLING_INTERVAL_SECONDS
         elapsed = 0
 
@@ -91,21 +84,24 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
             req = requests[0] if isinstance(requests[0], dict) else {}
             status = req.get("status", "")
             machine_ids = req.get("machine_ids", [])
-            instance_id = machine_ids[0] if machine_ids else None
 
-            if instance_id:
-                worker_name = get_orb_aws_ec2_worker_name(instance_id)
-                self._units.append(instance_id)
-                logging.info(
-                    f"ORB request {request_id} fulfilled: launched worker '{worker_name}' (instance {instance_id})"
-                )
+            if len(machine_ids) >= count:
+                for instance_id in machine_ids:
+                    logging.info(f"ORB request {request_id}: instance {instance_id} ready")
+                self._units.extend(machine_ids)
                 return
 
             if status.lower() in {"failed", "error", "cancelled", "canceled"}:
-                logging.error(f"ORB request {request_id} reached terminal status '{status}' with no instance ID.")
+                logging.error(
+                    f"ORB request {request_id} reached terminal status '{status}' "
+                    f"with {len(machine_ids)}/{count} instances fulfilled."
+                )
                 return
 
-        logging.error(f"ORB request {request_id} timed out after {timeout_seconds:.0f}s waiting for instance ID.")
+        logging.error(
+            f"ORB request {request_id} timed out after {timeout_seconds:.0f}s "
+            f"with 0/{count} instances fulfilled."
+        )
 
     async def stop_units(self, count: int) -> None:
         unit_ids = self._units[:count]
