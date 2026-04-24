@@ -120,6 +120,8 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
         unit_ids = self._units[:count]
         if len(unit_ids) < count:
             logging.warning(f"Requested to stop {count} unit(s) but only {len(unit_ids)} available.")
+        if not unit_ids:
+            return
         logging.info(f"Stopping {len(unit_ids)} unit(s): instances {unit_ids}")
         try:
             await self._sdk.create_return_request(machine_ids=unit_ids)
