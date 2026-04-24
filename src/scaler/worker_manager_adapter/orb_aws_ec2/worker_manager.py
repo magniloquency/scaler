@@ -16,7 +16,7 @@ from scaler.protocol.capnp import WorkerManagerCommand, WorkerManagerCommandResp
 from scaler.utility.event_loop import register_event_loop, run_task_forever
 from scaler.utility.identifiers import WorkerID
 from scaler.utility.logging.utility import setup_logger
-from scaler.worker_manager_adapter.common import extract_desired_count, format_capabilities
+from scaler.worker_manager_adapter.common import extract_desired_count, format_capabilities, reconcile
 from scaler.worker_manager_adapter.mixins import DeclarativeWorkerProvisioner
 from scaler.worker_manager_adapter.worker_manager_runner import WorkerManagerRunner
 
@@ -52,15 +52,9 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
 
     async def _reconcile(self) -> None:
         async with self._reconcile_lock:
-            desired = self._desired_count
-            delta = desired - len(self._workers)
-            if delta > 0:
-                await asyncio.gather(*[self._start_one_worker() for _ in range(delta)], return_exceptions=True)
-            elif delta < 0:
-                to_stop = list(self._workers.keys())[: abs(delta)]
-                await self._stop_workers([bytes(wid) for wid in to_stop])
+            await reconcile(self._desired_count, list(self._workers), self.start_worker, self.stop_workers)
 
-    async def _start_one_worker(self) -> None:
+    async def start_worker(self) -> None:
         logging.info(f"Submitting ORB machine request for template {self._template_id}...")
         try:
             create_response = await self._sdk.create_request(template_id=self._template_id, count=1)
@@ -111,16 +105,15 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
 
         logging.error(f"ORB request {request_id} timed out after {timeout_seconds:.0f}s waiting for instance ID.")
 
-    async def _stop_workers(self, worker_ids: List[bytes]) -> None:
+    async def stop_workers(self, worker_ids: List[WorkerID]) -> None:
         instance_ids = []
         valid_worker_ids = []
-        for wid_bytes in worker_ids:
-            worker_id = WorkerID(wid_bytes)
+        for worker_id in worker_ids:
             if worker_id not in self._workers:
-                logging.warning(f"Worker with ID {wid_bytes!r} does not exist.")
+                logging.warning(f"Worker with ID {worker_id!r} does not exist.")
                 continue
             instance_ids.append(self._workers[worker_id])
-            valid_worker_ids.append(wid_bytes)
+            valid_worker_ids.append(worker_id)
 
         if not instance_ids:
             return
@@ -132,8 +125,8 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
             logging.error(f"Failed to return instances {instance_ids} to ORB: {error}")
             return
 
-        for wid_bytes in valid_worker_ids:
-            del self._workers[WorkerID(wid_bytes)]
+        for worker_id in valid_worker_ids:
+            del self._workers[worker_id]
 
         logging.info(f"Successfully stopped {len(valid_worker_ids)} worker(s): instances {instance_ids}")
 

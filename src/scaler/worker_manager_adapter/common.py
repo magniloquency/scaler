@@ -1,7 +1,24 @@
-from typing import TYPE_CHECKING, Dict, List, Optional
+import asyncio
+from typing import TYPE_CHECKING, Awaitable, Callable, Collection, Dict, List, Optional
+
+from scaler.utility.identifiers import WorkerID
 
 if TYPE_CHECKING:
     from scaler.protocol.capnp import WorkerManagerCommand
+
+
+async def reconcile(
+    desired_count: int,
+    workers: List[WorkerID],
+    start_worker: Callable[[], Awaitable[None]],
+    stop_workers: Callable[[List[WorkerID]], Awaitable[None]],
+) -> None:
+    """Converge the active worker set toward desired_count by calling start_worker or stop_workers as needed."""
+    delta = desired_count - len(workers)
+    if delta > 0:
+        await asyncio.gather(*[start_worker() for _ in range(delta)], return_exceptions=True)
+    elif delta < 0:
+        await stop_workers(workers[: abs(delta)])
 
 
 class CapacityExceededError(Exception):

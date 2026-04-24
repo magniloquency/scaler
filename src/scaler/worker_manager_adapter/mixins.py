@@ -58,3 +58,9 @@ class DeclarativeWorkerProvisioner(ABC):
     async def set_desired_task_concurrency(
         self, requests: List["WorkerManagerCommand.DesiredTaskConcurrencyRequest"]
     ) -> None: ...
+
+    @abstractmethod
+    async def start_worker(self) -> None: ...
+
+    @abstractmethod
+    async def stop_workers(self, worker_ids: List[WorkerID]) -> None: ...
