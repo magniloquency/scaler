@@ -71,7 +71,7 @@ class DeclarativeWorkerProvisioner(ABC):
 
     @abstractmethod
     async def start_units(self, count: int) -> None:
-        """Launch `count` new units and register them internally."""
+        """Launch `count` new units."""
         ...
 
     @abstractmethod
