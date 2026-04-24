@@ -17,25 +17,28 @@ class TestORBWorkerProvisionerReconcile(unittest.IsolatedAsyncioTestCase):
         self.provisioner = _make_provisioner()
 
     async def test_reconcile_increases_worker_count(self) -> None:
+        self.provisioner._desired_count = 3
         with patch.object(self.provisioner, "start_unit", new_callable=AsyncMock) as start_mock:
             with patch.object(self.provisioner, "stop_units", new_callable=AsyncMock) as stop_mock:
-                await self.provisioner._reconcile(3)
+                await self.provisioner._reconcile()
                 self.assertEqual(start_mock.call_count, 3)
                 stop_mock.assert_not_called()
 
     async def test_reconcile_decreases_worker_count(self) -> None:
         self.provisioner._units = ["i-1", "i-2", "i-3"]
+        self.provisioner._desired_count = 1
         with patch.object(self.provisioner, "start_unit", new_callable=AsyncMock) as start_mock:
             with patch.object(self.provisioner, "stop_units", new_callable=AsyncMock) as stop_mock:
-                await self.provisioner._reconcile(1)
+                await self.provisioner._reconcile()
                 start_mock.assert_not_called()
-                stop_mock.assert_called_once_with(2)
+                stop_mock.assert_called_once_with(["i-1", "i-2"])
 
     async def test_reconcile_no_change(self) -> None:
         self.provisioner._units = ["i-1"]
+        self.provisioner._desired_count = 1
         with patch.object(self.provisioner, "start_unit", new_callable=AsyncMock) as start_mock:
             with patch.object(self.provisioner, "stop_units", new_callable=AsyncMock) as stop_mock:
-                await self.provisioner._reconcile(1)
+                await self.provisioner._reconcile()
                 start_mock.assert_not_called()
                 stop_mock.assert_not_called()
 
