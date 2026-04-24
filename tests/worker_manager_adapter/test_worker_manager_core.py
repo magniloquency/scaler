@@ -259,53 +259,76 @@ class TestNativeWorkerProvisioner(unittest.IsolatedAsyncioTestCase):
         setup_logger()
         logging_test_name(self)
 
-    async def test_start_worker_at_capacity_returns_too_many_workers(self) -> None:
-        provisioner = _make_native_provisioner(max_workers=1)
-        provisioner._workers[WorkerID.generate_worker_id("existing")] = MagicMock()
-
-        ids, status = await provisioner.start_worker()
-
-        self.assertEqual(ids, [])
-        self.assertEqual(status, Status.tooManyWorkers)
-
-    async def test_start_worker_success_starts_and_registers_worker(self) -> None:
-        provisioner = _make_native_provisioner(max_workers=2)
+    async def test_start_units_registers_workers(self) -> None:
+        provisioner = _make_native_provisioner(max_workers=3)
         mock_worker = MagicMock()
         mock_worker.identity = WorkerID.generate_worker_id("w0")
 
         with patch.object(provisioner, "_create_worker", return_value=mock_worker):
-            ids, status = await provisioner.start_worker()
+            await provisioner.start_units(1)
 
         mock_worker.start.assert_called_once()
-        self.assertEqual(status, Status.success)
-        self.assertEqual(ids, [bytes(mock_worker.identity)])
         self.assertIn(mock_worker.identity, provisioner._workers)
 
-    async def test_shutdown_workers_unknown_id_returns_worker_not_found(self) -> None:
-        provisioner = _make_native_provisioner()
-        unknown_bytes = bytes(WorkerID.generate_worker_id("ghost"))
+    async def test_start_units_respects_max_task_concurrency(self) -> None:
+        provisioner = _make_native_provisioner(max_workers=1)
+        provisioner._workers[WorkerID.generate_worker_id("existing")] = MagicMock()
 
-        ids, status = await provisioner.shutdown_workers([WorkerID(unknown_bytes)])
+        mock_worker = MagicMock()
+        mock_worker.identity = WorkerID.generate_worker_id("new")
+        with patch.object(provisioner, "_create_worker", return_value=mock_worker):
+            await provisioner.start_units(1)
 
-        self.assertEqual(ids, [])
-        self.assertEqual(status, Status.workerNotFound)
+        mock_worker.start.assert_not_called()
+        self.assertEqual(len(provisioner._workers), 1)
 
-    async def test_shutdown_workers_kills_joins_and_returns_id(self) -> None:
+    async def test_stop_units_kills_and_joins_workers(self) -> None:
         provisioner = _make_native_provisioner()
         worker_id = WorkerID.generate_worker_id("w0")
         mock_worker = MagicMock()
         mock_worker.pid = 99999
         provisioner._workers[worker_id] = mock_worker
-        worker_id_bytes = bytes(worker_id)
 
         with patch("os.kill") as mock_kill:
-            ids, status = await provisioner.shutdown_workers([WorkerID(worker_id_bytes)])
+            await provisioner.stop_units(1)
 
         mock_kill.assert_called_once_with(99999, signal.SIGINT)
         mock_worker.join.assert_called_once()
-        self.assertEqual(ids, [worker_id_bytes])
-        self.assertEqual(status, Status.success)
         self.assertNotIn(worker_id, provisioner._workers)
+
+    async def test_set_desired_task_concurrency_starts_workers_when_below_desired(self) -> None:
+        provisioner = _make_native_provisioner(max_workers=4)
+
+        mock_worker_0 = MagicMock()
+        mock_worker_0.identity = WorkerID.generate_worker_id("w0")
+        mock_worker_1 = MagicMock()
+        mock_worker_1.identity = WorkerID.generate_worker_id("w1")
+
+        request = MagicMock()
+        request.capabilities = []
+        request.taskConcurrency = 2
+
+        with patch.object(provisioner, "_create_worker", side_effect=[mock_worker_0, mock_worker_1]):
+            await provisioner.set_desired_task_concurrency([request])
+
+        self.assertEqual(len(provisioner._workers), 2)
+
+    async def test_set_desired_task_concurrency_stops_workers_when_above_desired(self) -> None:
+        provisioner = _make_native_provisioner()
+        for i in range(2):
+            wid = WorkerID.generate_worker_id(f"w{i}")
+            mock_worker = MagicMock()
+            mock_worker.pid = 10000 + i
+            provisioner._workers[wid] = mock_worker
+
+        request = MagicMock()
+        request.capabilities = []
+        request.taskConcurrency = 0
+
+        with patch("os.kill"):
+            await provisioner.set_desired_task_concurrency([request])
+
+        self.assertEqual(len(provisioner._workers), 0)
 
 
 def _make_task(source: Optional[ClientID] = None) -> Task:
