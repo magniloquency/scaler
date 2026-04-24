@@ -40,6 +40,10 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
     ) -> None:
         own_capabilities = self._config.worker_config.per_worker_capabilities.capabilities
         self._desired_count = extract_desired_count(requests, own_capabilities)
+
+        # reconciling the ec2 instances can take some time
+        # so we launch a task to handle it in the background
+        # `_reconcile_lock` ensures only one runs at a time
         asyncio.create_task(self._reconcile())
 
     async def _reconcile(self) -> None:
