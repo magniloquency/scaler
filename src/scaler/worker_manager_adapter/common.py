@@ -1,4 +1,7 @@
-from typing import Dict
+from typing import TYPE_CHECKING, Dict, List, Optional
+
+if TYPE_CHECKING:
+    from scaler.protocol.capnp import WorkerManagerCommand
 
 
 class CapacityExceededError(Exception):
@@ -7,6 +10,25 @@ class CapacityExceededError(Exception):
 
 class WorkerNotFoundError(Exception):
     pass
+
+
+def extract_desired_count(
+    requests: List["WorkerManagerCommand.DesiredTaskConcurrencyRequest"], own_capabilities: Dict[str, int]
+) -> int:
+    """Return the desired worker count for this provisioner from a declarative scaling command.
+
+    Selects the most specific request whose capability set is a subset of own_capabilities.
+    An empty capability set in a request acts as a wildcard that matches any provisioner.
+    Returns 0 if no request matches.
+    """
+    best: Optional[tuple] = None  # (specificity, count)
+    for request in requests:
+        request_capabilities = {entry.key: entry.value for entry in request.capabilities}
+        if request_capabilities.items() <= own_capabilities.items():
+            specificity = len(request_capabilities)
+            if best is None or specificity > best[0]:
+                best = (specificity, request.taskConcurrency)
+    return best[1] if best is not None else 0
 
 
 def format_capabilities(capabilities: Dict[str, int]) -> str:

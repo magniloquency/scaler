@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from scaler.utility.identifiers import WorkerID
+from scaler.worker_manager_adapter.common import extract_desired_count
 from scaler.worker_manager_adapter.orb_aws_ec2.worker_manager import ORBWorkerProvisioner
 
 
@@ -47,9 +48,8 @@ class TestORBWorkerProvisionerReconcile(unittest.IsolatedAsyncioTestCase):
                 stop_mock.assert_not_called()
 
 
-class TestORBWorkerProvisionerExtractDesiredCount(unittest.IsolatedAsyncioTestCase):
-    def setUp(self) -> None:
-        self.provisioner = _make_provisioner()
+class TestExtractDesiredCount(unittest.TestCase):
+    OWN_CAPABILITIES = {"cpu": 4}
 
     def _make_request(self, task_concurrency: int, capabilities: dict) -> MagicMock:
         request = MagicMock()
@@ -58,21 +58,21 @@ class TestORBWorkerProvisionerExtractDesiredCount(unittest.IsolatedAsyncioTestCa
         return request
 
     def test_returns_zero_for_empty_requests(self) -> None:
-        self.assertEqual(self.provisioner._extract_desired_count([]), 0)
+        self.assertEqual(extract_desired_count([], self.OWN_CAPABILITIES), 0)
 
-    def test_matches_own_capabilities(self) -> None:
+    def test_exact_capability_match(self) -> None:
         request = self._make_request(task_concurrency=8, capabilities={"cpu": 4})
-        self.assertEqual(self.provisioner._extract_desired_count([request]), 8)
+        self.assertEqual(extract_desired_count([request], self.OWN_CAPABILITIES), 8)
 
-    def test_falls_back_to_empty_capabilities(self) -> None:
+    def test_empty_capabilities_matches_as_wildcard(self) -> None:
         request = self._make_request(task_concurrency=5, capabilities={})
-        self.assertEqual(self.provisioner._extract_desired_count([request]), 5)
+        self.assertEqual(extract_desired_count([request], self.OWN_CAPABILITIES), 5)
 
-    def test_prefers_matching_over_empty_fallback(self) -> None:
-        fallback = self._make_request(task_concurrency=2, capabilities={})
-        matching = self._make_request(task_concurrency=6, capabilities={"cpu": 4})
-        self.assertEqual(self.provisioner._extract_desired_count([fallback, matching]), 6)
+    def test_prefers_more_specific_over_wildcard(self) -> None:
+        wildcard = self._make_request(task_concurrency=2, capabilities={})
+        specific = self._make_request(task_concurrency=6, capabilities={"cpu": 4})
+        self.assertEqual(extract_desired_count([wildcard, specific], self.OWN_CAPABILITIES), 6)
 
-    def test_falls_back_to_first_when_no_match_and_no_empty(self) -> None:
+    def test_returns_zero_when_no_request_matches(self) -> None:
         request = self._make_request(task_concurrency=3, capabilities={"gpu": 1})
-        self.assertEqual(self.provisioner._extract_desired_count([request]), 3)
+        self.assertEqual(extract_desired_count([request], self.OWN_CAPABILITIES), 0)

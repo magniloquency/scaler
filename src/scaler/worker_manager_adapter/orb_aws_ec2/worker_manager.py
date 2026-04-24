@@ -16,7 +16,7 @@ from scaler.protocol.capnp import WorkerManagerCommand, WorkerManagerCommandResp
 from scaler.utility.event_loop import register_event_loop, run_task_forever
 from scaler.utility.identifiers import WorkerID
 from scaler.utility.logging.utility import setup_logger
-from scaler.worker_manager_adapter.common import format_capabilities
+from scaler.worker_manager_adapter.common import extract_desired_count, format_capabilities
 from scaler.worker_manager_adapter.mixins import DeclarativeWorkerProvisioner
 from scaler.worker_manager_adapter.worker_manager_runner import WorkerManagerRunner
 
@@ -46,21 +46,9 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
     async def set_desired_task_concurrency(
         self, requests: List[WorkerManagerCommand.DesiredTaskConcurrencyRequest]
     ) -> None:
-        self._desired_count = self._extract_desired_count(requests)
-        asyncio.create_task(self._reconcile())
-
-    def _extract_desired_count(self, requests: List[WorkerManagerCommand.DesiredTaskConcurrencyRequest]) -> int:
-        if not requests:
-            return 0
         own_capabilities = self._config.worker_config.per_worker_capabilities.capabilities
-        fallback: Optional[int] = None
-        for request in requests:
-            request_capabilities = {entry.key: entry.value for entry in request.capabilities}
-            if not request_capabilities and fallback is None:
-                fallback = request.taskConcurrency
-            if request_capabilities == own_capabilities:
-                return request.taskConcurrency
-        return fallback if fallback is not None else requests[0].taskConcurrency
+        self._desired_count = extract_desired_count(requests, own_capabilities)
+        asyncio.create_task(self._reconcile())
 
     async def _reconcile(self) -> None:
         async with self._reconcile_lock:
