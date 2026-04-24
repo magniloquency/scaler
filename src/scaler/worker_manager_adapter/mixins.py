@@ -54,13 +54,25 @@ class ImperativeWorkerProvisioner(ABC):
 
 
 class DeclarativeWorkerProvisioner(ABC):
+    """Provisioner that converges toward a desired task concurrency via start_unit/stop_units.
+
+    A unit is the atomic resource this provisioner allocates — e.g. a VM, a container, or a
+    process group. One unit may host one or more workers (see workers_per_provisioner_unit in
+    WorkerManagerRunner). Units are identified by opaque strings whose meaning is
+    implementation-defined (e.g. an EC2 instance ID).
+    """
+
     @abstractmethod
     async def set_desired_task_concurrency(
         self, requests: List["WorkerManagerCommand.DesiredTaskConcurrencyRequest"]
     ) -> None: ...
 
     @abstractmethod
-    async def start_worker(self) -> None: ...
+    async def start_unit(self) -> None:
+        """Launch one new unit and register it internally."""
+        ...
 
     @abstractmethod
-    async def stop_workers(self, worker_ids: List[WorkerID]) -> None: ...
+    async def stop_units(self, unit_ids: List[str]) -> None:
+        """Shut down the units identified by unit_ids and deregister them internally."""
+        ...

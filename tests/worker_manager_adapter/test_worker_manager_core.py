@@ -285,7 +285,7 @@ class TestNativeWorkerProvisioner(unittest.IsolatedAsyncioTestCase):
         provisioner = _make_native_provisioner()
         unknown_bytes = bytes(WorkerID.generate_worker_id("ghost"))
 
-        ids, status = await provisioner.shutdown_workers([unknown_bytes])
+        ids, status = await provisioner.shutdown_workers([WorkerID(unknown_bytes)])
 
         self.assertEqual(ids, [])
         self.assertEqual(status, Status.workerNotFound)
@@ -299,7 +299,7 @@ class TestNativeWorkerProvisioner(unittest.IsolatedAsyncioTestCase):
         worker_id_bytes = bytes(worker_id)
 
         with patch("os.kill") as mock_kill:
-            ids, status = await provisioner.shutdown_workers([worker_id_bytes])
+            ids, status = await provisioner.shutdown_workers([WorkerID(worker_id_bytes)])
 
         mock_kill.assert_called_once_with(99999, signal.SIGINT)
         mock_worker.join.assert_called_once()

@@ -2,7 +2,7 @@ import asyncio
 import logging
 import math
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 
 try:
     import boto3
@@ -14,7 +14,6 @@ except ModuleNotFoundError as exc:
 from scaler.config.section.orb_aws_ec2_worker_adapter import ORBAWSEC2WorkerAdapterConfig
 from scaler.protocol.capnp import WorkerManagerCommand, WorkerManagerCommandResponse
 from scaler.utility.event_loop import register_event_loop, run_task_forever
-from scaler.utility.identifiers import WorkerID
 from scaler.utility.logging.utility import setup_logger
 from scaler.worker_manager_adapter.common import extract_desired_count, format_capabilities, reconcile
 from scaler.worker_manager_adapter.mixins import DeclarativeWorkerProvisioner
@@ -39,7 +38,7 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
         self._max_instances = max_instances
         self._sdk = sdk
         self._template_id = template_id
-        self._workers: Dict[WorkerID, str] = {}
+        self._units: List[str] = []  # EC2 instance IDs of active units
         self._desired_count: int = 0
         self._reconcile_lock: asyncio.Lock = asyncio.Lock()
 
@@ -52,9 +51,9 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
 
     async def _reconcile(self) -> None:
         async with self._reconcile_lock:
-            await reconcile(self._desired_count, list(self._workers), self.start_worker, self.stop_workers)
+            await reconcile(self._desired_count, self._units, self.start_unit, self.stop_units)
 
-    async def start_worker(self) -> None:
+    async def start_unit(self) -> None:
         logging.info(f"Submitting ORB machine request for template {self._template_id}...")
         try:
             create_response = await self._sdk.create_request(template_id=self._template_id, count=1)
@@ -92,8 +91,7 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
 
             if instance_id:
                 worker_name = get_orb_aws_ec2_worker_name(instance_id)
-                worker_id = WorkerID(worker_name.encode())
-                self._workers[worker_id] = instance_id
+                self._units.append(instance_id)
                 logging.info(
                     f"ORB request {request_id} fulfilled: launched worker '{worker_name}' (instance {instance_id})"
                 )
@@ -105,42 +103,39 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
 
         logging.error(f"ORB request {request_id} timed out after {timeout_seconds:.0f}s waiting for instance ID.")
 
-    async def stop_workers(self, worker_ids: List[WorkerID]) -> None:
-        instance_ids = []
-        valid_worker_ids = []
-        for worker_id in worker_ids:
-            if worker_id not in self._workers:
-                logging.warning(f"Worker with ID {worker_id!r} does not exist.")
+    async def stop_units(self, unit_ids: List[str]) -> None:
+        valid_unit_ids = []
+        for unit_id in unit_ids:
+            if unit_id not in self._units:
+                logging.warning(f"Unit with ID {unit_id!r} does not exist.")
                 continue
-            instance_ids.append(self._workers[worker_id])
-            valid_worker_ids.append(worker_id)
+            valid_unit_ids.append(unit_id)
 
-        if not instance_ids:
+        if not valid_unit_ids:
             return
 
-        logging.info(f"Stopping {len(instance_ids)} worker(s): instances {instance_ids}")
+        logging.info(f"Stopping {len(valid_unit_ids)} unit(s): instances {valid_unit_ids}")
         try:
-            await self._sdk.create_return_request(machine_ids=instance_ids)
+            await self._sdk.create_return_request(machine_ids=valid_unit_ids)
         except Exception as error:
-            logging.error(f"Failed to return instances {instance_ids} to ORB: {error}")
+            logging.error(f"Failed to return instances {valid_unit_ids} to ORB: {error}")
             return
 
-        for worker_id in valid_worker_ids:
-            del self._workers[worker_id]
+        for unit_id in valid_unit_ids:
+            self._units.remove(unit_id)
 
-        logging.info(f"Successfully stopped {len(valid_worker_ids)} worker(s): instances {instance_ids}")
+        logging.info(f"Successfully stopped {len(valid_unit_ids)} unit(s): instances {valid_unit_ids}")
 
     async def terminate_all_workers(self) -> None:
-        if not self._workers:
+        if not self._units:
             return
-        instance_ids = list(self._workers.values())
-        logging.info(f"Terminating {len(instance_ids)} worker group(s)...")
+        logging.info(f"Terminating {len(self._units)} unit(s)...")
         try:
-            await self._sdk.create_return_request(machine_ids=instance_ids)
-            logging.info(f"Successfully requested termination of instances: {instance_ids}")
+            await self._sdk.create_return_request(machine_ids=self._units)
+            logging.info(f"Successfully requested termination of instances: {self._units}")
         except Exception as e:
             logging.warning(f"Failed to terminate instances during cleanup: {e}")
-        self._workers.clear()
+        self._units.clear()
 
 
 class ORBAWSEC2WorkerAdapter:
