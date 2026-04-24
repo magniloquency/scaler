@@ -70,11 +70,7 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
 
     async def start_units(self, count: int) -> None:
         logging.info(f"Submitting ORB batch machine request for template {self._template_id} (count={count})...")
-        try:
-            create_response = await self._sdk.create_request(template_id=self._template_id, count=count)
-        except Exception as exc:
-            logging.exception(f"ORB create_request failed: {exc}")
-            raise
+        create_response = await self._sdk.create_request(template_id=self._template_id, count=count)
 
         request_id = create_response.get("created_request_id") if isinstance(create_response, dict) else None
         if not request_id:
@@ -88,11 +84,7 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
             await asyncio.sleep(ORB_AWS_EC2_POLLING_INTERVAL_SECONDS)
             elapsed += ORB_AWS_EC2_POLLING_INTERVAL_SECONDS
 
-            try:
-                status_response = await self._sdk.get_request_status(request_ids=[request_id])
-            except Exception as exc:
-                logging.exception(f"ORB get_request_status failed for request {request_id}: {exc}")
-                raise
+            status_response = await self._sdk.get_request_status(request_ids=[request_id])
 
             requests = status_response.get("requests", []) if isinstance(status_response, dict) else []
             if not requests:
