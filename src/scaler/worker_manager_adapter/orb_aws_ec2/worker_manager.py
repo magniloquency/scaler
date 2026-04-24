@@ -61,6 +61,8 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
                     await self.start_units(delta)
                 elif delta < 0:
                     await self.stop_units(abs(delta))
+            except Exception:
+                logging.exception("Reconcile failed")
             finally:
                 self._active_reconcile_task = None
 
@@ -70,12 +72,12 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
             create_response = await self._sdk.create_request(template_id=self._template_id, count=count)
         except Exception:
             logging.exception("ORB create_request failed")
-            return
+            raise
 
         request_id = create_response.get("created_request_id") if isinstance(create_response, dict) else None
         if not request_id:
             logging.error(f"ORB create_request returned no request ID. Response: {create_response}")
-            return
+            raise RuntimeError(f"ORB create_request returned no request ID. Response: {create_response}")
 
         logging.info(f"ORB request {request_id} submitted, polling for {count} instance ID(s)...")
         timeout_seconds = ORB_AWS_EC2_MAX_POLLING_ATTEMPTS * ORB_AWS_EC2_POLLING_INTERVAL_SECONDS
@@ -89,7 +91,7 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
                 status_response = await self._sdk.get_request_status(request_ids=[request_id])
             except Exception:
                 logging.exception(f"ORB get_request_status failed for request {request_id}")
-                return
+                raise
 
             requests = status_response.get("requests", []) if isinstance(status_response, dict) else []
             if not requests:
@@ -110,10 +112,18 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
                     f"ORB request {request_id} reached terminal status '{status}' "
                     f"with {len(machine_ids)}/{count} instances fulfilled."
                 )
-                return
+                raise RuntimeError(
+                    f"ORB request {request_id} reached terminal status '{status}' "
+                    f"with {len(machine_ids)}/{count} instances fulfilled."
+                )
 
         logging.error(
-            f"ORB request {request_id} timed out after {timeout_seconds:.0f}s " f"with 0/{count} instances fulfilled."
+            f"ORB request {request_id} timed out after {timeout_seconds:.0f}s "
+            f"with 0/{count} instances fulfilled."
+        )
+        raise TimeoutError(
+            f"ORB request {request_id} timed out after {timeout_seconds:.0f}s "
+            f"with 0/{count} instances fulfilled."
         )
 
     async def stop_units(self, count: int) -> None:
@@ -123,12 +133,7 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
         if not unit_ids:
             return
         logging.info(f"Stopping {len(unit_ids)} unit(s): instances {unit_ids}")
-        try:
-            await self._sdk.create_return_request(machine_ids=unit_ids)
-        except Exception as e:
-            logging.error(f"Failed to return instances {unit_ids} to ORB: {e}")
-            return
-
+        await self._sdk.create_return_request(machine_ids=unit_ids)
         del self._units[:count]
         logging.info(f"Successfully stopped {count} unit(s): instances {unit_ids}")
 
