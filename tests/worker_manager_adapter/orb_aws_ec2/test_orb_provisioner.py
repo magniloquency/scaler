@@ -31,7 +31,7 @@ class TestORBWorkerProvisionerReconcile(unittest.IsolatedAsyncioTestCase):
             with patch.object(self.provisioner, "stop_units", new_callable=AsyncMock) as stop_mock:
                 await self.provisioner._reconcile()
                 start_mock.assert_not_called()
-                stop_mock.assert_called_once_with(["i-1", "i-2"])
+                stop_mock.assert_called_once_with(2)
 
     async def test_reconcile_no_change(self) -> None:
         self.provisioner._units = ["i-1"]
