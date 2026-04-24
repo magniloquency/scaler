@@ -51,7 +51,7 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
 
     async def _reconcile(self) -> None:
         async with self._reconcile_lock:
-            await reconcile(self._desired_count, self._units, self.start_unit, self.stop_units)
+            await reconcile(self._desired_count, len(self._units), self.start_unit, self.stop_units)
 
     async def start_unit(self) -> None:
         logging.info(f"Submitting ORB machine request for template {self._template_id}...")
@@ -103,28 +103,17 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
 
         logging.error(f"ORB request {request_id} timed out after {timeout_seconds:.0f}s waiting for instance ID.")
 
-    async def stop_units(self, unit_ids: List[str]) -> None:
-        valid_unit_ids = []
-        for unit_id in unit_ids:
-            if unit_id not in self._units:
-                logging.warning(f"Unit with ID {unit_id!r} does not exist.")
-                continue
-            valid_unit_ids.append(unit_id)
-
-        if not valid_unit_ids:
-            return
-
-        logging.info(f"Stopping {len(valid_unit_ids)} unit(s): instances {valid_unit_ids}")
+    async def stop_units(self, count: int) -> None:
+        unit_ids = self._units[:count]
+        logging.info(f"Stopping {count} unit(s): instances {unit_ids}")
         try:
-            await self._sdk.create_return_request(machine_ids=valid_unit_ids)
+            await self._sdk.create_return_request(machine_ids=unit_ids)
         except Exception as error:
-            logging.error(f"Failed to return instances {valid_unit_ids} to ORB: {error}")
+            logging.error(f"Failed to return instances {unit_ids} to ORB: {error}")
             return
 
-        for unit_id in valid_unit_ids:
-            self._units.remove(unit_id)
-
-        logging.info(f"Successfully stopped {len(valid_unit_ids)} unit(s): instances {valid_unit_ids}")
+        del self._units[:count]
+        logging.info(f"Successfully stopped {count} unit(s): instances {unit_ids}")
 
     async def terminate_all_workers(self) -> None:
         if not self._units:

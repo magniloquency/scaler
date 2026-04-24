@@ -9,16 +9,16 @@ if TYPE_CHECKING:
 
 async def reconcile(
     desired_count: int,
-    units: List[str],
+    unit_count: int,
     start_unit: Callable[[], Awaitable[None]],
-    stop_units: Callable[[List[str]], Awaitable[None]],
+    stop_units: Callable[[int], Awaitable[None]],
 ) -> None:
     """Converge the active unit set toward desired_count by calling start_unit or stop_units as needed."""
-    delta = desired_count - len(units)
+    delta = desired_count - unit_count
     if delta > 0:
         await asyncio.gather(*[start_unit() for _ in range(delta)], return_exceptions=True)
     elif delta < 0:
-        await stop_units(units[: abs(delta)])
+        await stop_units(abs(delta))
 
 
 class CapacityExceededError(Exception):

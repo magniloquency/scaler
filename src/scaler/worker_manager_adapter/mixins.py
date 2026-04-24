@@ -75,6 +75,6 @@ class DeclarativeWorkerProvisioner(ABC):
         ...
 
     @abstractmethod
-    async def stop_units(self, unit_ids: List[str]) -> None:
-        """Shut down the units identified by unit_ids and deregister them internally."""
+    async def stop_units(self, count: int) -> None:
+        """Shut down `count` units."""
         ...
