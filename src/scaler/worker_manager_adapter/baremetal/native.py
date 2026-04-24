@@ -2,19 +2,20 @@ import logging
 import os
 import signal
 import uuid
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 from scaler.config.section.native_worker_manager import NativeWorkerManagerConfig, NativeWorkerManagerMode
-from scaler.protocol.capnp import WorkerManagerCommandResponse
+from scaler.protocol.capnp import WorkerManagerCommand, WorkerManagerCommandResponse
 from scaler.utility.identifiers import WorkerID
 from scaler.worker.worker import Worker
-from scaler.worker_manager_adapter.mixins import ImperativeWorkerProvisioner
+from scaler.worker_manager_adapter.common import extract_desired_count
+from scaler.worker_manager_adapter.mixins import DeclarativeWorkerProvisioner
 from scaler.worker_manager_adapter.worker_manager_runner import WorkerManagerRunner
 
 Status = WorkerManagerCommandResponse.Status
 
 
-class NativeWorkerProvisioner(ImperativeWorkerProvisioner):
+class NativeWorkerProvisioner(DeclarativeWorkerProvisioner):
     def __init__(self, config: NativeWorkerManagerConfig) -> None:
         self._worker_scheduler_address = config.worker_manager_config.effective_worker_scheduler_address
         self._object_storage_address = config.worker_manager_config.object_storage_address
@@ -85,31 +86,33 @@ class NativeWorkerProvisioner(ImperativeWorkerProvisioner):
         for worker in self._workers.values():
             worker.join()
 
-    async def start_worker(self) -> Tuple[List[WorkerID], Status]:
-        if self._max_task_concurrency != -1 and len(self._workers) >= self._max_task_concurrency:
-            return [], Status.tooManyWorkers
+    async def set_desired_task_concurrency(
+        self, requests: List[WorkerManagerCommand.DesiredTaskConcurrencyRequest]
+    ) -> None:
+        desired_count = extract_desired_count(requests, self._capabilities)
+        delta = desired_count - len(self._workers)
+        if delta > 0:
+            await self.start_units(delta)
+        elif delta < 0:
+            await self.stop_units(abs(delta))
 
-        worker = self._create_worker()
-        worker.start()
-        self._workers[worker.identity] = worker
-        logging.info(f"Started native worker {worker.identity!r}")
-        return [worker.identity], Status.success
+    async def start_units(self, count: int) -> None:
+        for _ in range(count):
+            if self._max_task_concurrency != -1 and len(self._workers) >= self._max_task_concurrency:
+                logging.warning("NativeWorkerProvisioner: max_task_concurrency reached, cannot start more workers")
+                break
+            worker = self._create_worker()
+            worker.start()
+            self._workers[worker.identity] = worker
+            logging.info(f"Started native worker {worker.identity!r}")
 
-    async def shutdown_workers(self, worker_ids: List[WorkerID]) -> Tuple[List[WorkerID], Status]:
-        if not worker_ids:
-            return [], Status.workerNotFound
-
-        for wid in worker_ids:
-            if wid not in self._workers:
-                logging.warning(f"Worker with ID {wid!r} does not exist.")
-                return [], Status.workerNotFound
-
-        for wid in worker_ids:
+    async def stop_units(self, count: int) -> None:
+        to_stop = list(self._workers.keys())[:count]
+        for wid in to_stop:
             worker = self._workers.pop(wid)
             os.kill(worker.pid, signal.SIGINT)
             worker.join()
-
-        return list(worker_ids), Status.success
+            logging.info(f"Stopped native worker {wid!r}")
 
 
 class NativeWorkerManager:
