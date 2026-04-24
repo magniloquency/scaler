@@ -76,9 +76,8 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
                 if self._max_instances != -1:
                     delta = min(delta, self._max_instances - current)
                 capped = self._max_instances != -1 and delta != self._desired_count - current
-                msg = (
-                    f"Reconcile: desired={self._desired_count}, current={current}, delta={delta:+d}"
-                    + (f" (capped by max_instances={self._max_instances})" if capped else "")
+                msg = f"Reconcile: desired={self._desired_count}, current={current}, delta={delta:+d}" + (
+                    f" (capped by max_instances={self._max_instances})" if capped else ""
                 )
                 if delta != 0:
                     logging.info(msg)
