@@ -77,7 +77,11 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
                     delta = min(delta, self._max_instances - current)
                 logging.info(
                     f"Reconcile: desired={self._desired_count}, current={current}, delta={delta:+d}"
-                    + (f" (capped by max_instances={self._max_instances})" if self._max_instances != -1 and delta != self._desired_count - current else "")
+                    + (
+                        f" (capped by max_instances={self._max_instances})"
+                        if self._max_instances != -1 and delta != self._desired_count - current
+                        else ""
+                    )
                 )
                 if delta > 0:
                     await self.start_units(delta)
