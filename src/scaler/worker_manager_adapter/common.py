@@ -1,24 +1,9 @@
 from __future__ import annotations
 
-import asyncio
-from typing import TYPE_CHECKING, Awaitable, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 if TYPE_CHECKING:
     from scaler.protocol.capnp import WorkerManagerCommand
-
-
-async def reconcile(
-    desired_count: int,
-    unit_count: int,
-    start_unit: Callable[[], Awaitable[None]],
-    stop_units: Callable[[int], Awaitable[None]],
-) -> None:
-    """Converge the active unit set toward desired_count by calling start_unit or stop_units as needed."""
-    delta = desired_count - unit_count
-    if delta > 0:
-        await asyncio.gather(*[start_unit() for _ in range(delta)], return_exceptions=True)
-    elif delta < 0:
-        await stop_units(abs(delta))
 
 
 class CapacityExceededError(Exception):

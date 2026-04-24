@@ -15,7 +15,7 @@ from scaler.config.section.orb_aws_ec2_worker_adapter import ORBAWSEC2WorkerAdap
 from scaler.protocol.capnp import WorkerManagerCommand, WorkerManagerCommandResponse
 from scaler.utility.event_loop import register_event_loop, run_task_forever
 from scaler.utility.logging.utility import setup_logger
-from scaler.worker_manager_adapter.common import extract_desired_count, format_capabilities, reconcile
+from scaler.worker_manager_adapter.common import extract_desired_count, format_capabilities
 from scaler.worker_manager_adapter.mixins import DeclarativeWorkerProvisioner
 from scaler.worker_manager_adapter.worker_manager_runner import WorkerManagerRunner
 
@@ -51,7 +51,11 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
 
     async def _reconcile(self) -> None:
         async with self._reconcile_lock:
-            await reconcile(self._desired_count, len(self._units), self.start_unit, self.stop_units)
+            delta = self._desired_count - len(self._units)
+            if delta > 0:
+                await asyncio.gather(*[self.start_unit() for _ in range(delta)], return_exceptions=True)
+            elif delta < 0:
+                await self.stop_units(abs(delta))
 
     async def start_unit(self) -> None:
         logging.info(f"Submitting ORB machine request for template {self._template_id}...")
