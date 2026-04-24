@@ -34,7 +34,9 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
         self._units: List[str] = []  # EC2 instance IDs of active units
         self._desired_count: int = 0
         self._reconcile_lock: asyncio.Lock = asyncio.Lock()
-        self._active_reconcile_task: Optional[asyncio.Task] = None  # strong ref: asyncio holds only weak refs to tasks
+
+        # keeps a strong reference to the running task
+        self._active_reconcile_task: Optional[asyncio.Task] = None
         self._pending_reconcile_task: Optional[asyncio.Task] = None
 
     async def set_desired_task_concurrency(
