@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 if TYPE_CHECKING:
     from scaler.protocol.capnp import WorkerManagerCommand
@@ -23,7 +23,7 @@ def extract_desired_count(
     An empty capability set in a request acts as a wildcard that matches any provisioner.
     Returns 0 if no request matches.
     """
-    best: Optional[tuple] = None  # (specificity, count)
+    best: Optional[Tuple[int, int]] = None  # (specificity, count)
     for request in requests:
         request_capabilities = {entry.key: entry.value for entry in request.capabilities}
         if request_capabilities.items() <= own_capabilities.items():

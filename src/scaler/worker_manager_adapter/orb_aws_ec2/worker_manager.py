@@ -34,6 +34,8 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
         self._units: List[str] = []  # EC2 instance IDs of active units
         self._desired_count: int = 0
         self._reconcile_lock: asyncio.Lock = asyncio.Lock()
+        self._running_reconcile_task: Optional[asyncio.Task] = None
+        self._pending_reconcile_task: Optional[asyncio.Task] = None
 
     async def set_desired_task_concurrency(
         self, requests: List[WorkerManagerCommand.DesiredTaskConcurrencyRequest]
@@ -44,15 +46,21 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
         # reconciling the ec2 instances can take some time
         # so we launch a task to handle it in the background
         # `_reconcile_lock` ensures only one runs at a time
-        asyncio.create_task(self._reconcile())
+        if self._pending_reconcile_task is None:
+            self._pending_reconcile_task = asyncio.create_task(self._reconcile())
 
     async def _reconcile(self) -> None:
         async with self._reconcile_lock:
-            delta = self._desired_count - len(self._units)
-            if delta > 0:
-                await self.start_units(delta)
-            elif delta < 0:
-                await self.stop_units(abs(delta))
+            self._running_reconcile_task = asyncio.current_task()
+            self._pending_reconcile_task = None
+            try:
+                delta = self._desired_count - len(self._units)
+                if delta > 0:
+                    await self.start_units(delta)
+                elif delta < 0:
+                    await self.stop_units(abs(delta))
+            finally:
+                self._running_reconcile_task = None
 
     async def start_units(self, count: int) -> None:
         logging.info(f"Submitting ORB batch machine request for template {self._template_id} (count={count})...")
@@ -108,11 +116,13 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
 
     async def stop_units(self, count: int) -> None:
         unit_ids = self._units[:count]
-        logging.info(f"Stopping {count} unit(s): instances {unit_ids}")
+        if len(unit_ids) < count:
+            logging.warning(f"Requested to stop {count} unit(s) but only {len(unit_ids)} available.")
+        logging.info(f"Stopping {len(unit_ids)} unit(s): instances {unit_ids}")
         try:
             await self._sdk.create_return_request(machine_ids=unit_ids)
-        except Exception as error:
-            logging.error(f"Failed to return instances {unit_ids} to ORB: {error}")
+        except Exception as e:
+            logging.error(f"Failed to return instances {unit_ids} to ORB: {e}")
             return
 
         del self._units[:count]

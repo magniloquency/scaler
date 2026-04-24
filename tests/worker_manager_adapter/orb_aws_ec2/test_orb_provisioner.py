@@ -1,3 +1,4 @@
+import asyncio
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -32,6 +33,32 @@ class TestORBWorkerProvisionerReconcile(unittest.IsolatedAsyncioTestCase):
                 await self.provisioner._reconcile()
                 start_mock.assert_not_called()
                 stop_mock.assert_called_once_with(2)
+
+    async def test_set_desired_task_concurrency_triggers_reconcile(self) -> None:
+        request = MagicMock()
+        request.taskConcurrency = 3
+        request.capabilities = [MagicMock(key="cpu", value=4)]
+
+        with patch.object(self.provisioner, "_reconcile", new_callable=AsyncMock) as reconcile_mock:
+            await self.provisioner.set_desired_task_concurrency([request])
+            self.assertIsNotNone(self.provisioner._pending_reconcile_task)
+            await asyncio.sleep(0)
+
+        self.assertEqual(self.provisioner._desired_count, 3)
+        reconcile_mock.assert_called_once()
+
+    async def test_set_desired_task_concurrency_coalesces_rapid_calls(self) -> None:
+        request = MagicMock()
+        request.taskConcurrency = 5
+        request.capabilities = [MagicMock(key="cpu", value=4)]
+
+        with patch.object(self.provisioner, "_reconcile", new_callable=AsyncMock) as reconcile_mock:
+            await self.provisioner.set_desired_task_concurrency([request])
+            await self.provisioner.set_desired_task_concurrency([request])
+            await self.provisioner.set_desired_task_concurrency([request])
+            await asyncio.sleep(0)
+
+        reconcile_mock.assert_called_once()
 
     async def test_reconcile_no_change(self) -> None:
         self.provisioner._units = ["i-1"]
