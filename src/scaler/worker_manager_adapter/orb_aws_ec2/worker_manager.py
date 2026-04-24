@@ -57,6 +57,8 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
             self._pending_reconcile_task = None
             try:
                 delta = self._desired_count - len(self._units)
+                if self._max_instances != -1:
+                    delta = min(delta, self._max_instances - len(self._units))
                 if delta > 0:
                     await self.start_units(delta)
                 elif delta < 0:
