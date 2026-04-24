@@ -52,7 +52,13 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
     ) -> None:
         own_capabilities = self._config.worker_config.per_worker_capabilities.capabilities
         task_concurrency = extract_desired_count(requests, own_capabilities)
-        self._desired_count = math.ceil(task_concurrency / self._workers_per_instance)
+        new_desired = math.ceil(task_concurrency / self._workers_per_instance)
+        if new_desired != self._desired_count:
+            logging.info(
+                f"Desired instance count changed: {self._desired_count} → {new_desired} "
+                f"(task_concurrency={task_concurrency}, workers_per_instance={self._workers_per_instance})"
+            )
+        self._desired_count = new_desired
 
         # reconciling the ec2 instances can take some time
         # so we launch a task to handle it in the background
@@ -65,9 +71,14 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
             self._active_reconcile_task = asyncio.current_task()
             self._pending_reconcile_task = None
             try:
-                delta = self._desired_count - len(self._units)
+                current = len(self._units)
+                delta = self._desired_count - current
                 if self._max_instances != -1:
-                    delta = min(delta, self._max_instances - len(self._units))
+                    delta = min(delta, self._max_instances - current)
+                logging.info(
+                    f"Reconcile: desired={self._desired_count}, current={current}, delta={delta:+d}"
+                    + (f" (capped by max_instances={self._max_instances})" if self._max_instances != -1 and delta != self._desired_count - current else "")
+                )
                 if delta > 0:
                     await self.start_units(delta)
                 elif delta < 0:
