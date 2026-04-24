@@ -34,7 +34,7 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
         self._units: List[str] = []  # EC2 instance IDs of active units
         self._desired_count: int = 0
         self._reconcile_lock: asyncio.Lock = asyncio.Lock()
-        self._running_reconcile_task: Optional[asyncio.Task] = None
+        self._active_reconcile_task: Optional[asyncio.Task] = None  # strong ref: asyncio holds only weak refs to tasks
         self._pending_reconcile_task: Optional[asyncio.Task] = None
 
     async def set_desired_task_concurrency(
@@ -51,7 +51,7 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
 
     async def _reconcile(self) -> None:
         async with self._reconcile_lock:
-            self._running_reconcile_task = asyncio.current_task()
+            self._active_reconcile_task = asyncio.current_task()
             self._pending_reconcile_task = None
             try:
                 delta = self._desired_count - len(self._units)
@@ -60,7 +60,7 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
                 elif delta < 0:
                     await self.stop_units(abs(delta))
             finally:
-                self._running_reconcile_task = None
+                self._active_reconcile_task = None
 
     async def start_units(self, count: int) -> None:
         logging.info(f"Submitting ORB batch machine request for template {self._template_id} (count={count})...")
