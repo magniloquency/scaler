@@ -56,7 +56,7 @@ class ImperativeWorkerProvisioner(ABC):
 
 
 class DeclarativeWorkerProvisioner(ABC):
-    """Provisioner that converges toward a desired task concurrency via start_unit/stop_units.
+    """Provisioner that converges toward a desired task concurrency via start_units/stop_units.
 
     A unit is the atomic resource this provisioner allocates — e.g. a VM, a container, or a
     process group. One unit may host one or more workers (see workers_per_provisioner_unit in
@@ -70,8 +70,8 @@ class DeclarativeWorkerProvisioner(ABC):
     ) -> None: ...
 
     @abstractmethod
-    async def start_unit(self) -> None:
-        """Launch one new unit and register it internally."""
+    async def start_units(self, count: int) -> None:
+        """Launch `count` new units and register them internally."""
         ...
 
     @abstractmethod
