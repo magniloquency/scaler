@@ -39,23 +39,21 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
         self._sdk = sdk
         self._template_id = template_id
         self._units: List[str] = []  # EC2 instance IDs of active units
-        self._desired_count: int = 0
-        self._reconcile_lock: asyncio.Lock = asyncio.Lock()
 
     async def set_desired_task_concurrency(
         self, requests: List[WorkerManagerCommand.DesiredTaskConcurrencyRequest]
     ) -> None:
+        # Not safe to call concurrently — assumes single-threaded dispatch from WorkerManagerRunner.
         own_capabilities = self._config.worker_config.per_worker_capabilities.capabilities
-        self._desired_count = extract_desired_count(requests, own_capabilities)
-        asyncio.create_task(self._reconcile())
+        desired_count = extract_desired_count(requests, own_capabilities)
+        await self._reconcile(desired_count)
 
-    async def _reconcile(self) -> None:
-        async with self._reconcile_lock:
-            delta = self._desired_count - len(self._units)
-            if delta > 0:
-                await asyncio.gather(*[self.start_unit() for _ in range(delta)], return_exceptions=True)
-            elif delta < 0:
-                await self.stop_units(abs(delta))
+    async def _reconcile(self, desired_count: int) -> None:
+        delta = desired_count - len(self._units)
+        if delta > 0:
+            await asyncio.gather(*[self.start_unit() for _ in range(delta)], return_exceptions=True)
+        elif delta < 0:
+            await self.stop_units(abs(delta))
 
     async def start_unit(self) -> None:
         logging.info(f"Submitting ORB machine request for template {self._template_id}...")
