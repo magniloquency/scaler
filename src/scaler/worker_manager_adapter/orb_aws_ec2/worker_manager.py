@@ -63,8 +63,8 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
                     await self.start_units(delta)
                 elif delta < 0:
                     await self.stop_units(abs(delta))
-            except Exception:
-                logging.exception("Reconcile failed")
+            except Exception as exc:
+                logging.exception(f"Reconcile failed: {exc}")
             finally:
                 self._active_reconcile_task = None
 
@@ -72,13 +72,12 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
         logging.info(f"Submitting ORB batch machine request for template {self._template_id} (count={count})...")
         try:
             create_response = await self._sdk.create_request(template_id=self._template_id, count=count)
-        except Exception:
-            logging.exception("ORB create_request failed")
+        except Exception as exc:
+            logging.exception(f"ORB create_request failed: {exc}")
             raise
 
         request_id = create_response.get("created_request_id") if isinstance(create_response, dict) else None
         if not request_id:
-            logging.error(f"ORB create_request returned no request ID. Response: {create_response}")
             raise RuntimeError(f"ORB create_request returned no request ID. Response: {create_response}")
 
         logging.info(f"ORB request {request_id} submitted, polling for {count} instance ID(s)...")
@@ -91,8 +90,8 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
 
             try:
                 status_response = await self._sdk.get_request_status(request_ids=[request_id])
-            except Exception:
-                logging.exception(f"ORB get_request_status failed for request {request_id}")
+            except Exception as exc:
+                logging.exception(f"ORB get_request_status failed for request {request_id}: {exc}")
                 raise
 
             requests = status_response.get("requests", []) if isinstance(status_response, dict) else []
@@ -110,18 +109,11 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
                 return
 
             if status.lower() in {"failed", "error", "cancelled", "canceled"}:
-                logging.error(
-                    f"ORB request {request_id} reached terminal status '{status}' "
-                    f"with {len(machine_ids)}/{count} instances fulfilled."
-                )
                 raise RuntimeError(
                     f"ORB request {request_id} reached terminal status '{status}' "
                     f"with {len(machine_ids)}/{count} instances fulfilled."
                 )
 
-        logging.error(
-            f"ORB request {request_id} timed out after {timeout_seconds:.0f}s " f"with 0/{count} instances fulfilled."
-        )
         raise TimeoutError(
             f"ORB request {request_id} timed out after {timeout_seconds:.0f}s " f"with 0/{count} instances fulfilled."
         )
