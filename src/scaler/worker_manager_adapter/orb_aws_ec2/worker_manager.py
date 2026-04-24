@@ -120,12 +120,10 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
                 )
 
         logging.error(
-            f"ORB request {request_id} timed out after {timeout_seconds:.0f}s "
-            f"with 0/{count} instances fulfilled."
+            f"ORB request {request_id} timed out after {timeout_seconds:.0f}s " f"with 0/{count} instances fulfilled."
         )
         raise TimeoutError(
-            f"ORB request {request_id} timed out after {timeout_seconds:.0f}s "
-            f"with 0/{count} instances fulfilled."
+            f"ORB request {request_id} timed out after {timeout_seconds:.0f}s " f"with 0/{count} instances fulfilled."
         )
 
     async def stop_units(self, count: int) -> None:
