@@ -43,7 +43,7 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
         self, requests: List[WorkerManagerCommand.DesiredTaskConcurrencyRequest]
     ) -> None:
         own_capabilities = self._config.worker_config.per_worker_capabilities.capabilities
-        self._desired_count = extract_desired_count(requests, own_capabilities) or 0
+        self._desired_count = extract_desired_count(requests, own_capabilities)
 
         # reconciling the ec2 instances can take some time
         # so we launch a task to handle it in the background
