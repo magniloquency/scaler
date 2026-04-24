@@ -6,6 +6,7 @@ from scaler.protocol.capnp import ProcessorStatus, Task, TaskCancel, WorkerManag
 from scaler.utility.identifiers import TaskID
 
 if TYPE_CHECKING:
+    from scaler.protocol.capnp import WorkerManagerCommand
     from scaler.worker_manager_adapter.task_manager import TaskManager
 
 Status = WorkerManagerCommandResponse.Status
@@ -50,3 +51,10 @@ class WorkerProvisioner(ABC):
 
     @abstractmethod
     async def shutdown_workers(self, worker_ids: List[bytes]) -> Tuple[List[bytes], Status]: ...
+
+
+class DeclarativeWorkerProvisioner(WorkerProvisioner):
+    @abstractmethod
+    async def set_desired_task_concurrency(
+        self, requests: List["WorkerManagerCommand.DesiredTaskConcurrencyRequest"]
+    ) -> None: ...

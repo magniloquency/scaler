@@ -17,7 +17,7 @@ from scaler.protocol.capnp import (
     WorkerManagerHeartbeatEcho,
 )
 from scaler.utility.event_loop import create_async_loop_routine, run_task_forever
-from scaler.worker_manager_adapter.mixins import WorkerProvisioner
+from scaler.worker_manager_adapter.mixins import DeclarativeWorkerProvisioner, WorkerProvisioner
 
 Status = WorkerManagerCommandResponse.Status
 
@@ -136,10 +136,15 @@ class WorkerManagerRunner:
                 capabilities = self._capabilities
         elif cmd_type == WorkerManagerCommandType.shutdownWorkers:
             worker_ids, response_status = await self._worker_provisioner.shutdown_workers(list(command.workerIDs))
+        elif cmd_type == WorkerManagerCommandType.setDesiredTaskConcurrency:
+            if isinstance(self._worker_provisioner, DeclarativeWorkerProvisioner):
+                await self._worker_provisioner.set_desired_task_concurrency(
+                    list(command.setDesiredTaskConcurrencyRequests)
+                )
+            else:
+                logging.debug(f"Ignoring unimplemented WorkerManagerCommand: {cmd_type!r}")
+            return
         else:
-            # Worker managers silently ignore command variants they do not implement (e.g.
-            # setDesiredTaskConcurrency during the transition to declarative scaling). No
-            # response is sent so the scheduler's single-in-flight gate must bypass these.
             logging.debug(f"Ignoring unimplemented WorkerManagerCommand: {cmd_type!r}")
             return
 

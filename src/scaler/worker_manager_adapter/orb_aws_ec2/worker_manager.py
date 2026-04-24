@@ -12,12 +12,12 @@ except ModuleNotFoundError as exc:
     raise ModuleNotFoundError('execute "pip install opengris-scaler[orb]" to use ORB AWS EC2 worker Manager') from exc
 
 from scaler.config.section.orb_aws_ec2_worker_adapter import ORBAWSEC2WorkerAdapterConfig
-from scaler.protocol.capnp import WorkerManagerCommandResponse
+from scaler.protocol.capnp import WorkerManagerCommand, WorkerManagerCommandResponse
 from scaler.utility.event_loop import register_event_loop, run_task_forever
 from scaler.utility.identifiers import WorkerID
 from scaler.utility.logging.utility import setup_logger
 from scaler.worker_manager_adapter.common import format_capabilities
-from scaler.worker_manager_adapter.mixins import WorkerProvisioner
+from scaler.worker_manager_adapter.mixins import DeclarativeWorkerProvisioner
 from scaler.worker_manager_adapter.worker_manager_runner import WorkerManagerRunner
 
 Status = WorkerManagerCommandResponse.Status
@@ -33,32 +33,63 @@ def get_orb_aws_ec2_worker_name(instance_id: str) -> str:
     return f"Worker|ORB|{instance_id}|{tag}"
 
 
-class ORBWorkerProvisioner(WorkerProvisioner):
+class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
     def __init__(self, config: ORBAWSEC2WorkerAdapterConfig, max_instances: int, sdk: Any, template_id: str) -> None:
         self._config = config
         self._max_instances = max_instances
         self._sdk = sdk
         self._template_id = template_id
         self._workers: Dict[WorkerID, str] = {}
+        self._desired_count: int = 0
+        self._reconcile_lock: asyncio.Lock = asyncio.Lock()
 
     async def start_worker(self) -> Tuple[List[bytes], Status]:
-        if self._max_instances != -1 and len(self._workers) >= self._max_instances:
-            logging.warning(
-                f"Worker start rejected: at capacity ({len(self._workers)}/{self._max_instances} instances)"
-            )
-            return [], Status.tooManyWorkers
+        return [], Status.success
 
+    async def shutdown_workers(self, worker_ids: List[bytes]) -> Tuple[List[bytes], Status]:
+        return list(worker_ids), Status.success
+
+    async def set_desired_task_concurrency(
+        self, requests: List[WorkerManagerCommand.DesiredTaskConcurrencyRequest]
+    ) -> None:
+        self._desired_count = self._extract_desired_count(requests)
+        asyncio.create_task(self._reconcile())
+
+    def _extract_desired_count(self, requests: List[WorkerManagerCommand.DesiredTaskConcurrencyRequest]) -> int:
+        if not requests:
+            return 0
+        own_capabilities = self._config.worker_config.per_worker_capabilities.capabilities
+        fallback: Optional[int] = None
+        for request in requests:
+            request_capabilities = {entry.key: entry.value for entry in request.capabilities}
+            if not request_capabilities and fallback is None:
+                fallback = request.taskConcurrency
+            if request_capabilities == own_capabilities:
+                return request.taskConcurrency
+        return fallback if fallback is not None else requests[0].taskConcurrency
+
+    async def _reconcile(self) -> None:
+        async with self._reconcile_lock:
+            desired = self._desired_count
+            delta = desired - len(self._workers)
+            if delta > 0:
+                await asyncio.gather(*[self._start_one_worker() for _ in range(delta)], return_exceptions=True)
+            elif delta < 0:
+                to_stop = list(self._workers.keys())[: abs(delta)]
+                await self._stop_workers([bytes(wid) for wid in to_stop])
+
+    async def _start_one_worker(self) -> None:
         logging.info(f"Submitting ORB machine request for template {self._template_id}...")
         try:
             create_response = await self._sdk.create_request(template_id=self._template_id, count=1)
         except Exception:
             logging.exception("ORB create_request failed")
-            return [], Status.unknownAction
+            return
 
         request_id = create_response.get("created_request_id") if isinstance(create_response, dict) else None
         if not request_id:
             logging.error(f"ORB create_request returned no request ID. Response: {create_response}")
-            return [], Status.unknownAction
+            return
 
         logging.info(f"ORB request {request_id} submitted, polling for instance ID...")
         timeout_seconds = ORB_AWS_EC2_MAX_POLLING_ATTEMPTS * ORB_AWS_EC2_POLLING_INTERVAL_SECONDS
@@ -72,7 +103,7 @@ class ORBWorkerProvisioner(WorkerProvisioner):
                 status_response = await self._sdk.get_request_status(request_ids=[request_id])
             except Exception:
                 logging.exception(f"ORB get_request_status failed for request {request_id}")
-                return [], Status.unknownAction
+                return
 
             requests = status_response.get("requests", []) if isinstance(status_response, dict) else []
             if not requests:
@@ -90,41 +121,39 @@ class ORBWorkerProvisioner(WorkerProvisioner):
                 logging.info(
                     f"ORB request {request_id} fulfilled: launched worker '{worker_name}' (instance {instance_id})"
                 )
-                return [bytes(worker_id)], Status.success
+                return
 
             if status.lower() in {"failed", "error", "cancelled", "canceled"}:
                 logging.error(f"ORB request {request_id} reached terminal status '{status}' with no instance ID.")
-                return [], Status.unknownAction
+                return
 
         logging.error(f"ORB request {request_id} timed out after {timeout_seconds:.0f}s waiting for instance ID.")
-        return [], Status.unknownAction
 
-    async def shutdown_workers(self, worker_ids: List[bytes]) -> Tuple[List[bytes], Status]:
-        if not worker_ids:
-            return [], Status.workerNotFound
-
+    async def _stop_workers(self, worker_ids: List[bytes]) -> None:
         instance_ids = []
-        affected_worker_ids = []
+        valid_worker_ids = []
         for wid_bytes in worker_ids:
             worker_id = WorkerID(wid_bytes)
             if worker_id not in self._workers:
                 logging.warning(f"Worker with ID {wid_bytes!r} does not exist.")
-                return [], Status.workerNotFound
+                continue
             instance_ids.append(self._workers[worker_id])
-            affected_worker_ids.append(wid_bytes)
+            valid_worker_ids.append(wid_bytes)
+
+        if not instance_ids:
+            return
 
         logging.info(f"Stopping {len(instance_ids)} worker(s): instances {instance_ids}")
         try:
             await self._sdk.create_return_request(machine_ids=instance_ids)
-        except Exception as e:
-            logging.error(f"Failed to return instances {instance_ids} to ORB: {e}")
-            return [], Status.unknownAction
+        except Exception as error:
+            logging.error(f"Failed to return instances {instance_ids} to ORB: {error}")
+            return
 
-        for wid_bytes in affected_worker_ids:
+        for wid_bytes in valid_worker_ids:
             del self._workers[WorkerID(wid_bytes)]
 
-        logging.info(f"Successfully stopped {len(affected_worker_ids)} worker(s): instances {instance_ids}")
-        return affected_worker_ids, Status.success
+        logging.info(f"Successfully stopped {len(valid_worker_ids)} worker(s): instances {instance_ids}")
 
     async def terminate_all_workers(self) -> None:
         if not self._workers:
