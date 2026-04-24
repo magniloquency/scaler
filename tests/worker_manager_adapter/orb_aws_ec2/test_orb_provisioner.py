@@ -6,11 +6,13 @@ from scaler.worker_manager_adapter.common import extract_desired_count
 from scaler.worker_manager_adapter.orb_aws_ec2.worker_manager import ORBWorkerProvisioner
 
 
-def _make_provisioner() -> ORBWorkerProvisioner:
+def _make_provisioner(workers_per_instance: int = 1) -> ORBWorkerProvisioner:
     config = MagicMock()
     config.worker_config.per_worker_capabilities.capabilities = {"cpu": 4}
     sdk = MagicMock()
-    return ORBWorkerProvisioner(config=config, max_instances=-1, sdk=sdk, template_id="tmpl-123")
+    return ORBWorkerProvisioner(
+        config=config, max_instances=-1, sdk=sdk, template_id="tmpl-123", workers_per_instance=workers_per_instance
+    )
 
 
 class TestORBWorkerProvisionerReconcile(unittest.IsolatedAsyncioTestCase):
@@ -44,8 +46,20 @@ class TestORBWorkerProvisionerReconcile(unittest.IsolatedAsyncioTestCase):
             self.assertIsNotNone(self.provisioner._pending_reconcile_task)
             await asyncio.sleep(0)
 
-        self.assertEqual(self.provisioner._desired_count, 3)
+        self.assertEqual(self.provisioner._desired_count, 3)  # ceil(3 / 1) = 3
         reconcile_mock.assert_called_once()
+
+    async def test_set_desired_task_concurrency_converts_workers_to_instances(self) -> None:
+        provisioner = _make_provisioner(workers_per_instance=16)
+        request = MagicMock()
+        request.taskConcurrency = 100
+        request.capabilities = [MagicMock(key="cpu", value=4)]
+
+        with patch.object(provisioner, "_reconcile", new_callable=AsyncMock):
+            await provisioner.set_desired_task_concurrency([request])
+            await asyncio.sleep(0)
+
+        self.assertEqual(provisioner._desired_count, 7)  # ceil(100 / 16) = 7
 
     async def test_set_desired_task_concurrency_coalesces_rapid_calls(self) -> None:
         request = MagicMock()

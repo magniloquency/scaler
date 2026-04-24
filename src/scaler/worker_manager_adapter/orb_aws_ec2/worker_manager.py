@@ -26,11 +26,19 @@ ORB_AWS_EC2_MAX_POLLING_ATTEMPTS = 60
 
 
 class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
-    def __init__(self, config: ORBAWSEC2WorkerAdapterConfig, max_instances: int, sdk: Any, template_id: str) -> None:
+    def __init__(
+        self,
+        config: ORBAWSEC2WorkerAdapterConfig,
+        max_instances: int,
+        sdk: Any,
+        template_id: str,
+        workers_per_instance: int,
+    ) -> None:
         self._config = config
         self._max_instances = max_instances
         self._sdk = sdk
         self._template_id = template_id
+        self._workers_per_instance = workers_per_instance
         self._units: List[str] = []  # EC2 instance IDs of active units
         self._desired_count: int = 0
         self._reconcile_lock: asyncio.Lock = asyncio.Lock()
@@ -43,7 +51,8 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
         self, requests: List[WorkerManagerCommand.DesiredTaskConcurrencyRequest]
     ) -> None:
         own_capabilities = self._config.worker_config.per_worker_capabilities.capabilities
-        self._desired_count = extract_desired_count(requests, own_capabilities)
+        task_concurrency = extract_desired_count(requests, own_capabilities)
+        self._desired_count = math.ceil(task_concurrency / self._workers_per_instance)
 
         # reconciling the ec2 instances can take some time
         # so we launch a task to handle it in the background
@@ -211,7 +220,11 @@ class ORBAWSEC2WorkerAdapter:
         image_id = self._config.image_id or self._discover_latest_al2023_ami()
 
         self._orb_pool = ORBWorkerProvisioner(
-            config=self._config, max_instances=max_instances, sdk=sdk, template_id=template_id
+            config=self._config,
+            max_instances=max_instances,
+            sdk=sdk,
+            template_id=template_id,
+            workers_per_instance=workers_per_instance,
         )
         self._runner = WorkerManagerRunner(
             address=self._config.worker_manager_config.scheduler_address,
