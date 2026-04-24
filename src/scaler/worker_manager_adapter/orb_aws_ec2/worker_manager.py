@@ -2,7 +2,7 @@ import asyncio
 import logging
 import math
 import os
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 try:
     import boto3
@@ -42,12 +42,6 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
         self._workers: Dict[WorkerID, str] = {}
         self._desired_count: int = 0
         self._reconcile_lock: asyncio.Lock = asyncio.Lock()
-
-    async def start_worker(self) -> Tuple[List[bytes], Status]:
-        return [], Status.success
-
-    async def shutdown_workers(self, worker_ids: List[bytes]) -> Tuple[List[bytes], Status]:
-        return list(worker_ids), Status.success
 
     async def set_desired_task_concurrency(
         self, requests: List[WorkerManagerCommand.DesiredTaskConcurrencyRequest]

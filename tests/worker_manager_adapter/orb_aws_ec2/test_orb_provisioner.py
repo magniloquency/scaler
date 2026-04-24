@@ -1,11 +1,8 @@
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from scaler.protocol.capnp import WorkerManagerCommandResponse
 from scaler.utility.identifiers import WorkerID
 from scaler.worker_manager_adapter.orb_aws_ec2.worker_manager import ORBWorkerProvisioner
-
-Status = WorkerManagerCommandResponse.Status
 
 
 def _make_provisioner() -> ORBWorkerProvisioner:
@@ -13,26 +10,6 @@ def _make_provisioner() -> ORBWorkerProvisioner:
     config.worker_config.per_worker_capabilities.capabilities = {"cpu": 4}
     sdk = MagicMock()
     return ORBWorkerProvisioner(config=config, max_instances=-1, sdk=sdk, template_id="tmpl-123")
-
-
-class TestORBWorkerProvisionerImperativeNoOps(unittest.IsolatedAsyncioTestCase):
-    def setUp(self) -> None:
-        self.provisioner = _make_provisioner()
-
-    async def test_start_worker_noop_returns_success(self) -> None:
-        worker_ids, status = await self.provisioner.start_worker()
-        self.assertEqual(worker_ids, [])
-        self.assertEqual(status, Status.success)
-
-    async def test_shutdown_workers_noop_returns_success(self) -> None:
-        worker_ids, status = await self.provisioner.shutdown_workers([b"worker-1", b"worker-2"])
-        self.assertEqual(worker_ids, [b"worker-1", b"worker-2"])
-        self.assertEqual(status, Status.success)
-
-    async def test_shutdown_workers_noop_empty_returns_success(self) -> None:
-        worker_ids, status = await self.provisioner.shutdown_workers([])
-        self.assertEqual(worker_ids, [])
-        self.assertEqual(status, Status.success)
 
 
 class TestORBWorkerProvisionerReconcile(unittest.IsolatedAsyncioTestCase):

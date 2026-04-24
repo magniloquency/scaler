@@ -20,7 +20,7 @@ from scaler.utility.identifiers import ClientID, ObjectID, TaskID, WorkerID
 from scaler.utility.logging.utility import setup_logger
 from scaler.utility.metadata.task_flags import TaskFlags
 from scaler.worker_manager_adapter.baremetal.native import NativeWorkerProvisioner
-from scaler.worker_manager_adapter.mixins import DeclarativeWorkerProvisioner, WorkerProvisioner
+from scaler.worker_manager_adapter.mixins import DeclarativeWorkerProvisioner, ImperativeWorkerProvisioner
 from scaler.worker_manager_adapter.worker_manager_runner import WorkerManagerRunner
 from scaler.worker_manager_adapter.worker_process import WorkerProcess
 from tests.utility.utility import logging_test_name
@@ -33,7 +33,7 @@ class TestWorkerManagerHandleCommand(unittest.IsolatedAsyncioTestCase):
         setup_logger()
         logging_test_name(self)
         self.capabilities = {"cpu": 4}
-        self.provisioner = MagicMock(spec=WorkerProvisioner)
+        self.provisioner = MagicMock(spec=ImperativeWorkerProvisioner)
         self.provisioner.start_worker = AsyncMock()
         self.provisioner.shutdown_workers = AsyncMock()
         self.send_mock = AsyncMock()
@@ -126,6 +126,26 @@ class TestWorkerManagerHandleCommand(unittest.IsolatedAsyncioTestCase):
         await self.runner._handle_command(cmd)
 
         declarative_provisioner.set_desired_task_concurrency.assert_called_once_with(requests)
+        self.send_mock.assert_not_called()
+
+    async def test_start_workers_is_silently_ignored_for_declarative_provisioner(self) -> None:
+        declarative_provisioner = MagicMock(spec=DeclarativeWorkerProvisioner)
+        self.runner._worker_provisioner = declarative_provisioner
+
+        cmd = MagicMock(spec=WorkerManagerCommand)
+        cmd.command = WorkerManagerCommandType.startWorkers
+        await self.runner._handle_command(cmd)
+
+        self.send_mock.assert_not_called()
+
+    async def test_shutdown_workers_is_silently_ignored_for_declarative_provisioner(self) -> None:
+        declarative_provisioner = MagicMock(spec=DeclarativeWorkerProvisioner)
+        self.runner._worker_provisioner = declarative_provisioner
+
+        cmd = MagicMock(spec=WorkerManagerCommand)
+        cmd.command = WorkerManagerCommandType.shutdownWorkers
+        await self.runner._handle_command(cmd)
+
         self.send_mock.assert_not_called()
 
 

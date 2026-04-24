@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, List, Tuple
 
 from scaler.protocol.capnp import ProcessorStatus, Task, TaskCancel, WorkerManagerCommandResponse
-from scaler.utility.identifiers import TaskID
+from scaler.utility.identifiers import TaskID, WorkerID
 
 if TYPE_CHECKING:
     from scaler.protocol.capnp import WorkerManagerCommand
@@ -45,15 +45,15 @@ class ExecutionBackend(ABC):
     def register(self, load_task_inputs: Callable[[Task], Awaitable[Tuple[Any, List[Any]]]]) -> None: ...
 
 
-class WorkerProvisioner(ABC):
+class ImperativeWorkerProvisioner(ABC):
     @abstractmethod
-    async def start_worker(self) -> Tuple[List[bytes], Status]: ...
+    async def start_worker(self) -> Tuple[List[WorkerID], Status]: ...
 
     @abstractmethod
-    async def shutdown_workers(self, worker_ids: List[bytes]) -> Tuple[List[bytes], Status]: ...
+    async def shutdown_workers(self, worker_ids: List[WorkerID]) -> Tuple[List[WorkerID], Status]: ...
 
 
-class DeclarativeWorkerProvisioner(WorkerProvisioner):
+class DeclarativeWorkerProvisioner(ABC):
     @abstractmethod
     async def set_desired_task_concurrency(
         self, requests: List["WorkerManagerCommand.DesiredTaskConcurrencyRequest"]
