@@ -128,7 +128,7 @@ class TestWorkerManagerHandleCommand(unittest.IsolatedAsyncioTestCase):
         declarative_provisioner.set_desired_task_concurrency.assert_called_once_with(requests)
         self.send_mock.assert_not_called()
 
-    async def test_start_workers_is_silently_ignored_for_declarative_provisioner(self) -> None:
+    async def test_start_workers_sends_noop_success_for_declarative_provisioner(self) -> None:
         declarative_provisioner = MagicMock(spec=DeclarativeWorkerProvisioner)
         self.runner._worker_provisioner = declarative_provisioner
 
@@ -136,9 +136,13 @@ class TestWorkerManagerHandleCommand(unittest.IsolatedAsyncioTestCase):
         cmd.command = WorkerManagerCommandType.startWorkers
         await self.runner._handle_command(cmd)
 
-        self.send_mock.assert_not_called()
+        response = self._sent_response()
+        self.assertIsInstance(response, WorkerManagerCommandResponse)
+        self.assertEqual(response.status, Status.success)
+        self.assertEqual(list(response.workerIDs), [])
+        self.assertEqual(dict(response.capabilities), {})
 
-    async def test_shutdown_workers_is_silently_ignored_for_declarative_provisioner(self) -> None:
+    async def test_shutdown_workers_sends_noop_success_for_declarative_provisioner(self) -> None:
         declarative_provisioner = MagicMock(spec=DeclarativeWorkerProvisioner)
         self.runner._worker_provisioner = declarative_provisioner
 
@@ -146,7 +150,11 @@ class TestWorkerManagerHandleCommand(unittest.IsolatedAsyncioTestCase):
         cmd.command = WorkerManagerCommandType.shutdownWorkers
         await self.runner._handle_command(cmd)
 
-        self.send_mock.assert_not_called()
+        response = self._sent_response()
+        self.assertIsInstance(response, WorkerManagerCommandResponse)
+        self.assertEqual(response.status, Status.success)
+        self.assertEqual(list(response.workerIDs), [])
+        self.assertEqual(dict(response.capabilities), {})
 
 
 class TestWorkerProcessOnReceiveExternal(unittest.IsolatedAsyncioTestCase):

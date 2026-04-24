@@ -137,8 +137,9 @@ class WorkerManagerRunner:
                 if response_status == Status.success:
                     capabilities = self._capabilities
             else:
+                # declarative provisioners send a no-op success so the scheduler's
+                # single-in-flight gate is not blocked waiting for a response that never comes
                 logging.debug(f"Ignoring unimplemented WorkerManagerCommand: {cmd_type!r}")
-                return
         elif cmd_type == WorkerManagerCommandType.shutdownWorkers:
             if isinstance(self._worker_provisioner, ImperativeWorkerProvisioner):
                 worker_ids, response_status = await self._worker_provisioner.shutdown_workers(
@@ -146,7 +147,6 @@ class WorkerManagerRunner:
                 )
             else:
                 logging.debug(f"Ignoring unimplemented WorkerManagerCommand: {cmd_type!r}")
-                return
         elif cmd_type == WorkerManagerCommandType.setDesiredTaskConcurrency:
             if isinstance(self._worker_provisioner, DeclarativeWorkerProvisioner):
                 await self._worker_provisioner.set_desired_task_concurrency(
