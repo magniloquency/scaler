@@ -16,12 +16,12 @@ class WorkerNotFoundError(Exception):
 
 def extract_desired_count(
     requests: List[WorkerManagerCommand.DesiredTaskConcurrencyRequest], own_capabilities: Dict[str, int]
-) -> int:
+) -> Optional[int]:
     """Return the desired worker count for this provisioner from a declarative scaling command.
 
     Selects the most specific request whose capability set is a subset of own_capabilities.
     An empty capability set in a request acts as a wildcard that matches any provisioner.
-    Returns 0 if no request matches.
+    Returns None if no request matches.
     """
     best: Optional[Tuple[int, int]] = None  # (specificity, count)
     for request in requests:
@@ -30,7 +30,7 @@ def extract_desired_count(
             specificity = len(request_capabilities)
             if best is None or specificity > best[0]:
                 best = (specificity, request.taskConcurrency)
-    return best[1] if best is not None else 0
+    return best[1] if best is not None else None
 
 
 def format_capabilities(capabilities: Dict[str, int]) -> str:

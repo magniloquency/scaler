@@ -79,8 +79,8 @@ class TestExtractDesiredCount(unittest.TestCase):
         request.capabilities = [MagicMock(key=key, value=value) for key, value in capabilities.items()]
         return request
 
-    def test_returns_zero_for_empty_requests(self) -> None:
-        self.assertEqual(extract_desired_count([], self.OWN_CAPABILITIES), 0)
+    def test_returns_none_for_empty_requests(self) -> None:
+        self.assertIsNone(extract_desired_count([], self.OWN_CAPABILITIES))
 
     def test_exact_capability_match(self) -> None:
         request = self._make_request(task_concurrency=8, capabilities={"cpu": 4})
@@ -95,6 +95,6 @@ class TestExtractDesiredCount(unittest.TestCase):
         specific = self._make_request(task_concurrency=6, capabilities={"cpu": 4})
         self.assertEqual(extract_desired_count([wildcard, specific], self.OWN_CAPABILITIES), 6)
 
-    def test_returns_zero_when_no_request_matches(self) -> None:
+    def test_returns_none_when_no_request_matches(self) -> None:
         request = self._make_request(task_concurrency=3, capabilities={"gpu": 1})
-        self.assertEqual(extract_desired_count([request], self.OWN_CAPABILITIES), 0)
+        self.assertIsNone(extract_desired_count([request], self.OWN_CAPABILITIES))
