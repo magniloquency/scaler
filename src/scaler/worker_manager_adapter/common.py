@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 from typing import TYPE_CHECKING, Awaitable, Callable, Dict, List, Optional
 
@@ -28,7 +30,7 @@ class WorkerNotFoundError(Exception):
 
 
 def extract_desired_count(
-    requests: List["WorkerManagerCommand.DesiredTaskConcurrencyRequest"], own_capabilities: Dict[str, int]
+    requests: List[WorkerManagerCommand.DesiredTaskConcurrencyRequest], own_capabilities: Dict[str, int]
 ) -> int:
     """Return the desired worker count for this provisioner from a declarative scaling command.
 

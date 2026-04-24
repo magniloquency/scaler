@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, List, Tuple
@@ -14,7 +16,7 @@ Status = WorkerManagerCommandResponse.Status
 
 class ProcessorStatusProvider(ABC):
     @abstractmethod
-    def set_task_manager(self, task_manager: "TaskManager") -> None: ...
+    def set_task_manager(self, task_manager: TaskManager) -> None: ...
 
     @abstractmethod
     def get_processor_statuses(self) -> List[ProcessorStatus]: ...
@@ -64,7 +66,7 @@ class DeclarativeWorkerProvisioner(ABC):
 
     @abstractmethod
     async def set_desired_task_concurrency(
-        self, requests: List["WorkerManagerCommand.DesiredTaskConcurrencyRequest"]
+        self, requests: List[WorkerManagerCommand.DesiredTaskConcurrencyRequest]
     ) -> None: ...
 
     @abstractmethod
