@@ -623,7 +623,21 @@ std::expected<void, scaler::wrapper::uv::Error> WebSocketStream::shutdown(
                 (*callbackPtr)({});
                 return;
             }
-            UV_EXIT_ON_ERROR(state->_socket.shutdown(std::move(*callbackPtr)));
+            // UV_ENOTCONN from the TCP shutdown callback means the peer already closed the
+            // connection after we sent the CLOSE frame — treat as successful shutdown.
+            auto r = state->_socket.shutdown(
+                [callbackPtr](std::expected<void, scaler::wrapper::uv::Error> shutdownErr) mutable {
+                    if (!shutdownErr.has_value() && shutdownErr.error().code() == UV_ENOTCONN)
+                        (*callbackPtr)({});
+                    else
+                        (*callbackPtr)(shutdownErr);
+                });
+            if (!r.has_value()) {
+                if (r.error().code() == UV_ENOTCONN)
+                    (*callbackPtr)({});
+                else
+                    UV_EXIT_ON_ERROR(r);
+            }
         });
 
     if (!result.has_value()) {
