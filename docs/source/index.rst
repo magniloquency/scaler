@@ -8,14 +8,14 @@
 OpenGris Scaler
 ===============
 
-Scaler is a lightweight distributed computing Python framework that lets you easily distribute tasks across single/multiple local machines, multiple different clouds.
+Scaler is a lightweight distributed computing Python framework that lets you easily distribute tasks across one or more local machines, or across multiple clouds.
 
 .. image:: tutorials/images/client_usage_framework.svg
    :alt: Scaler architecture
    :width: 1000px
 
-Performances
-------------
+Performance
+-----------
 
 Scaler is efficient at scaling short tasks over a high number of CPUs with very low overhead and minimal latency.
 
@@ -41,5 +41,5 @@ Content
    tutorials/policy_engine
    tutorials/worker_managers/index
    tutorials/additional_features
-   tutorials/example
+   tutorials/examples
    tutorials/development
