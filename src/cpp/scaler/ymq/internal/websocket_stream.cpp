@@ -611,15 +611,29 @@ std::expected<void, scaler::wrapper::uv::Error> WebSocketStream::shutdown(
     const std::span<const uint8_t> frameSpan(*frameData);
     auto state = _state;
 
+    // Share ownership so both the synchronous error path and the async write callback can invoke it.
+    auto callbackPtr = std::make_shared<scaler::wrapper::uv::ShutdownCallback>(std::move(callback));
+
     auto result = _state->_socket.write(
         std::span<const std::span<const uint8_t>>(&frameSpan, 1),
-        [state, frameData = std::move(frameData), callback = std::move(callback)](
-            std::expected<void, scaler::wrapper::uv::Error>) mutable {
-            UV_EXIT_ON_ERROR(state->_socket.shutdown(std::move(callback)));
+        [state, frameData = std::move(frameData), callbackPtr](
+            std::expected<void, scaler::wrapper::uv::Error> writeErr) mutable {
+            if (!writeErr.has_value()) {
+                // CLOSE frame failed (connection already gone) — treat as successful shutdown.
+                (*callbackPtr)({});
+                return;
+            }
+            UV_EXIT_ON_ERROR(state->_socket.shutdown(std::move(*callbackPtr)));
         });
 
-    if (!result.has_value())
+    if (!result.has_value()) {
+        if (result.error().code() == UV_ENOTCONN) {
+            // Socket already disconnected — no CLOSE frame needed.
+            (*callbackPtr)({});
+            return {};
+        }
         return std::unexpected(result.error());
+    }
     return {};
 }
 
