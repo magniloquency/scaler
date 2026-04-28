@@ -104,8 +104,7 @@ TEST_F(WebSocketUtilsTest, ComputeWebSocketAcceptRFC6455Example)
 {
     // RFC 6455 §1.3 example: key "dGhlIHNhbXBsZSBub25jZQ==" → "s3pPLMBiTxaQ9kYGzzhZRbK+xOo="
     EXPECT_EQ(
-        scaler::ymq::internal::computeWebSocketAccept("dGhlIHNhbXBsZSBub25jZQ=="),
-        "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=");
+        scaler::ymq::internal::computeWebSocketAccept("dGhlIHNhbXBsZSBub25jZQ=="), "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=");
 }
 
 TEST_F(WebSocketUtilsTest, ExtractHeadersBasic)
