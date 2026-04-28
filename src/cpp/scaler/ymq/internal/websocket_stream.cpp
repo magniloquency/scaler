@@ -51,7 +51,6 @@ std::string buildServerUpgradeResponse(const std::string& key) noexcept
            "\r\n";
 }
 
-// ─── WebSocket frame encoding ────────────────────────────────────────────────
 
 // Returns the frame header bytes for a server-side frame (unmasked).
 std::vector<uint8_t> buildServerFrameHeader(size_t payloadSize) noexcept
@@ -134,7 +133,6 @@ std::vector<uint8_t> buildControlFrame(uint8_t opcode, bool isClient, std::span<
     return frame;
 }
 
-// ─── Frame decoding ──────────────────────────────────────────────────────────
 
 struct DecodedFrame {
     uint8_t opcode;
@@ -202,7 +200,6 @@ std::expected<std::optional<DecodedFrame>, scaler::wrapper::uv::Error> tryDecode
 
 }  // anonymous namespace
 
-// ─── Upgrade state ───────────────────────────────────────────────────────────
 
 // Shared state used during the async HTTP upgrade phase on the client side.
 // TCPSocket has no public default constructor, so we wrap it in optional.
@@ -220,7 +217,6 @@ struct ServerUpgradeContext {
     scaler::utility::MoveOnlyFunction<void(std::expected<WebSocketStream, scaler::wrapper::uv::Error>)> callback {};
 };
 
-// ─── WebSocketStream implementation ─────────────────────────────────────────
 
 WebSocketStream::State::State(scaler::wrapper::uv::TCPSocket socket, bool isServer) noexcept
     : _socket(std::move(socket)), _isServer(isServer)
@@ -457,7 +453,6 @@ void WebSocketStream::upgradeAsServer(
     }
 }
 
-// ─── Data path ───────────────────────────────────────────────────────────────
 
 std::expected<void, scaler::wrapper::uv::Error> WebSocketStream::write(
     std::span<const std::span<const uint8_t>> buffers, scaler::wrapper::uv::WriteCallback callback) noexcept

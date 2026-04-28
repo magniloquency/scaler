@@ -13,7 +13,6 @@
 #include "scaler/ymq/address.h"
 #include "scaler/ymq/internal/websocket_utils.h"
 
-// ─── Shared WebSocketSocket implementation ────────────────────────────────────
 
 WebSocketSocket::WebSocketSocket(long long fd, bool isServer): _fd(fd), _isServer(isServer)
 {
