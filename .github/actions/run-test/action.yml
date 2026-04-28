@@ -13,10 +13,6 @@ runs:
       shell: bash
       run: uv pip install --system scapy==2.*
 
-    - name: Install websockets for WebSocket interop tests
-      shell: bash
-      run: uv pip install --system "websockets>=16.0"
-
     - name: Install pydivert and pywin32 for MITM tests (Windows)
       if: inputs.os == 'Windows'
       shell: pwsh
