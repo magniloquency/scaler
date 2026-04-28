@@ -95,6 +95,14 @@ std::string base64Encode(std::span<const uint8_t> data) noexcept
     return result;
 }
 
+std::string toLower(std::string_view s) noexcept
+{
+    std::string result(s);
+    for (char& c: result)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return result;
+}
+
 std::string generateWebSocketKey() noexcept
 {
     static thread_local std::mt19937 rng(std::random_device {}());
@@ -117,12 +125,8 @@ std::string computeWebSocketAccept(const std::string& key) noexcept
 
 std::optional<std::string> extractHeader(std::string_view headers, std::string_view name) noexcept
 {
-    std::string lowerHeaders(headers);
-    std::string lowerName(name);
-    for (char& c: lowerHeaders)
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    for (char& c: lowerName)
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    std::string lowerHeaders = toLower(headers);
+    std::string lowerName    = toLower(name);
     lowerName += ":";
 
     const size_t pos = lowerHeaders.find(lowerName);

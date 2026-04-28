@@ -13,6 +13,7 @@ namespace internal {
 
 std::array<uint8_t, 20> sha1(std::string_view input) noexcept;
 std::string base64Encode(std::span<const uint8_t> data) noexcept;
+std::string toLower(std::string_view s) noexcept;
 std::string generateWebSocketKey() noexcept;
 std::string computeWebSocketAccept(const std::string& key) noexcept;
 

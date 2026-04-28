@@ -324,19 +324,13 @@ static void finishServerUpgrade(std::shared_ptr<ServerUpgradeContext> ctx) noexc
     }
 
     // Verify Upgrade: websocket (case-insensitive)
-    std::string upgradeValue = *upgradeHeader;
-    for (char& c: upgradeValue)
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    if (upgradeValue != "websocket") {
+    if (toLower(*upgradeHeader) != "websocket") {
         ctx->callback(std::unexpected(scaler::wrapper::uv::Error {UV_EPROTO}));
         return;
     }
 
     // Verify Connection header contains "upgrade" (case-insensitive, may be a token list)
-    std::string connectionValue = *connectionHeader;
-    for (char& c: connectionValue)
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    if (connectionValue.find("upgrade") == std::string::npos) {
+    if (toLower(*connectionHeader).find("upgrade") == std::string::npos) {
         ctx->callback(std::unexpected(scaler::wrapper::uv::Error {UV_EPROTO}));
         return;
     }
