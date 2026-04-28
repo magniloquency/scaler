@@ -271,8 +271,9 @@ static void finishClientUpgrade(std::shared_ptr<ClientUpgradeContext> ctx) noexc
         return;
     }
 
-    const auto acceptHeader = extractHeader(headers, "Sec-WebSocket-Accept");
-    if (!acceptHeader.has_value() || *acceptHeader != computeWebSocketAccept(ctx->key)) {
+    const auto headerMap = extractHeaders(headers);
+    const auto acceptIt  = headerMap.find("sec-websocket-accept");
+    if (acceptIt == headerMap.end() || acceptIt->second != computeWebSocketAccept(ctx->key)) {
         ctx->callback(std::unexpected(scaler::wrapper::uv::Error {UV_EPROTO}));
         return;
     }
@@ -312,35 +313,36 @@ static void finishServerUpgrade(std::shared_ptr<ServerUpgradeContext> ctx) noexc
         return;
     }
 
-    const auto upgradeHeader    = extractHeader(headers, "Upgrade");
-    const auto keyHeader        = extractHeader(headers, "Sec-WebSocket-Key");
-    const auto connectionHeader = extractHeader(headers, "Connection");
-    const auto versionHeader    = extractHeader(headers, "Sec-WebSocket-Version");
+    const auto headerMap    = extractHeaders(headers);
+    const auto upgradeIt    = headerMap.find("upgrade");
+    const auto keyIt        = headerMap.find("sec-websocket-key");
+    const auto connectionIt = headerMap.find("connection");
+    const auto versionIt    = headerMap.find("sec-websocket-version");
 
-    if (!upgradeHeader.has_value() || !keyHeader.has_value() || !connectionHeader.has_value() ||
-        !versionHeader.has_value()) {
+    if (upgradeIt == headerMap.end() || keyIt == headerMap.end() || connectionIt == headerMap.end() ||
+        versionIt == headerMap.end()) {
         ctx->callback(std::unexpected(scaler::wrapper::uv::Error {UV_EPROTO}));
         return;
     }
 
     // Verify Upgrade: websocket (case-insensitive)
-    if (toLower(*upgradeHeader) != "websocket") {
+    if (toLower(upgradeIt->second) != "websocket") {
         ctx->callback(std::unexpected(scaler::wrapper::uv::Error {UV_EPROTO}));
         return;
     }
 
     // Verify Connection header contains "upgrade" (case-insensitive, may be a token list)
-    if (toLower(*connectionHeader).find("upgrade") == std::string::npos) {
+    if (toLower(connectionIt->second).find("upgrade") == std::string::npos) {
         ctx->callback(std::unexpected(scaler::wrapper::uv::Error {UV_EPROTO}));
         return;
     }
 
-    if (*versionHeader != "13") {
+    if (versionIt->second != "13") {
         ctx->callback(std::unexpected(scaler::wrapper::uv::Error {UV_EPROTO}));
         return;
     }
 
-    const std::string response = buildServerUpgradeResponse(*keyHeader);
+    const std::string response = buildServerUpgradeResponse(keyIt->second);
     auto responseData          = std::make_shared<std::string>(response);
     const std::span<const uint8_t> responseSpan(
         reinterpret_cast<const uint8_t*>(responseData->data()), responseData->size());

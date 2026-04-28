@@ -2,7 +2,7 @@
 
 #include <array>
 #include <cstdint>
-#include <optional>
+#include <map>
 #include <span>
 #include <string>
 #include <string_view>
@@ -17,9 +17,10 @@ std::string toLower(std::string_view s) noexcept;
 std::string generateWebSocketKey() noexcept;
 std::string computeWebSocketAccept(const std::string& key) noexcept;
 
-// Case-insensitive header value extraction. Handles both "Name: value" and "Name:value"
-// (RFC 7230 optional whitespace).
-std::optional<std::string> extractHeader(std::string_view headers, std::string_view name) noexcept;
+// Parses all headers from an HTTP request/response block (including the first request/status line)
+// in a single pass. Returns a map with lowercase header names and original-case values.
+// Handles both "Name: value" and "Name:value" (RFC 7230 optional whitespace).
+std::map<std::string, std::string> extractHeaders(std::string_view headers) noexcept;
 
 }  // namespace internal
 }  // namespace ymq
