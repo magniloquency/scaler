@@ -375,8 +375,8 @@ void WebSocketStream::upgradeAsClient(
     ctx->key      = generateWebSocketKey();
     ctx->callback = std::move(callback);
 
-    const std::string request = buildClientUpgradeRequest(address.host, address.port, address.path, ctx->key);
-    auto requestData          = std::make_shared<std::string>(request);
+    auto requestData =
+        std::make_shared<std::string>(buildClientUpgradeRequest(address.host, address.port, address.path, ctx->key));
     const std::span<const uint8_t> requestSpan(
         reinterpret_cast<const uint8_t*>(requestData->data()), requestData->size());
 
