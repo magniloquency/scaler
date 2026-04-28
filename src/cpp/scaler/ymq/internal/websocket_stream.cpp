@@ -20,8 +20,7 @@ namespace internal {
 
 namespace {
 
-static constexpr uint64_t kMaxWebSocketPayloadSize = 64ULL * 1024 * 1024;  // 64 MB
-static constexpr size_t kMaxUpgradeHeaderSize      = 64 * 1024;            // 64 KB
+static constexpr size_t kMaxUpgradeHeaderSize = 64 * 1024;  // 64 KB
 
 // WebSocket frame flags and masks (RFC 6455 §5.2)
 static constexpr uint8_t kFlagFIN    = 0x80;
@@ -189,9 +188,6 @@ std::expected<std::optional<DecodedFrame>, scaler::wrapper::uv::Error> tryDecode
             payloadLen = (payloadLen << 8) | buffer[2 + i];
         headerSize = 10;
     }
-
-    if (payloadLen > kMaxWebSocketPayloadSize)
-        return std::unexpected(scaler::wrapper::uv::Error {UV_EPROTO});
 
     if (masked)
         headerSize += 4;

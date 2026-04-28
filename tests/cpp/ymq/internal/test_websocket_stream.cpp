@@ -306,58 +306,6 @@ TEST_F(WebSocketStreamTest, PingReceivesPong)
     loop.run(UV_RUN_DEFAULT);
 }
 
-// Verifies that a frame advertising a payload larger than kMaxWebSocketPayloadSize
-// causes an error to be delivered to the read callback.
-TEST_F(WebSocketStreamTest, OversizedPayloadError)
-{
-    scaler::wrapper::uv::Loop loop = UV_EXIT_ON_ERROR(scaler::wrapper::uv::Loop::init());
-    TestTCPPair pair(loop);
-    pair.waitForFullConnection();
-
-    auto wsStream = scaler::ymq::internal::WebSocketStream::fromUpgradedSocket(
-        std::move(pair._serverSide.value()), true /* server */);
-    pair._serverSide.reset();
-    pair._server.reset();
-
-    bool errorReceived = false;
-
-    UV_EXIT_ON_ERROR(
-        wsStream.readStart([&](std::expected<std::span<const uint8_t>, scaler::wrapper::uv::Error> result) {
-            if (!result.has_value())
-                errorReceived = true;
-        }));
-
-    // Build a 10-byte frame header with payloadLen = 64 MiB + 1.
-    // byte0 = FIN=1, binary; byte1 = MASK=1, extended-64 marker (0xFF = 0x80|127).
-    // The 8-byte length field encodes 64*1024*1024 + 1 = 0x0000000004000001.
-    const auto oversizedData = std::make_shared<std::vector<uint8_t>>(std::vector<uint8_t> {
-        0x82,
-        0xFF,
-        0x00,
-        0x00,
-        0x00,
-        0x00,
-        0x04,
-        0x00,
-        0x00,
-        0x01,
-    });
-
-    const std::span<const uint8_t> oversizedSpan(*oversizedData);
-    UV_EXIT_ON_ERROR(pair._client->write(
-        std::span<const std::span<const uint8_t>>(&oversizedSpan, 1),
-        [oversizedData](std::expected<void, scaler::wrapper::uv::Error>) {}));
-
-    runUntil(loop, errorReceived);
-
-    EXPECT_TRUE(errorReceived);
-
-    wsStream.readStop();
-    UV_EXIT_ON_ERROR(wsStream.closeReset());
-    UV_EXIT_ON_ERROR(pair._client->closeReset());
-    loop.run(UV_RUN_DEFAULT);
-}
-
 // Verifies that the server terminates the upgrade if the client sends more than
 // kMaxUpgradeHeaderSize bytes before the end-of-headers delimiter.
 TEST_F(WebSocketStreamTest, UpgradeHeaderTooLarge)
