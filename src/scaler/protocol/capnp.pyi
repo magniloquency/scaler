@@ -88,8 +88,9 @@ class ObjectMetadata(CapnpStruct):
 class ObjectStorageAddress(CapnpStruct):
     host: str
     port: int
+    scheme: str
     @staticmethod
-    def new_msg(host: str, port: int) -> "ObjectStorageAddress": ...
+    def new_msg(host: str, port: int, scheme: str) -> "ObjectStorageAddress": ...
 
 class Resource(CapnpStruct):
     cpu: int
