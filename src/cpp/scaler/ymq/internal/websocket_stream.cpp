@@ -381,7 +381,7 @@ void WebSocketStream::upgradeAsClient(
         reinterpret_cast<const uint8_t*>(requestData->data()), requestData->size());
 
     auto writeResult = ctx->socket->write(
-        std::span<const std::span<const uint8_t>>(&requestSpan, 1),
+        requestSpan,
         [ctx, requestData = std::move(requestData)](std::expected<void, scaler::wrapper::uv::Error> result) mutable {
             if (!result.has_value()) {
                 ctx->callback(std::unexpected(result.error()));
