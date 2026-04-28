@@ -202,7 +202,6 @@ TEST_F(WebSocketStreamTest, ClientServerHandshake)
     loop.run(UV_RUN_DEFAULT);
 }
 
-
 // Verifies that three frames (FIN=0 binary, FIN=0 continuation, FIN=1 continuation)
 // are assembled into a single message delivery.
 TEST_F(WebSocketStreamTest, FragmentedMessage)
@@ -393,7 +392,6 @@ TEST_F(WebSocketStreamTest, UpgradeHeaderTooLarge)
     loop.run(UV_RUN_DEFAULT);
 }
 
-
 // Runs upgradeAsServer with a raw HTTP request and returns whether it succeeded.
 static bool upgradeSucceeds(const std::string& request)
 {
@@ -500,7 +498,6 @@ TEST_F(WebSocketStreamTest, UpgradeHeaderNoSpaceAfterColon)
         "\r\n";
     EXPECT_TRUE(upgradeSucceeds(request));
 }
-
 
 // Verifies that calling shutdown() on a WebSocketStream causes the peer to receive
 // a WebSocket CLOSE frame (opcode 0x8) before the TCP FIN.
