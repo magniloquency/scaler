@@ -18,9 +18,14 @@
 
 class WebSocketStreamTest: public ::testing::Test {};
 
-// ─── Test helpers ─────────────────────────────────────────────────────────────
-
 namespace {
+
+void runUntil(scaler::wrapper::uv::Loop& loop, const bool& done)
+{
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (!done && std::chrono::steady_clock::now() < deadline)
+        loop.run(UV_RUN_ONCE);
+}
 
 // Creates a pair of connected TCP sockets via a local loopback server.
 // Not movable — lambdas capture 'this' by pointer.
@@ -30,6 +35,7 @@ struct TestTCPPair {
     std::optional<scaler::wrapper::uv::TCPSocket> _client;
     std::optional<scaler::wrapper::uv::TCPSocket> _serverSide;
     bool _clientConnected = false;
+    bool _ready           = false;
 
     explicit TestTCPPair(scaler::wrapper::uv::Loop& loop): _loop(loop)
     {
@@ -41,6 +47,8 @@ struct TestTCPPair {
             auto sock = UV_EXIT_ON_ERROR(scaler::wrapper::uv::TCPSocket::init(_loop));
             UV_EXIT_ON_ERROR(_server->accept(sock));
             _serverSide.emplace(std::move(sock));
+            if (_clientConnected)
+                _ready = true;
         }));
 
         const int port = UV_EXIT_ON_ERROR(_server->getSockName()).port();
@@ -50,6 +58,8 @@ struct TestTCPPair {
             [this](std::expected<void, scaler::wrapper::uv::Error> r) {
                 UV_EXIT_ON_ERROR(r);
                 _clientConnected = true;
+                if (_serverSide.has_value())
+                    _ready = true;
             }));
     }
 
@@ -58,11 +68,9 @@ struct TestTCPPair {
     TestTCPPair(TestTCPPair&&)                 = delete;
     TestTCPPair& operator=(TestTCPPair&&)      = delete;
 
-    // Wait for both sides to be ready before attempting any reads/writes.
     void waitForFullConnection()
     {
-        while (!_serverSide.has_value() || !_clientConnected)
-            _loop.run(UV_RUN_ONCE);
+        runUntil(_loop, _ready);
     }
 };
 
@@ -81,16 +89,7 @@ std::vector<uint8_t> maskedFrame(uint8_t byte0, std::vector<uint8_t> payload)
     return frame;
 }
 
-void runUntil(scaler::wrapper::uv::Loop& loop, const bool& done)
-{
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
-    while (!done && std::chrono::steady_clock::now() < deadline)
-        loop.run(UV_RUN_ONCE);
-}
-
 }  // namespace
-
-// ─── Address parsing tests ────────────────────────────────────────────────────
 
 // Verify that a WebSocket address round-trips through toString() / fromString().
 TEST_F(WebSocketStreamTest, AddressRoundTrip)
@@ -136,8 +135,6 @@ TEST_F(WebSocketStreamTest, InvalidAddresses)
     EXPECT_FALSE(scaler::ymq::Address::fromString("ws://127.0.0.1:abc/").has_value());  // bad port
 }
 
-// ─── End-to-end handshake test ────────────────────────────────────────────────
-
 // End-to-end: a WebSocket AcceptServer receives a connection.
 // Verifies that the full upgrade path runs without error and that the server's
 // connection callback is invoked with an isWebSocket() client.
@@ -148,25 +145,25 @@ TEST_F(WebSocketStreamTest, ClientServerHandshake)
     const auto listenAddress = scaler::ymq::Address::fromString("ws://127.0.0.1:0/").value();
 
     std::vector<uint8_t> serverReceived {};
+    bool messageReceived = false;
     // Keep the server-side client alive across the callback boundary.
     std::optional<scaler::ymq::internal::Client> serverClient {};
 
-    // ── Server ──────────────────────────────────────────────────────────────
     scaler::ymq::internal::AcceptServer server(loop, listenAddress, [&](scaler::ymq::internal::Client client) {
         ASSERT_TRUE(client.isWebSocket());
         serverClient.emplace(std::move(client));
-        UV_EXIT_ON_ERROR(serverClient->readStart(
-            [&serverReceived](std::expected<std::span<const uint8_t>, scaler::wrapper::uv::Error> result) {
+        UV_EXIT_ON_ERROR(
+            serverClient->readStart([&](std::expected<std::span<const uint8_t>, scaler::wrapper::uv::Error> result) {
                 if (!result.has_value())
                     return;
                 serverReceived.insert(serverReceived.end(), result->begin(), result->end());
+                messageReceived = true;
             }));
     });
 
     const scaler::ymq::Address boundAddress = server.address();
     ASSERT_EQ(boundAddress.type(), scaler::ymq::Address::Type::WebSocket);
 
-    // ── Client ──────────────────────────────────────────────────────────────
     bool clientConnected = false;
     // Keep the client-side client alive so the socket stays open for writing.
     std::optional<scaler::ymq::internal::Client> clientClient {};
@@ -183,11 +180,7 @@ TEST_F(WebSocketStreamTest, ClientServerHandshake)
             UV_EXIT_ON_ERROR(clientClient->write(std::span<const std::span<const uint8_t>>(&msgSpan, 1), [](auto) {}));
         });
 
-    // Run the event loop until the server receives the message (or timeout after 2 s).
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
-    while (serverReceived.empty() && std::chrono::steady_clock::now() < deadline) {
-        loop.run(UV_RUN_ONCE);
-    }
+    runUntil(loop, messageReceived);
 
     EXPECT_TRUE(clientConnected);
     EXPECT_EQ(serverReceived, (std::vector<uint8_t> {'H', 'e', 'l', 'l', 'o'}));
@@ -412,6 +405,7 @@ static bool upgradeSucceeds(const std::string& request)
 
     std::optional<bool> upgradeResult;
     std::optional<scaler::ymq::internal::WebSocketStream> upgradedStream;
+    bool upgradeDone = false;
 
     scaler::ymq::internal::WebSocketStream::upgradeAsServer(
         std::move(pair._serverSide.value()),
@@ -419,6 +413,7 @@ static bool upgradeSucceeds(const std::string& request)
             upgradeResult = result.has_value();
             if (result.has_value())
                 upgradedStream.emplace(std::move(*result));
+            upgradeDone = true;
         });
     pair._serverSide.reset();
     pair._server.reset();
@@ -430,9 +425,7 @@ static bool upgradeSucceeds(const std::string& request)
         std::span<const std::span<const uint8_t>>(&requestSpan, 1),
         [requestData](std::expected<void, scaler::wrapper::uv::Error>) {}));
 
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
-    while (!upgradeResult.has_value() && std::chrono::steady_clock::now() < deadline)
-        loop.run(UV_RUN_ONCE);
+    runUntil(loop, upgradeDone);
 
     if (upgradedStream) {
         upgradedStream->readStop();
