@@ -51,12 +51,6 @@ class ObjectStorageServerProcess(multiprocessing.get_context("spawn").Process): 
 
         self._server = ObjectStorageServer()
         try:
-            self._server.run(
-                repr(self._bind_address),
-                self._ident,
-                log_level_str,
-                log_format_str,
-                logging_paths,
-            )
+            self._server.run(repr(self._bind_address), self._ident, log_level_str, log_format_str, logging_paths)
         except KeyboardInterrupt:
             logging.info("ObjectStorageServer: received KeyboardInterrupt, shutting down")
