@@ -23,6 +23,26 @@ namespace {
 static constexpr uint64_t kMaxWebSocketPayloadSize = 64ULL * 1024 * 1024;  // 64 MB
 static constexpr size_t kMaxUpgradeHeaderSize      = 64 * 1024;            // 64 KB
 
+// WebSocket frame flags and masks (RFC 6455 §5.2)
+static constexpr uint8_t kFlagFIN    = 0x80;
+static constexpr uint8_t kFlagMasked = 0x80;
+static constexpr uint8_t kMaskOpcode = 0x0F;
+static constexpr uint8_t kMaskLength = 0x7F;
+
+// WebSocket opcodes (RFC 6455 §5.2)
+static constexpr uint8_t kOpcodeContinuation = 0x0;
+static constexpr uint8_t kOpcodeText         = 0x1;
+static constexpr uint8_t kOpcodeBinary       = 0x2;
+static constexpr uint8_t kOpcodeClose        = 0x8;
+static constexpr uint8_t kOpcodePing         = 0x9;
+static constexpr uint8_t kOpcodePong         = 0xA;
+
+// WebSocket payload length encoding (RFC 6455 §5.2)
+static constexpr uint8_t kPayloadLen16Bit        = 126;
+static constexpr uint8_t kPayloadLen64Bit        = 127;
+static constexpr size_t kPayloadLen16BitMax      = 65536;
+static constexpr uint8_t kMaxControlFramePayload = 125;
+
 std::string buildClientUpgradeRequest(
     const std::string& host, uint16_t port, const std::string& path, const std::string& key) noexcept
 {
@@ -55,15 +75,15 @@ std::string buildServerUpgradeResponse(const std::string& key) noexcept
 std::vector<uint8_t> buildServerFrameHeader(size_t payloadSize) noexcept
 {
     std::vector<uint8_t> header;
-    header.push_back(0x82);  // FIN | opcode=binary
-    if (payloadSize < 126) {
+    header.push_back(kFlagFIN | kOpcodeBinary);
+    if (payloadSize < kPayloadLen16Bit) {
         header.push_back(static_cast<uint8_t>(payloadSize));
-    } else if (payloadSize < 65536) {
-        header.push_back(126);
+    } else if (payloadSize < kPayloadLen16BitMax) {
+        header.push_back(kPayloadLen16Bit);
         header.push_back(static_cast<uint8_t>((payloadSize >> 8) & 0xFF));
         header.push_back(static_cast<uint8_t>(payloadSize & 0xFF));
     } else {
-        header.push_back(127);
+        header.push_back(kPayloadLen64Bit);
         for (int i = 7; i >= 0; --i)
             header.push_back(static_cast<uint8_t>((payloadSize >> (i * 8)) & 0xFF));
     }
@@ -81,15 +101,15 @@ std::pair<std::vector<uint8_t>, std::vector<uint8_t>> buildClientFrame(
     std::memcpy(maskKey.data(), &maskInt, 4);
 
     std::vector<uint8_t> header;
-    header.push_back(0x82);  // FIN | binary
-    if (totalSize < 126) {
-        header.push_back(0x80 | static_cast<uint8_t>(totalSize));
-    } else if (totalSize < 65536) {
-        header.push_back(0x80 | 126);
+    header.push_back(kFlagFIN | kOpcodeBinary);
+    if (totalSize < kPayloadLen16Bit) {
+        header.push_back(kFlagMasked | static_cast<uint8_t>(totalSize));
+    } else if (totalSize < kPayloadLen16BitMax) {
+        header.push_back(kFlagMasked | kPayloadLen16Bit);
         header.push_back(static_cast<uint8_t>((totalSize >> 8) & 0xFF));
         header.push_back(static_cast<uint8_t>(totalSize & 0xFF));
     } else {
-        header.push_back(0x80 | 127);
+        header.push_back(kFlagMasked | kPayloadLen64Bit);
         for (int i = 7; i >= 0; --i)
             header.push_back(static_cast<uint8_t>((totalSize >> (i * 8)) & 0xFF));
     }
@@ -105,7 +125,7 @@ std::pair<std::vector<uint8_t>, std::vector<uint8_t>> buildClientFrame(
     return {std::move(header), std::move(masked)};
 }
 
-// Builds a control frame (CLOSE=0x8, PING=0x9, PONG=0xA). RFC 6455 §5.5:
+// Builds a control frame (CLOSE, PING, PONG). RFC 6455 §5.5:
 // control frames are always FIN=1 and carry at most 125 bytes of payload.
 // Client frames must be masked; server frames must not.
 std::vector<uint8_t> buildControlFrame(uint8_t opcode, bool isClient, std::span<const uint8_t> payload) noexcept
@@ -116,9 +136,9 @@ std::vector<uint8_t> buildControlFrame(uint8_t opcode, bool isClient, std::span<
     const uint8_t len = static_cast<uint8_t>(payload.size());  // caller ensures ≤ 125
 
     std::vector<uint8_t> frame;
-    frame.push_back(0x80 | opcode);  // FIN=1
+    frame.push_back(kFlagFIN | opcode);
     if (isClient) {
-        frame.push_back(0x80 | len);  // MASK=1
+        frame.push_back(kFlagMasked | len);
         std::array<uint8_t, 4> maskKey;
         const uint32_t maskInt = dist(rng);
         std::memcpy(maskKey.data(), &maskInt, 4);
@@ -150,18 +170,18 @@ std::expected<std::optional<DecodedFrame>, scaler::wrapper::uv::Error> tryDecode
 
     const uint8_t byte0  = buffer[0];
     const uint8_t byte1  = buffer[1];
-    const bool fin       = (byte0 & 0x80) != 0;
-    const uint8_t opcode = byte0 & 0x0F;
-    const bool masked    = (byte1 & 0x80) != 0;
-    uint64_t payloadLen  = byte1 & 0x7F;
+    const bool fin       = (byte0 & kFlagFIN) != 0;
+    const uint8_t opcode = byte0 & kMaskOpcode;
+    const bool masked    = (byte1 & kFlagMasked) != 0;
+    uint64_t payloadLen  = byte1 & kMaskLength;
     size_t headerSize    = 2;
 
-    if (payloadLen == 126) {
+    if (payloadLen == kPayloadLen16Bit) {
         if (buffer.size() < 4)
             return std::optional<DecodedFrame> {std::nullopt};
         payloadLen = (uint64_t(buffer[2]) << 8) | buffer[3];
         headerSize = 4;
-    } else if (payloadLen == 127) {
+    } else if (payloadLen == kPayloadLen64Bit) {
         if (buffer.size() < 10)
             return std::optional<DecodedFrame> {std::nullopt};
         payloadLen = 0;
@@ -524,9 +544,9 @@ std::expected<void, scaler::wrapper::uv::Error> WebSocketStream::readStart(
 
                 auto& frame = frameResult->value();
 
-                if (frame.opcode == 0x8) {
+                if (frame.opcode == kOpcodeClose) {
                     // CLOSE: echo a CLOSE frame then signal clean disconnect.
-                    auto closeFrame = buildControlFrame(0x8, !state->_isServer, {});
+                    auto closeFrame = buildControlFrame(kOpcodeClose, !state->_isServer, {});
                     auto frameData  = std::make_shared<std::vector<uint8_t>>(std::move(closeFrame));
                     const std::span<const uint8_t> frameSpan(*frameData);
                     // Best-effort CLOSE echo — connection is shutting down regardless.
@@ -540,12 +560,12 @@ std::expected<void, scaler::wrapper::uv::Error> WebSocketStream::readStart(
                     return;
                 }
 
-                if (frame.opcode == 0x9) {
+                if (frame.opcode == kOpcodePing) {
                     // PING: respond with PONG carrying the same payload (RFC 6455 §5.5.3).
                     auto pongPayload = frame.payload;
-                    if (pongPayload.size() > 125)
-                        pongPayload.resize(125);
-                    auto pongFrame = buildControlFrame(0xA, !state->_isServer, pongPayload);
+                    if (pongPayload.size() > kMaxControlFramePayload)
+                        pongPayload.resize(kMaxControlFramePayload);
+                    auto pongFrame = buildControlFrame(kOpcodePong, !state->_isServer, pongPayload);
                     auto frameData = std::make_shared<std::vector<uint8_t>>(std::move(pongFrame));
                     const std::span<const uint8_t> frameSpan(*frameData);
                     // Best-effort PONG — if this write fails the next read will catch the error.
@@ -557,13 +577,13 @@ std::expected<void, scaler::wrapper::uv::Error> WebSocketStream::readStart(
                     continue;
                 }
 
-                if (frame.opcode == 0xA) {
+                if (frame.opcode == kOpcodePong) {
                     // PONG: unsolicited or in response to our PING — ignore.
                     continue;
                 }
 
                 // Data frames: handle fragmentation per RFC 6455 §5.4.
-                if (frame.opcode == 0x1 || frame.opcode == 0x2) {
+                if (frame.opcode == kOpcodeText || frame.opcode == kOpcodeBinary) {
                     if (frame.fin) {
                         // Complete single-frame message.
                         state->_readCallback(std::span<const uint8_t>(frame.payload));
@@ -571,7 +591,7 @@ std::expected<void, scaler::wrapper::uv::Error> WebSocketStream::readStart(
                         // First fragment — start accumulating.
                         state->_fragmentBuffer = std::move(frame.payload);
                     }
-                } else if (frame.opcode == 0x0) {
+                } else if (frame.opcode == kOpcodeContinuation) {
                     // Continuation frame.
                     state->_fragmentBuffer.insert(
                         state->_fragmentBuffer.end(), frame.payload.begin(), frame.payload.end());
@@ -596,7 +616,7 @@ void WebSocketStream::readStop() noexcept
 std::expected<void, scaler::wrapper::uv::Error> WebSocketStream::shutdown(
     scaler::wrapper::uv::ShutdownCallback callback) noexcept
 {
-    auto closeFrame = buildControlFrame(0x8, !_state->_isServer, {});
+    auto closeFrame = buildControlFrame(kOpcodeClose, !_state->_isServer, {});
     auto frameData  = std::make_shared<std::vector<uint8_t>>(std::move(closeFrame));
     const std::span<const uint8_t> frameSpan(*frameData);
     auto state = _state;
