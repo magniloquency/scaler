@@ -66,23 +66,14 @@ class AddressConfig(ConfigType):
         if socket_type_enum in _TYPES_WITHOUT_PORT:
             return cls(socket_type_enum, host=rest)
 
-        if socket_type_enum == SocketType.tcp:
-            host, port_str = rest.split(":", 1)
-            try:
-                port_int = int(port_str)
-            except ValueError:
-                raise ValueError(f"cannot convert '{port_str}' to port number")
-            return cls(socket_type_enum, host=host, port=port_int)
-
-        if socket_type_enum in {SocketType.ws, SocketType.wss}:
-            slash_pos = rest.find("/")
-            authority = rest if slash_pos == -1 else rest[:slash_pos]
-            path = "/" if slash_pos == -1 else rest[slash_pos:]
+        if socket_type_enum in _TYPES_WITH_PORT:
+            authority, _, path_rest = rest.partition("/")
             host, port_str = authority.rsplit(":", 1)
             try:
                 port_int = int(port_str)
             except ValueError:
                 raise ValueError(f"cannot convert '{port_str}' to port number")
+            path = ("/" + path_rest) if socket_type_enum in {SocketType.ws, SocketType.wss} else None
             return cls(socket_type_enum, host=host, port=port_int, path=path)
 
         raise ValueError(f"Unsupported socket type: {socket_type}")
