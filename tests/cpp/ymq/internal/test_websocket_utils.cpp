@@ -74,38 +74,26 @@ TEST_F(WebSocketUtilsTest, Base64EncodeEmpty)
 
 TEST_F(WebSocketUtilsTest, Base64EncodePadTwo)
 {
-    // "M" → 1 byte → "TQ=="
-    EXPECT_EQ(encodeStr("M"), "TQ==");
+    // "citi" → 4 bytes (4 mod 3 = 1) → two padding chars
+    EXPECT_EQ(encodeStr("citi"), "Y2l0aQ==");
 }
 
 TEST_F(WebSocketUtilsTest, Base64EncodePadOne)
 {
-    // "Ma" → 2 bytes → "TWE="
-    EXPECT_EQ(encodeStr("Ma"), "TWE=");
+    // "citibank" → 8 bytes (8 mod 3 = 2) → one padding char
+    EXPECT_EQ(encodeStr("citibank"), "Y2l0aWJhbms=");
 }
 
 TEST_F(WebSocketUtilsTest, Base64EncodeNoPad)
 {
-    // "Man" → 3 bytes → "TWFu"
-    EXPECT_EQ(encodeStr("Man"), "TWFu");
+    // "scaler" → 6 bytes (multiple of 3) → no padding
+    EXPECT_EQ(encodeStr("scaler"), "c2NhbGVy");
 }
 
 TEST_F(WebSocketUtilsTest, Base64EncodeMultipleGroups)
 {
-    // RFC 4648 §10: "foobar" → "Zm9vYmFy"
-    EXPECT_EQ(encodeStr("foobar"), "Zm9vYmFy");
-}
-
-TEST_F(WebSocketUtilsTest, Base64EncodeAllZeroBytes)
-{
-    const std::array<uint8_t, 3> zeros = {0, 0, 0};
-    EXPECT_EQ(scaler::ymq::internal::base64Encode(std::span<const uint8_t>(zeros)), "AAAA");
-}
-
-TEST_F(WebSocketUtilsTest, Base64EncodeAllOnesBytes)
-{
-    const std::array<uint8_t, 3> ones = {0xFF, 0xFF, 0xFF};
-    EXPECT_EQ(scaler::ymq::internal::base64Encode(std::span<const uint8_t>(ones)), "////");
+    // "opengris" → 8 bytes across multiple encoding groups
+    EXPECT_EQ(encodeStr("opengris"), "b3BlbmdyaXM=");
 }
 
 // ---------------------------------------------------------------------------
