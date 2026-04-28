@@ -34,6 +34,7 @@ class TestWebSocketInterop(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(magic, _MAGIC)
 
             identity_frame = await ws.recv()
+            assert isinstance(identity_frame, bytes)
             self.assertEqual(_decode_message(identity_frame), b"binder")
 
             await ws.send(_encode_message(b"hello from websockets"))
@@ -46,6 +47,7 @@ class TestWebSocketInterop(unittest.IsolatedAsyncioTestCase):
             await binder.send_message("py-ws-client", Bytes(b"hello from ymq"))
 
             reply_frame = await ws.recv()
+            assert isinstance(reply_frame, bytes)
             self.assertEqual(_decode_message(reply_frame), b"hello from ymq")
 
     async def test_websocket_server_ymq_client(self):
@@ -56,18 +58,20 @@ class TestWebSocketInterop(unittest.IsolatedAsyncioTestCase):
         async def handle(ws: websockets.asyncio.server.ServerConnection) -> None:
             self.assertEqual(await ws.recv(), _MAGIC)
             identity_frame = await ws.recv()
+            assert isinstance(identity_frame, bytes)
             self.assertEqual(_decode_message(identity_frame), b"connector")
 
             await ws.send(_MAGIC)
             await ws.send(_encode_message(b"py-ws-server"))
 
             msg_frame = await ws.recv()
+            assert isinstance(msg_frame, bytes)
             received.set_result(_decode_message(msg_frame))
 
             await ws.send(_encode_message(await ymq_recv))
 
         async with websockets.asyncio.server.serve(handle, "127.0.0.1", 0) as server:
-            port = server.sockets[0].getsockname()[1]
+            port = next(iter(server.sockets)).getsockname()[1]
 
             ctx = IOContext()
             connector = await ConnectorSocket.async_connect(ctx, "connector", f"ws://127.0.0.1:{port}/")
