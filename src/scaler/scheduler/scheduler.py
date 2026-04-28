@@ -3,7 +3,7 @@ import logging
 
 from scaler.config.defaults import CLEANUP_INTERVAL_SECONDS, STATUS_REPORT_INTERVAL_SECONDS
 from scaler.config.section.scheduler import SchedulerConfig
-from scaler.config.types.address import AddressConfig, SocketType
+from scaler.config.types.address import AddressConfig
 from scaler.io.mixins import AsyncBinder, AsyncObjectStorageConnector, AsyncPublisher
 from scaler.io.network_backends import get_network_backend_from_env
 from scaler.io.utility import generate_identity_from_name
@@ -152,15 +152,7 @@ class Scheduler:
         address = self._address
         assert address.port is not None, "scheduler bind address must have a port"
 
-        if address.type in {SocketType.ws, SocketType.wss}:
-            default_monitor = AddressConfig(
-                type=address.type,
-                host=address.host,
-                port=address.port + 2,
-                path=address.path,
-            )
-        else:
-            default_monitor = AddressConfig(type=SocketType.tcp, host=address.host, port=address.port + 2)
+        default_monitor = AddressConfig(type=address.type, host=address.host, port=address.port + 2, path=address.path)
 
         monitor_address = self._config_controller.get_config("monitor_address") or default_monitor
 
