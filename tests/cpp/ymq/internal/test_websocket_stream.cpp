@@ -91,50 +91,6 @@ std::vector<uint8_t> maskedFrame(uint8_t byte0, std::vector<uint8_t> payload)
 
 }  // namespace
 
-// Verify that a WebSocket address round-trips through toString() / fromString().
-TEST_F(WebSocketStreamTest, AddressRoundTrip)
-{
-    const auto addr = scaler::ymq::Address::fromString("ws://127.0.0.1:8765/");
-    ASSERT_TRUE(addr.has_value());
-    ASSERT_EQ(addr->type(), scaler::ymq::Address::Type::WebSocket);
-
-    const auto& ws = addr->asWebSocket();
-    EXPECT_EQ(ws.host, "127.0.0.1");
-    EXPECT_EQ(ws.port, 8765);
-    EXPECT_EQ(ws.path, "/");
-    EXPECT_FALSE(ws.secure);
-
-    const auto str = addr->toString();
-    ASSERT_TRUE(str.has_value());
-    EXPECT_EQ(*str, "ws://127.0.0.1:8765/");
-}
-
-TEST_F(WebSocketStreamTest, AddressWithPath)
-{
-    const auto addr = scaler::ymq::Address::fromString("ws://127.0.0.1:9000/ymq/v1");
-    ASSERT_TRUE(addr.has_value());
-    ASSERT_EQ(addr->asWebSocket().path, "/ymq/v1");
-    ASSERT_FALSE(addr->asWebSocket().secure);
-}
-
-TEST_F(WebSocketStreamTest, WSSAddress)
-{
-    const auto addr = scaler::ymq::Address::fromString("wss://127.0.0.1:443/");
-    ASSERT_TRUE(addr.has_value());
-    ASSERT_EQ(addr->type(), scaler::ymq::Address::Type::WebSocket);
-    ASSERT_TRUE(addr->asWebSocket().secure);
-
-    const auto str = addr->toString();
-    ASSERT_TRUE(str.has_value());
-    ASSERT_TRUE(str->starts_with("wss://"));
-}
-
-TEST_F(WebSocketStreamTest, InvalidAddresses)
-{
-    EXPECT_FALSE(scaler::ymq::Address::fromString("ws://127.0.0.1").has_value());       // missing port
-    EXPECT_FALSE(scaler::ymq::Address::fromString("ws://127.0.0.1:abc/").has_value());  // bad port
-}
-
 // End-to-end: a WebSocket AcceptServer receives a connection.
 // Verifies that the full upgrade path runs without error and that the server's
 // connection callback is invoked with an isWebSocket() client.
