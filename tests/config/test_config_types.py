@@ -39,6 +39,34 @@ class TestConfigTypes(unittest.TestCase):
         cfg = AddressConfig.from_string("ipc://a-valid-path")
         self.assertEqual(cfg.host, "a-valid-path")
 
+    def test_address_config_ws(self):
+        cfg = AddressConfig.from_string("ws://127.0.0.1:8765/")
+        self.assertEqual(cfg.host, "127.0.0.1")
+        self.assertEqual(cfg.port, 8765)
+        self.assertEqual(cfg.path, "/")
+        self.assertEqual(str(cfg), "ws://127.0.0.1:8765/")
+
+    def test_address_config_ws_with_path(self):
+        cfg = AddressConfig.from_string("ws://127.0.0.1:9000/ymq/v1")
+        self.assertEqual(cfg.path, "/ymq/v1")
+        self.assertEqual(str(cfg), "ws://127.0.0.1:9000/ymq/v1")
+
+    def test_address_config_wss(self):
+        cfg = AddressConfig.from_string("wss://example.com:443/ymq")
+        self.assertEqual(cfg.host, "example.com")
+        self.assertEqual(cfg.port, 443)
+        self.assertEqual(cfg.path, "/ymq")
+        self.assertEqual(str(cfg), "wss://example.com:443/ymq")
+
+    def test_address_config_ws_default_path(self):
+        cfg = AddressConfig.from_string("ws://127.0.0.1:8765")
+        self.assertEqual(cfg.path, "/")
+        self.assertEqual(str(cfg), "ws://127.0.0.1:8765/")
+
+    def test_address_config_ws_invalid(self):
+        with self.assertRaises(ValueError):
+            AddressConfig.from_string("ws://127.0.0.1")
+
     def test_worker_names_config_value(self):
         """Test the WorkerNames ConfigType class."""
         wn = WorkerNames.from_string(" worker1 , worker2 ")
