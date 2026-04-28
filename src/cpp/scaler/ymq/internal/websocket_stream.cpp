@@ -512,6 +512,90 @@ std::expected<void, scaler::wrapper::uv::Error> WebSocketStream::write(
     return {};
 }
 
+void WebSocketStream::onRead(
+    std::shared_ptr<State> state, std::expected<std::span<const uint8_t>, scaler::wrapper::uv::Error> result) noexcept
+{
+    if (!result.has_value()) {
+        if (state->_readActive && state->_readCallback) {
+            state->_readCallback(std::unexpected(result.error()));
+        }
+        return;
+    }
+
+    const auto& data = result.value();
+    state->_recvBuffer.insert(state->_recvBuffer.end(), data.begin(), data.end());
+
+    while (state->_readActive && !state->_recvBuffer.empty()) {
+        auto frameResult = tryDecodeFrame(state->_recvBuffer);
+        if (!frameResult.has_value()) {
+            state->_readCallback(std::unexpected(frameResult.error()));
+            return;
+        }
+        if (!frameResult->has_value())
+            break;  // need more data
+
+        auto& frame = frameResult->value();
+
+        if (frame.opcode == kOpcodeClose) {
+            // CLOSE: echo a CLOSE frame then signal clean disconnect.
+            auto closeFrame = buildControlFrame(kOpcodeClose, !state->_isServer, {});
+            auto frameData  = std::make_shared<std::vector<uint8_t>>(std::move(closeFrame));
+            const std::span<const uint8_t> frameSpan(*frameData);
+            // Best-effort CLOSE echo — connection is shutting down regardless.
+            if (auto r = state->_socket.write(
+                    std::span<const std::span<const uint8_t>>(&frameSpan, 1),
+                    [frameData = std::move(frameData)](std::expected<void, scaler::wrapper::uv::Error>) {});
+                !r.has_value()) {
+            }
+            if (state->_readActive && state->_readCallback)
+                state->_readCallback(std::unexpected(scaler::wrapper::uv::Error {UV_EOF}));
+            return;
+        }
+
+        if (frame.opcode == kOpcodePing) {
+            // PING: respond with PONG carrying the same payload (RFC 6455 §5.5.3).
+            auto pongPayload = frame.payload;
+            if (pongPayload.size() > kMaxControlFramePayload)
+                pongPayload.resize(kMaxControlFramePayload);
+            auto pongFrame = buildControlFrame(kOpcodePong, !state->_isServer, pongPayload);
+            auto frameData = std::make_shared<std::vector<uint8_t>>(std::move(pongFrame));
+            const std::span<const uint8_t> frameSpan(*frameData);
+            // Best-effort PONG — if this write fails the next read will catch the error.
+            if (auto r = state->_socket.write(
+                    std::span<const std::span<const uint8_t>>(&frameSpan, 1),
+                    [frameData = std::move(frameData)](std::expected<void, scaler::wrapper::uv::Error>) {});
+                !r.has_value()) {
+            }
+            continue;
+        }
+
+        if (frame.opcode == kOpcodePong) {
+            // PONG: unsolicited or in response to our PING — ignore.
+            continue;
+        }
+
+        // Data frames: handle fragmentation per RFC 6455 §5.4.
+        if (frame.opcode == kOpcodeText || frame.opcode == kOpcodeBinary) {
+            if (frame.fin) {
+                // Complete single-frame message.
+                state->_readCallback(std::span<const uint8_t>(frame.payload));
+            } else {
+                // First fragment — start accumulating.
+                state->_fragmentBuffer = std::move(frame.payload);
+            }
+        } else if (frame.opcode == kOpcodeContinuation) {
+            // Continuation frame.
+            state->_fragmentBuffer.insert(state->_fragmentBuffer.end(), frame.payload.begin(), frame.payload.end());
+            if (frame.fin) {
+                // Final fragment — deliver assembled message.
+                state->_readCallback(std::span<const uint8_t>(state->_fragmentBuffer));
+                state->_fragmentBuffer.clear();
+            }
+        }
+        // Reserved opcodes are silently ignored.
+    }
+}
+
 std::expected<void, scaler::wrapper::uv::Error> WebSocketStream::readStart(
     scaler::wrapper::uv::ReadCallback callback) noexcept
 {
@@ -521,86 +605,7 @@ std::expected<void, scaler::wrapper::uv::Error> WebSocketStream::readStart(
 
     return state->_socket.readStart(
         [state](std::expected<std::span<const uint8_t>, scaler::wrapper::uv::Error> result) mutable {
-            if (!result.has_value()) {
-                if (state->_readActive && state->_readCallback) {
-                    state->_readCallback(std::unexpected(result.error()));
-                }
-                return;
-            }
-
-            const auto& data = result.value();
-            state->_recvBuffer.insert(state->_recvBuffer.end(), data.begin(), data.end());
-
-            while (state->_readActive && !state->_recvBuffer.empty()) {
-                auto frameResult = tryDecodeFrame(state->_recvBuffer);
-                if (!frameResult.has_value()) {
-                    state->_readCallback(std::unexpected(frameResult.error()));
-                    return;
-                }
-                if (!frameResult->has_value())
-                    break;  // need more data
-
-                auto& frame = frameResult->value();
-
-                if (frame.opcode == kOpcodeClose) {
-                    // CLOSE: echo a CLOSE frame then signal clean disconnect.
-                    auto closeFrame = buildControlFrame(kOpcodeClose, !state->_isServer, {});
-                    auto frameData  = std::make_shared<std::vector<uint8_t>>(std::move(closeFrame));
-                    const std::span<const uint8_t> frameSpan(*frameData);
-                    // Best-effort CLOSE echo — connection is shutting down regardless.
-                    if (auto r = state->_socket.write(
-                            std::span<const std::span<const uint8_t>>(&frameSpan, 1),
-                            [frameData = std::move(frameData)](std::expected<void, scaler::wrapper::uv::Error>) {});
-                        !r.has_value()) {
-                    }
-                    if (state->_readActive && state->_readCallback)
-                        state->_readCallback(std::unexpected(scaler::wrapper::uv::Error {UV_EOF}));
-                    return;
-                }
-
-                if (frame.opcode == kOpcodePing) {
-                    // PING: respond with PONG carrying the same payload (RFC 6455 §5.5.3).
-                    auto pongPayload = frame.payload;
-                    if (pongPayload.size() > kMaxControlFramePayload)
-                        pongPayload.resize(kMaxControlFramePayload);
-                    auto pongFrame = buildControlFrame(kOpcodePong, !state->_isServer, pongPayload);
-                    auto frameData = std::make_shared<std::vector<uint8_t>>(std::move(pongFrame));
-                    const std::span<const uint8_t> frameSpan(*frameData);
-                    // Best-effort PONG — if this write fails the next read will catch the error.
-                    if (auto r = state->_socket.write(
-                            std::span<const std::span<const uint8_t>>(&frameSpan, 1),
-                            [frameData = std::move(frameData)](std::expected<void, scaler::wrapper::uv::Error>) {});
-                        !r.has_value()) {
-                    }
-                    continue;
-                }
-
-                if (frame.opcode == kOpcodePong) {
-                    // PONG: unsolicited or in response to our PING — ignore.
-                    continue;
-                }
-
-                // Data frames: handle fragmentation per RFC 6455 §5.4.
-                if (frame.opcode == kOpcodeText || frame.opcode == kOpcodeBinary) {
-                    if (frame.fin) {
-                        // Complete single-frame message.
-                        state->_readCallback(std::span<const uint8_t>(frame.payload));
-                    } else {
-                        // First fragment — start accumulating.
-                        state->_fragmentBuffer = std::move(frame.payload);
-                    }
-                } else if (frame.opcode == kOpcodeContinuation) {
-                    // Continuation frame.
-                    state->_fragmentBuffer.insert(
-                        state->_fragmentBuffer.end(), frame.payload.begin(), frame.payload.end());
-                    if (frame.fin) {
-                        // Final fragment — deliver assembled message.
-                        state->_readCallback(std::span<const uint8_t>(state->_fragmentBuffer));
-                        state->_fragmentBuffer.clear();
-                    }
-                }
-                // Reserved opcodes are silently ignored.
-            }
+            onRead(state, std::move(result));
         });
 }
 
