@@ -628,7 +628,7 @@ std::expected<void, scaler::wrapper::uv::Error> WebSocketStream::shutdown(
     auto callbackPtr = std::make_shared<scaler::wrapper::uv::ShutdownCallback>(std::move(callback));
 
     auto result = _state->_socket.write(
-        std::span<const std::span<const uint8_t>>(&frameSpan, 1),
+        frameSpan,
         [state, frameData = std::move(frameData), callbackPtr](
             std::expected<void, scaler::wrapper::uv::Error> writeErr) mutable {
             if (!writeErr.has_value()) {
