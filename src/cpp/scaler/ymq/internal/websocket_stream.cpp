@@ -391,8 +391,9 @@ void WebSocketStream::upgradeAsClient(
             auto readStartResult = ctx->socket->readStart(
                 [ctx](std::expected<std::span<const uint8_t>, scaler::wrapper::uv::Error> readResult) mutable {
                     if (!readResult.has_value()) {
+                        auto safeCtx = ctx;
                         ctx->socket->readStop();
-                        ctx->callback(std::unexpected(readResult.error()));
+                        safeCtx->callback(std::unexpected(readResult.error()));
                         return;
                     }
 
@@ -400,8 +401,9 @@ void WebSocketStream::upgradeAsClient(
                     ctx->recvBuffer.insert(ctx->recvBuffer.end(), data.begin(), data.end());
 
                     if (ctx->recvBuffer.size() > kMaxUpgradeHeaderSize) {
+                        auto safeCtx = ctx;
                         ctx->socket->readStop();
-                        ctx->callback(std::unexpected(scaler::wrapper::uv::Error {UV_EPROTO}));
+                        safeCtx->callback(std::unexpected(scaler::wrapper::uv::Error {UV_EPROTO}));
                         return;
                     }
 
