@@ -13,6 +13,9 @@
 #include "scaler/ymq/address.h"
 #include "scaler/ymq/internal/websocket_utils.h"
 
+// Split large payloads into 1 MiB frames so the receiver can decode and deliver
+// each chunk without accumulating the entire payload before the first delivery.
+static constexpr size_t MAX_FRAME_PAYLOAD = 1024 * 1024;
 
 WebSocketSocket::WebSocketSocket(long long fd, bool isServer): _fd(fd), _isServer(isServer)
 {
@@ -79,9 +82,6 @@ void WebSocketSocket::rawReadExact(void* buffer, size_t size) const
 
 void WebSocketSocket::sendFrame(const void* data, size_t size) const
 {
-    // Split large payloads into 1 MiB frames so the receiver can decode and deliver
-    // each chunk without accumulating the entire payload before the first delivery.
-    static constexpr size_t MAX_FRAME_PAYLOAD = 1024 * 1024;
     if (size > MAX_FRAME_PAYLOAD) {
         const auto* bytes = static_cast<const uint8_t*>(data);
         for (size_t offset = 0; offset < size; offset += MAX_FRAME_PAYLOAD) {
