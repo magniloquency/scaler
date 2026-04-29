@@ -39,7 +39,7 @@ function useFormState() {
   const [region, setRegion]               = useState("us-east-1");
   const [accessKeyId, setAccessKeyId]     = useState("");
   const [secretKey, setSecretKey]         = useState("");
-  const [schedulerType, setSchedulerType] = useState("c5.xlarge");
+  const [schedulerType] = useState("c5.xlarge");
   const [workerType, setWorkerType]       = useState("g4dn.xlarge");
   const [capMode, setCapMode]             = useState("instances");
   const [instanceCap, setInstanceCap]     = useState(4);
@@ -70,7 +70,7 @@ function useFormState() {
   const reset = () => setPhase("idle");
 
   return { region, setRegion, accessKeyId, setAccessKeyId, secretKey, setSecretKey,
-           schedulerType, schedulerInst, workerType, setWorkerType,
+           schedulerInst, workerType, setWorkerType,
            capMode, setCapMode, instanceCap, setInstanceCap, budgetCap, setBudgetCap,
            derivedInstanceCount, workerCount, workersCostPerHr, totalCostPerHr,
            requirements, setRequirements,
@@ -324,7 +324,7 @@ function App() {
           <div style={{ animation: "fadeSlideIn 0.3s ease", display: "flex", flexDirection: "column", gap: 16 }}>
             <TerminalWindow
               lines={f.lines}
-              config={{ schedulerType: f.schedulerType, workerType: f.workerType, region: f.region }}
+              config={{ schedulerType: "c5.xlarge", workerType: f.workerType, region: f.region }}
             />
             <DeployDetails visible={f.phase === "done"} />
           </div>
