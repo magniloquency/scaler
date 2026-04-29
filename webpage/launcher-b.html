@@ -108,8 +108,48 @@ function buildUserData(cfg, creds) {
     ? "\nmax_task_concurrency = " + cfg.workerMaxConcurrency : "";
   var tagLine  = '\ninstance_tags = {Name = "scaler-worker-' + cfg.nameSuffix + '"}';
   var dbgLine  = cfg.debugDumpPath ? '\ndebug_dump_path = "' + cfg.debugDumpPath + '"' : "";
-  var gitLine  = cfg.scalerPackage.indexOf("git+") >= 0 ? "dnf install -y git\n" : "";
   var req      = cfg.workerRequirements.trim();
+
+  var isGitInstall = cfg.scalerPackage.indexOf("git+") >= 0;
+
+  // When installing from a git repo, the C++ extension must be compiled from source.
+  // AL2023 defaults to GCC 11 (no C++23 <expected>); Cap'n Proto must be built manually.
+  var gitBuildLines = "";
+  var scalerInstallLine = "uv pip install '" + cfg.scalerPackage + "'\n";
+  if (isGitInstall) {
+    // Extract the bare https:// clone URL and optional branch from the pip spec.
+    // Spec form: "opengris-scaler[all] @ git+https://github.com/org/repo@branch"
+    var gitPlusIdx  = cfg.scalerPackage.indexOf("git+");
+    var rawUrl      = cfg.scalerPackage.slice(gitPlusIdx + 4); // strip "git+"
+    var atIdx       = rawUrl.lastIndexOf("@");
+    var cloneUrl    = atIdx >= 0 ? rawUrl.slice(0, atIdx) : rawUrl;
+    var cloneBranch = atIdx >= 0 ? rawUrl.slice(atIdx + 1) : "";
+    var cloneCmd    = cloneBranch
+      ? "git clone -b " + cloneBranch + " --depth 1 " + cloneUrl + " /opt/scaler-src\n"
+      : "git clone --depth 1 " + cloneUrl + " /opt/scaler-src\n";
+
+    gitBuildLines =
+      "# C++ build deps: GCC 14 (required for C++23 <expected>) + Cap'n Proto toolchain\n" +
+      "dnf install -y git gcc14 gcc14-c++ gcc14-libstdc++-devel autoconf automake libtool libuv-devel\n\n" +
+      "# Clone repo to access build scripts\n" +
+      cloneCmd +
+      "\n# Build and install Cap'n Proto via the vendored build script\n" +
+      "cd /opt/scaler-src\n" +
+      "CC=/usr/bin/gcc14-gcc CXX=/usr/bin/gcc14-g++ bash scripts/library_tool.sh capnp download\n" +
+      "CC=/usr/bin/gcc14-gcc CXX=/usr/bin/gcc14-g++ bash scripts/library_tool.sh capnp compile\n" +
+      "bash scripts/library_tool.sh capnp install\n" +
+      "cd /\n\n" +
+      "# AL2023 excludes /usr/local/lib from ldconfig by default\n" +
+      "echo '/usr/local/lib' > /etc/ld.so.conf.d/local.conf\n" +
+      "ldconfig\n\n";
+
+    // scikit-build-core spawns CMake in an isolated env — CC/CXX are not forwarded,
+    // must pass via CMAKE_ARGS. Static libuv.a lacks -fPIC on AL2023; force shared via pkg-config.
+    scalerInstallLine =
+      "PKG_CONFIG_PATH=/usr/local/lib/pkgconfig \\\n" +
+      "CMAKE_ARGS='-DCMAKE_C_COMPILER=/usr/bin/gcc14-gcc -DCMAKE_CXX_COMPILER=/usr/bin/gcc14-g++ -DCMAKE_DISABLE_FIND_PACKAGE_libuv=TRUE' \\\n" +
+      "  uv pip install '" + cfg.scalerPackage + "'\n";
+  }
 
   // $IMDS_TOKEN / $PUBLIC_IP / $PRIVATE_IP / $! are bash variables — they appear literally in the
   // output string and are expanded by bash at runtime on the EC2 instance.
@@ -118,12 +158,12 @@ function buildUserData(cfg, creds) {
     "PUBLIC_IP=$(curl -sf -H \"X-aws-ec2-metadata-token: $IMDS_TOKEN\" http://169.254.169.254/latest/meta-data/public-ipv4)\n" +
     "PRIVATE_IP=$(curl -sf -H \"X-aws-ec2-metadata-token: $IMDS_TOKEN\" http://169.254.169.254/latest/meta-data/local-ipv4)\n\n" +
     "export HOME=/root\n" +
-    gitLine +
+    gitBuildLines +
     "curl -LsSf https://astral.sh/uv/install.sh | sh\n" +
     "source /root/.local/bin/env\n\n" +
     "uv venv --python " + cfg.pythonVersion + " /opt/scaler-venv\n" +
     "source /opt/scaler-venv/bin/activate\n" +
-    "uv pip install '" + cfg.scalerPackage + "'\n" +
+    scalerInstallLine +
     "uv pip install --upgrade orb-py\n\n" +
     // WORKAROUND: ORB worker manager bug — does not pick up instance-profile credentials
     // correctly, so we write them explicitly to ~/.aws/config. Remove once fixed in orb-py.
