@@ -266,6 +266,7 @@ class ORBAWSEC2WorkerAdapter:
             security_group_ids=security_group_ids,
             key_name=key_name,
             user_data=user_data,
+            tags=self._config.instance_tags,
         )
         logging.info(f"create_template result: {create_result}")
 
