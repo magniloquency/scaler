@@ -56,6 +56,15 @@ class ORBAWSEC2WorkerAdapterConfig(ConfigClass):
                     "Both --python-version and --requirements-txt must be provided when --image-id is not specified"
                 )
 
+    aws_profile: Optional[str] = dataclasses.field(
+        default=None,
+        metadata=dict(
+            help=(
+                "AWS named profile to use for authentication. "
+                "Leave unset to use the default credential chain (env vars, instance role, etc.)."
+            )
+        ),
+    )
     key_name: Optional[str] = dataclasses.field(
         default=None, metadata=dict(help="AWS key pair name for the instances (optional)")
     )
@@ -79,4 +88,8 @@ class ORBAWSEC2WorkerAdapterConfig(ConfigClass):
             type=lambda s: dict(kv.split("=", 1) for kv in s.split(",") if "=" in kv),
             help="Comma-separated Key=Value EC2 tags applied to worker instances (e.g. 'Name=my-worker,Env=prod')",
         ),
+    )
+    debug_dump_path: Optional[str] = dataclasses.field(
+        default=None,
+        metadata=dict(help="If set, dump config and template kwargs as JSON files to this directory for debugging"),
     )

@@ -114,6 +114,7 @@ class ProvisionConfig:
     poll_interval: int
     ami_id: Optional[str]  # None → auto-discover latest AL2023 x86_64
     name_suffix: str
+    debug_dump_path: Optional[str] = None
 
 
 @dataclass
@@ -208,6 +209,15 @@ def _latest_al2023_ami(ec2_client) -> str:
     return images[-1]["ImageId"]
 
 
+def _git_pip_url(git_ref: str, extras: str = "[all]") -> str:
+    """Convert 'owner/repo[@ref]' to a pip-installable PEP 440 git URL."""
+    repo, _, ref = git_ref.partition("@")
+    url = f"git+https://github.com/{repo}"
+    if ref:
+        url += f"@{ref}"
+    return f"opengris-scaler{extras} @ {url}"
+
+
 def _build_user_data(config: ProvisionConfig) -> str:
     """Return a bash user-data script that installs and starts scaler.
 
@@ -225,8 +235,12 @@ def _build_user_data(config: ProvisionConfig) -> str:
         f"\nmax_task_concurrency = {config.worker_max_concurrency}" if config.worker_max_concurrency is not None else ""
     )
     instance_tags_line = f'\ninstance_tags = {{Name = "scaler-worker-{config.name_suffix}"}}'
+    debug_dump_path_line = (
+        f'\ndebug_dump_path = "{config.debug_dump_path}"' if config.debug_dump_path is not None else ""
+    )
 
     req_block = config.worker_requirements.strip()
+    git_install_line = "dnf install -y git\n" if "git+" in config.scaler_package else ""
 
     # f'''...''' lets """ appear freely inside without ending the string.
     return f'''\
@@ -238,7 +252,7 @@ PUBLIC_IP=$(curl -sf -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.1
 PRIVATE_IP=$(curl -sf -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.169.254/latest/meta-data/local-ipv4)
 
 export HOME=/root
-curl -LsSf https://astral.sh/uv/install.sh | sh
+{git_install_line}curl -LsSf https://astral.sh/uv/install.sh | sh
 source /root/.local/bin/env
 
 uv venv --python {config.python_version} /opt/scaler-venv
@@ -269,7 +283,7 @@ requirements_txt = """
 """
 instance_type = "{config.worker_instance_type}"
 aws_region = "{config.region}"
-logging_level = "INFO"{concurrency_line}{instance_tags_line}
+logging_level = "INFO"{concurrency_line}{instance_tags_line}{debug_dump_path_line}
 CONFIG_EOF
 
 /opt/scaler-venv/bin/scaler /opt/scaler/config.toml >> /var/log/scaler.log 2>&1 &
@@ -387,12 +401,15 @@ def _ignore_not_found(fn) -> None:
 # ---------------------------------------------------------------------------
 
 
-def provision(config: ProvisionConfig) -> ProvisionState:
+def provision(config: ProvisionConfig, state_file: Optional[Path] = None) -> ProvisionState:
     """Provision an EC2 instance running OpenGRIS Scaler and return its state.
 
     All side effects (AWS resource creation, key file write) are performed here.
     Raises ProvisionError on failure, which carries the partial state dict so the
     caller can persist it for later cleanup.
+
+    If state_file is given, the full state is written there as soon as all resource
+    IDs and addresses are known — before waiting for the scheduler to come online.
     """
     session = boto3.Session(region_name=config.region)
     ec2 = session.client("ec2")
@@ -497,7 +514,7 @@ def provision(config: ProvisionConfig) -> ProvisionState:
         print(f"Public IP:  {public_ip}", file=sys.stderr)
         print(f"Private IP: {private_ip}", file=sys.stderr)
 
-        # 7. Build client-facing addresses
+        # 7. Build client-facing addresses and persist state immediately
         ws_slash = "/" if config.transport == "ws" else ""
         scheduler_address = f"{config.transport}://{public_ip}:{config.scheduler_port}{ws_slash}"
         object_storage_address = f"{config.transport}://{public_ip}:{config.object_storage_port}{ws_slash}"
@@ -509,22 +526,7 @@ def provision(config: ProvisionConfig) -> ProvisionState:
             object_storage_address=object_storage_address,
         )
 
-        # 8. Poll until the scheduler port accepts connections
-        print(
-            f"Waiting up to {config.poll_timeout}s for scheduler " f"at {public_ip}:{config.scheduler_port}...",
-            file=sys.stderr,
-        )
-        ready = _wait_for_scheduler(
-            config.transport, public_ip, config.scheduler_port, config.poll_timeout, config.poll_interval
-        )
-        if not ready:
-            raise RuntimeError(
-                f"Scheduler did not become reachable within {config.poll_timeout}s. "
-                "SSH into the instance and check /var/log/scaler.log for details."
-            )
-        print("Scheduler is reachable.", file=sys.stderr)
-
-        return ProvisionState(
+        state = ProvisionState(
             region=config.region,
             name_suffix=suffix,
             instance_id=instance_id,
@@ -541,6 +543,26 @@ def provision(config: ProvisionConfig) -> ProvisionState:
             iam=iam_state,
             worker_name=f"scaler-worker-{suffix}",
         )
+        if state_file is not None:
+            state_file.write_text(json.dumps(state.to_dict(), indent=2))
+            print(f"State written to {state_file}", file=sys.stderr)
+
+        # 8. Poll until the scheduler port accepts connections
+        print(
+            f"Waiting up to {config.poll_timeout}s for scheduler at {public_ip}:{config.scheduler_port}...",
+            file=sys.stderr,
+        )
+        ready = _wait_for_scheduler(
+            config.transport, public_ip, config.scheduler_port, config.poll_timeout, config.poll_interval
+        )
+        if not ready:
+            raise RuntimeError(
+                f"Scheduler did not become reachable within {config.poll_timeout}s. "
+                "SSH into the instance and check /var/log/scaler.log for details."
+            )
+        print("Scheduler is reachable.", file=sys.stderr)
+
+        return state
 
     except Exception as exc:
         raise ProvisionError(str(exc), partial) from exc
@@ -644,6 +666,13 @@ def _build_cli() -> argparse.ArgumentParser:
     install.add_argument(
         "--scaler-package", default="opengris-scaler[all]", help="pip package spec for scaler on the scheduler instance"
     )
+    install.add_argument(
+        "--scaler-git",
+        metavar="OWNER/REPO[@REF]",
+        help="Install scaler from a GitHub repo/branch instead of PyPI "
+        "(e.g. finos/opengris-scaler@my-branch). Mutually exclusive with --scaler-package. "
+        "Also used as the default worker scaler requirement unless --worker-requirements is given.",
+    )
 
     # Transport
     transport = parser.add_argument_group("Transport")
@@ -676,6 +705,12 @@ def _build_cli() -> argparse.ArgumentParser:
         type=int,
         help="max_task_concurrency for the ORB worker manager "
         "(controls total number of worker slots across all instances)",
+    )
+    wm.add_argument(
+        "--debug-dump-path",
+        metavar="DIR",
+        help="Directory on the scheduler instance where the ORB worker manager writes "
+        "debug JSON dumps of its config and template (e.g. /tmp). Omit to disable.",
     )
 
     # Polling
@@ -724,13 +759,23 @@ def main() -> None:
     if not region:
         parser.error("Could not determine AWS region. Pass --region or configure the AWS CLI / environment.")
 
-    worker_requirements = "\n".join(args.worker_requirements) if args.worker_requirements else "opengris-scaler[all]"
+    if args.scaler_git and args.scaler_package != "opengris-scaler[all]":
+        parser.error("--scaler-git and --scaler-package are mutually exclusive")
+
+    if args.scaler_git:
+        scaler_package = _git_pip_url(args.scaler_git)
+        default_worker_req = _git_pip_url(args.scaler_git)
+    else:
+        scaler_package = args.scaler_package
+        default_worker_req = "opengris-scaler[all]"
+
+    worker_requirements = "\n".join(args.worker_requirements) if args.worker_requirements else default_worker_req
 
     config = ProvisionConfig(
         region=region,
         instance_type=args.instance_type,
         python_version=args.python_version,
-        scaler_package=args.scaler_package,
+        scaler_package=scaler_package,
         transport=args.transport,
         scheduler_port=args.scheduler_port,
         object_storage_port=args.object_storage_port,
@@ -744,14 +789,12 @@ def main() -> None:
         poll_interval=args.poll_interval,
         ami_id=args.ami_id,
         name_suffix=suffix,
+        debug_dump_path=args.debug_dump_path,
     )
 
     try:
-        state = provision(config)
-        output = json.dumps(state.to_dict(), indent=2)
-        print(output)
-        state_file.write_text(output)
-        print(f"\nState written to {state_file}", file=sys.stderr)
+        state = provision(config, state_file=state_file)
+        print(json.dumps(state.to_dict(), indent=2))
     except ProvisionError as exc:
         print(f"\nError during provisioning: {exc}", file=sys.stderr)
         if exc.partial_state:
