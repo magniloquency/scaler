@@ -19,7 +19,9 @@
     @keyframes fadeSlideIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
     @keyframes launchPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(0,255,136,0.4); } 50% { box-shadow: 0 0 0 12px rgba(0,255,136,0); } }
 
-    input[type=number]::-webkit-inner-spin-button { opacity: 0.4; }
+    input[type=number] { -moz-appearance: textfield; }
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
     ::-webkit-scrollbar { width: 4px; height: 4px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: rgba(0,200,224,0.2); border-radius: 2px; }
@@ -55,7 +57,8 @@ function useFormState() {
     : Math.max(0, Math.floor((budgetCap - schedulerInst.price) / (workerInst.price || 1)));
 
   const workerCount    = derivedInstanceCount * workerInst.vcpu;
-  const totalCostPerHr = schedulerInst.price + derivedInstanceCount * workerInst.price;
+  const workersCostPerHr   = derivedInstanceCount * workerInst.price;
+  const totalCostPerHr     = schedulerInst.price + workersCostPerHr;
 
   const launch = useCallback(() => {
     if (phase !== "idle") return;
@@ -67,16 +70,66 @@ function useFormState() {
   const reset = () => setPhase("idle");
 
   return { region, setRegion, accessKeyId, setAccessKeyId, secretKey, setSecretKey,
-           schedulerType, workerType, setWorkerType,
+           schedulerType, schedulerInst, workerType, setWorkerType,
            capMode, setCapMode, instanceCap, setInstanceCap, budgetCap, setBudgetCap,
-           derivedInstanceCount, workerCount, totalCostPerHr,
+           derivedInstanceCount, workerCount, workersCostPerHr, totalCostPerHr,
            requirements, setRequirements,
            phase, launch, reset, lines };
 }
 
+function NumericStepper({ value, onChange, min = 0, max = Infinity, step = 1, width = 56 }) {
+  const btnStyle = (side) => ({
+    width: 28, height: "100%",
+    background: "transparent",
+    border: "none",
+    borderLeft:  side === "plus"  ? "1px solid rgba(0,200,224,0.15)" : "none",
+    borderRight: side === "minus" ? "1px solid rgba(0,200,224,0.15)" : "none",
+    color: "oklch(0.62 0.1 200)",
+    fontFamily: "inherit",
+    fontSize: 16,
+    lineHeight: 1,
+    cursor: "pointer",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    flexShrink: 0,
+    transition: "background 0.12s, color 0.12s",
+    padding: 0,
+  });
+  const [hov, setHov] = React.useState(null);
+  return (
+    <div style={{ display: "flex", alignItems: "stretch", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(0,200,224,0.15)", borderRadius: 3, height: 36, overflow: "hidden" }}>
+      <button
+        style={{ ...btnStyle("minus"), background: hov === "minus" ? "rgba(0,200,224,0.1)" : "transparent" }}
+        onMouseEnter={() => setHov("minus")} onMouseLeave={() => setHov(null)}
+        onClick={() => onChange(Math.max(min, value - step))}
+      >−</button>
+      <input
+        type="number"
+        value={value}
+        onChange={e => { const v = parseFloat(e.target.value); if (!isNaN(v)) onChange(Math.min(max, Math.max(min, v))); }}
+        style={{ width, background: "transparent", border: "none", outline: "none", color: "oklch(0.88 0.08 200)", fontFamily: "inherit", fontSize: 13, fontWeight: 600, textAlign: "center", padding: "0 4px" }}
+      />
+      <button
+        style={{ ...btnStyle("plus"), background: hov === "plus" ? "rgba(0,200,224,0.1)" : "transparent" }}
+        onMouseEnter={() => setHov("plus")} onMouseLeave={() => setHov(null)}
+        onClick={() => onChange(Math.min(max, value + step))}
+      >+</button>
+    </div>
+  );
+}
+
+function useReadiness(f) {
+  const checks = [
+    { key: "accessKey",  label: "Access Key ID required",                                 ok: f.accessKeyId.trim().length > 0 },
+    { key: "secretKey",  label: "Secret Access Key required",                             ok: f.secretKey.trim().length > 0 },
+    { key: "budgetCap",  label: "Budget too low to launch any worker instances",          ok: f.capMode !== "budget" || f.derivedInstanceCount >= 1 },
+  ];
+  const blocking = checks.filter(c => !c.ok);
+  return { ready: blocking.length === 0, blocking };
+}
+
 function App() {
   const f = useFormState();
-  const regions = window.SCALER_REGIONS || [];
+  const { ready, blocking } = useReadiness(f);
 
   const Label = ({ children, help }) => (
     <div style={{ fontSize: 10, letterSpacing: "0.1em", color: "oklch(0.72 0.14 200)", marginBottom: 5, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 6 }}>
@@ -102,18 +155,13 @@ function App() {
 
           {/* Region */}
           <div>
-            <Label help="The AWS region where your cluster will be deployed. Choose a region close to your data or end-users to minimize latency.">AWS Region</Label>
-            <select value={f.region} onChange={e => f.setRegion(e.target.value)} style={{
-              width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(0,200,224,0.15)",
-              borderRadius: 3, padding: "8px 10px", color: "oklch(0.85 0.06 200)", fontFamily: "inherit", fontSize: 12, outline: "none", cursor: "pointer",
-            }}>
-              {regions.map(r => <option key={r.value} value={r.value}>{r.value}</option>)}
-            </select>
+            <Label help="The AWS region where your cluster will be deployed.">AWS Region</Label>
+            <RegionSelect value={f.region} onChange={f.setRegion} />
           </div>
 
           {/* Credentials */}
           <div>
-            <Label help="Your IAM credentials must have permissions to create EC2 instances, VPCs, security groups, and IAM roles. We recommend a dedicated IAM user with the AmazonEC2FullAccess policy.">AWS Credentials</Label>
+            <Label help={"Your IAM credentials must have permissions to create EC2 instances, VPCs, security groups, and IAM roles. We recommend a dedicated IAM user with the AmazonEC2FullAccess policy.\n---\nTo get keys: AWS Console → IAM → Users → your user → Security credentials → Create access key."}>AWS Credentials</Label>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <div style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(0,200,224,0.15)", borderRadius:3, padding:"8px 10px", display:"flex", alignItems:"center" }}>
                 <span style={{ fontSize:10, color:"oklch(0.64 0.08 200)", marginRight:8, flexShrink:0 }}>KEY_ID</span>
@@ -136,7 +184,7 @@ function App() {
           <div>
             <Label help="Cap cluster size by instance count or total $/hr spend. The worker count is derived automatically (1 worker per vCPU).">Scale Limit</Label>
             <div style={{ display: "flex", marginBottom: 8, borderRadius: 3, overflow: "hidden", border: "1px solid rgba(0,200,224,0.2)" }}>
-              {[["instances","Instance cap"],["budget","$/hr cap"]].map(([val, lbl]) => (
+              {[["instances","Worker instance cap"],["budget","$/hr cap"]].map(([val, lbl]) => (
                 <button key={val} onClick={() => f.setCapMode(val)} style={{
                   flex: 1, padding: "7px 0", fontFamily: "inherit", fontSize: 10, letterSpacing: "0.06em",
                   textTransform: "uppercase", cursor: "pointer", border: "none",
@@ -147,40 +195,48 @@ function App() {
               ))}
             </div>
             {f.capMode === "instances" ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(0,200,224,0.15)", borderRadius: 3, padding: "8px 10px" }}>
-                <input type="number" min={1} max={1000} value={f.instanceCap}
-                  onChange={e => f.setInstanceCap(Math.max(1, parseInt(e.target.value)||1))}
-                  style={{ width: 60, background: "transparent", border: "none", outline: "none", color: "oklch(0.88 0.08 200)", fontFamily: "inherit", fontSize: 13, fontWeight: 600 }} />
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <NumericStepper value={f.instanceCap} onChange={f.setInstanceCap} min={1} max={1000} step={1} />
                 <span style={{ fontSize: 11, color: "oklch(0.5 0.04 220)" }}>max EC2 instances</span>
               </div>
             ) : (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(0,200,224,0.15)", borderRadius: 3, padding: "8px 10px" }}>
-                <span style={{ fontSize: 12, color: "oklch(0.62 0.1 150)" }}>$</span>
-                <input type="number" min={0} step={0.5} value={f.budgetCap}
-                  onChange={e => f.setBudgetCap(Math.max(0, parseFloat(e.target.value)||0))}
-                  style={{ width: 70, background: "transparent", border: "none", outline: "none", color: "oklch(0.88 0.08 200)", fontFamily: "inherit", fontSize: 13, fontWeight: 600 }} />
-                <span style={{ fontSize: 11, color: "oklch(0.5 0.04 220)" }}>max per hour</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
+                  <span style={{ fontSize: 12, color: "oklch(0.62 0.1 150)", marginRight: 6 }}>$</span>
+                  <NumericStepper value={f.budgetCap} onChange={f.setBudgetCap} min={0} step={0.5} width={64} />
+                </div>
+                <span style={{ fontSize: 11, color: "oklch(0.5 0.04 220)" }}>max USD/h</span>
               </div>
             )}
             <div style={{ marginTop: 10, padding: "10px 12px", background: "rgba(0,255,136,0.04)", border: "1px solid rgba(0,255,136,0.12)", borderRadius: 3, display: "flex", flexDirection: "column", gap: 5 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                <span style={{ fontSize: 10, color: "oklch(0.55 0.04 220)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Workers spawned</span>
+                <span style={{ fontSize: 10, color: "oklch(0.55 0.04 220)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Max workers spawned</span>
                 <span style={{ fontSize: 16, fontWeight: 700, color: "oklch(0.78 0.18 150)" }}>{f.workerCount.toLocaleString()}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                <span style={{ fontSize: 10, color: "oklch(0.55 0.04 220)", letterSpacing: "0.06em", textTransform: "uppercase" }}>EC2 instances</span>
+                <span style={{ fontSize: 10, color: "oklch(0.55 0.04 220)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Max worker EC2 instances</span>
                 <span style={{ fontSize: 12, color: "oklch(0.65 0.08 200)" }}>{f.derivedInstanceCount}</span>
               </div>
+              <div style={{ borderTop: "1px solid rgba(0,255,136,0.1)", margin: "3px 0" }} />
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                <span style={{ fontSize: 10, color: "oklch(0.55 0.04 220)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Est. cost/hr</span>
-                <span style={{ fontSize: 12, color: "oklch(0.65 0.12 150)" }}>${f.totalCostPerHr.toFixed(3)}</span>
+                <span style={{ fontSize: 10, color: "oklch(0.55 0.04 220)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Scheduler (USD/h)</span>
+                <span style={{ fontSize: 12, color: "oklch(0.55 0.06 200)" }}>${f.schedulerInst.price.toFixed(3)}/h</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                <span style={{ fontSize: 10, color: "oklch(0.55 0.04 220)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Workers (USD/h)</span>
+                <span style={{ fontSize: 12, color: "oklch(0.55 0.06 200)" }}>${f.workersCostPerHr.toFixed(3)}/h</span>
+              </div>
+              <div style={{ borderTop: "1px solid rgba(0,255,136,0.1)", margin: "3px 0" }} />
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+                <span style={{ fontSize: 10, color: "oklch(0.55 0.04 220)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Max est. total (USD/h)</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "oklch(0.65 0.12 150)" }}>${f.totalCostPerHr.toFixed(3)}/h</span>
               </div>
             </div>
           </div>
 
           {/* Requirements */}
           <div>
-            <Label help="Python packages to install on all cluster nodes. opengris-scaler[all] is always included. Add one package per line in pip requirements format (e.g. numpy==1.26.0 or torch>=2.0).">
+            <Label help="Python packages to install on worker nodes only. opengris-scaler[all] is always included. Add one package per line in pip requirements format (e.g. numpy==1.26.0 or torch>=2.0).">
               requirements.txt
             </Label>
             <div style={{ fontFamily:"inherit", fontSize:12, background:"rgba(255,255,255,0.03)", border:"1px solid rgba(0,200,224,0.15)", borderRadius:"3px 3px 0 0", padding:"7px 10px", display:"flex", alignItems:"center", gap:8, borderBottom:"1px dashed rgba(0,200,224,0.1)" }}>
@@ -215,24 +271,24 @@ function App() {
         {/* Launch */}
         <button
           onClick={f.launch}
-          disabled={f.phase !== "idle"}
+          disabled={f.phase !== "idle" || !ready}
           style={{
             marginTop: 24,
             padding: "16px",
-            background: f.phase !== "idle"
+            background: f.phase !== "idle" || !ready
               ? "rgba(0,200,224,0.05)"
               : "linear-gradient(135deg, oklch(0.38 0.16 155) 0%, oklch(0.32 0.14 200) 100%)",
-            border: "1px solid " + (f.phase !== "idle" ? "rgba(0,200,224,0.15)" : "oklch(0.55 0.16 155)"),
+            border: "1px solid " + (f.phase !== "idle" || !ready ? "rgba(0,200,224,0.15)" : "oklch(0.55 0.16 155)"),
             borderRadius: 4,
-            color: f.phase !== "idle" ? "oklch(0.45 0.08 200)" : "oklch(0.92 0.1 155)",
+            color: f.phase !== "idle" || !ready ? "oklch(0.45 0.08 200)" : "oklch(0.92 0.1 155)",
             fontFamily: "inherit",
             fontSize: 13,
             fontWeight: 700,
             letterSpacing: "0.15em",
-            cursor: f.phase !== "idle" ? "default" : "pointer",
+            cursor: f.phase !== "idle" || !ready ? "default" : "pointer",
             textTransform: "uppercase",
             transition: "all 0.2s",
-            animation: f.phase === "idle" ? "launchPulse 3s ease-in-out infinite" : "none",
+            animation: f.phase === "idle" && ready ? "launchPulse 3s ease-in-out infinite" : "none",
             flexShrink: 0,
           }}
         >
@@ -244,9 +300,25 @@ function App() {
       <div style={{ flex: 1, padding: "32px 32px", display: "flex", flexDirection: "column", gap: 20, overflowY: "auto" }}>
         {f.phase === "idle" ? (
           <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
-            <div style={{ fontSize: 32, color: "rgba(0,200,224,0.35)" }}>◈</div>
-            <div style={{ fontSize: 12, color: "oklch(0.62 0.1 200)", letterSpacing: "0.08em" }}>READY TO DEPLOY</div>
-            <div style={{ fontSize: 11, color: "oklch(0.54 0.04 220)", textAlign: "center", maxWidth: 260, lineHeight: 1.7 }}>Configure your cluster on the left, then press Launch Cluster to begin deployment.</div>
+            <div style={{ fontSize: 32, color: ready ? "rgba(0,200,224,0.35)" : "rgba(255,160,60,0.35)" }}>◈</div>
+            {ready ? (
+              <>
+                <div style={{ fontSize: 12, color: "oklch(0.62 0.1 200)", letterSpacing: "0.08em" }}>READY TO DEPLOY</div>
+                <div style={{ fontSize: 11, color: "oklch(0.54 0.04 220)", textAlign: "center", maxWidth: 260, lineHeight: 1.7 }}>Press Launch Cluster to begin deployment.</div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: 12, color: "oklch(0.7 0.14 60)", letterSpacing: "0.08em" }}>NOT READY</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "center" }}>
+                  {blocking.map(c => (
+                    <div key={c.key} style={{ fontSize: 11, color: "oklch(0.58 0.08 60)", display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 9, color: "oklch(0.6 0.14 60)" }}>✕</span>
+                      {c.label}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         ) : (
           <div style={{ animation: "fadeSlideIn 0.3s ease", display: "flex", flexDirection: "column", gap: 16 }}>

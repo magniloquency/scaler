@@ -74,6 +74,7 @@ window.SCALER_INSTANCES = [
   { type:"r6i.xlarge",    vcpu:4,  mem:32,   gpu:0, gpuType:null,  gpuMem:0,   net:"Up to 12.5 Gbps",cat:"memory",  price:0.252  },
   { type:"r6i.4xlarge",   vcpu:16, mem:128,  gpu:0, gpuType:null,  gpuMem:0,   net:"Up to 12.5 Gbps",cat:"memory",  price:1.008  },
   // GPU
+  { type:"p5.48xlarge",   vcpu:192,mem:2048, gpu:8, gpuType:"H100",gpuMem:640, net:"3200 Gbps EFA",  cat:"gpu",     price:98.32, featured:true },
   { type:"p3.2xlarge",    vcpu:8,  mem:61,   gpu:1, gpuType:"V100",gpuMem:16,  net:"Up to 10 Gbps",  cat:"gpu",     price:3.06   },
   { type:"p3.8xlarge",    vcpu:32, mem:244,  gpu:4, gpuType:"V100",gpuMem:64,  net:"10 Gbps",        cat:"gpu",     price:12.24  },
   { type:"p3.16xlarge",   vcpu:64, mem:488,  gpu:8, gpuType:"V100",gpuMem:128, net:"25 Gbps",        cat:"gpu",     price:24.48  },
