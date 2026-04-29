@@ -8,6 +8,8 @@
   <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <!-- AWS SDK v2 for browser — pin this version for production -->
+  <script src="https://unpkg.com/aws-sdk@2.1692.0/dist/aws-sdk.min.js"></script>
   <script src="launcher-data.js"></script>
   <script type="text/babel" src="launcher-shared.jsx"></script>
   <style>
@@ -18,6 +20,7 @@
     @keyframes blink { 50% { opacity: 0; } }
     @keyframes fadeSlideIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
     @keyframes launchPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(0,255,136,0.4); } 50% { box-shadow: 0 0 0 12px rgba(0,255,136,0); } }
+    @keyframes destroyPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(255,80,60,0.35); } 50% { box-shadow: 0 0 0 10px rgba(255,80,60,0); } }
 
     input[type=number] { -moz-appearance: textfield; }
     input[type=number]::-webkit-inner-spin-button,
@@ -25,111 +28,660 @@
     ::-webkit-scrollbar { width: 4px; height: 4px; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: rgba(0,200,224,0.2); border-radius: 2px; }
-
     select option { background: #0c1219; color: #c0d4e8; }
   </style>
 </head>
 <body>
 <div id="root"></div>
 
-<script type="text/babel">
-const { useState, useCallback } = React;
+<!-- ─── AWS EC2 Provisioning Logic (plain JS, no Babel needed) ─── -->
+<script>
+"use strict";
 
-function useFormState() {
-  const [region, setRegion]               = useState("us-east-1");
-  const [accessKeyId, setAccessKeyId]     = useState("");
-  const [secretKey, setSecretKey]         = useState("");
-  const [schedulerType] = useState("c5.xlarge");
-  const [workerType, setWorkerType]       = useState("g4dn.xlarge");
-  const [capMode, setCapMode]             = useState("instances");
-  const [instanceCap, setInstanceCap]     = useState(4);
-  const [budgetCap, setBudgetCap]         = useState(10);
-  const [requirements, setRequirements]   = useState("");
-  const [phase, setPhase]                 = useState("idle");
-  const lines = window.FAKE_TERMINAL_LINES || [];
+const _EC2_TRUST_POLICY = JSON.stringify({
+  Version: "2012-10-17",
+  Statement: [{ Effect: "Allow", Principal: { Service: "ec2.amazonaws.com" }, Action: "sts:AssumeRole" }],
+});
 
-  const allInstances   = window.SCALER_INSTANCES || [];
-  const workerInst     = allInstances.find(i => i.type === workerType)    || { vcpu: 1, price: 0 };
-  const schedulerInst  = allInstances.find(i => i.type === schedulerType) || { price: 0 };
+const _ORB_INLINE_POLICY = JSON.stringify({
+  Version: "2012-10-17",
+  Statement: [{
+    Effect: "Allow",
+    Action: ["ec2:*", "autoscaling:*", "iam:GetRole", "iam:PassRole", "ssm:GetParameter", "sts:GetCallerIdentity"],
+    Resource: "*",
+  }],
+});
 
-  const derivedInstanceCount = capMode === "instances"
-    ? Math.max(0, instanceCap)
-    : Math.max(0, Math.floor((budgetCap - schedulerInst.price) / (workerInst.price || 1)));
-
-  const workerCount    = derivedInstanceCount * workerInst.vcpu;
-  const workersCostPerHr   = derivedInstanceCount * workerInst.price;
-  const totalCostPerHr     = schedulerInst.price + workersCostPerHr;
-
-  const launch = useCallback(() => {
-    if (phase !== "idle") return;
-    setPhase("launching");
-    const maxT = Math.max(...lines.map(l => l.t));
-    setTimeout(() => setPhase("done"), maxT + 600);
-  }, [phase, lines]);
-
-  const reset = () => setPhase("idle");
-
-  return { region, setRegion, accessKeyId, setAccessKeyId, secretKey, setSecretKey,
-           schedulerInst, workerType, setWorkerType,
-           capMode, setCapMode, instanceCap, setInstanceCap, budgetCap, setBudgetCap,
-           derivedInstanceCount, workerCount, workersCostPerHr, totalCostPerHr,
-           requirements, setRequirements,
-           phase, launch, reset, lines };
+function randomSuffix(n) {
+  n = n || 8;
+  var chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  return Array.from({ length: n }, function() { return chars[Math.floor(Math.random() * chars.length)]; }).join("");
 }
 
+function gitPipUrl(gitRef, extras) {
+  extras = extras || "[all]";
+  var atIdx = gitRef.indexOf("@");
+  var repo = atIdx >= 0 ? gitRef.slice(0, atIdx) : gitRef;
+  var ref  = atIdx >= 0 ? gitRef.slice(atIdx + 1) : "";
+  var url  = "git+https://github.com/" + repo;
+  if (ref) url += "@" + ref;
+  return "opengris-scaler" + extras + " @ " + url;
+}
+
+function sleep(ms) {
+  return new Promise(function(resolve) { setTimeout(resolve, ms); });
+}
+
+function downloadText(filename, content) {
+  var blob = new Blob([content], { type: "text/plain" });
+  var url  = URL.createObjectURL(blob);
+  var a    = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
+function buildUserData(cfg, creds) {
+  var proto    = "ws";
+  var sp       = cfg.schedulerPort;
+  var op       = cfg.objectStoragePort;
+  var wsSlash  = "/";
+  var concLine = cfg.workerMaxConcurrency != null
+    ? "\nmax_task_concurrency = " + cfg.workerMaxConcurrency : "";
+  var tagLine  = '\ninstance_tags = {Name = "scaler-worker-' + cfg.nameSuffix + '"}';
+  var dbgLine  = cfg.debugDumpPath ? '\ndebug_dump_path = "' + cfg.debugDumpPath + '"' : "";
+  var gitLine  = cfg.scalerPackage.indexOf("git+") >= 0 ? "dnf install -y git\n" : "";
+  var req      = cfg.workerRequirements.trim();
+
+  // $IMDS_TOKEN / $PUBLIC_IP / $PRIVATE_IP / $! are bash variables — they appear literally in the
+  // output string and are expanded by bash at runtime on the EC2 instance.
+  return "#!/bin/bash\nset -euxo pipefail\n\n" +
+    "IMDS_TOKEN=$(curl -sf -X PUT \"http://169.254.169.254/latest/api/token\" -H \"X-aws-ec2-metadata-token-ttl-seconds: 300\")\n" +
+    "PUBLIC_IP=$(curl -sf -H \"X-aws-ec2-metadata-token: $IMDS_TOKEN\" http://169.254.169.254/latest/meta-data/public-ipv4)\n" +
+    "PRIVATE_IP=$(curl -sf -H \"X-aws-ec2-metadata-token: $IMDS_TOKEN\" http://169.254.169.254/latest/meta-data/local-ipv4)\n\n" +
+    "export HOME=/root\n" +
+    gitLine +
+    "curl -LsSf https://astral.sh/uv/install.sh | sh\n" +
+    "source /root/.local/bin/env\n\n" +
+    "uv venv --python " + cfg.pythonVersion + " /opt/scaler-venv\n" +
+    "source /opt/scaler-venv/bin/activate\n" +
+    "uv pip install '" + cfg.scalerPackage + "'\n" +
+    "uv pip install --upgrade orb-py\n\n" +
+    // WORKAROUND: ORB worker manager bug — does not pick up instance-profile credentials
+    // correctly, so we write them explicitly to ~/.aws/config. Remove once fixed in orb-py.
+    "mkdir -p /root/.aws\n" +
+    "cat > /root/.aws/config << AWS_EOF\n" +
+    "[default]\n" +
+    "aws_access_key_id = " + creds.accessKeyId + "\n" +
+    "aws_secret_access_key = " + creds.secretKey + "\n" +
+    "region = " + cfg.region + "\n" +
+    "AWS_EOF\n" +
+    "chmod 600 /root/.aws/config\n\n" +
+    "mkdir -p /opt/scaler\n\n" +
+    "cat > /opt/scaler/config.toml << CONFIG_EOF\n" +
+    "[object_storage_server]\n" +
+    "bind_address = \"" + proto + "://0.0.0.0:" + op + wsSlash + "\"\n\n" +
+    "[scheduler]\n" +
+    "bind_address = \"" + proto + "://0.0.0.0:" + sp + wsSlash + "\"\n" +
+    "object_storage_address = \"" + proto + "://127.0.0.1:" + op + wsSlash + "\"\n" +
+    "advertised_object_storage_address = \"" + proto + "://$PUBLIC_IP:" + op + wsSlash + "\"\n\n" +
+    "[[worker_manager]]\n" +
+    "type = \"orb_aws_ec2\"\n" +
+    "scheduler_address = \"" + proto + "://127.0.0.1:" + sp + wsSlash + "\"\n" +
+    "worker_manager_id = \"wm-orb\"\n" +
+    "worker_scheduler_address = \"" + proto + "://$PRIVATE_IP:" + sp + wsSlash + "\"\n" +
+    "object_storage_address = \"" + proto + "://$PRIVATE_IP:" + op + wsSlash + "\"\n" +
+    "python_version = \"" + cfg.workerPythonVersion + "\"\n" +
+    "requirements_txt = \"\"\"\n" + req + "\n\"\"\"\n" +
+    "instance_type = \"" + cfg.workerInstanceType + "\"\n" +
+    "aws_region = \"" + cfg.region + "\"\n" +
+    "logging_level = \"INFO\"" + concLine + tagLine + dbgLine + "\n" +
+    "CONFIG_EOF\n\n" +
+    "/opt/scaler-venv/bin/scaler /opt/scaler/config.toml >> /var/log/scaler.log 2>&1 &\n" +
+    "echo \"Scaler started (PID=$!)\"\n";
+}
+
+function makeAwsClients(region, creds) {
+  var awsCfg = { region: region, credentials: new AWS.Credentials(creds.accessKeyId, creds.secretKey) };
+  return { ec2: new AWS.EC2(awsCfg), iam: new AWS.IAM(awsCfg) };
+}
+
+async function getMyPublicIp() {
+  var resp = await fetch("https://checkip.amazonaws.com");
+  return (await resp.text()).trim();
+}
+
+async function getLatestAl2023Ami(ec2) {
+  var resp = await ec2.describeImages({
+    Owners: ["amazon"],
+    Filters: [
+      { Name: "name", Values: ["al2023-ami-2023.*-kernel-*-x86_64"] },
+      { Name: "state", Values: ["available"] },
+    ],
+  }).promise();
+  if (!resp.Images || resp.Images.length === 0) throw new Error("No AL2023 x86_64 AMI found in this region");
+  var sorted = resp.Images.slice().sort(function(a, b) { return a.CreationDate.localeCompare(b.CreationDate); });
+  return sorted[sorted.length - 1].ImageId;
+}
+
+async function waitForWs(host, port, timeoutMs, intervalMs) {
+  var deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    var ok = await new Promise(function(resolve) {
+      var ws = new WebSocket("ws://" + host + ":" + port + "/");
+      var done = false;
+      function finish(v) { if (!done) { done = true; resolve(v); } }
+      var timer = setTimeout(function() { try { ws.close(); } catch (_) {} finish(false); }, 5000);
+      ws.onopen  = function() { clearTimeout(timer); try { ws.close(); } catch (_) {} finish(true); };
+      ws.onerror = function() { clearTimeout(timer); finish(false); };
+    });
+    if (ok) return true;
+    var remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+    await sleep(Math.min(intervalMs, remaining));
+  }
+  return false;
+}
+
+async function ignoreNotFound(fn) {
+  try { await fn(); }
+  catch (e) { if (e.code !== "NoSuchEntity" && e.code !== "NoSuchEntityException") throw e; }
+}
+
+async function createIamStack(iam, suffix, addLog) {
+  var roleName    = "scaler-ec2-role-" + suffix;
+  var profileName = "scaler-ec2-profile-" + suffix;
+
+  addLog("Creating IAM role '" + roleName + "'...", "cmd");
+  await iam.createRole({ RoleName: roleName, AssumeRolePolicyDocument: _EC2_TRUST_POLICY, Description: "OpenGRIS Scaler ORB worker manager role" }).promise();
+  await iam.putRolePolicy({ RoleName: roleName, PolicyName: "ScalerORBPolicy", PolicyDocument: _ORB_INLINE_POLICY }).promise();
+
+  addLog("Creating instance profile '" + profileName + "'...", "cmd");
+  try {
+    await iam.createInstanceProfile({ InstanceProfileName: profileName }).promise();
+    await iam.addRoleToInstanceProfile({ InstanceProfileName: profileName, RoleName: roleName }).promise();
+  } catch (err) {
+    try {
+      await iam.deleteRolePolicy({ RoleName: roleName, PolicyName: "ScalerORBPolicy" }).promise();
+      await iam.deleteRole({ RoleName: roleName }).promise();
+    } catch (_) {}
+    throw err;
+  }
+
+  addLog("Waiting 15s for IAM profile to propagate...", "info");
+  await sleep(15000);
+
+  return { instance_profile_name: profileName, role_name: roleName, created: true };
+}
+
+async function destroyIamStack(iam, iamState, addLog) {
+  if (!iamState || !iamState.created) return;
+  var profileName = iamState.instance_profile_name;
+  var roleName    = iamState.role_name;
+
+  addLog("Removing role from instance profile '" + profileName + "'...", "cmd");
+  await ignoreNotFound(function() {
+    return iam.removeRoleFromInstanceProfile({ InstanceProfileName: profileName, RoleName: roleName }).promise();
+  });
+
+  addLog("Deleting instance profile '" + profileName + "'...", "cmd");
+  await ignoreNotFound(function() {
+    return iam.deleteInstanceProfile({ InstanceProfileName: profileName }).promise();
+  });
+
+  addLog("Deleting role '" + roleName + "'...", "cmd");
+  try {
+    var policies = await iam.listRolePolicies({ RoleName: roleName }).promise();
+    for (var i = 0; i < policies.PolicyNames.length; i++) {
+      await iam.deleteRolePolicy({ RoleName: roleName, PolicyName: policies.PolicyNames[i] }).promise();
+    }
+    await iam.deleteRole({ RoleName: roleName }).promise();
+  } catch (e) { if (e.code !== "NoSuchEntity" && e.code !== "NoSuchEntityException") throw e; }
+}
+
+async function provision(cfg, creds, addLog, onPartialState) {
+  var clients = makeAwsClients(cfg.region, creds);
+  var ec2 = clients.ec2, iam = clients.iam;
+  var suffix = cfg.nameSuffix;
+  var partial = { region: cfg.region, name_suffix: suffix };
+
+  addLog("openGRIS Scaler — EC2 deployment", "dim");
+  addLog("─".repeat(52), "dim");
+
+  // 1. AMI
+  addLog(cfg.amiId ? "Using AMI: " + cfg.amiId : "Discovering latest AL2023 x86_64 AMI...", "cmd");
+  var amiId = cfg.amiId || await getLatestAl2023Ami(ec2);
+  addLog("  → " + amiId, "info");
+
+  // 2. IAM
+  var iamState;
+  if (cfg.instanceProfileName) {
+    iamState = { instance_profile_name: cfg.instanceProfileName, role_name: "", created: false };
+    addLog("  → Using existing instance profile: " + cfg.instanceProfileName, "info");
+  } else {
+    iamState = await createIamStack(iam, suffix, addLog);
+    addLog("  ✓ IAM role and profile created", "ok");
+  }
+  partial.iam = iamState;
+  onPartialState(partial);
+
+  // 3. Key pair
+  var keyPairName = "scaler-key-" + suffix;
+  addLog("Creating key pair '" + keyPairName + "'...", "cmd");
+  var keyResp = await ec2.createKeyPair({ KeyName: keyPairName }).promise();
+  downloadText(keyPairName + ".pem", keyResp.KeyMaterial);
+  addLog("  ✓ Key downloaded as " + keyPairName + ".pem", "ok");
+  partial.key_pair_name = keyPairName;
+  partial.key_file = keyPairName + ".pem";
+  onPartialState(partial);
+
+  // 4. Security group
+  var myIp  = await getMyPublicIp();
+  var sgName = "scaler-sg-" + suffix;
+  addLog("Creating security group '" + sgName + "' (your IP: " + myIp + ")...", "cmd");
+  var sgResp = await ec2.createSecurityGroup({ GroupName: sgName, Description: "OpenGRIS Scaler scheduler [" + suffix + "]" }).promise();
+  var sgId = sgResp.GroupId;
+  partial.security_group_id = sgId;
+  onPartialState(partial);
+
+  await ec2.authorizeSecurityGroupIngress({
+    GroupId: sgId,
+    IpPermissions: [
+      { IpProtocol: "tcp", FromPort: 22, ToPort: 22,
+        IpRanges: [{ CidrIp: myIp + "/32", Description: "SSH from local machine" }] },
+      { IpProtocol: "tcp", FromPort: cfg.schedulerPort, ToPort: cfg.schedulerPort,
+        IpRanges: [{ CidrIp: myIp + "/32", Description: "Scaler scheduler from local machine" }] },
+      { IpProtocol: "tcp", FromPort: cfg.objectStoragePort, ToPort: cfg.objectStoragePort,
+        IpRanges: [{ CidrIp: myIp + "/32", Description: "Scaler object storage from local machine" }] },
+      { IpProtocol: "-1",
+        IpRanges: [{ CidrIp: "172.16.0.0/12", Description: "All traffic from VPC private range (ORB workers)" }] },
+    ],
+  }).promise();
+  addLog("  ✓ Security group created: " + sgId, "ok");
+
+  // 5. Launch instance
+  var userData = buildUserData(cfg, creds);
+  addLog("Launching " + cfg.instanceType + " instance...", "cmd");
+  var runResp = await ec2.runInstances({
+    ImageId: amiId,
+    InstanceType: cfg.instanceType,
+    KeyName: keyPairName,
+    SecurityGroupIds: [sgId],
+    IamInstanceProfile: { Name: iamState.instance_profile_name },
+    UserData: btoa(userData),
+    MinCount: 1, MaxCount: 1,
+    TagSpecifications: [{ ResourceType: "instance", Tags: [{ Key: "Name", Value: "scaler-scheduler-" + suffix }] }],
+  }).promise();
+  var instanceId = runResp.Instances[0].InstanceId;
+  partial.instance_id = instanceId;
+  onPartialState(partial);
+  addLog("  → Instance launched: " + instanceId, "info");
+
+  // 6. Wait for running state
+  addLog("Waiting for instance to reach running state...", "cmd");
+  await ec2.waitFor("instanceRunning", { InstanceIds: [instanceId] }).promise();
+
+  var desc = await ec2.describeInstances({ InstanceIds: [instanceId] }).promise();
+  var inst = desc.Reservations[0].Instances[0];
+  var publicIp  = inst.PublicIpAddress;
+  var privateIp = inst.PrivateIpAddress;
+  partial.public_ip  = publicIp;
+  partial.private_ip = privateIp;
+  addLog("  ✓ Instance running", "ok");
+  addLog("  → Public IP:  " + publicIp, "info");
+  addLog("  → Private IP: " + privateIp, "info");
+
+  // 7. Build addresses and persist complete state
+  var schedAddr = "ws://" + publicIp + ":" + cfg.schedulerPort + "/";
+  var objAddr   = "ws://" + publicIp + ":" + cfg.objectStoragePort + "/";
+
+  var state = {
+    region: cfg.region,
+    name_suffix: suffix,
+    instance_id: instanceId,
+    key_pair_name: keyPairName,
+    key_file: keyPairName + ".pem",
+    security_group_id: sgId,
+    public_ip: publicIp,
+    private_ip: privateIp,
+    transport: "ws",
+    scheduler_port: cfg.schedulerPort,
+    object_storage_port: cfg.objectStoragePort,
+    scheduler_address: schedAddr,
+    object_storage_address: objAddr,
+    iam: iamState,
+    worker_name: "scaler-worker-" + suffix,
+  };
+  onPartialState(state);
+
+  // 8. Poll for scheduler readiness via WebSocket
+  addLog("Waiting up to " + cfg.pollTimeout + "s for scheduler at " + publicIp + ":" + cfg.schedulerPort + "...", "cmd");
+  var ready = await waitForWs(publicIp, cfg.schedulerPort, cfg.pollTimeout * 1000, cfg.pollInterval * 1000);
+
+  if (ready) {
+    addLog("  ✓ Scheduler is reachable", "ok");
+  } else {
+    addLog("  ✗ Could not verify readiness — check /var/log/scaler.log on the instance", "warn");
+  }
+
+  addLog("─".repeat(52), "dim");
+  addLog("  DEPLOYMENT COMPLETE", "done");
+  addLog("─".repeat(52), "dim");
+  addLog("  scheduler:      " + schedAddr, "addr");
+  addLog("  object-storage: " + objAddr, "addr");
+  addLog("  ssh:            ssh -i " + keyPairName + ".pem ec2-user@" + publicIp, "addr");
+  addLog("─".repeat(52), "dim");
+
+  return state;
+}
+
+async function destroyResources(state, creds, addLog) {
+  var clients = makeAwsClients(state.region, creds);
+  var ec2 = clients.ec2, iam = clients.iam;
+
+  addLog("openGRIS Scaler — teardown", "dim");
+  addLog("─".repeat(52), "dim");
+
+  // Terminate worker instances first (they hold the security group open).
+  if (state.worker_name) {
+    addLog("Searching for worker instances tagged '" + state.worker_name + "'...", "cmd");
+    var resp = await ec2.describeInstances({
+      Filters: [
+        { Name: "tag:Name", Values: [state.worker_name] },
+        { Name: "instance-state-name", Values: ["pending", "running", "stopping", "stopped"] },
+      ],
+    }).promise();
+    var workerIds = resp.Reservations.reduce(function(acc, r) {
+      return acc.concat(r.Instances.map(function(i) { return i.InstanceId; }));
+    }, []);
+    if (workerIds.length > 0) {
+      addLog("  → Terminating " + workerIds.length + " worker instance(s)...", "info");
+      try {
+        await ec2.terminateInstances({ InstanceIds: workerIds }).promise();
+        await ec2.waitFor("instanceTerminated", { InstanceIds: workerIds }).promise();
+        addLog("  ✓ Worker instances terminated", "ok");
+      } catch (e) { addLog("  ! Warning: " + e.message, "warn"); }
+    } else {
+      addLog("  → No live worker instances found", "info");
+    }
+  }
+
+  // Terminate scheduler instance.
+  if (state.instance_id) {
+    addLog("Terminating scheduler instance " + state.instance_id + "...", "cmd");
+    try {
+      await ec2.terminateInstances({ InstanceIds: [state.instance_id] }).promise();
+      addLog("  → Waiting for termination...", "info");
+      await ec2.waitFor("instanceTerminated", { InstanceIds: [state.instance_id] }).promise();
+      addLog("  ✓ Instance terminated", "ok");
+    } catch (e) { addLog("  ! Warning: " + e.message, "warn"); }
+  }
+
+  if (state.security_group_id) {
+    addLog("Deleting security group " + state.security_group_id + "...", "cmd");
+    try {
+      await ec2.deleteSecurityGroup({ GroupId: state.security_group_id }).promise();
+      addLog("  ✓ Security group deleted", "ok");
+    } catch (e) { addLog("  ! Warning: " + e.message, "warn"); }
+  }
+
+  if (state.key_pair_name) {
+    addLog("Deleting key pair '" + state.key_pair_name + "'...", "cmd");
+    try {
+      await ec2.deleteKeyPair({ KeyName: state.key_pair_name }).promise();
+      addLog("  ✓ Key pair deleted", "ok");
+    } catch (e) { addLog("  ! Warning: " + e.message, "warn"); }
+  }
+
+  if (state.iam) {
+    await destroyIamStack(iam, state.iam, addLog);
+    addLog("  ✓ IAM resources cleaned up", "ok");
+  }
+
+  addLog("─".repeat(52), "dim");
+  addLog("  TEARDOWN COMPLETE", "done");
+  addLog("─".repeat(52), "dim");
+}
+</script>
+
+<!-- ─── React Application ─── -->
+<script type="text/babel">
+const { useState, useCallback, useRef, useEffect } = React;
+
+/* ── NumericStepper ── */
 function NumericStepper({ value, onChange, min = 0, max = Infinity, step = 1, width = 56 }) {
+  const [hov, setHov] = useState(null);
   const btnStyle = (side) => ({
-    width: 28, height: "100%",
-    background: "transparent",
-    border: "none",
+    width: 28, height: "100%", background: "transparent", border: "none",
     borderLeft:  side === "plus"  ? "1px solid rgba(0,200,224,0.15)" : "none",
     borderRight: side === "minus" ? "1px solid rgba(0,200,224,0.15)" : "none",
-    color: "oklch(0.62 0.1 200)",
-    fontFamily: "inherit",
-    fontSize: 16,
-    lineHeight: 1,
-    cursor: "pointer",
-    display: "flex", alignItems: "center", justifyContent: "center",
-    flexShrink: 0,
-    transition: "background 0.12s, color 0.12s",
-    padding: 0,
+    color: "oklch(0.62 0.1 200)", fontFamily: "inherit", fontSize: 16, lineHeight: 1,
+    cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+    flexShrink: 0, transition: "background 0.12s, color 0.12s", padding: 0,
   });
-  const [hov, setHov] = React.useState(null);
   return (
     <div style={{ display: "flex", alignItems: "stretch", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(0,200,224,0.15)", borderRadius: 3, height: 36, overflow: "hidden" }}>
-      <button
-        style={{ ...btnStyle("minus"), background: hov === "minus" ? "rgba(0,200,224,0.1)" : "transparent" }}
+      <button style={{ ...btnStyle("minus"), background: hov === "minus" ? "rgba(0,200,224,0.1)" : "transparent" }}
         onMouseEnter={() => setHov("minus")} onMouseLeave={() => setHov(null)}
-        onClick={() => onChange(Math.max(min, value - step))}
-      >−</button>
-      <input
-        type="number"
-        value={value}
+        onClick={() => onChange(Math.max(min, value - step))}>−</button>
+      <input type="number" value={value}
         onChange={e => { const v = parseFloat(e.target.value); if (!isNaN(v)) onChange(Math.min(max, Math.max(min, v))); }}
-        style={{ width, background: "transparent", border: "none", outline: "none", color: "oklch(0.88 0.08 200)", fontFamily: "inherit", fontSize: 13, fontWeight: 600, textAlign: "center", padding: "0 4px" }}
-      />
-      <button
-        style={{ ...btnStyle("plus"), background: hov === "plus" ? "rgba(0,200,224,0.1)" : "transparent" }}
+        style={{ width, background: "transparent", border: "none", outline: "none", color: "oklch(0.88 0.08 200)", fontFamily: "inherit", fontSize: 13, fontWeight: 600, textAlign: "center", padding: "0 4px" }} />
+      <button style={{ ...btnStyle("plus"), background: hov === "plus" ? "rgba(0,200,224,0.1)" : "transparent" }}
         onMouseEnter={() => setHov("plus")} onMouseLeave={() => setHov(null)}
-        onClick={() => onChange(Math.min(max, value + step))}
-      >+</button>
+        onClick={() => onChange(Math.min(max, value + step))}>+</button>
     </div>
   );
 }
 
-function useReadiness(f) {
-  const checks = [
-    { key: "accessKey",  label: "Access Key ID required",                                 ok: f.accessKeyId.trim().length > 0 },
-    { key: "secretKey",  label: "Secret Access Key required",                             ok: f.secretKey.trim().length > 0 },
-    { key: "budgetCap",  label: "Budget too low to launch any worker instances",          ok: f.capMode !== "budget" || f.derivedInstanceCount >= 1 },
-  ];
-  const blocking = checks.filter(c => !c.ok);
-  return { ready: blocking.length === 0, blocking };
+/* ── CopyBtn ── */
+function CopyBtn({ value }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button onClick={() => navigator.clipboard.writeText(value).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); })}
+      style={{ background: "none", border: "1px solid rgba(0,200,224,0.2)", borderRadius: 3, color: copied ? "oklch(0.72 0.18 150)" : "oklch(0.5 0.08 200)", fontFamily: "inherit", fontSize: 10, padding: "2px 7px", cursor: "pointer", letterSpacing: "0.06em", transition: "color 0.15s", flexShrink: 0 }}>
+      {copied ? "COPIED" : "COPY"}
+    </button>
+  );
 }
 
+/* ── DeploymentCard ── */
+function DeploymentCard({ state, onDestroy, onDownload, hasCredentials }) {
+  const rows = [
+    { label: "Scheduler",      value: state.scheduler_address },
+    { label: "Object storage", value: state.object_storage_address },
+    { label: "Public IP",      value: state.public_ip },
+    { label: "Private IP",     value: state.private_ip },
+    { label: "SSH",            value: "ssh -i " + state.key_file + " ec2-user@" + state.public_ip },
+    { label: "Region",         value: state.region },
+    { label: "Instance",       value: state.instance_id },
+  ];
+  return (
+    <div style={{ background: "rgba(0,255,136,0.03)", border: "1px solid rgba(0,255,136,0.15)", borderRadius: 4, padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16, animation: "fadeSlideIn 0.3s ease" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ fontSize: 11, letterSpacing: "0.1em", color: "oklch(0.72 0.18 150)", textTransform: "uppercase" }}>Active Deployment</div>
+        <button onClick={onDownload}
+          style={{ background: "none", border: "1px solid rgba(0,200,224,0.2)", borderRadius: 3, color: "oklch(0.55 0.08 200)", fontFamily: "inherit", fontSize: 10, padding: "3px 9px", cursor: "pointer", letterSpacing: "0.05em" }}>
+          ↓ State JSON
+        </button>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {rows.map(({ label, value }) => value && (
+          <div key={label} style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+            <span style={{ fontSize: 10, color: "oklch(0.42 0.04 220)", letterSpacing: "0.05em", width: 120, flexShrink: 0, textTransform: "uppercase" }}>{label}</span>
+            <span style={{ fontSize: 12, color: "oklch(0.82 0.08 200)", fontWeight: 500, flex: 1, wordBreak: "break-all" }}>{value}</span>
+            <CopyBtn value={value} />
+          </div>
+        ))}
+      </div>
+
+      <div style={{ borderTop: "1px solid rgba(255,80,60,0.12)", paddingTop: 16 }}>
+        {!hasCredentials && (
+          <div style={{ fontSize: 11, color: "oklch(0.6 0.1 60)", marginBottom: 10 }}>
+            ↑ Enter AWS credentials in the panel on the left to enable teardown.
+          </div>
+        )}
+        <button onClick={onDestroy} disabled={!hasCredentials}
+          style={{
+            width: "100%", padding: "14px", fontFamily: "inherit", fontSize: 13, fontWeight: 700,
+            letterSpacing: "0.15em", textTransform: "uppercase", cursor: hasCredentials ? "pointer" : "default",
+            border: "1px solid " + (hasCredentials ? "oklch(0.48 0.18 15)" : "rgba(255,80,60,0.15)"),
+            borderRadius: 4,
+            background: hasCredentials
+              ? "linear-gradient(135deg, oklch(0.32 0.18 15) 0%, oklch(0.26 0.14 30) 100%)"
+              : "rgba(255,80,60,0.04)",
+            color: hasCredentials ? "oklch(0.88 0.1 30)" : "oklch(0.45 0.08 30)",
+            transition: "all 0.2s",
+            animation: hasCredentials ? "destroyPulse 4s ease-in-out infinite" : "none",
+          }}>
+          ▼  Destroy Cluster
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ── App ── */
 function App() {
-  const f = useFormState();
-  const { ready, blocking } = useReadiness(f);
+  /* form */
+  const [region, setRegion]         = useState("us-east-1");
+  const [accessKeyId, setAKI]       = useState("");
+  const [secretKey,   setSK]        = useState("");
+  const [schedulerType, setSchedulerType] = useState("c5.xlarge");
+  const [workerType,  setWorkerType]= useState("g4dn.xlarge");
+  const [capMode,     setCapMode]   = useState("instances");
+  const [instanceCap, setInstanceCap] = useState(4);
+  const [budgetCap,   setBudgetCap]   = useState(10);
+  const [requirements, setReqs]     = useState("");
+  /* advanced */
+  const [pythonVersion,        setPyVer]    = useState("3.12");
+  const [scalerPackage,        setScalerPkg]= useState("opengris-scaler[all]");
+  const [instanceProfileName,  setIPN]      = useState("");
+  const [nameSuffix,           setSuffix]   = useState("");
+  const [pollTimeout,          setPollTO]   = useState(600);
+  const [showAdvanced,         setShowAdv]  = useState(false);
+
+  /* phase + persistent state */
+  const [phase, setPhase] = useState(() => {
+    try { return localStorage.getItem("scaler_state") ? "ready" : "idle"; } catch { return "idle"; }
+  });
+  const [log, setLog] = useState([]);
+  const [provState, setProvState] = useState(() => {
+    try { const s = localStorage.getItem("scaler_state"); return s ? JSON.parse(s) : null; } catch { return null; }
+  });
+
+  const addLog = useCallback((text, cls) => {
+    cls = cls || "info";
+    setLog(prev => [...prev, { text, cls }]);
+  }, []);
+
+  const savePartial = useCallback((partial) => {
+    setProvState(partial);
+    try { localStorage.setItem("scaler_state", JSON.stringify(partial)); } catch (_) {}
+  }, []);
+
+  /* cost calculations */
+  const allInstances  = window.SCALER_INSTANCES || [];
+  const workerInst    = allInstances.find(i => i.type === workerType)    || { vcpu: 1, price: 0 };
+  const schedulerInst = allInstances.find(i => i.type === schedulerType) || { price: 0.17 };
+  const derivedCount  = capMode === "instances"
+    ? Math.max(0, instanceCap)
+    : Math.max(0, Math.floor((budgetCap - schedulerInst.price) / (workerInst.price || 1)));
+  const workerCount       = derivedCount * workerInst.vcpu;
+  const workersCostPerHr  = derivedCount * workerInst.price;
+  const totalCostPerHr    = schedulerInst.price + workersCostPerHr;
+
+  /* readiness */
+  const checks = [
+    { key: "aki",    label: "Access Key ID required",                           ok: accessKeyId.trim().length > 0 },
+    { key: "sk",     label: "Secret Access Key required",                       ok: secretKey.trim().length > 0 },
+    { key: "budget", label: "Budget too low to launch any worker instances",    ok: capMode !== "budget" || derivedCount >= 1 },
+  ];
+  const blocking      = checks.filter(c => !c.ok);
+  const formReady     = blocking.length === 0;
+  const hasCredentials= accessKeyId.trim().length > 0 && secretKey.trim().length > 0;
+
+  /* actions */
+  const handleLaunch = useCallback(async () => {
+    if (!formReady) return;
+    setLog([]);
+    setPhase("provisioning");
+
+    const suffix   = nameSuffix.trim() || randomSuffix();
+    const workerReqs = "opengris-scaler[all]\n" + requirements.trim();
+
+    const cfg = {
+      region, nameSuffix: suffix,
+      instanceType: schedulerType, amiId: null,
+      transport: "ws", schedulerPort: 6788, objectStoragePort: 6789,
+      pythonVersion, scalerPackage,
+      workerInstanceType: workerType, workerPythonVersion: pythonVersion,
+      workerRequirements: workerReqs,
+      workerMaxConcurrency: null,
+      instanceProfileName: instanceProfileName.trim() || null,
+      pollTimeout, pollInterval: 15,
+      debugDumpPath: null,
+    };
+
+    try {
+      const state = await provision(cfg, { accessKeyId, secretKey }, addLog, savePartial);
+      savePartial(state);
+      setPhase("ready");
+    } catch (err) {
+      addLog("\nError: " + err.message, "err");
+      setPhase("error");
+    }
+  }, [formReady, region, accessKeyId, secretKey, schedulerType, workerType,
+      derivedCount, workerInst, requirements, pythonVersion, scalerPackage,
+      instanceProfileName, nameSuffix, pollTimeout, addLog, savePartial]);
+
+  const handleDestroy = useCallback(async () => {
+    if (!provState || !hasCredentials) return;
+    if (!window.confirm(
+      "Terminate all AWS resources in this deployment?\n\n" +
+      "• EC2 instance: " + (provState.instance_id || "—") + "\n" +
+      "• Security group: " + (provState.security_group_id || "—") + "\n" +
+      "• Key pair: " + (provState.key_pair_name || "—") + "\n" +
+      (provState.iam && provState.iam.created ? "• IAM role & profile\n" : "") +
+      "\nThis cannot be undone."
+    )) return;
+    setLog([]);
+    setPhase("destroying");
+    try {
+      await destroyResources(provState, { accessKeyId, secretKey }, addLog);
+      try { localStorage.removeItem("scaler_state"); } catch (_) {}
+      setProvState(null);
+      setPhase("destroyed");
+    } catch (err) {
+      addLog("\nError during teardown: " + err.message, "err");
+    }
+  }, [provState, hasCredentials, accessKeyId, secretKey, addLog]);
+
+  const handleReset = useCallback(() => {
+    setLog([]);
+    setPhase("idle");
+    setProvState(null);
+    try { localStorage.removeItem("scaler_state"); } catch (_) {}
+  }, []);
+
+  const handleLoadState = useCallback((e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const state = JSON.parse(ev.target.result);
+        savePartial(state);
+        setLog([]);
+        setPhase("ready");
+      } catch { alert("Invalid state file — expected JSON from a previous provision run."); }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  }, [savePartial]);
+
+  const isRunning = phase === "provisioning" || phase === "destroying";
 
   const Label = ({ children, help }) => (
     <div style={{ fontSize: 10, letterSpacing: "0.1em", color: "oklch(0.72 0.14 200)", marginBottom: 5, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 6 }}>
@@ -138,10 +690,49 @@ function App() {
     </div>
   );
 
+  const inputStyle = {
+    width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(0,200,224,0.15)",
+    borderRadius: 3, padding: "7px 10px", color: "oklch(0.85 0.06 200)",
+    fontFamily: "inherit", fontSize: 12, outline: "none",
+  };
+
+  /* ── Left rail launch/status button ── */
+  let launchBtn;
+  if (phase === "idle" || phase === "error" || phase === "destroyed") {
+    launchBtn = (
+      <button onClick={handleLaunch} disabled={!formReady}
+        style={{
+          marginTop: 20, padding: "16px",
+          background: !formReady ? "rgba(0,200,224,0.05)" : "linear-gradient(135deg, oklch(0.38 0.16 155) 0%, oklch(0.32 0.14 200) 100%)",
+          border: "1px solid " + (!formReady ? "rgba(0,200,224,0.15)" : "oklch(0.55 0.16 155)"),
+          borderRadius: 4, color: !formReady ? "oklch(0.45 0.08 200)" : "oklch(0.92 0.1 155)",
+          fontFamily: "inherit", fontSize: 13, fontWeight: 700, letterSpacing: "0.15em",
+          cursor: !formReady ? "default" : "pointer", textTransform: "uppercase", transition: "all 0.2s",
+          animation: formReady ? "launchPulse 3s ease-in-out infinite" : "none", flexShrink: 0,
+        }}>
+        {phase === "destroyed" ? "▶  Launch New Cluster" : "▶  Launch Cluster"}
+      </button>
+    );
+  } else if (phase === "provisioning") {
+    launchBtn = (
+      <div style={{ marginTop: 20, padding: "16px", textAlign: "center", background: "rgba(0,200,224,0.04)", border: "1px solid rgba(0,200,224,0.15)", borderRadius: 4, color: "oklch(0.6 0.1 200)", fontSize: 12, letterSpacing: "0.1em", flexShrink: 0 }}>
+        Deploying…
+      </div>
+    );
+  } else if (phase === "ready") {
+    launchBtn = null;
+  } else if (phase === "destroying") {
+    launchBtn = (
+      <div style={{ marginTop: 20, padding: "16px", textAlign: "center", background: "rgba(255,80,60,0.04)", border: "1px solid rgba(255,80,60,0.2)", borderRadius: 4, color: "oklch(0.6 0.1 30)", fontSize: 12, letterSpacing: "0.1em", flexShrink: 0 }}>
+        Tearing down…
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: "flex", height: "100%", background: "#06090d" }}>
 
-      {/* LEFT RAIL */}
+      {/* ── LEFT RAIL ── */}
       <div style={{ width: 560, flexShrink: 0, background: "#09101a", borderRight: "1px solid rgba(0,200,224,0.1)", padding: "32px 44px", display: "flex", flexDirection: "column", overflowY: "auto" }}>
 
         {/* Logo */}
@@ -156,155 +747,169 @@ function App() {
           {/* Region */}
           <div>
             <Label help="The AWS region where your cluster will be deployed.">AWS Region</Label>
-            <RegionSelect value={f.region} onChange={f.setRegion} />
+            <RegionSelect value={region} onChange={setRegion} />
           </div>
 
           {/* Credentials */}
           <div>
-            <Label help={"Your IAM credentials must have permissions to create EC2 instances, VPCs, security groups, and IAM roles. We recommend a dedicated IAM user with the AmazonEC2FullAccess policy.\n---\nTo get keys: AWS Console → IAM → Users → your user → Security credentials → Create access key."}>AWS Credentials</Label>
+            <Label help={"IAM credentials with EC2FullAccess and IAM permissions.\n---\nTo get keys: AWS Console → IAM → Users → your user → Security credentials → Create access key.\n---\nCredentials are kept in memory only and never stored."}>AWS Credentials</Label>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <div style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(0,200,224,0.15)", borderRadius:3, padding:"8px 10px", display:"flex", alignItems:"center" }}>
-                <span style={{ fontSize:10, color:"oklch(0.64 0.08 200)", marginRight:8, flexShrink:0 }}>KEY_ID</span>
-                <SecretInput value={f.accessKeyId} onChange={f.setAccessKeyId} placeholder="AKIA…" style={{ flex:1, fontSize:12, color:"oklch(0.85 0.06 200)" }} />
+              <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(0,200,224,0.15)", borderRadius: 3, padding: "8px 10px", display: "flex", alignItems: "center" }}>
+                <span style={{ fontSize: 10, color: "oklch(0.64 0.08 200)", marginRight: 8, flexShrink: 0 }}>KEY_ID</span>
+                <SecretInput value={accessKeyId} onChange={setAKI} placeholder="AKIA…" style={{ flex: 1, fontSize: 12, color: "oklch(0.85 0.06 200)" }} />
               </div>
-              <div style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(0,200,224,0.15)", borderRadius:3, padding:"8px 10px", display:"flex", alignItems:"center" }}>
-                <span style={{ fontSize:10, color:"oklch(0.64 0.08 200)", marginRight:8, flexShrink:0 }}>SECRET</span>
-                <SecretInput value={f.secretKey} onChange={f.setSecretKey} placeholder="wJalr…" style={{ flex:1, fontSize:12, color:"oklch(0.85 0.06 200)" }} />
+              <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(0,200,224,0.15)", borderRadius: 3, padding: "8px 10px", display: "flex", alignItems: "center" }}>
+                <span style={{ fontSize: 10, color: "oklch(0.64 0.08 200)", marginRight: 8, flexShrink: 0 }}>SECRET</span>
+                <SecretInput value={secretKey} onChange={setSK} placeholder="wJalr…" style={{ flex: 1, fontSize: 12, color: "oklch(0.85 0.06 200)" }} />
               </div>
             </div>
           </div>
 
-          {/* Instances */}
+          {/* Worker instance */}
           <div>
-            <Label help="Worker instance type used for all compute nodes. Choose based on your workload: compute (c5/c6i) for CPU jobs, memory (r5/r6i) for large datasets, or GPU (g4dn/g5) for ML workloads.">Worker Instance</Label>
-            <InstancePicker value={f.workerType} onChange={f.setWorkerType} />
+            <Label help="Worker instance type for ORB-provisioned compute nodes. Choose based on your workload: compute (c5/c6i) for CPU jobs, memory (r5/r6i) for large datasets, GPU (g4dn/g5) for ML workloads.">Worker Instance</Label>
+            <InstancePicker value={workerType} onChange={setWorkerType} />
           </div>
 
           {/* Scale cap */}
           <div>
             <Label help="Cap cluster size by instance count or total $/hr spend. The worker count is derived automatically (1 worker per vCPU).">Scale Limit</Label>
             <div style={{ display: "flex", marginBottom: 8, borderRadius: 3, overflow: "hidden", border: "1px solid rgba(0,200,224,0.2)" }}>
-              {[["instances","Worker instance cap"],["budget","$/hr cap"]].map(([val, lbl]) => (
-                <button key={val} onClick={() => f.setCapMode(val)} style={{
+              {[["instances", "Worker instance cap"], ["budget", "$/hr cap"]].map(([val, lbl]) => (
+                <button key={val} onClick={() => setCapMode(val)} style={{
                   flex: 1, padding: "7px 0", fontFamily: "inherit", fontSize: 10, letterSpacing: "0.06em",
                   textTransform: "uppercase", cursor: "pointer", border: "none",
-                  background: f.capMode === val ? "rgba(0,200,224,0.18)" : "transparent",
-                  color: f.capMode === val ? "oklch(0.78 0.16 200)" : "oklch(0.48 0.05 220)",
+                  background: capMode === val ? "rgba(0,200,224,0.18)" : "transparent",
+                  color: capMode === val ? "oklch(0.78 0.16 200)" : "oklch(0.48 0.05 220)",
                   transition: "background 0.15s, color 0.15s",
                 }}>{lbl}</button>
               ))}
             </div>
-            {f.capMode === "instances" ? (
+            {capMode === "instances" ? (
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <NumericStepper value={f.instanceCap} onChange={f.setInstanceCap} min={1} max={1000} step={1} />
+                <NumericStepper value={instanceCap} onChange={setInstanceCap} min={1} max={1000} />
                 <span style={{ fontSize: 11, color: "oklch(0.5 0.04 220)" }}>max EC2 instances</span>
               </div>
             ) : (
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
-                  <span style={{ fontSize: 12, color: "oklch(0.62 0.1 150)", marginRight: 6 }}>$</span>
-                  <NumericStepper value={f.budgetCap} onChange={f.setBudgetCap} min={0} step={0.5} width={64} />
-                </div>
+                <span style={{ fontSize: 12, color: "oklch(0.62 0.1 150)", marginRight: 2 }}>$</span>
+                <NumericStepper value={budgetCap} onChange={setBudgetCap} min={0} step={0.5} width={64} />
                 <span style={{ fontSize: 11, color: "oklch(0.5 0.04 220)" }}>max USD/h</span>
               </div>
             )}
             <div style={{ marginTop: 10, padding: "10px 12px", background: "rgba(0,255,136,0.04)", border: "1px solid rgba(0,255,136,0.12)", borderRadius: 3, display: "flex", flexDirection: "column", gap: 5 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
                 <span style={{ fontSize: 10, color: "oklch(0.55 0.04 220)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Max workers spawned</span>
-                <span style={{ fontSize: 16, fontWeight: 700, color: "oklch(0.78 0.18 150)" }}>{f.workerCount.toLocaleString()}</span>
+                <span style={{ fontSize: 16, fontWeight: 700, color: "oklch(0.78 0.18 150)" }}>{workerCount.toLocaleString()}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
                 <span style={{ fontSize: 10, color: "oklch(0.55 0.04 220)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Max worker EC2 instances</span>
-                <span style={{ fontSize: 12, color: "oklch(0.65 0.08 200)" }}>{f.derivedInstanceCount}</span>
+                <span style={{ fontSize: 12, color: "oklch(0.65 0.08 200)" }}>{derivedCount}</span>
               </div>
               <div style={{ borderTop: "1px solid rgba(0,255,136,0.1)", margin: "3px 0" }} />
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
                 <span style={{ fontSize: 10, color: "oklch(0.55 0.04 220)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Scheduler (USD/h)</span>
-                <span style={{ fontSize: 12, color: "oklch(0.55 0.06 200)" }}>${f.schedulerInst.price.toFixed(3)}/h</span>
+                <span style={{ fontSize: 12, color: "oklch(0.55 0.06 200)" }}>${schedulerInst.price.toFixed(3)}/h</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
                 <span style={{ fontSize: 10, color: "oklch(0.55 0.04 220)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Workers (USD/h)</span>
-                <span style={{ fontSize: 12, color: "oklch(0.55 0.06 200)" }}>${f.workersCostPerHr.toFixed(3)}/h</span>
+                <span style={{ fontSize: 12, color: "oklch(0.55 0.06 200)" }}>${workersCostPerHr.toFixed(3)}/h</span>
               </div>
               <div style={{ borderTop: "1px solid rgba(0,255,136,0.1)", margin: "3px 0" }} />
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
                 <span style={{ fontSize: 10, color: "oklch(0.55 0.04 220)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Max est. total (USD/h)</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: "oklch(0.65 0.12 150)" }}>${f.totalCostPerHr.toFixed(3)}/h</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "oklch(0.65 0.12 150)" }}>${totalCostPerHr.toFixed(3)}/h</span>
               </div>
             </div>
           </div>
 
-          {/* Requirements */}
+          {/* requirements.txt */}
           <div>
-            <Label help="Python packages to install on worker nodes only. opengris-scaler[all] is always included. Add one package per line in pip requirements format (e.g. numpy==1.26.0 or torch>=2.0).">
-              requirements.txt
-            </Label>
-            <div style={{ fontFamily:"inherit", fontSize:12, background:"rgba(255,255,255,0.03)", border:"1px solid rgba(0,200,224,0.15)", borderRadius:"3px 3px 0 0", padding:"7px 10px", display:"flex", alignItems:"center", gap:8, borderBottom:"1px dashed rgba(0,200,224,0.1)" }}>
-              <span style={{ color:"oklch(0.72 0.16 150)", fontWeight:600 }}>opengris-scaler[all]</span>
-              <span style={{ color:"oklch(0.42 0.06 200)", fontSize:11 }}>&nbsp;# required</span>
-              <span style={{ marginLeft:"auto", fontSize:9, color:"oklch(0.38 0.04 220)", letterSpacing:"0.06em", textTransform:"uppercase", userSelect:"none" }}>locked</span>
+            <Label help="Python packages installed on every worker node. opengris-scaler[all] is always included. Add one package per line in pip requirements format (e.g. numpy==1.26.0).">requirements.txt</Label>
+            <div style={{ fontFamily: "inherit", fontSize: 12, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(0,200,224,0.15)", borderRadius: "3px 3px 0 0", padding: "7px 10px", display: "flex", alignItems: "center", gap: 8, borderBottom: "1px dashed rgba(0,200,224,0.1)" }}>
+              <span style={{ color: "oklch(0.72 0.16 150)", fontWeight: 600 }}>opengris-scaler[all]</span>
+              <span style={{ color: "oklch(0.42 0.06 200)", fontSize: 11 }}>&nbsp;# required</span>
+              <span style={{ marginLeft: "auto", fontSize: 9, color: "oklch(0.38 0.04 220)", letterSpacing: "0.06em", textTransform: "uppercase", userSelect: "none" }}>locked</span>
             </div>
-            <textarea
-              value={f.requirements}
-              onChange={e => f.setRequirements(e.target.value)}
-              placeholder={"numpy>=1.26\ntorch>=2.0\n# add more packages…"}
-              rows={4}
-              spellCheck={false}
-              style={{
-                width:"100%", display:"block",
-                background:"rgba(255,255,255,0.03)",
-                border:"1px solid rgba(0,200,224,0.15)",
-                borderTop:"none",
-                borderRadius:"0 0 3px 3px",
-                padding:"8px 10px",
-                color:"oklch(0.82 0.06 200)",
-                fontFamily:"inherit", fontSize:12, lineHeight:1.65,
-                resize:"vertical",
-                outline:"none",
-                caretColor:"oklch(0.72 0.18 150)",
-              }}
-            />
+            <textarea value={requirements} onChange={e => setReqs(e.target.value)}
+              placeholder={"numpy>=1.26\ntorch>=2.0\n# add more packages…"} rows={4} spellCheck={false}
+              style={{ width: "100%", display: "block", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(0,200,224,0.15)", borderTop: "none", borderRadius: "0 0 3px 3px", padding: "8px 10px", color: "oklch(0.82 0.06 200)", fontFamily: "inherit", fontSize: 12, lineHeight: 1.65, resize: "vertical", outline: "none", caretColor: "oklch(0.72 0.18 150)" }} />
+          </div>
+
+          {/* Advanced */}
+          <div>
+            <button onClick={() => setShowAdv(v => !v)} style={{ background: "none", border: "none", cursor: "pointer", color: "oklch(0.52 0.08 200)", fontFamily: "inherit", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", padding: 0, display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontSize: 8 }}>{showAdvanced ? "▼" : "▶"}</span> Advanced Options
+            </button>
+            {showAdvanced && (
+              <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 14 }}>
+                <div>
+                  <Label help="The EC2 instance type for the scheduler. Compute-optimized instances (c5/c6i) work well for most deployments.">Scheduler Instance</Label>
+                  <InstancePicker value={schedulerType} onChange={setSchedulerType} defaultCat="all" />
+                </div>
+                <div>
+                  <Label help="Python version to install on the scheduler and workers via uv.">Python Version</Label>
+                  <input value={pythonVersion} onChange={e => setPyVer(e.target.value)} style={inputStyle} placeholder="3.12" />
+                </div>
+                <div>
+                  <Label help="pip package spec for scaler on the scheduler instance. Use the git+https:// form to install from a branch, e.g. opengris-scaler[all] @ git+https://github.com/finos/opengris-scaler@my-branch">Scaler Package</Label>
+                  <input value={scalerPackage} onChange={e => setScalerPkg(e.target.value)} style={inputStyle} placeholder="opengris-scaler[all]" />
+                </div>
+                <div>
+                  <Label help="Existing IAM instance profile to attach to the scheduler. If blank, a new role and profile are created and deleted on destroy.">Existing Instance Profile</Label>
+                  <input value={instanceProfileName} onChange={e => setIPN(e.target.value)} style={inputStyle} placeholder="my-scaler-profile (optional)" />
+                </div>
+                <div>
+                  <Label help="Fixed name suffix for all AWS resources (default: random 8-char). Use this for reproducible resource names.">Resource Name Suffix</Label>
+                  <input value={nameSuffix} onChange={e => setSuffix(e.target.value)} style={inputStyle} placeholder="random (optional)" />
+                </div>
+                <div>
+                  <Label help="Seconds to wait for the scheduler to become reachable after instance launch.">Poll Timeout (seconds)</Label>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <NumericStepper value={pollTimeout} onChange={setPollTO} min={60} max={1800} step={60} width={72} />
+                    <span style={{ fontSize: 11, color: "oklch(0.5 0.04 220)" }}>seconds</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
         </div>
 
-        {/* Launch */}
-        <button
-          onClick={f.launch}
-          disabled={f.phase !== "idle" || !ready}
-          style={{
-            marginTop: 24,
-            padding: "16px",
-            background: f.phase !== "idle" || !ready
-              ? "rgba(0,200,224,0.05)"
-              : "linear-gradient(135deg, oklch(0.38 0.16 155) 0%, oklch(0.32 0.14 200) 100%)",
-            border: "1px solid " + (f.phase !== "idle" || !ready ? "rgba(0,200,224,0.15)" : "oklch(0.55 0.16 155)"),
-            borderRadius: 4,
-            color: f.phase !== "idle" || !ready ? "oklch(0.45 0.08 200)" : "oklch(0.92 0.1 155)",
-            fontFamily: "inherit",
-            fontSize: 13,
-            fontWeight: 700,
-            letterSpacing: "0.15em",
-            cursor: f.phase !== "idle" || !ready ? "default" : "pointer",
-            textTransform: "uppercase",
-            transition: "all 0.2s",
-            animation: f.phase === "idle" && ready ? "launchPulse 3s ease-in-out infinite" : "none",
-            flexShrink: 0,
-          }}
-        >
-          {f.phase === "idle" ? "▶  Launch Cluster" : f.phase === "launching" ? "Deploying…" : "✓  Deployed"}
-        </button>
+        {/* Load state from file — visible only in idle state */}
+        {phase === "idle" && (
+          <div style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 10, color: "oklch(0.42 0.04 220)" }}>Have a state file?</span>
+            <label style={{ fontSize: 10, color: "oklch(0.58 0.1 200)", cursor: "pointer", textDecoration: "underline", textDecorationColor: "rgba(0,200,224,0.3)" }}>
+              Load for teardown
+              <input type="file" accept=".json" onChange={handleLoadState} style={{ display: "none" }} />
+            </label>
+          </div>
+        )}
+
+        {/* Reset link when in error/destroyed state */}
+        {(phase === "error" || phase === "destroyed") && (
+          <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
+            <button onClick={handleReset} style={{ background: "none", border: "none", cursor: "pointer", color: "oklch(0.48 0.06 220)", fontFamily: "inherit", fontSize: 10, padding: 0, letterSpacing: "0.06em" }}>
+              ← Clear state
+            </button>
+          </div>
+        )}
+
+        {launchBtn}
       </div>
 
-      {/* RIGHT PANEL */}
+      {/* ── RIGHT PANEL ── */}
       <div style={{ flex: 1, padding: "32px 32px", display: "flex", flexDirection: "column", gap: 20, overflowY: "auto" }}>
-        {f.phase === "idle" ? (
+
+        {/* Idle — no saved state */}
+        {phase === "idle" && (
           <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
-            <div style={{ fontSize: 32, color: ready ? "rgba(0,200,224,0.35)" : "rgba(255,160,60,0.35)" }}>◈</div>
-            {ready ? (
+            <div style={{ fontSize: 32, color: formReady ? "rgba(0,200,224,0.35)" : "rgba(255,160,60,0.35)" }}>◈</div>
+            {formReady ? (
               <>
                 <div style={{ fontSize: 12, color: "oklch(0.62 0.1 200)", letterSpacing: "0.08em" }}>READY TO DEPLOY</div>
-                <div style={{ fontSize: 11, color: "oklch(0.54 0.04 220)", textAlign: "center", maxWidth: 260, lineHeight: 1.7 }}>Press Launch Cluster to begin deployment.</div>
+                <div style={{ fontSize: 11, color: "oklch(0.54 0.04 220)", textAlign: "center", maxWidth: 260, lineHeight: 1.7 }}>Press Launch Cluster to provision a scheduler EC2 instance and configure it as an openGRIS Scaler node.</div>
               </>
             ) : (
               <>
@@ -312,25 +917,53 @@ function App() {
                 <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "center" }}>
                   {blocking.map(c => (
                     <div key={c.key} style={{ fontSize: 11, color: "oklch(0.58 0.08 60)", display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontSize: 9, color: "oklch(0.6 0.14 60)" }}>✕</span>
-                      {c.label}
+                      <span style={{ fontSize: 9, color: "oklch(0.6 0.14 60)" }}>✕</span> {c.label}
                     </div>
                   ))}
                 </div>
               </>
             )}
           </div>
-        ) : (
-          <div style={{ animation: "fadeSlideIn 0.3s ease", display: "flex", flexDirection: "column", gap: 16 }}>
-            <TerminalWindow
-              lines={f.lines}
-              config={{ schedulerType: "c5.xlarge", workerType: f.workerType, region: f.region }}
+        )}
+
+        {/* Log — shown whenever there are entries */}
+        {log.length > 0 && (
+          <div style={{ animation: "fadeSlideIn 0.3s ease" }}>
+            <LiveTerminal
+              lines={log}
+              isRunning={isRunning}
+              title={phase === "destroying" ? "openGRIS Scaler — teardown" : "openGRIS Scaler — deploy log"}
             />
-            <DeployDetails visible={f.phase === "done"} />
           </div>
         )}
-      </div>
 
+        {/* Deployment details — shown in ready state */}
+        {phase === "ready" && provState && (
+          <div style={{ animation: "fadeSlideIn 0.3s ease" }}>
+            {log.length === 0 && (
+              <div style={{ marginBottom: 12, padding: "10px 14px", background: "rgba(0,200,224,0.05)", border: "1px solid rgba(0,200,224,0.15)", borderRadius: 3, fontSize: 11, color: "oklch(0.58 0.08 200)" }}>
+                Deployment loaded from saved state.
+              </div>
+            )}
+            <DeploymentCard
+              state={provState}
+              onDestroy={handleDestroy}
+              onDownload={() => downloadText("scaler-state-" + provState.name_suffix + ".json", JSON.stringify(provState, null, 2))}
+              hasCredentials={hasCredentials}
+            />
+          </div>
+        )}
+
+        {/* Destroyed confirmation */}
+        {phase === "destroyed" && log.length === 0 && (
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
+            <div style={{ fontSize: 28, color: "rgba(0,200,224,0.4)" }}>◇</div>
+            <div style={{ fontSize: 12, color: "oklch(0.62 0.1 200)", letterSpacing: "0.08em" }}>TEARDOWN COMPLETE</div>
+            <div style={{ fontSize: 11, color: "oklch(0.5 0.04 220)" }}>All AWS resources have been terminated.</div>
+          </div>
+        )}
+
+      </div>
     </div>
   );
 }

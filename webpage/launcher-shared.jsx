@@ -181,10 +181,10 @@ const CAT_COLORS = {
   hpc:     "oklch(0.65 0.14 30)",
 };
 
-function InstancePicker({ value, onChange, label }) {
+function InstancePicker({ value, onChange, label, defaultCat = "gpu" }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [filterCat, setFilterCat] = useState("gpu");
+  const [filterCat, setFilterCat] = useState(defaultCat);
   const [filterGpu, setFilterGpu] = useState(false);
   const [minVcpu, setMinVcpu] = useState("");
   const [minMem, setMinMem] = useState("");
@@ -215,13 +215,26 @@ function InstancePicker({ value, onChange, label }) {
 
   const openDropdown = () => {
     if (!triggerRef.current) return;
-    const r = triggerRef.current.getBoundingClientRect();
-    setDropdownStyle({
-      position: "fixed",
-      top: r.bottom + 4,
-      left: r.left,
-      minWidth: Math.max(540, r.width),
-    });
+    const r       = triggerRef.current.getBoundingClientRect();
+    const vh      = window.innerHeight;
+    const gap     = 4;
+    const minW    = Math.max(540, r.width);
+    // Header + filter bar + category tabs ≈ 90px; results list maxHeight 280px.
+    const POPUP_H = 370;
+    const spaceBelow = vh - r.bottom - gap;
+    const spaceAbove = r.top - gap;
+
+    let style;
+    if (spaceBelow >= POPUP_H || spaceBelow >= spaceAbove) {
+      // Open downward; shrink results list if viewport is tight.
+      const availH = Math.max(120, spaceBelow - 90);
+      style = { position: "fixed", top: r.bottom + gap, left: r.left, minWidth: minW, maxResultsH: Math.min(280, availH) };
+    } else {
+      // Open upward; shrink results list if viewport is tight.
+      const availH = Math.max(120, spaceAbove - 90);
+      style = { position: "fixed", bottom: vh - r.top + gap, left: r.left, minWidth: minW, maxResultsH: Math.min(280, availH) };
+    }
+    setDropdownStyle(style);
     setOpen(true);
   };
 
@@ -229,7 +242,11 @@ function InstancePicker({ value, onChange, label }) {
 
   const dropdown = (
     <div ref={dropdownRef} style={{
-      ...dropdownStyle,
+      position: dropdownStyle.position,
+      top: dropdownStyle.top,
+      bottom: dropdownStyle.bottom,
+      left: dropdownStyle.left,
+      minWidth: dropdownStyle.minWidth,
       background: "#0c1219",
       border: "1px solid rgba(0,200,224,0.25)",
       borderRadius: "4px",
@@ -297,7 +314,7 @@ function InstancePicker({ value, onChange, label }) {
           </div>
 
           {/* Results */}
-          <div style={{ maxHeight: 280, overflowY: "auto" }}>
+          <div style={{ maxHeight: dropdownStyle.maxResultsH || 280, overflowY: "auto" }}>
             {filtered.length === 0 && (
               <div style={{ padding:"20px", textAlign:"center", color:"oklch(0.4 0.03 220)", fontSize:12 }}>No instances match</div>
             )}
@@ -646,4 +663,51 @@ function HelpTip({ text }) {
   );
 }
 
-Object.assign(window, { SecretInput, RegionSelect, InstancePicker, TerminalWindow, DeployDetails, HelpTip });
+/* ── LiveTerminal ── */
+function LiveTerminal({ lines, isRunning, title, style }) {
+  const scrollRef = useRef(null);
+
+  useEffect(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [lines]);
+
+  const clsColor = {
+    dim:  "oklch(0.38 0.04 220)",
+    cmd:  "oklch(0.82 0.16 155)",
+    ok:   "oklch(0.72 0.18 150)",
+    info: "oklch(0.65 0.06 220)",
+    err:  "oklch(0.72 0.16 30)",
+    warn: "oklch(0.72 0.16 60)",
+    done: "oklch(0.85 0.2 155)",
+    addr: "oklch(0.75 0.18 200)",
+  };
+
+  return (
+    <div style={{ background: "#050810", border: "1px solid rgba(0,255,136,0.15)", borderRadius: "4px", overflow: "hidden", ...style }}>
+      <div style={{ background: "rgba(0,255,136,0.06)", borderBottom: "1px solid rgba(0,255,136,0.1)", padding: "7px 14px", display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#ff5f57", display: "inline-block" }} />
+        <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#febc2e", display: "inline-block" }} />
+        <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#28c840", display: "inline-block" }} />
+        <span style={{ marginLeft: 8, fontSize: 11, color: "oklch(0.45 0.05 155)", letterSpacing: "0.08em" }}>
+          {title || "openGRIS Scaler — deploy log"}
+        </span>
+      </div>
+      <div
+        ref={scrollRef}
+        style={{ padding: "14px 16px", fontFamily: "inherit", fontSize: "12px", lineHeight: "1.7", minHeight: 300, maxHeight: 520, overflowY: "auto", color: "oklch(0.65 0.06 220)" }}
+      >
+        {lines.map((line, i) => (
+          <div
+            key={i}
+            style={{ color: clsColor[line.cls] || "oklch(0.65 0.06 220)", fontWeight: line.cls === "done" ? 700 : 400, letterSpacing: line.cls === "done" ? "0.08em" : "normal", whiteSpace: "pre-wrap", wordBreak: "break-all" }}
+          >
+            {line.text}
+          </div>
+        ))}
+        {isRunning && <span style={{ color: "oklch(0.72 0.18 150)", animation: "blink 1s step-end infinite" }}>▌</span>}
+      </div>
+    </div>
+  );
+}
+
+Object.assign(window, { SecretInput, RegionSelect, InstancePicker, TerminalWindow, DeployDetails, HelpTip, LiveTerminal });

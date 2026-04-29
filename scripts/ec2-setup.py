@@ -115,6 +115,11 @@ class ProvisionConfig:
     ami_id: Optional[str]  # None → auto-discover latest AL2023 x86_64
     name_suffix: str
     debug_dump_path: Optional[str] = None
+    # WORKAROUND: ORB worker manager bug — does not pick up instance-profile credentials
+    # correctly, so we write them to ~/.aws/config on the scheduler instance. Remove once
+    # the bug is fixed in orb-py.
+    workaround_aws_access_key_id: Optional[str] = None
+    workaround_aws_secret_access_key: Optional[str] = None
 
 
 @dataclass
@@ -242,6 +247,24 @@ def _build_user_data(config: ProvisionConfig) -> str:
     req_block = config.worker_requirements.strip()
     git_install_line = "dnf install -y git\n" if "git+" in config.scaler_package else ""
 
+    # WORKAROUND: ORB worker manager bug — does not pick up instance-profile credentials
+    # correctly, so we write them to ~/.aws/config on the scheduler instance. Remove once
+    # the bug is fixed in orb-py.
+    workaround_aws_config = ""
+    if config.workaround_aws_access_key_id and config.workaround_aws_secret_access_key:
+        workaround_aws_config = f"""\
+# WORKAROUND: explicit credentials for ORB worker manager (remove once orb-py bug is fixed)
+mkdir -p /root/.aws
+cat > /root/.aws/config << AWS_EOF
+[default]
+aws_access_key_id = {config.workaround_aws_access_key_id}
+aws_secret_access_key = {config.workaround_aws_secret_access_key}
+region = {config.region}
+AWS_EOF
+chmod 600 /root/.aws/config
+
+"""
+
     # f'''...''' lets """ appear freely inside without ending the string.
     return f'''\
 #!/bin/bash
@@ -255,7 +278,7 @@ export HOME=/root
 {git_install_line}curl -LsSf https://astral.sh/uv/install.sh | sh
 source /root/.local/bin/env
 
-uv venv --python {config.python_version} /opt/scaler-venv
+{workaround_aws_config}uv venv --python {config.python_version} /opt/scaler-venv
 source /opt/scaler-venv/bin/activate
 uv pip install \'{config.scaler_package}\'
 uv pip install --upgrade orb-py
@@ -771,6 +794,11 @@ def main() -> None:
 
     worker_requirements = "\n".join(args.worker_requirements) if args.worker_requirements else default_worker_req
 
+    # WORKAROUND: resolve credentials now so they can be written to ~/.aws/config on the
+    # scheduler instance. Remove once the ORB worker manager bug is fixed in orb-py.
+    _resolved_creds = boto3.Session(region_name=region).get_credentials()
+    _resolved_creds = _resolved_creds.resolve() if _resolved_creds else None
+
     config = ProvisionConfig(
         region=region,
         instance_type=args.instance_type,
@@ -790,6 +818,8 @@ def main() -> None:
         ami_id=args.ami_id,
         name_suffix=suffix,
         debug_dump_path=args.debug_dump_path,
+        workaround_aws_access_key_id=_resolved_creds.access_key if _resolved_creds else None,
+        workaround_aws_secret_access_key=_resolved_creds.secret_key if _resolved_creds else None,
     )
 
     try:
