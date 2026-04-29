@@ -68,8 +68,26 @@ function gitPipUrl(gitRef, extras) {
   return "opengris-scaler" + extras + " @ " + url;
 }
 
-function sleep(ms) {
-  return new Promise(function(resolve) { setTimeout(resolve, ms); });
+function sleep(ms, signal) {
+  return new Promise(function(resolve, reject) {
+    if (signal && signal.aborted) return reject(new DOMException("Aborted", "AbortError"));
+    var timer = setTimeout(resolve, ms);
+    if (signal) signal.addEventListener("abort", function() {
+      clearTimeout(timer);
+      reject(new DOMException("Aborted", "AbortError"));
+    }, { once: true });
+  });
+}
+
+// Race an AWS SDK promise against an AbortSignal so waiters can be interrupted.
+function withAbort(promise, signal) {
+  if (!signal) return promise;
+  return Promise.race([promise, new Promise(function(_, reject) {
+    if (signal.aborted) return reject(new DOMException("Aborted", "AbortError"));
+    signal.addEventListener("abort", function() {
+      reject(new DOMException("Aborted", "AbortError"));
+    }, { once: true });
+  })]);
 }
 
 function downloadText(filename, content) {
@@ -164,9 +182,10 @@ async function getLatestAl2023Ami(ec2) {
   return sorted[sorted.length - 1].ImageId;
 }
 
-async function waitForWs(host, port, timeoutMs, intervalMs) {
+async function waitForWs(host, port, timeoutMs, intervalMs, signal) {
   var deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
+    if (signal && signal.aborted) throw new DOMException("Aborted", "AbortError");
     var ok = await new Promise(function(resolve) {
       var ws = new WebSocket("ws://" + host + ":" + port + "/");
       var done = false;
@@ -174,11 +193,14 @@ async function waitForWs(host, port, timeoutMs, intervalMs) {
       var timer = setTimeout(function() { try { ws.close(); } catch (_) {} finish(false); }, 5000);
       ws.onopen  = function() { clearTimeout(timer); try { ws.close(); } catch (_) {} finish(true); };
       ws.onerror = function() { clearTimeout(timer); finish(false); };
+      if (signal) signal.addEventListener("abort", function() {
+        clearTimeout(timer); try { ws.close(); } catch (_) {} finish(false);
+      }, { once: true });
     });
     if (ok) return true;
     var remaining = deadline - Date.now();
     if (remaining <= 0) break;
-    await sleep(Math.min(intervalMs, remaining));
+    await sleep(Math.min(intervalMs, remaining), signal);
   }
   return false;
 }
@@ -188,18 +210,18 @@ async function ignoreNotFound(fn) {
   catch (e) { if (e.code !== "NoSuchEntity" && e.code !== "NoSuchEntityException") throw e; }
 }
 
-async function createIamStack(iam, suffix, addLog) {
+async function createIamStack(iam, suffix, addLog, signal) {
   var roleName    = "scaler-ec2-role-" + suffix;
   var profileName = "scaler-ec2-profile-" + suffix;
 
   addLog("Creating IAM role '" + roleName + "'...", "cmd");
-  await iam.createRole({ RoleName: roleName, AssumeRolePolicyDocument: _EC2_TRUST_POLICY, Description: "OpenGRIS Scaler ORB worker manager role" }).promise();
-  await iam.putRolePolicy({ RoleName: roleName, PolicyName: "ScalerORBPolicy", PolicyDocument: _ORB_INLINE_POLICY }).promise();
+  await withAbort(iam.createRole({ RoleName: roleName, AssumeRolePolicyDocument: _EC2_TRUST_POLICY, Description: "OpenGRIS Scaler ORB worker manager role" }).promise(), signal);
+  await withAbort(iam.putRolePolicy({ RoleName: roleName, PolicyName: "ScalerORBPolicy", PolicyDocument: _ORB_INLINE_POLICY }).promise(), signal);
 
   addLog("Creating instance profile '" + profileName + "'...", "cmd");
   try {
-    await iam.createInstanceProfile({ InstanceProfileName: profileName }).promise();
-    await iam.addRoleToInstanceProfile({ InstanceProfileName: profileName, RoleName: roleName }).promise();
+    await withAbort(iam.createInstanceProfile({ InstanceProfileName: profileName }).promise(), signal);
+    await withAbort(iam.addRoleToInstanceProfile({ InstanceProfileName: profileName, RoleName: roleName }).promise(), signal);
   } catch (err) {
     try {
       await iam.deleteRolePolicy({ RoleName: roleName, PolicyName: "ScalerORBPolicy" }).promise();
@@ -209,7 +231,7 @@ async function createIamStack(iam, suffix, addLog) {
   }
 
   addLog("Waiting 15s for IAM profile to propagate...", "info");
-  await sleep(15000);
+  await sleep(15000, signal);
 
   return { instance_profile_name: profileName, role_name: roleName, created: true };
 }
@@ -239,7 +261,7 @@ async function destroyIamStack(iam, iamState, addLog) {
   } catch (e) { if (e.code !== "NoSuchEntity" && e.code !== "NoSuchEntityException") throw e; }
 }
 
-async function provision(cfg, creds, addLog, onPartialState) {
+async function provision(cfg, creds, addLog, onPartialState, signal) {
   var clients = makeAwsClients(cfg.region, creds);
   var ec2 = clients.ec2, iam = clients.iam;
   var suffix = cfg.nameSuffix;
@@ -250,7 +272,7 @@ async function provision(cfg, creds, addLog, onPartialState) {
 
   // 1. AMI
   addLog(cfg.amiId ? "Using AMI: " + cfg.amiId : "Discovering latest AL2023 x86_64 AMI...", "cmd");
-  var amiId = cfg.amiId || await getLatestAl2023Ami(ec2);
+  var amiId = cfg.amiId || await withAbort(getLatestAl2023Ami(ec2), signal);
   addLog("  → " + amiId, "info");
 
   // 2. IAM
@@ -259,7 +281,7 @@ async function provision(cfg, creds, addLog, onPartialState) {
     iamState = { instance_profile_name: cfg.instanceProfileName, role_name: "", created: false };
     addLog("  → Using existing instance profile: " + cfg.instanceProfileName, "info");
   } else {
-    iamState = await createIamStack(iam, suffix, addLog);
+    iamState = await createIamStack(iam, suffix, addLog, signal);
     addLog("  ✓ IAM role and profile created", "ok");
   }
   partial.iam = iamState;
@@ -268,7 +290,7 @@ async function provision(cfg, creds, addLog, onPartialState) {
   // 3. Key pair
   var keyPairName = "scaler-key-" + suffix;
   addLog("Creating key pair '" + keyPairName + "'...", "cmd");
-  var keyResp = await ec2.createKeyPair({ KeyName: keyPairName }).promise();
+  var keyResp = await withAbort(ec2.createKeyPair({ KeyName: keyPairName }).promise(), signal);
   downloadText(keyPairName + ".pem", keyResp.KeyMaterial);
   addLog("  ✓ Key downloaded as " + keyPairName + ".pem", "ok");
   partial.key_pair_name = keyPairName;
@@ -276,15 +298,15 @@ async function provision(cfg, creds, addLog, onPartialState) {
   onPartialState(partial);
 
   // 4. Security group
-  var myIp  = await getMyPublicIp();
+  var myIp  = await withAbort(getMyPublicIp(), signal);
   var sgName = "scaler-sg-" + suffix;
   addLog("Creating security group '" + sgName + "' (your IP: " + myIp + ")...", "cmd");
-  var sgResp = await ec2.createSecurityGroup({ GroupName: sgName, Description: "OpenGRIS Scaler scheduler [" + suffix + "]" }).promise();
+  var sgResp = await withAbort(ec2.createSecurityGroup({ GroupName: sgName, Description: "OpenGRIS Scaler scheduler [" + suffix + "]" }).promise(), signal);
   var sgId = sgResp.GroupId;
   partial.security_group_id = sgId;
   onPartialState(partial);
 
-  await ec2.authorizeSecurityGroupIngress({
+  await withAbort(ec2.authorizeSecurityGroupIngress({
     GroupId: sgId,
     IpPermissions: [
       { IpProtocol: "tcp", FromPort: 22, ToPort: 22,
@@ -296,13 +318,13 @@ async function provision(cfg, creds, addLog, onPartialState) {
       { IpProtocol: "-1",
         IpRanges: [{ CidrIp: "172.16.0.0/12", Description: "All traffic from VPC private range (ORB workers)" }] },
     ],
-  }).promise();
+  }).promise(), signal);
   addLog("  ✓ Security group created: " + sgId, "ok");
 
   // 5. Launch instance
   var userData = buildUserData(cfg, creds);
   addLog("Launching " + cfg.instanceType + " instance...", "cmd");
-  var runResp = await ec2.runInstances({
+  var runResp = await withAbort(ec2.runInstances({
     ImageId: amiId,
     InstanceType: cfg.instanceType,
     KeyName: keyPairName,
@@ -311,7 +333,7 @@ async function provision(cfg, creds, addLog, onPartialState) {
     UserData: btoa(userData),
     MinCount: 1, MaxCount: 1,
     TagSpecifications: [{ ResourceType: "instance", Tags: [{ Key: "Name", Value: "scaler-scheduler-" + suffix }] }],
-  }).promise();
+  }).promise(), signal);
   var instanceId = runResp.Instances[0].InstanceId;
   partial.instance_id = instanceId;
   onPartialState(partial);
@@ -319,9 +341,9 @@ async function provision(cfg, creds, addLog, onPartialState) {
 
   // 6. Wait for running state
   addLog("Waiting for instance to reach running state...", "cmd");
-  await ec2.waitFor("instanceRunning", { InstanceIds: [instanceId] }).promise();
+  await withAbort(ec2.waitFor("instanceRunning", { InstanceIds: [instanceId] }).promise(), signal);
 
-  var desc = await ec2.describeInstances({ InstanceIds: [instanceId] }).promise();
+  var desc = await withAbort(ec2.describeInstances({ InstanceIds: [instanceId] }).promise(), signal);
   var inst = desc.Reservations[0].Instances[0];
   var publicIp  = inst.PublicIpAddress;
   var privateIp = inst.PrivateIpAddress;
@@ -356,7 +378,7 @@ async function provision(cfg, creds, addLog, onPartialState) {
 
   // 8. Poll for scheduler readiness via WebSocket
   addLog("Waiting up to " + cfg.pollTimeout + "s for scheduler at " + publicIp + ":" + cfg.schedulerPort + "...", "cmd");
-  var ready = await waitForWs(publicIp, cfg.schedulerPort, cfg.pollTimeout * 1000, cfg.pollInterval * 1000);
+  var ready = await waitForWs(publicIp, cfg.schedulerPort, cfg.pollTimeout * 1000, cfg.pollInterval * 1000, signal);
 
   if (ready) {
     addLog("  ✓ Scheduler is reachable", "ok");
@@ -375,7 +397,7 @@ async function provision(cfg, creds, addLog, onPartialState) {
   return state;
 }
 
-async function destroyResources(state, creds, addLog) {
+async function destroyResources(state, creds, addLog, signal) {
   var clients = makeAwsClients(state.region, creds);
   var ec2 = clients.ec2, iam = clients.iam;
 
@@ -385,22 +407,22 @@ async function destroyResources(state, creds, addLog) {
   // Terminate worker instances first (they hold the security group open).
   if (state.worker_name) {
     addLog("Searching for worker instances tagged '" + state.worker_name + "'...", "cmd");
-    var resp = await ec2.describeInstances({
+    var resp = await withAbort(ec2.describeInstances({
       Filters: [
         { Name: "tag:Name", Values: [state.worker_name] },
         { Name: "instance-state-name", Values: ["pending", "running", "stopping", "stopped"] },
       ],
-    }).promise();
+    }).promise(), signal);
     var workerIds = resp.Reservations.reduce(function(acc, r) {
       return acc.concat(r.Instances.map(function(i) { return i.InstanceId; }));
     }, []);
     if (workerIds.length > 0) {
       addLog("  → Terminating " + workerIds.length + " worker instance(s)...", "info");
       try {
-        await ec2.terminateInstances({ InstanceIds: workerIds }).promise();
-        await ec2.waitFor("instanceTerminated", { InstanceIds: workerIds }).promise();
+        await withAbort(ec2.terminateInstances({ InstanceIds: workerIds }).promise(), signal);
+        await withAbort(ec2.waitFor("instanceTerminated", { InstanceIds: workerIds }).promise(), signal);
         addLog("  ✓ Worker instances terminated", "ok");
-      } catch (e) { addLog("  ! Warning: " + e.message, "warn"); }
+      } catch (e) { if (e.name === "AbortError") throw e; addLog("  ! Warning: " + e.message, "warn"); }
     } else {
       addLog("  → No live worker instances found", "info");
     }
@@ -410,27 +432,27 @@ async function destroyResources(state, creds, addLog) {
   if (state.instance_id) {
     addLog("Terminating scheduler instance " + state.instance_id + "...", "cmd");
     try {
-      await ec2.terminateInstances({ InstanceIds: [state.instance_id] }).promise();
+      await withAbort(ec2.terminateInstances({ InstanceIds: [state.instance_id] }).promise(), signal);
       addLog("  → Waiting for termination...", "info");
-      await ec2.waitFor("instanceTerminated", { InstanceIds: [state.instance_id] }).promise();
+      await withAbort(ec2.waitFor("instanceTerminated", { InstanceIds: [state.instance_id] }).promise(), signal);
       addLog("  ✓ Instance terminated", "ok");
-    } catch (e) { addLog("  ! Warning: " + e.message, "warn"); }
+    } catch (e) { if (e.name === "AbortError") throw e; addLog("  ! Warning: " + e.message, "warn"); }
   }
 
   if (state.security_group_id) {
     addLog("Deleting security group " + state.security_group_id + "...", "cmd");
     try {
-      await ec2.deleteSecurityGroup({ GroupId: state.security_group_id }).promise();
+      await withAbort(ec2.deleteSecurityGroup({ GroupId: state.security_group_id }).promise(), signal);
       addLog("  ✓ Security group deleted", "ok");
-    } catch (e) { addLog("  ! Warning: " + e.message, "warn"); }
+    } catch (e) { if (e.name === "AbortError") throw e; addLog("  ! Warning: " + e.message, "warn"); }
   }
 
   if (state.key_pair_name) {
     addLog("Deleting key pair '" + state.key_pair_name + "'...", "cmd");
     try {
-      await ec2.deleteKeyPair({ KeyName: state.key_pair_name }).promise();
+      await withAbort(ec2.deleteKeyPair({ KeyName: state.key_pair_name }).promise(), signal);
       addLog("  ✓ Key pair deleted", "ok");
-    } catch (e) { addLog("  ! Warning: " + e.message, "warn"); }
+    } catch (e) { if (e.name === "AbortError") throw e; addLog("  ! Warning: " + e.message, "warn"); }
   }
 
   if (state.iam) {
@@ -570,6 +592,7 @@ function App() {
   const [provState, setProvState] = useState(() => {
     try { const s = localStorage.getItem("scaler_state"); return s ? JSON.parse(s) : null; } catch { return null; }
   });
+  const abortRef = useRef(null);
 
   const addLog = useCallback((text, cls) => {
     cls = cls || "info";
@@ -624,17 +647,29 @@ function App() {
       debugDumpPath: null,
     };
 
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
-      const state = await provision(cfg, { accessKeyId, secretKey }, addLog, savePartial);
+      const state = await provision(cfg, { accessKeyId, secretKey }, addLog, savePartial, controller.signal);
       savePartial(state);
       setPhase("ready");
     } catch (err) {
-      addLog("\nError: " + err.message, "err");
+      if (err.name === "AbortError") {
+        addLog("\nAborted. Any resources created so far are saved — use Destroy to clean them up.", "warn");
+      } else {
+        addLog("\nError: " + err.message, "err");
+      }
       setPhase("error");
+    } finally {
+      abortRef.current = null;
     }
   }, [formReady, region, accessKeyId, secretKey, schedulerType, workerType,
       derivedCount, workerInst, requirements, pythonVersion, scalerPackage,
       instanceProfileName, nameSuffix, pollTimeout, addLog, savePartial]);
+
+  const handleAbort = useCallback(() => {
+    if (abortRef.current) abortRef.current.abort();
+  }, []);
 
   const handleDestroy = useCallback(async () => {
     if (!provState || !hasCredentials) return;
@@ -648,13 +683,21 @@ function App() {
     )) return;
     setLog([]);
     setPhase("destroying");
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
-      await destroyResources(provState, { accessKeyId, secretKey }, addLog);
+      await destroyResources(provState, { accessKeyId, secretKey }, addLog, controller.signal);
       try { localStorage.removeItem("scaler_state"); } catch (_) {}
       setProvState(null);
       setPhase("destroyed");
     } catch (err) {
-      addLog("\nError during teardown: " + err.message, "err");
+      if (err.name === "AbortError") {
+        addLog("\nTeardown aborted. Some resources may still exist — run Destroy again to retry.", "warn");
+      } else {
+        addLog("\nError during teardown: " + err.message, "err");
+      }
+    } finally {
+      abortRef.current = null;
     }
   }, [provState, hasCredentials, accessKeyId, secretKey, addLog]);
 
@@ -715,16 +758,30 @@ function App() {
     );
   } else if (phase === "provisioning") {
     launchBtn = (
-      <div style={{ marginTop: 20, padding: "16px", textAlign: "center", background: "rgba(0,200,224,0.04)", border: "1px solid rgba(0,200,224,0.15)", borderRadius: 4, color: "oklch(0.6 0.1 200)", fontSize: 12, letterSpacing: "0.1em", flexShrink: 0 }}>
-        Deploying…
+      <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 8, flexShrink: 0 }}>
+        <div style={{ padding: "16px", textAlign: "center", background: "rgba(0,200,224,0.04)", border: "1px solid rgba(0,200,224,0.15)", borderRadius: 4, color: "oklch(0.6 0.1 200)", fontSize: 12, letterSpacing: "0.1em" }}>
+          Deploying…
+        </div>
+        <button onClick={handleAbort} style={{ padding: "9px", background: "transparent", border: "1px solid rgba(255,160,60,0.3)", borderRadius: 4, color: "oklch(0.62 0.12 60)", fontFamily: "inherit", fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", cursor: "pointer", transition: "border-color 0.15s, color 0.15s" }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(255,160,60,0.6)"; e.currentTarget.style.color = "oklch(0.72 0.14 60)"; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,160,60,0.3)"; e.currentTarget.style.color = "oklch(0.62 0.12 60)"; }}>
+          ✕  Abort
+        </button>
       </div>
     );
   } else if (phase === "ready") {
     launchBtn = null;
   } else if (phase === "destroying") {
     launchBtn = (
-      <div style={{ marginTop: 20, padding: "16px", textAlign: "center", background: "rgba(255,80,60,0.04)", border: "1px solid rgba(255,80,60,0.2)", borderRadius: 4, color: "oklch(0.6 0.1 30)", fontSize: 12, letterSpacing: "0.1em", flexShrink: 0 }}>
-        Tearing down…
+      <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 8, flexShrink: 0 }}>
+        <div style={{ padding: "16px", textAlign: "center", background: "rgba(255,80,60,0.04)", border: "1px solid rgba(255,80,60,0.2)", borderRadius: 4, color: "oklch(0.6 0.1 30)", fontSize: 12, letterSpacing: "0.1em" }}>
+          Tearing down…
+        </div>
+        <button onClick={handleAbort} style={{ padding: "9px", background: "transparent", border: "1px solid rgba(255,160,60,0.3)", borderRadius: 4, color: "oklch(0.62 0.12 60)", fontFamily: "inherit", fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", cursor: "pointer", transition: "border-color 0.15s, color 0.15s" }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(255,160,60,0.6)"; e.currentTarget.style.color = "oklch(0.72 0.14 60)"; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,160,60,0.3)"; e.currentTarget.style.color = "oklch(0.62 0.12 60)"; }}>
+          ✕  Abort
+        </button>
       </div>
     );
   }
