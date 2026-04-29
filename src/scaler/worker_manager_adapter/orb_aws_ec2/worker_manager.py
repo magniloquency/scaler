@@ -199,21 +199,6 @@ class ORBAWSEC2WorkerAdapter:
                         "config": {"region": region, "profile": self._config.aws_profile},
                     }
                 ],
-                # ORB's config pipeline applies aws_defaults.json handler definitions only via
-                # strategy defaults, which are not loaded when a config_dict is provided.
-                # provider_defaults must therefore be included explicitly here; without it,
-                # get_effective_handlers() returns {} and RunInstances is not in supported_apis.
-                "provider_defaults": {
-                    "aws": {
-                        "handlers": {
-                            "RunInstances": {
-                                "handler_class": "RunInstancesHandler",
-                                "supports_spot": False,
-                                "supports_ondemand": True,
-                            }
-                        }
-                    }
-                },
             },
             "storage": {"type": "json"},
         }
