@@ -195,7 +195,7 @@ function buildUserData(cfg, creds) {
     "aws_region = \"" + cfg.region + "\"\n" +
     "logging_level = \"INFO\"" + concLine + tagLine + dbgLine + "\n" +
     "CONFIG_EOF\n\n" +
-    "/opt/scaler-venv/bin/scaler /opt/scaler/config.toml >> /var/log/scaler.log 2>&1 &\n" +
+    "SCALER_NETWORK_BACKEND=ymq /opt/scaler-venv/bin/scaler /opt/scaler/config.toml >> /var/log/scaler.log 2>&1 &\n" +
     "echo \"Scaler started (PID=$!)\"\n";
 }
 
