@@ -106,7 +106,7 @@ function buildUserData(cfg, creds) {
   var wsSlash  = "/";
   var concLine = cfg.workerMaxConcurrency != null
     ? "\nmax_task_concurrency = " + cfg.workerMaxConcurrency : "";
-  var tagLine  = '\ninstance_tags = {Name = "scaler-worker-' + cfg.nameSuffix + '", scaler-deployment = "' + cfg.nameSuffix + '"}';
+  var tagLine  = '\ninstance_tags = {scaler-deployment = "' + cfg.nameSuffix + '"}';
   var dbgLine  = cfg.debugDumpPath ? '\ndebug_dump_path = "' + cfg.debugDumpPath + '"' : "";
   var req      = cfg.workerRequirements.trim();
 
