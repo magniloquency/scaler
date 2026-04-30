@@ -75,33 +75,32 @@ struct TestTCPPair {
 };
 
 // Performs a real WebSocket handshake over a loopback TCP pair.
-// The server side is returned as a WebSocketStream; the client stays as a raw TCPSocket
+// _server is the upgraded WebSocketStream; _tcp->_client is the raw client TCPSocket
 // so tests can craft and inspect frames at the wire level.
+// _tcp is kept alive for the lifetime of this struct so that its internal listen
+// callback (which captures a pointer to the TestTCPPair) is never left dangling.
 // Not movable — lambdas capture 'this' by pointer.
 struct TestWebSocketStreamPair {
     scaler::wrapper::uv::Loop& _loop;
+    std::unique_ptr<TestTCPPair> _tcp;
     std::optional<scaler::ymq::internal::WebSocketStream> _server;
-    std::optional<scaler::wrapper::uv::TCPSocket> _client;
     bool _serverUpgraded = false;
     bool _clientDrained  = false;
 
     explicit TestWebSocketStreamPair(scaler::wrapper::uv::Loop& loop): _loop(loop)
     {
-        TestTCPPair tcp(loop);
-        tcp.waitForFullConnection();
+        _tcp = std::make_unique<TestTCPPair>(loop);
+        _tcp->waitForFullConnection();
 
         scaler::ymq::internal::WebSocketStream::upgradeAsServer(
-            std::move(tcp._serverSide.value()),
+            std::move(_tcp->_serverSide.value()),
             [&](std::expected<scaler::ymq::internal::WebSocketStream, scaler::wrapper::uv::Error> result) {
                 UV_EXIT_ON_ERROR(result);
                 _server.emplace(std::move(*result));
                 _serverUpgraded = true;
             });
-        tcp._serverSide.reset();
-        tcp._server.reset();
-
-        _client.emplace(std::move(tcp._client.value()));
-        tcp._client.reset();
+        _tcp->_serverSide.reset();
+        _tcp->_server.reset();
 
         static const std::string kUpgradeRequest =
             "GET / HTTP/1.1\r\n"
@@ -114,25 +113,26 @@ struct TestWebSocketStreamPair {
         auto requestData = std::make_shared<std::string>(kUpgradeRequest);
         const std::span<const uint8_t> requestSpan(
             reinterpret_cast<const uint8_t*>(requestData->data()), requestData->size());
-        UV_EXIT_ON_ERROR(_client->write(
+        UV_EXIT_ON_ERROR(_tcp->_client->write(
             std::span<const std::span<const uint8_t>>(&requestSpan, 1),
             [requestData](std::expected<void, scaler::wrapper::uv::Error>) {}));
 
         runUntil(_loop, _serverUpgraded);
 
         // Drain the HTTP 101 response so subsequent reads on _client see only WebSocket frames.
-        std::vector<uint8_t> headerBuf;
-        UV_EXIT_ON_ERROR(
-            _client->readStart([&](std::expected<std::span<const uint8_t>, scaler::wrapper::uv::Error> result) {
+        // headerBuf is heap-allocated so the lambda can safely outlive this constructor.
+        auto headerBuf = std::make_shared<std::vector<uint8_t>>();
+        UV_EXIT_ON_ERROR(_tcp->_client->readStart(
+            [this, headerBuf](std::expected<std::span<const uint8_t>, scaler::wrapper::uv::Error> result) {
                 if (!result.has_value() || _clientDrained)
                     return;
-                headerBuf.insert(headerBuf.end(), result->begin(), result->end());
-                const std::string s(headerBuf.begin(), headerBuf.end());
+                headerBuf->insert(headerBuf->end(), result->begin(), result->end());
+                const std::string s(headerBuf->begin(), headerBuf->end());
                 if (s.find("\r\n\r\n") != std::string::npos)
                     _clientDrained = true;
             }));
         runUntil(_loop, _clientDrained);
-        _client->readStop();
+        _tcp->_client->readStop();
     }
 
     TestWebSocketStreamPair(const TestWebSocketStreamPair&)            = delete;
@@ -257,7 +257,7 @@ TEST_F(WebSocketStreamTest, FragmentedMessage)
     allFrames->insert(allFrames->end(), frame3.begin(), frame3.end());
 
     const std::span<const uint8_t> frameSpan(*allFrames);
-    UV_EXIT_ON_ERROR(pair._client->write(
+    UV_EXIT_ON_ERROR(pair._tcp->_client->write(
         std::span<const std::span<const uint8_t>>(&frameSpan, 1),
         [allFrames](std::expected<void, scaler::wrapper::uv::Error>) {}));
 
@@ -268,7 +268,7 @@ TEST_F(WebSocketStreamTest, FragmentedMessage)
 
     pair._server->readStop();
     UV_EXIT_ON_ERROR(pair._server->closeReset());
-    UV_EXIT_ON_ERROR(pair._client->closeReset());
+    UV_EXIT_ON_ERROR(pair._tcp->_client->closeReset());
     loop.run(UV_RUN_DEFAULT);
 }
 
@@ -286,7 +286,7 @@ TEST_F(WebSocketStreamTest, PingReceivesPong)
     bool pongReceived = false;
 
     UV_EXIT_ON_ERROR(
-        pair._client->readStart([&](std::expected<std::span<const uint8_t>, scaler::wrapper::uv::Error> result) {
+        pair._tcp->_client->readStart([&](std::expected<std::span<const uint8_t>, scaler::wrapper::uv::Error> result) {
             if (!result.has_value())
                 return;
             clientReceived.insert(clientReceived.end(), result->begin(), result->end());
@@ -299,7 +299,7 @@ TEST_F(WebSocketStreamTest, PingReceivesPong)
     auto pingFrame = maskedFrame(0x89, {});
     auto pingData  = std::make_shared<std::vector<uint8_t>>(std::move(pingFrame));
     const std::span<const uint8_t> pingSpan(*pingData);
-    UV_EXIT_ON_ERROR(pair._client->write(
+    UV_EXIT_ON_ERROR(pair._tcp->_client->write(
         std::span<const std::span<const uint8_t>>(&pingSpan, 1),
         [pingData](std::expected<void, scaler::wrapper::uv::Error>) {}));
 
@@ -311,9 +311,9 @@ TEST_F(WebSocketStreamTest, PingReceivesPong)
     EXPECT_EQ(clientReceived[1], 0x00);  // unmasked, no payload
 
     pair._server->readStop();
-    pair._client->readStop();
+    pair._tcp->_client->readStop();
     UV_EXIT_ON_ERROR(pair._server->closeReset());
-    UV_EXIT_ON_ERROR(pair._client->closeReset());
+    UV_EXIT_ON_ERROR(pair._tcp->_client->closeReset());
     loop.run(UV_RUN_DEFAULT);
 }
 
@@ -469,7 +469,7 @@ TEST_F(WebSocketStreamTest, GracefulShutdownSendsClose)
     bool closeFrameReceived = false;
 
     UV_EXIT_ON_ERROR(
-        pair._client->readStart([&](std::expected<std::span<const uint8_t>, scaler::wrapper::uv::Error> result) {
+        pair._tcp->_client->readStart([&](std::expected<std::span<const uint8_t>, scaler::wrapper::uv::Error> result) {
             if (!result.has_value())
                 return;
             clientReceived.insert(clientReceived.end(), result->begin(), result->end());
@@ -487,7 +487,7 @@ TEST_F(WebSocketStreamTest, GracefulShutdownSendsClose)
     EXPECT_EQ(clientReceived[0], 0x88);  // FIN=1, opcode=close
     EXPECT_EQ(clientReceived[1], 0x00);  // unmasked, no payload
 
-    pair._client->readStop();
-    UV_EXIT_ON_ERROR(pair._client->closeReset());
+    pair._tcp->_client->readStop();
+    UV_EXIT_ON_ERROR(pair._tcp->_client->closeReset());
     loop.run(UV_RUN_DEFAULT);
 }
