@@ -156,7 +156,9 @@ function buildUserData(cfg, creds) {
   return "#!/bin/bash\nset -euxo pipefail\n\n" +
     "IMDS_TOKEN=$(curl -sf -X PUT \"http://169.254.169.254/latest/api/token\" -H \"X-aws-ec2-metadata-token-ttl-seconds: 300\")\n" +
     "PUBLIC_IP=$(curl -sf -H \"X-aws-ec2-metadata-token: $IMDS_TOKEN\" http://169.254.169.254/latest/meta-data/public-ipv4)\n" +
-    "PRIVATE_IP=$(curl -sf -H \"X-aws-ec2-metadata-token: $IMDS_TOKEN\" http://169.254.169.254/latest/meta-data/local-ipv4)\n\n" +
+    "PRIVATE_IP=$(curl -sf -H \"X-aws-ec2-metadata-token: $IMDS_TOKEN\" http://169.254.169.254/latest/meta-data/local-ipv4)\n" +
+    "MAC=$(curl -sf -H \"X-aws-ec2-metadata-token: $IMDS_TOKEN\" http://169.254.169.254/latest/meta-data/network/interfaces/macs/ | head -1 | tr -d '/')\n" +
+    "SUBNET_ID=$(curl -sf -H \"X-aws-ec2-metadata-token: $IMDS_TOKEN\" \"http://169.254.169.254/latest/meta-data/network/interfaces/macs/$MAC/subnet-id\")\n\n" +
     "export HOME=/root\n" +
     gitBuildLines +
     "curl -LsSf https://astral.sh/uv/install.sh | sh\n" +
@@ -194,6 +196,8 @@ function buildUserData(cfg, creds) {
     "instance_type = \"" + cfg.workerInstanceType + "\"\n" +
     "aws_region = \"" + cfg.region + "\"\n" +
     "key_name = \"scaler-key-" + cfg.nameSuffix + "\"\n" +
+    "subnet_id = \"$SUBNET_ID\"\n" +
+    "security_group_ids = [\"" + cfg.securityGroupId + "\"]\n" +
     "logging_level = \"INFO\"" + concLine + tagLine + dbgLine + "\n" +
     "CONFIG_EOF\n\n" +
     "SCALER_NETWORK_BACKEND=ymq /opt/scaler-venv/bin/scaler /opt/scaler/config.toml >> /var/log/scaler.log 2>&1 &\n" +
@@ -356,13 +360,12 @@ async function provision(cfg, creds, addLog, onPartialState, signal) {
         IpRanges: [{ CidrIp: myIp + "/32", Description: "Scaler scheduler from local machine" }] },
       { IpProtocol: "tcp", FromPort: cfg.objectStoragePort, ToPort: cfg.objectStoragePort,
         IpRanges: [{ CidrIp: myIp + "/32", Description: "Scaler object storage from local machine" }] },
-      { IpProtocol: "-1",
-        IpRanges: [{ CidrIp: "172.16.0.0/12", Description: "All traffic from VPC private range (ORB workers)" }] },
     ],
   }).promise(), signal);
   addLog("  ✓ Security group created: " + sgId, "ok");
 
   // 5. Launch instance
+  cfg = Object.assign({}, cfg, { securityGroupId: sgId });
   var userData = buildUserData(cfg, creds);
   addLog("Launching " + cfg.instanceType + " instance...", "cmd");
   var runResp = await withAbort(ec2.runInstances({
@@ -388,11 +391,28 @@ async function provision(cfg, creds, addLog, onPartialState, signal) {
   var inst = desc.Reservations[0].Instances[0];
   var publicIp  = inst.PublicIpAddress;
   var privateIp = inst.PrivateIpAddress;
+  var vpcId     = inst.VpcId;
+  var subnetId  = inst.SubnetId;
   partial.public_ip  = publicIp;
   partial.private_ip = privateIp;
+  partial.vpc_id     = vpcId;
+  partial.subnet_id  = subnetId;
   addLog("  ✓ Instance running", "ok");
   addLog("  → Public IP:  " + publicIp, "info");
   addLog("  → Private IP: " + privateIp, "info");
+
+  // Allow all inbound traffic from the VPC's CIDR so ORB workers can reach the scheduler.
+  var vpcDesc = await withAbort(ec2.describeVpcs({ VpcIds: [vpcId] }).promise(), signal);
+  var vpcCidr = vpcDesc.Vpcs[0].CidrBlock;
+  await withAbort(ec2.authorizeSecurityGroupIngress({
+    GroupId: sgId,
+    IpPermissions: [
+      { IpProtocol: "-1",
+        IpRanges: [{ CidrIp: vpcCidr, Description: "All traffic from VPC (ORB workers)" }] },
+    ],
+  }).promise(), signal);
+  addLog("  → VPC: " + vpcId + "  CIDR: " + vpcCidr + "  subnet: " + subnetId, "info");
+  onPartialState(partial);
 
   // 7. Build addresses and persist complete state
   var schedAddr = "ws://" + publicIp + ":" + cfg.schedulerPort + "/";
@@ -407,6 +427,8 @@ async function provision(cfg, creds, addLog, onPartialState, signal) {
     security_group_id: sgId,
     public_ip: publicIp,
     private_ip: privateIp,
+    vpc_id: vpcId,
+    subnet_id: subnetId,
     transport: "ws",
     scheduler_port: cfg.schedulerPort,
     object_storage_port: cfg.objectStoragePort,
