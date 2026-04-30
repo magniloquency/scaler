@@ -106,7 +106,7 @@ function buildUserData(cfg, creds) {
   var wsSlash  = "/";
   var concLine = cfg.workerMaxConcurrency != null
     ? "\nmax_task_concurrency = " + cfg.workerMaxConcurrency : "";
-  var tagLine  = '\ninstance_tags = {Name = "scaler-worker-' + cfg.nameSuffix + '"}';
+  var tagLine  = '\ninstance_tags = {Name = "scaler-worker-' + cfg.nameSuffix + '", scaler-deployment = "' + cfg.nameSuffix + '"}';
   var dbgLine  = cfg.debugDumpPath ? '\ndebug_dump_path = "' + cfg.debugDumpPath + '"' : "";
   var req      = cfg.workerRequirements.trim();
 
@@ -335,7 +335,10 @@ async function provision(cfg, creds, addLog, onPartialState, signal) {
   // 3. Key pair
   var keyPairName = "scaler-key-" + suffix;
   addLog("Creating key pair '" + keyPairName + "'...", "cmd");
-  var keyResp = await withAbort(ec2.createKeyPair({ KeyName: keyPairName }).promise(), signal);
+  var keyResp = await withAbort(ec2.createKeyPair({
+    KeyName: keyPairName,
+    TagSpecifications: [{ ResourceType: "key-pair", Tags: [{ Key: "scaler-deployment", Value: suffix }] }],
+  }).promise(), signal);
   downloadText(keyPairName + ".pem", keyResp.KeyMaterial);
   addLog("  ✓ Key downloaded as " + keyPairName + ".pem", "ok");
   partial.key_pair_name = keyPairName;
@@ -346,7 +349,14 @@ async function provision(cfg, creds, addLog, onPartialState, signal) {
   var myIp  = await withAbort(getMyPublicIp(), signal);
   var sgName = "scaler-sg-" + suffix;
   addLog("Creating security group '" + sgName + "' (your IP: " + myIp + ")...", "cmd");
-  var sgResp = await withAbort(ec2.createSecurityGroup({ GroupName: sgName, Description: "OpenGRIS Scaler scheduler [" + suffix + "]" }).promise(), signal);
+  var sgResp = await withAbort(ec2.createSecurityGroup({
+    GroupName: sgName,
+    Description: "OpenGRIS Scaler scheduler [" + suffix + "]",
+    TagSpecifications: [{ ResourceType: "security-group", Tags: [
+      { Key: "Name", Value: sgName },
+      { Key: "scaler-deployment", Value: suffix },
+    ]}],
+  }).promise(), signal);
   var sgId = sgResp.GroupId;
   partial.security_group_id = sgId;
   onPartialState(partial);
@@ -376,7 +386,10 @@ async function provision(cfg, creds, addLog, onPartialState, signal) {
     IamInstanceProfile: { Name: iamState.instance_profile_name },
     UserData: btoa(userData),
     MinCount: 1, MaxCount: 1,
-    TagSpecifications: [{ ResourceType: "instance", Tags: [{ Key: "Name", Value: "scaler-scheduler-" + suffix }] }],
+    TagSpecifications: [{ ResourceType: "instance", Tags: [
+      { Key: "Name", Value: "scaler-scheduler-" + suffix },
+      { Key: "scaler-deployment", Value: suffix },
+    ]}],
   }).promise(), signal);
   var instanceId = runResp.Instances[0].InstanceId;
   partial.instance_id = instanceId;
@@ -467,39 +480,32 @@ async function destroyResources(state, creds, addLog, signal) {
   addLog("openGRIS Scaler — teardown", "dim");
   addLog("─".repeat(52), "dim");
 
-  // Terminate worker instances first (they hold the security group open).
-  if (state.worker_name) {
-    addLog("Searching for worker instances tagged '" + state.worker_name + "'...", "cmd");
-    var resp = await withAbort(ec2.describeInstances({
+  // Terminate all deployment instances (scheduler + any ORB workers) in one pass.
+  // Search by scaler-deployment tag; fall back to explicit instance_id for old state files.
+  addLog("Searching for deployment instances (scaler-deployment=" + state.name_suffix + ")...", "cmd");
+  var instanceIdSet = {};
+  if (state.name_suffix) {
+    var tagResp = await withAbort(ec2.describeInstances({
       Filters: [
-        { Name: "tag:Name", Values: [state.worker_name] },
+        { Name: "tag:scaler-deployment", Values: [state.name_suffix] },
         { Name: "instance-state-name", Values: ["pending", "running", "stopping", "stopped"] },
       ],
     }).promise(), signal);
-    var workerIds = resp.Reservations.reduce(function(acc, r) {
-      return acc.concat(r.Instances.map(function(i) { return i.InstanceId; }));
-    }, []);
-    if (workerIds.length > 0) {
-      addLog("  → Terminating " + workerIds.length + " worker instance(s)...", "info");
-      try {
-        await withAbort(ec2.terminateInstances({ InstanceIds: workerIds }).promise(), signal);
-        await withAbort(ec2.waitFor("instanceTerminated", { InstanceIds: workerIds }).promise(), signal);
-        addLog("  ✓ Worker instances terminated", "ok");
-      } catch (e) { if (e.name === "AbortError") throw e; addLog("  ! Warning: " + e.message, "warn"); }
-    } else {
-      addLog("  → No live worker instances found", "info");
-    }
+    tagResp.Reservations.forEach(function(r) {
+      r.Instances.forEach(function(i) { instanceIdSet[i.InstanceId] = true; });
+    });
   }
-
-  // Terminate scheduler instance.
-  if (state.instance_id) {
-    addLog("Terminating scheduler instance " + state.instance_id + "...", "cmd");
+  if (state.instance_id) instanceIdSet[state.instance_id] = true;
+  var allInstanceIds = Object.keys(instanceIdSet);
+  if (allInstanceIds.length > 0) {
+    addLog("  → Terminating " + allInstanceIds.length + " instance(s): " + allInstanceIds.join(", "), "info");
     try {
-      await withAbort(ec2.terminateInstances({ InstanceIds: [state.instance_id] }).promise(), signal);
-      addLog("  → Waiting for termination...", "info");
-      await withAbort(ec2.waitFor("instanceTerminated", { InstanceIds: [state.instance_id] }).promise(), signal);
-      addLog("  ✓ Instance terminated", "ok");
+      await withAbort(ec2.terminateInstances({ InstanceIds: allInstanceIds }).promise(), signal);
+      await withAbort(ec2.waitFor("instanceTerminated", { InstanceIds: allInstanceIds }).promise(), signal);
+      addLog("  ✓ All instances terminated", "ok");
     } catch (e) { if (e.name === "AbortError") throw e; addLog("  ! Warning: " + e.message, "warn"); }
+  } else {
+    addLog("  → No live instances found", "info");
   }
 
   if (state.security_group_id) {
