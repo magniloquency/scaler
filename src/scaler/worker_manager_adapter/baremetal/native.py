@@ -50,8 +50,8 @@ class NativeWorkerProvisioner(DeclarativeWorkerProvisioner):
 
         self._workers: List[Worker] = []
         self._reconcile_loop = ReconcileLoop(
-            start_units=lambda n: self.start_units(n),
-            stop_units=lambda n: self.stop_units(n),
+            start_units=self.start_units,
+            stop_units=self.stop_units,
             get_current_count=lambda: len(self._workers),
             max_units=self._max_task_concurrency,
         )

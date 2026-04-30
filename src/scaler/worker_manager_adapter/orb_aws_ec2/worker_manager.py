@@ -44,8 +44,8 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
         self._workers_per_instance = workers_per_instance
         self._units: List[str] = []  # EC2 instance IDs of active units
         self._reconcile_loop = ReconcileLoop(
-            start_units=lambda n: self.start_units(n),
-            stop_units=lambda n: self.stop_units(n),
+            start_units=self.start_units,
+            stop_units=self.stop_units,
             get_current_count=lambda: len(self._units),
             max_units=max_instances,
         )
