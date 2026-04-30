@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import logging
 import math
@@ -17,6 +19,7 @@ from scaler.utility.event_loop import register_event_loop, run_task_forever
 from scaler.utility.logging.utility import setup_logger
 from scaler.worker_manager_adapter.common import extract_desired_count, format_capabilities
 from scaler.worker_manager_adapter.mixins import DeclarativeWorkerProvisioner
+from scaler.worker_manager_adapter.reconcile_loop import ReconcileLoop
 from scaler.worker_manager_adapter.worker_manager_runner import WorkerManagerRunner
 
 Status = WorkerManagerCommandResponse.Status
@@ -40,57 +43,19 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
         self._template_id = template_id
         self._workers_per_instance = workers_per_instance
         self._units: List[str] = []  # EC2 instance IDs of active units
-        self._desired_count: int = 0
-        self._reconcile_lock: asyncio.Lock = asyncio.Lock()
-
-        # keeps a strong reference to the running task
-        self._active_reconcile_task: Optional[asyncio.Task] = None
-        self._pending_reconcile_task: Optional[asyncio.Task] = None
+        self._reconcile_loop = ReconcileLoop(
+            start_units=lambda n: self.start_units(n),
+            stop_units=lambda n: self.stop_units(n),
+            get_current_count=lambda: len(self._units),
+            max_units=max_instances,
+        )
 
     async def set_desired_task_concurrency(
         self, requests: List[WorkerManagerCommand.DesiredTaskConcurrencyRequest]
     ) -> None:
         own_capabilities = self._config.worker_config.per_worker_capabilities.capabilities
         task_concurrency = extract_desired_count(requests, own_capabilities)
-        new_desired = math.ceil(task_concurrency / self._workers_per_instance)
-        if new_desired != self._desired_count:
-            logging.info(
-                f"Desired instance count changed: {self._desired_count} → {new_desired} "
-                f"(task_concurrency={task_concurrency}, workers_per_instance={self._workers_per_instance})"
-            )
-        self._desired_count = new_desired
-
-        # reconciling the ec2 instances can take some time
-        # so we launch a task to handle it in the background
-        # `_reconcile_lock` ensures only one runs at a time
-        if self._pending_reconcile_task is None:
-            self._pending_reconcile_task = asyncio.create_task(self._reconcile())
-
-    async def _reconcile(self) -> None:
-        async with self._reconcile_lock:
-            self._active_reconcile_task = asyncio.current_task()
-            self._pending_reconcile_task = None
-            try:
-                current = len(self._units)
-                delta = self._desired_count - current
-                if self._max_instances != -1:
-                    delta = min(delta, self._max_instances - current)
-                capped = self._max_instances != -1 and delta != self._desired_count - current
-                msg = f"Reconcile: desired={self._desired_count}, current={current}, delta={delta:+d}" + (
-                    f" (capped by max_instances={self._max_instances})" if capped else ""
-                )
-                if delta != 0:
-                    logging.info(msg)
-                else:
-                    logging.debug(msg)
-                if delta > 0:
-                    await self.start_units(delta)
-                elif delta < 0:
-                    await self.stop_units(abs(delta))
-            except Exception as exc:
-                logging.exception(f"Reconcile failed: {exc}")
-            finally:
-                self._active_reconcile_task = None
+        await self._reconcile_loop.set_desired(math.ceil(task_concurrency / self._workers_per_instance))
 
     async def start_units(self, count: int) -> None:
         logging.info(f"Submitting ORB batch machine request for template {self._template_id} (count={count})...")

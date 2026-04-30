@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 import math
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, List
 
 from scaler.config.section.aws_hpc_worker_manager import AWSBatchWorkerManagerConfig, AWSHPCBackend
 from scaler.worker_manager_adapter.aws_hpc.worker import create_aws_batch_worker
 from scaler.worker_manager_adapter.common import extract_desired_count
 from scaler.worker_manager_adapter.mixins import DeclarativeWorkerProvisioner
+from scaler.worker_manager_adapter.reconcile_loop import ReconcileLoop
 from scaler.worker_manager_adapter.worker_manager_runner import WorkerManagerRunner
 from scaler.worker_manager_adapter.worker_process import WorkerProcess
 
@@ -22,45 +22,18 @@ class BatchWorkerProvisioner(DeclarativeWorkerProvisioner):
         self._base_concurrency = config.max_concurrent_jobs
         self._capabilities = config.worker_config.per_worker_capabilities.capabilities
         self._units: List[WorkerProcess] = []
-        self._desired_count: int = 0
-        self._reconcile_lock: asyncio.Lock = asyncio.Lock()
-        self._pending_reconcile_task: Optional[asyncio.Task] = None
-        self._active_reconcile_task: Optional[asyncio.Task] = None
+        self._reconcile_loop = ReconcileLoop(
+            start_units=lambda n: self.start_units(n),
+            stop_units=lambda n: self.stop_units(n),
+            get_current_count=lambda: len(self._units),
+        )
 
     async def set_desired_task_concurrency(
         self, requests: List[WorkerManagerCommand.DesiredTaskConcurrencyRequest]
     ) -> None:
         task_concurrency = extract_desired_count(requests, self._capabilities)
         new_desired = math.ceil(task_concurrency / self._base_concurrency) if task_concurrency > 0 else 0
-        if new_desired != self._desired_count:
-            logging.info(
-                f"Desired worker process count changed: {self._desired_count} → {new_desired} "
-                f"(task_concurrency={task_concurrency}, base_concurrency={self._base_concurrency})"
-            )
-        self._desired_count = new_desired
-        if self._pending_reconcile_task is None:
-            self._pending_reconcile_task = asyncio.create_task(self._reconcile())
-
-    async def _reconcile(self) -> None:
-        async with self._reconcile_lock:
-            self._active_reconcile_task = asyncio.current_task()
-            self._pending_reconcile_task = None
-            try:
-                current = len(self._units)
-                delta = self._desired_count - current
-                msg = f"Reconcile: desired={self._desired_count}, current={current}, delta={delta:+d}"
-                if delta != 0:
-                    logging.info(msg)
-                else:
-                    logging.debug(msg)
-                if delta > 0:
-                    await self.start_units(delta)
-                elif delta < 0:
-                    await self.stop_units(abs(delta))
-            except Exception as exc:
-                logging.exception(f"Reconcile failed: {exc}")
-            finally:
-                self._active_reconcile_task = None
+        await self._reconcile_loop.set_desired(new_desired)
 
     async def start_units(self, count: int) -> None:
         config = self._config

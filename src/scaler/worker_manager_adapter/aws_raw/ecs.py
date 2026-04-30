@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 import math
 import shlex
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, List
 
 import boto3
 
 from scaler.config.section.ecs_worker_manager import ECSWorkerManagerConfig
 from scaler.worker_manager_adapter.common import extract_desired_count, format_capabilities
 from scaler.worker_manager_adapter.mixins import DeclarativeWorkerProvisioner
+from scaler.worker_manager_adapter.reconcile_loop import ReconcileLoop
 from scaler.worker_manager_adapter.worker_manager_runner import WorkerManagerRunner
 
 if TYPE_CHECKING:
@@ -47,10 +47,12 @@ class ECSWorkerProvisioner(DeclarativeWorkerProvisioner):
         self._ecs_subnets = config.ecs_subnets
         self._worker_manager_id = config.worker_manager_config.worker_manager_id.encode()
         self._units: List[str] = []  # ECS task ARNs of active units
-        self._desired_count: int = 0
-        self._reconcile_lock: asyncio.Lock = asyncio.Lock()
-        self._pending_reconcile_task: Optional[asyncio.Task] = None
-        self._active_reconcile_task: Optional[asyncio.Task] = None
+        self._reconcile_loop = ReconcileLoop(
+            start_units=lambda n: self.start_units(n),
+            stop_units=lambda n: self.stop_units(n),
+            get_current_count=lambda: len(self._units),
+            max_units=self._max_instances,
+        )
 
         aws_session = boto3.Session(
             aws_access_key_id=config.aws_access_key_id,
@@ -136,41 +138,7 @@ class ECSWorkerProvisioner(DeclarativeWorkerProvisioner):
         self, requests: List[WorkerManagerCommand.DesiredTaskConcurrencyRequest]
     ) -> None:
         task_concurrency = extract_desired_count(requests, self._capabilities)
-        new_desired = math.ceil(task_concurrency / self._ecs_task_cpu)
-        if new_desired != self._desired_count:
-            logging.info(
-                f"Desired instance count changed: {self._desired_count} → {new_desired} "
-                f"(task_concurrency={task_concurrency}, ecs_task_cpu={self._ecs_task_cpu})"
-            )
-        self._desired_count = new_desired
-        if self._pending_reconcile_task is None:
-            self._pending_reconcile_task = asyncio.create_task(self._reconcile())
-
-    async def _reconcile(self) -> None:
-        async with self._reconcile_lock:
-            self._active_reconcile_task = asyncio.current_task()
-            self._pending_reconcile_task = None
-            try:
-                current = len(self._units)
-                delta = self._desired_count - current
-                if self._max_instances != -1:
-                    delta = min(delta, self._max_instances - current)
-                capped = self._max_instances != -1 and delta != self._desired_count - current
-                msg = f"Reconcile: desired={self._desired_count}, current={current}, delta={delta:+d}" + (
-                    f" (capped by max_instances={self._max_instances})" if capped else ""
-                )
-                if delta != 0:
-                    logging.info(msg)
-                else:
-                    logging.debug(msg)
-                if delta > 0:
-                    await self.start_units(delta)
-                elif delta < 0:
-                    await self.stop_units(abs(delta))
-            except Exception as exc:
-                logging.exception(f"Reconcile failed: {exc}")
-            finally:
-                self._active_reconcile_task = None
+        await self._reconcile_loop.set_desired(math.ceil(task_concurrency / self._ecs_task_cpu))
 
     async def start_units(self, count: int) -> None:
         command = self._build_task_command()
