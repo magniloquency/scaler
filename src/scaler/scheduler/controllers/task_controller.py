@@ -16,7 +16,7 @@ from scaler.protocol.capnp import (
     TaskState,
     TaskTransition,
 )
-from scaler.protocol.helpers import capabilities_to_dict
+from scaler.protocol.helpers import capabilities_to_dict, dict_to_capabilities
 from scaler.scheduler.controllers.config_controller import VanillaConfigController
 from scaler.scheduler.controllers.mixins import (
     ClientController,
@@ -360,14 +360,14 @@ class VanillaTaskController(TaskController, Looper, Reporter):
     async def __send_monitor(self, task_id: TaskID, function_name: bytes, metadata: bytes = b""):
         worker = self._worker_controller.get_worker_by_task_id(task_id)
         task_state = self._task_state_manager.get_state_machine(task_id).current_state()
-        capabilities = self._task_id_to_task[task_id].capabilities if task_id in self._task_id_to_task else {}
+        capabilities = self._task_id_to_task[task_id].capabilities if task_id in self._task_id_to_task else []
         await self._binder_monitor.send(
             StateTask(
                 taskId=task_id,
                 functionName=function_name,
                 state=task_state,
                 worker=worker,
-                capabilities=capabilities,
+                capabilities=dict_to_capabilities(capabilities),
                 metadata=metadata,
             )
         )
