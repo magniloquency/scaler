@@ -95,8 +95,7 @@ struct TestWebSocketStreamPair {
         scaler::ymq::internal::WebSocketStream::upgradeAsServer(
             std::move(_tcp->_serverSide.value()),
             [&](std::expected<scaler::ymq::internal::WebSocketStream, scaler::wrapper::uv::Error> result) {
-                UV_EXIT_ON_ERROR(result);
-                _server.emplace(std::move(*result));
+                _server.emplace(UV_EXIT_ON_ERROR(result));
                 _serverUpgraded = true;
             });
         _tcp->_serverSide.reset();
