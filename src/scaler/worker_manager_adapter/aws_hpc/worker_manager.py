@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import logging
 import math
@@ -26,7 +28,7 @@ class BatchWorkerProvisioner(DeclarativeWorkerProvisioner):
         self._active_reconcile_task: Optional[asyncio.Task] = None
 
     async def set_desired_task_concurrency(
-        self, requests: List["WorkerManagerCommand.DesiredTaskConcurrencyRequest"]
+        self, requests: List[WorkerManagerCommand.DesiredTaskConcurrencyRequest]
     ) -> None:
         task_concurrency = extract_desired_count(requests, self._capabilities)
         new_desired = math.ceil(task_concurrency / self._base_concurrency) if task_concurrency > 0 else 0

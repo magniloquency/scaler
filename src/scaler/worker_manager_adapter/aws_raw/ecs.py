@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import logging
 import math
@@ -131,7 +133,7 @@ class ECSWorkerProvisioner(DeclarativeWorkerProvisioner):
         return command
 
     async def set_desired_task_concurrency(
-        self, requests: List["WorkerManagerCommand.DesiredTaskConcurrencyRequest"]
+        self, requests: List[WorkerManagerCommand.DesiredTaskConcurrencyRequest]
     ) -> None:
         task_concurrency = extract_desired_count(requests, self._capabilities)
         new_desired = math.ceil(task_concurrency / self._ecs_task_cpu)

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import logging
 import os
@@ -93,7 +95,7 @@ class NativeWorkerProvisioner(DeclarativeWorkerProvisioner):
             worker.join()
 
     async def set_desired_task_concurrency(
-        self, requests: List["WorkerManagerCommand.DesiredTaskConcurrencyRequest"]
+        self, requests: List[WorkerManagerCommand.DesiredTaskConcurrencyRequest]
     ) -> None:
         task_concurrency = extract_desired_count(requests, self._capabilities)
         new_desired = task_concurrency
