@@ -463,16 +463,11 @@ async function provision(cfg, creds, addLog, onPartialState, onKeyReady, signal)
       addLog("  ✗ Could not verify readiness — check /var/log/scaler.log on the instance", "warn");
     }
   } else {
-    addLog("  ℹ Skipping scheduler connection check — browsers can't open TCP connections", "info");
-    addLog("    Connect via: " + schedAddr, "info");
+    addLog("  ℹ Skipping scheduler connection check — browsers can't open TCP connections", "warn");
   }
 
   addLog("─".repeat(52), "dim");
   addLog("  DEPLOYMENT COMPLETE", "done");
-  addLog("─".repeat(52), "dim");
-  addLog("  scheduler:      " + schedAddr, "addr");
-  addLog("  object-storage: " + objAddr, "addr");
-  addLog("  ssh:            ssh -i " + keyPairName + ".pem ec2-user@" + publicIp, "addr");
   addLog("─".repeat(52), "dim");
 
   return state;
@@ -573,9 +568,21 @@ function NumericStepper({ value, onChange, min = 0, max = Infinity, step = 1, wi
 /* ── CopyBtn ── */
 function CopyBtn({ value }) {
   const [copied, setCopied] = useState(false);
+  const [hov, setHov] = useState(false);
   return (
-    <button onClick={() => navigator.clipboard.writeText(value).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); })}
-      style={{ background: "none", border: "1px solid rgba(0,200,224,0.2)", borderRadius: 3, color: copied ? "oklch(0.72 0.18 150)" : "oklch(0.5 0.08 200)", fontFamily: "inherit", fontSize: 10, padding: "2px 7px", cursor: "pointer", letterSpacing: "0.06em", transition: "color 0.15s", flexShrink: 0 }}>
+    <button
+      onClick={() => navigator.clipboard.writeText(value).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); })}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        background: hov && !copied ? "rgba(0,200,224,0.08)" : "none",
+        border: "1px solid " + (copied ? "rgba(0,255,136,0.4)" : hov ? "rgba(0,200,224,0.5)" : "rgba(0,200,224,0.2)"),
+        borderRadius: 3,
+        color: copied ? "oklch(0.72 0.18 150)" : hov ? "oklch(0.72 0.14 200)" : "oklch(0.5 0.08 200)",
+        fontFamily: "inherit", fontSize: 10, padding: "2px 7px", cursor: "pointer",
+        letterSpacing: "0.06em", transition: "color 0.12s, border-color 0.12s, background 0.12s",
+        flexShrink: 0,
+      }}>
       {copied ? "COPIED" : "COPY"}
     </button>
   );
@@ -586,7 +593,7 @@ function DeploymentCard({ state, onDestroy, onDownload, hasCredentials, isRunnin
   const rows = [
     { label: "Scheduler",      value: state.scheduler_address },
     { label: "Object storage", value: state.object_storage_address },
-    { label: "SSH",            value: state.public_ip ? "ssh -i " + state.key_file + " ec2-user@" + state.public_ip : null },
+    { label: "SSH",            value: state.public_ip ? "chmod 400 " + state.key_file + " &&\nssh -i " + state.key_file + " ec2-user@" + state.public_ip : null },
     { label: "Instance",       value: state.instance_id },
   ];
   return (
@@ -600,24 +607,27 @@ function DeploymentCard({ state, onDestroy, onDownload, hasCredentials, isRunnin
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {rows.map(({ label, value }) => value && (
+        {rows.map(({ label, value }) => (
           <div key={label} style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
             <span style={{ fontSize: 10, color: "oklch(0.42 0.04 220)", letterSpacing: "0.05em", width: 120, flexShrink: 0, textTransform: "uppercase" }}>{label}</span>
             <div style={{ display: "flex", alignItems: "baseline", gap: 6, flex: 1 }}>
-              <span style={{ fontSize: 12, color: "oklch(0.82 0.08 200)", fontWeight: 500, wordBreak: "break-all" }}>{value}</span>
-              <CopyBtn value={value} />
+              {value
+                ? <><span style={{ fontSize: 12, color: "oklch(0.82 0.08 200)", fontWeight: 500, wordBreak: "break-all", whiteSpace: "pre-wrap" }}>{value}</span><CopyBtn value={value} /></>
+                : <span style={{ fontSize: 12, color: "oklch(0.32 0.03 220)", fontStyle: "italic" }}>pending…</span>
+              }
             </div>
           </div>
         ))}
-        {keyMaterial && (
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ fontSize: 10, color: "oklch(0.42 0.04 220)", letterSpacing: "0.05em", width: 120, flexShrink: 0, textTransform: "uppercase" }}>SSH Key</span>
-            <button onClick={() => downloadText(keyMaterial.name + ".pem", keyMaterial.mat)}
-              style={{ background: "none", border: "1px solid rgba(0,200,224,0.2)", borderRadius: 3, color: "oklch(0.62 0.14 200)", fontFamily: "inherit", fontSize: 10, padding: "3px 9px", cursor: "pointer", letterSpacing: "0.05em" }}>
-              ↓ {keyMaterial.name}.pem
-            </button>
-          </div>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 10, color: "oklch(0.42 0.04 220)", letterSpacing: "0.05em", width: 120, flexShrink: 0, textTransform: "uppercase" }}>SSH Key</span>
+          {keyMaterial
+            ? <button onClick={() => downloadText(keyMaterial.name + ".pem", keyMaterial.mat)}
+                style={{ background: "none", border: "1px solid rgba(0,200,224,0.2)", borderRadius: 3, color: "oklch(0.62 0.14 200)", fontFamily: "inherit", fontSize: 10, padding: "3px 9px", cursor: "pointer", letterSpacing: "0.05em" }}>
+                ↓ {keyMaterial.name}.pem
+              </button>
+            : <span style={{ fontSize: 12, color: "oklch(0.32 0.03 220)", fontStyle: "italic" }}>pending…</span>
+          }
+        </div>
       </div>
 
       {!isRunning && (
@@ -1102,8 +1112,8 @@ function App() {
           </div>
         )}
 
-        {/* Deployment card — shown as soon as any state is known */}
-        {provState && (
+        {/* Deployment card — shown as soon as any state is known, hidden during teardown */}
+        {provState && phase !== "destroying" && (
           <div style={{ animation: "fadeSlideIn 0.3s ease" }}>
             {phase === "ready" && log.length === 0 && (
               <div style={{ marginBottom: 12, padding: "10px 14px", background: "rgba(0,200,224,0.05)", border: "1px solid rgba(0,200,224,0.15)", borderRadius: 3, fontSize: 11, color: "oklch(0.58 0.08 200)" }}>
