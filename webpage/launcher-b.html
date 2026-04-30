@@ -100,10 +100,10 @@ function downloadText(filename, content) {
 }
 
 function buildUserData(cfg, creds) {
-  var proto    = "ws";
+  var proto    = cfg.transport || "ws";
   var sp       = cfg.schedulerPort;
   var op       = cfg.objectStoragePort;
-  var wsSlash  = "/";
+  var wsSlash  = proto === "ws" ? "/" : "";
   var concLine = cfg.workerMaxConcurrency != null
     ? "\nmax_task_concurrency = " + cfg.workerMaxConcurrency : "";
   var tagLine  = '\ninstance_tags = {scaler-deployment = "' + cfg.nameSuffix + '"}';
@@ -428,8 +428,9 @@ async function provision(cfg, creds, addLog, onPartialState, onKeyReady, signal)
   onPartialState(partial);
 
   // 7. Build addresses and persist complete state
-  var schedAddr = "ws://" + publicIp + ":" + cfg.schedulerPort + "/";
-  var objAddr   = "ws://" + publicIp + ":" + cfg.objectStoragePort + "/";
+  var addrSlash = cfg.transport === "ws" ? "/" : "";
+  var schedAddr = cfg.transport + "://" + publicIp + ":" + cfg.schedulerPort + addrSlash;
+  var objAddr   = cfg.transport + "://" + publicIp + ":" + cfg.objectStoragePort + addrSlash;
 
   var state = {
     region: cfg.region,
@@ -442,7 +443,7 @@ async function provision(cfg, creds, addLog, onPartialState, onKeyReady, signal)
     private_ip: privateIp,
     vpc_id: vpcId,
     subnet_id: subnetId,
-    transport: "ws",
+    transport: cfg.transport,
     scheduler_port: cfg.schedulerPort,
     object_storage_port: cfg.objectStoragePort,
     scheduler_address: schedAddr,
@@ -452,14 +453,18 @@ async function provision(cfg, creds, addLog, onPartialState, onKeyReady, signal)
   };
   onPartialState(state);
 
-  // 8. Poll for scheduler readiness via WebSocket
-  addLog("Waiting up to " + cfg.pollTimeout + "s for scheduler at " + publicIp + ":" + cfg.schedulerPort + "...", "cmd");
-  var ready = await waitForWs(publicIp, cfg.schedulerPort, cfg.pollTimeout * 1000, cfg.pollInterval * 1000, signal);
-
-  if (ready) {
-    addLog("  ✓ Scheduler is reachable", "ok");
+  // 8. Poll for scheduler readiness (WebSocket only — browsers cannot open raw TCP connections)
+  if (cfg.transport === "ws") {
+    addLog("Waiting up to " + cfg.pollTimeout + "s for scheduler at " + publicIp + ":" + cfg.schedulerPort + "...", "cmd");
+    var ready = await waitForWs(publicIp, cfg.schedulerPort, cfg.pollTimeout * 1000, cfg.pollInterval * 1000, signal);
+    if (ready) {
+      addLog("  ✓ Scheduler is reachable", "ok");
+    } else {
+      addLog("  ✗ Could not verify readiness — check /var/log/scaler.log on the instance", "warn");
+    }
   } else {
-    addLog("  ✗ Could not verify readiness — check /var/log/scaler.log on the instance", "warn");
+    addLog("  ℹ Skipping scheduler connection check — browsers can't open TCP connections", "info");
+    addLog("    Connect via: " + schedAddr, "info");
   }
 
   addLog("─".repeat(52), "dim");
@@ -656,7 +661,8 @@ function App() {
   const [budgetCap,   setBudgetCap]   = useState(10);
   const [requirements, setReqs]     = useState("");
   /* advanced */
-  const [pythonVersion,        setPyVer]    = useState("3.12");
+  const [transport,            setTransport]= useState("ws");
+  const [pythonVersion,        setPyVer]    = useState("3.14");
   const [scalerPackage,        setScalerPkg]= useState("opengris-scaler[all]");
   const [instanceProfileName,  setIPN]      = useState("");
   const [nameSuffix,           setSuffix]   = useState("");
@@ -717,7 +723,7 @@ function App() {
     const cfg = {
       region, nameSuffix: suffix,
       instanceType: schedulerType, amiId: null,
-      transport: "ws", schedulerPort: 6788, objectStoragePort: 6789,
+      transport, schedulerPort: 6788, objectStoragePort: 6789,
       pythonVersion, scalerPackage,
       workerInstanceType: workerType, workerPythonVersion: pythonVersion,
       workerRequirements: workerReqs,
@@ -744,7 +750,7 @@ function App() {
       abortRef.current = null;
     }
   }, [formReady, region, accessKeyId, secretKey, schedulerType, workerType,
-      derivedCount, workerInst, requirements, pythonVersion, scalerPackage,
+      derivedCount, workerInst, requirements, transport, pythonVersion, scalerPackage,
       instanceProfileName, nameSuffix, pollTimeout, addLog, savePartial]);
 
   const handleAbort = useCallback(() => {
@@ -986,6 +992,25 @@ function App() {
                 <div>
                   <Label help="The EC2 instance type for the scheduler. Compute-optimized instances (c5/c6i) work well for most deployments.">Scheduler Instance</Label>
                   <InstancePicker value={schedulerType} onChange={setSchedulerType} defaultCat="all" />
+                </div>
+                <div>
+                  <Label help={"Network transport for the scheduler and object storage.\n---\nWebSocket (ws://) — required when connecting from a browser; also works from Python clients.\n---\nTCP (tcp://) — lower overhead for Python-only clients. Browsers cannot open raw TCP connections, so the readiness check is skipped during deployment."}>Transport Protocol</Label>
+                  <div style={{ display: "flex", borderRadius: 3, overflow: "hidden", border: "1px solid rgba(0,200,224,0.2)" }}>
+                    {[["ws", "WebSocket"], ["tcp", "TCP"]].map(([val, lbl]) => (
+                      <button key={val} onClick={() => setTransport(val)} style={{
+                        flex: 1, padding: "7px 0", fontFamily: "inherit", fontSize: 10, letterSpacing: "0.06em",
+                        textTransform: "uppercase", cursor: "pointer", border: "none",
+                        background: transport === val ? "rgba(0,200,224,0.18)" : "transparent",
+                        color: transport === val ? "oklch(0.78 0.16 200)" : "oklch(0.48 0.05 220)",
+                        transition: "background 0.15s, color 0.15s",
+                      }}>{lbl}</button>
+                    ))}
+                  </div>
+                  {transport === "tcp" && (
+                    <div style={{ marginTop: 6, fontSize: 10, color: "oklch(0.56 0.1 60)", lineHeight: 1.55 }}>
+                      Browsers can't open TCP connections — readiness check will be skipped.
+                    </div>
+                  )}
                 </div>
                 <div>
                   <Label help="Python version to install on the scheduler and workers via uv.">Python Version</Label>
