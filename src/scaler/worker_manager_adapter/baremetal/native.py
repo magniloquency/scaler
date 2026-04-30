@@ -1,20 +1,22 @@
+import asyncio
 import logging
 import os
 import signal
 import uuid
-from typing import Dict, List, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 from scaler.config.section.native_worker_manager import NativeWorkerManagerConfig, NativeWorkerManagerMode
-from scaler.protocol.capnp import WorkerManagerCommandResponse
 from scaler.utility.identifiers import WorkerID
 from scaler.worker.worker import Worker
-from scaler.worker_manager_adapter.mixins import ImperativeWorkerProvisioner
+from scaler.worker_manager_adapter.common import extract_desired_count
+from scaler.worker_manager_adapter.mixins import DeclarativeWorkerProvisioner
 from scaler.worker_manager_adapter.worker_manager_runner import WorkerManagerRunner
 
-Status = WorkerManagerCommandResponse.Status
+if TYPE_CHECKING:
+    from scaler.protocol.capnp import WorkerManagerCommand
 
 
-class NativeWorkerProvisioner(ImperativeWorkerProvisioner):
+class NativeWorkerProvisioner(DeclarativeWorkerProvisioner):
     def __init__(self, config: NativeWorkerManagerConfig) -> None:
         self._worker_scheduler_address = config.worker_manager_config.effective_worker_scheduler_address
         self._object_storage_address = config.worker_manager_config.object_storage_address
@@ -44,7 +46,11 @@ class NativeWorkerProvisioner(ImperativeWorkerProvisioner):
         else:
             raise ValueError(f"worker_type is not set and mode is unrecognised: {config.mode!r}")
 
-        self._workers: Dict[WorkerID, Worker] = {}
+        self._workers: List[Worker] = []
+        self._desired_count: int = 0
+        self._reconcile_lock: asyncio.Lock = asyncio.Lock()
+        self._pending_reconcile_task: Optional[asyncio.Task] = None
+        self._active_reconcile_task: Optional[asyncio.Task] = None
 
     def _create_worker(self) -> Worker:
         return Worker(
@@ -68,48 +74,77 @@ class NativeWorkerProvisioner(ImperativeWorkerProvisioner):
         )
 
     def run_fixed(self) -> None:
+        fixed_workers: Dict[WorkerID, Worker] = {}
         for _ in range(self._max_task_concurrency):
             worker = self._create_worker()
             worker.start()
-            self._workers[worker.identity] = worker
+            fixed_workers[worker.identity] = worker
 
         def _on_signal(sig: int, frame: object) -> None:
             logging.info("NativeWorkerProvisioner (FIXED): received signal %d, terminating workers", sig)
-            for worker in self._workers.values():
+            for worker in fixed_workers.values():
                 if worker.is_alive():
                     worker.terminate()
 
         signal.signal(signal.SIGTERM, _on_signal)
         signal.signal(signal.SIGINT, _on_signal)
 
-        for worker in self._workers.values():
+        for worker in fixed_workers.values():
             worker.join()
 
-    async def start_worker(self) -> Tuple[List[WorkerID], Status]:
-        if self._max_task_concurrency != -1 and len(self._workers) >= self._max_task_concurrency:
-            return [], Status.tooManyWorkers
+    async def set_desired_task_concurrency(
+        self, requests: List["WorkerManagerCommand.DesiredTaskConcurrencyRequest"]
+    ) -> None:
+        task_concurrency = extract_desired_count(requests, self._capabilities)
+        new_desired = task_concurrency
+        if new_desired != self._desired_count:
+            logging.info(f"Desired worker count changed: {self._desired_count} → {new_desired}")
+        self._desired_count = new_desired
+        if self._pending_reconcile_task is None:
+            self._pending_reconcile_task = asyncio.create_task(self._reconcile())
 
-        worker = self._create_worker()
-        worker.start()
-        self._workers[worker.identity] = worker
-        logging.info(f"Started native worker {worker.identity!r}")
-        return [worker.identity], Status.success
+    async def _reconcile(self) -> None:
+        async with self._reconcile_lock:
+            self._active_reconcile_task = asyncio.current_task()
+            self._pending_reconcile_task = None
+            try:
+                current = len(self._workers)
+                delta = self._desired_count - current
+                if self._max_task_concurrency != -1:
+                    delta = min(delta, self._max_task_concurrency - current)
+                capped = self._max_task_concurrency != -1 and delta != self._desired_count - current
+                msg = f"Reconcile: desired={self._desired_count}, current={current}, delta={delta:+d}" + (
+                    f" (capped by max_task_concurrency={self._max_task_concurrency})" if capped else ""
+                )
+                if delta != 0:
+                    logging.info(msg)
+                else:
+                    logging.debug(msg)
+                if delta > 0:
+                    await self.start_units(delta)
+                elif delta < 0:
+                    await self.stop_units(abs(delta))
+            except Exception as exc:
+                logging.exception(f"Reconcile failed: {exc}")
+            finally:
+                self._active_reconcile_task = None
 
-    async def shutdown_workers(self, worker_ids: List[WorkerID]) -> Tuple[List[WorkerID], Status]:
-        if not worker_ids:
-            return [], Status.workerNotFound
+    async def start_units(self, count: int) -> None:
+        for _ in range(count):
+            worker = self._create_worker()
+            worker.start()
+            self._workers.append(worker)
+            logging.info(f"Started native worker {worker.identity!r}")
 
-        for wid in worker_ids:
-            if wid not in self._workers:
-                logging.warning(f"Worker with ID {wid!r} does not exist.")
-                return [], Status.workerNotFound
-
-        for wid in worker_ids:
-            worker = self._workers.pop(wid)
+    async def stop_units(self, count: int) -> None:
+        to_stop = self._workers[:count]
+        if len(to_stop) < count:
+            logging.warning(f"Requested to stop {count} worker(s) but only {len(to_stop)} available.")
+        del self._workers[:count]
+        for worker in to_stop:
             os.kill(worker.pid, signal.SIGINT)
             worker.join()
-
-        return list(worker_ids), Status.success
+            logging.info(f"Stopped native worker {worker.identity!r}")
 
 
 class NativeWorkerManager:
