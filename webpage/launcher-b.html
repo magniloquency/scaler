@@ -306,7 +306,7 @@ async function destroyIamStack(iam, iamState, addLog) {
   } catch (e) { if (e.code !== "NoSuchEntity" && e.code !== "NoSuchEntityException") throw e; }
 }
 
-async function provision(cfg, creds, addLog, onPartialState, signal) {
+async function provision(cfg, creds, addLog, onPartialState, onKeyReady, signal) {
   var clients = makeAwsClients(cfg.region, creds);
   var ec2 = clients.ec2, iam = clients.iam;
   var suffix = cfg.nameSuffix;
@@ -339,8 +339,8 @@ async function provision(cfg, creds, addLog, onPartialState, signal) {
     KeyName: keyPairName,
     TagSpecifications: [{ ResourceType: "key-pair", Tags: [{ Key: "scaler-deployment", Value: suffix }] }],
   }).promise(), signal);
-  downloadText(keyPairName + ".pem", keyResp.KeyMaterial);
-  addLog("  ✓ Key downloaded as " + keyPairName + ".pem", "ok");
+  onKeyReady(keyPairName, keyResp.KeyMaterial);
+  addLog("  ✓ Key pair ready — download via the deployment panel", "ok");
   partial.key_pair_name = keyPairName;
   partial.key_file = keyPairName + ".pem";
   onPartialState(partial);
@@ -577,14 +577,11 @@ function CopyBtn({ value }) {
 }
 
 /* ── DeploymentCard ── */
-function DeploymentCard({ state, onDestroy, onDownload, hasCredentials }) {
+function DeploymentCard({ state, onDestroy, onDownload, hasCredentials, isRunning, keyMaterial }) {
   const rows = [
     { label: "Scheduler",      value: state.scheduler_address },
     { label: "Object storage", value: state.object_storage_address },
-    { label: "Public IP",      value: state.public_ip },
-    { label: "Private IP",     value: state.private_ip },
-    { label: "SSH",            value: "ssh -i " + state.key_file + " ec2-user@" + state.public_ip },
-    { label: "Region",         value: state.region },
+    { label: "SSH",            value: state.public_ip ? "ssh -i " + state.key_file + " ec2-user@" + state.public_ip : null },
     { label: "Instance",       value: state.instance_id },
   ];
   return (
@@ -601,34 +598,47 @@ function DeploymentCard({ state, onDestroy, onDownload, hasCredentials }) {
         {rows.map(({ label, value }) => value && (
           <div key={label} style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
             <span style={{ fontSize: 10, color: "oklch(0.42 0.04 220)", letterSpacing: "0.05em", width: 120, flexShrink: 0, textTransform: "uppercase" }}>{label}</span>
-            <span style={{ fontSize: 12, color: "oklch(0.82 0.08 200)", fontWeight: 500, flex: 1, wordBreak: "break-all" }}>{value}</span>
-            <CopyBtn value={value} />
+            <div style={{ display: "flex", alignItems: "baseline", gap: 6, flex: 1 }}>
+              <span style={{ fontSize: 12, color: "oklch(0.82 0.08 200)", fontWeight: 500, wordBreak: "break-all" }}>{value}</span>
+              <CopyBtn value={value} />
+            </div>
           </div>
         ))}
-      </div>
-
-      <div style={{ borderTop: "1px solid rgba(255,80,60,0.12)", paddingTop: 16 }}>
-        {!hasCredentials && (
-          <div style={{ fontSize: 11, color: "oklch(0.6 0.1 60)", marginBottom: 10 }}>
-            ↑ Enter AWS credentials in the panel on the left to enable teardown.
+        {keyMaterial && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 10, color: "oklch(0.42 0.04 220)", letterSpacing: "0.05em", width: 120, flexShrink: 0, textTransform: "uppercase" }}>SSH Key</span>
+            <button onClick={() => downloadText(keyMaterial.name + ".pem", keyMaterial.mat)}
+              style={{ background: "none", border: "1px solid rgba(0,200,224,0.2)", borderRadius: 3, color: "oklch(0.62 0.14 200)", fontFamily: "inherit", fontSize: 10, padding: "3px 9px", cursor: "pointer", letterSpacing: "0.05em" }}>
+              ↓ {keyMaterial.name}.pem
+            </button>
           </div>
         )}
-        <button onClick={onDestroy} disabled={!hasCredentials}
-          style={{
-            width: "100%", padding: "14px", fontFamily: "inherit", fontSize: 13, fontWeight: 700,
-            letterSpacing: "0.15em", textTransform: "uppercase", cursor: hasCredentials ? "pointer" : "default",
-            border: "1px solid " + (hasCredentials ? "oklch(0.48 0.18 15)" : "rgba(255,80,60,0.15)"),
-            borderRadius: 4,
-            background: hasCredentials
-              ? "linear-gradient(135deg, oklch(0.32 0.18 15) 0%, oklch(0.26 0.14 30) 100%)"
-              : "rgba(255,80,60,0.04)",
-            color: hasCredentials ? "oklch(0.88 0.1 30)" : "oklch(0.45 0.08 30)",
-            transition: "all 0.2s",
-            animation: hasCredentials ? "destroyPulse 4s ease-in-out infinite" : "none",
-          }}>
-          ▼  Destroy Cluster
-        </button>
       </div>
+
+      {!isRunning && (
+        <div style={{ borderTop: "1px solid rgba(255,80,60,0.12)", paddingTop: 16 }}>
+          {!hasCredentials && (
+            <div style={{ fontSize: 11, color: "oklch(0.6 0.1 60)", marginBottom: 10 }}>
+              ↑ Enter AWS credentials in the panel on the left to enable teardown.
+            </div>
+          )}
+          <button onClick={onDestroy} disabled={!hasCredentials}
+            style={{
+              width: "100%", padding: "14px", fontFamily: "inherit", fontSize: 13, fontWeight: 700,
+              letterSpacing: "0.15em", textTransform: "uppercase", cursor: hasCredentials ? "pointer" : "default",
+              border: "1px solid " + (hasCredentials ? "oklch(0.48 0.18 15)" : "rgba(255,80,60,0.15)"),
+              borderRadius: 4,
+              background: hasCredentials
+                ? "linear-gradient(135deg, oklch(0.32 0.18 15) 0%, oklch(0.26 0.14 30) 100%)"
+                : "rgba(255,80,60,0.04)",
+              color: hasCredentials ? "oklch(0.88 0.1 30)" : "oklch(0.45 0.08 30)",
+              transition: "all 0.2s",
+              animation: hasCredentials ? "destroyPulse 4s ease-in-out infinite" : "none",
+            }}>
+            ▼  Destroy Cluster
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -640,7 +650,7 @@ function App() {
   const [accessKeyId, setAKI]       = useState("");
   const [secretKey,   setSK]        = useState("");
   const [schedulerType, setSchedulerType] = useState("c5.xlarge");
-  const [workerType,  setWorkerType]= useState("g4dn.xlarge");
+  const [workerType,  setWorkerType]= useState("t3.medium");
   const [capMode,     setCapMode]   = useState("instances");
   const [instanceCap, setInstanceCap] = useState(4);
   const [budgetCap,   setBudgetCap]   = useState(10);
@@ -661,6 +671,7 @@ function App() {
   const [provState, setProvState] = useState(() => {
     try { const s = localStorage.getItem("scaler_state"); return s ? JSON.parse(s) : null; } catch { return null; }
   });
+  const [keyMaterial, setKeyMaterial] = useState(null);
   const abortRef = useRef(null);
 
   const addLog = useCallback((text, cls) => {
@@ -719,7 +730,7 @@ function App() {
     const controller = new AbortController();
     abortRef.current = controller;
     try {
-      const state = await provision(cfg, { accessKeyId, secretKey }, addLog, savePartial, controller.signal);
+      const state = await provision(cfg, { accessKeyId, secretKey }, addLog, savePartial, (name, mat) => setKeyMaterial({ name, mat }), controller.signal);
       savePartial(state);
       setPhase("ready");
     } catch (err) {
@@ -758,6 +769,7 @@ function App() {
       await destroyResources(provState, { accessKeyId, secretKey }, addLog, controller.signal);
       try { localStorage.removeItem("scaler_state"); } catch (_) {}
       setProvState(null);
+      setKeyMaterial(null);
       setLog([]);
       setPhase("idle");
     } catch (err) {
@@ -775,6 +787,7 @@ function App() {
     setLog([]);
     setPhase("idle");
     setProvState(null);
+    setKeyMaterial(null);
     try { localStorage.removeItem("scaler_state"); } catch (_) {}
   }, []);
 
@@ -894,8 +907,8 @@ function App() {
 
           {/* Worker instance */}
           <div>
-            <Label help="Worker instance type for ORB-provisioned compute nodes. Choose based on your workload: compute (c5/c6i) for CPU jobs, memory (r5/r6i) for large datasets, GPU (g4dn/g5) for ML workloads.">Worker Instance</Label>
-            <InstancePicker value={workerType} onChange={setWorkerType} />
+            <Label help="Worker instance type for ORB-provisioned compute nodes. Choose based on your workload: compute (c5/c6i) for CPU jobs, memory (r5/r6i) for large datasets, GPU (g4dn/g5) for ML workloads.">Worker Instance Type</Label>
+            <InstancePicker value={workerType} onChange={setWorkerType} defaultCat="all" />
           </div>
 
           {/* Scale cap */}
@@ -1064,10 +1077,10 @@ function App() {
           </div>
         )}
 
-        {/* Deployment details — shown in ready state */}
-        {phase === "ready" && provState && (
+        {/* Deployment card — shown as soon as any state is known */}
+        {provState && (
           <div style={{ animation: "fadeSlideIn 0.3s ease" }}>
-            {log.length === 0 && (
+            {phase === "ready" && log.length === 0 && (
               <div style={{ marginBottom: 12, padding: "10px 14px", background: "rgba(0,200,224,0.05)", border: "1px solid rgba(0,200,224,0.15)", borderRadius: 3, fontSize: 11, color: "oklch(0.58 0.08 200)" }}>
                 Deployment loaded from saved state.
               </div>
@@ -1077,6 +1090,8 @@ function App() {
               onDestroy={handleDestroy}
               onDownload={() => downloadText("scaler-state-" + provState.name_suffix + ".json", JSON.stringify(provState, null, 2))}
               hasCredentials={hasCredentials}
+              isRunning={isRunning}
+              keyMaterial={keyMaterial}
             />
           </div>
         )}
