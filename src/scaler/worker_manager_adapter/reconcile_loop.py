@@ -18,7 +18,7 @@ class ReconcileLoop:
         start_units: Async callable that launches `n` new units.
         stop_units: Async callable that terminates `n` existing units.
         get_current_unit_count: Callable that returns the current live unit count.
-        max_unit_count: Hard cap on the number of units. -1 means unlimited.
+        max_unit_count: Hard cap on the number of units. None means unlimited.
     """
 
     def __init__(
@@ -26,7 +26,7 @@ class ReconcileLoop:
         start_units: Callable[[int], Awaitable[None]],
         stop_units: Callable[[int], Awaitable[None]],
         get_current_unit_count: Callable[[], int],
-        max_unit_count: int = -1,
+        max_unit_count: Optional[int],
     ) -> None:
         self._start_units = start_units
         self._stop_units = stop_units
@@ -52,9 +52,9 @@ class ReconcileLoop:
             try:
                 current = self._get_current_unit_count()
                 delta = self._desired_unit_count - current
-                if self._max_unit_count != -1:
+                if self._max_unit_count is not None:
                     delta = min(delta, self._max_unit_count - current)
-                capped = self._max_unit_count != -1 and delta != self._desired_unit_count - current
+                capped = self._max_unit_count is not None and delta != self._desired_unit_count - current
                 msg = f"Reconcile: desired={self._desired_unit_count}, current={current}, delta={delta:+d}" + (
                     f" (capped by max_unit_count={self._max_unit_count})" if capped else ""
                 )

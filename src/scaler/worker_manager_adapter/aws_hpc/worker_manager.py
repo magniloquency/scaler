@@ -23,7 +23,10 @@ class BatchWorkerProvisioner(DeclarativeWorkerProvisioner):
         self._capabilities = config.worker_config.per_worker_capabilities.capabilities
         self._units: List[WorkerProcess] = []
         self._reconcile_loop = ReconcileLoop(
-            start_units=self.start_units, stop_units=self.stop_units, get_current_unit_count=lambda: len(self._units)
+            start_units=self.start_units,
+            stop_units=self.stop_units,
+            get_current_unit_count=lambda: len(self._units),
+            max_unit_count=None,
         )
 
     async def set_desired_task_concurrency(
