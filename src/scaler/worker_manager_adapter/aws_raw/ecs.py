@@ -183,7 +183,6 @@ class ECSWorkerProvisioner(DeclarativeWorkerProvisioner):
         to_stop = self._units[:count]
         if len(to_stop) < count:
             logging.warning(f"Requested to stop {count} ECS task(s) but only {len(to_stop)} available.")
-        del self._units[:count]
         for task_arn in to_stop:
             resp = self._ecs_client.stop_task(
                 cluster=self._ecs_cluster, task=task_arn, reason="Shutdown requested by ECS adapter"
@@ -192,6 +191,7 @@ class ECSWorkerProvisioner(DeclarativeWorkerProvisioner):
             if failures:
                 logging.error(f"ECS stop task {task_arn!r} failed: {failures}")
             else:
+                self._units.remove(task_arn)
                 logging.info(f"Stopped ECS task {task_arn!r}")
 
 

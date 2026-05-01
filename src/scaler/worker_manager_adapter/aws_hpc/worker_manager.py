@@ -69,10 +69,10 @@ class BatchWorkerProvisioner(DeclarativeWorkerProvisioner):
         to_stop = self._units[:count]
         if len(to_stop) < count:
             logging.warning(f"Requested to stop {count} worker process(es) but only {len(to_stop)} available.")
-        del self._units[:count]
         for worker in to_stop:
             worker.terminate()
             worker.join()
+            self._units.pop(0)
             logging.info(f"Stopped Batch worker process {worker.name!r}")
 
     def terminate_all(self) -> None:

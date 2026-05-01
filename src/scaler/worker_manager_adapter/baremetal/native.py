@@ -113,10 +113,10 @@ class NativeWorkerProvisioner(DeclarativeWorkerProvisioner):
         to_stop = self._workers[:count]
         if len(to_stop) < count:
             logging.warning(f"Requested to stop {count} worker(s) but only {len(to_stop)} available.")
-        del self._workers[:count]
         for worker in to_stop:
             os.kill(worker.pid, signal.SIGINT)
             worker.join()
+            self._workers.pop(0)
             logging.info(f"Stopped native worker {worker.identity!r}")
 
 
