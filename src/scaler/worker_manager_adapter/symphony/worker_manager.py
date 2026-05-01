@@ -45,7 +45,7 @@ class SymphonyWorkerProvisioner(DeclarativeWorkerProvisioner):
         task_concurrency = extract_desired_count(requests, self._capabilities)
         await self._reconcile_loop.set_desired_unit_count(task_concurrency)
 
-    async def _start_unit(self) -> None:
+    def _start_unit(self) -> None:
         worker = create_symphony_worker(
             address=self._worker_scheduler_address,
             object_storage_address=self._object_storage_address,
@@ -65,7 +65,7 @@ class SymphonyWorkerProvisioner(DeclarativeWorkerProvisioner):
 
     async def start_units(self, count: int) -> None:
         for _ in range(count):
-            await self._start_unit()
+            self._start_unit()
 
     async def stop_units(self, count: int) -> None:
         to_stop = self._workers[:count]

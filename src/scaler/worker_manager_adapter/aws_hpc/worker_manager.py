@@ -36,7 +36,7 @@ class BatchWorkerProvisioner(DeclarativeWorkerProvisioner):
         new_desired = math.ceil(task_concurrency / self._base_concurrency) if task_concurrency > 0 else 0
         await self._reconcile_loop.set_desired_unit_count(new_desired)
 
-    async def _start_unit(self) -> None:
+    def _start_unit(self) -> None:
         config = self._config
         worker = create_aws_batch_worker(
             name=config.name,
@@ -63,7 +63,7 @@ class BatchWorkerProvisioner(DeclarativeWorkerProvisioner):
 
     async def start_units(self, count: int) -> None:
         for _ in range(count):
-            await self._start_unit()
+            self._start_unit()
 
     async def stop_units(self, count: int) -> None:
         to_stop = self._units[:count]
