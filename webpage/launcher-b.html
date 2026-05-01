@@ -198,9 +198,14 @@ function buildUserData(cfg, creds) {
     "key_name = \"scaler-key-" + cfg.nameSuffix + "\"\n" +
     "subnet_id = \"$SUBNET_ID\"\n" +
     "security_group_ids = [\"" + cfg.securityGroupId + "\"]\n" +
-    "logging_level = \"INFO\"" + concLine + tagLine + dbgLine + "\n" +
+    "logging_level = \"INFO\"" + concLine + tagLine + dbgLine +
+    "\nnetwork_backend = \"" + (cfg.networkBackend || "tcp_zmq") + "\"\n" +
+    "[gui]\n" +
+    "monitor_address = \"" + proto + "://127.0.0.1:" + (sp + 2) + wsSlash + "\"\n" +
+    "gui_address = \"0.0.0.0:50001\"\n" +
     "CONFIG_EOF\n\n" +
-    "SCALER_NETWORK_BACKEND=ymq /opt/scaler-venv/bin/scaler /opt/scaler/config.toml >> /var/log/scaler.log 2>&1 &\n" +
+    (cfg.networkBackend === "ymq" ? "SCALER_NETWORK_BACKEND=ymq " : "") +
+    "/opt/scaler-venv/bin/scaler /opt/scaler/config.toml >> /var/log/scaler.log 2>&1 &\n" +
     "echo \"Scaler started (PID=$!)\"\n";
 }
 
@@ -368,8 +373,12 @@ async function provision(cfg, creds, addLog, onPartialState, onKeyReady, signal)
         IpRanges: [{ CidrIp: myIp + "/32", Description: "SSH from local machine" }] },
       { IpProtocol: "tcp", FromPort: cfg.schedulerPort, ToPort: cfg.schedulerPort,
         IpRanges: [{ CidrIp: myIp + "/32", Description: "Scaler scheduler from local machine" }] },
+      { IpProtocol: "tcp", FromPort: cfg.schedulerPort + 2, ToPort: cfg.schedulerPort + 2,
+        IpRanges: [{ CidrIp: myIp + "/32", Description: "Scaler scheduler monitor from local machine" }] },
       { IpProtocol: "tcp", FromPort: cfg.objectStoragePort, ToPort: cfg.objectStoragePort,
         IpRanges: [{ CidrIp: myIp + "/32", Description: "Scaler object storage from local machine" }] },
+      { IpProtocol: "tcp", FromPort: 50001, ToPort: 50001,
+        IpRanges: [{ CidrIp: myIp + "/32", Description: "Scaler web GUI from local machine" }] },
     ],
   }).promise(), signal);
   addLog("  ✓ Security group created: " + sgId, "ok");
@@ -406,10 +415,11 @@ async function provision(cfg, creds, addLog, onPartialState, onKeyReady, signal)
   var privateIp = inst.PrivateIpAddress;
   var vpcId     = inst.VpcId;
   var subnetId  = inst.SubnetId;
-  partial.public_ip  = publicIp;
-  partial.private_ip = privateIp;
-  partial.vpc_id     = vpcId;
-  partial.subnet_id  = subnetId;
+  partial.public_ip    = publicIp;
+  partial.private_ip   = privateIp;
+  partial.vpc_id       = vpcId;
+  partial.subnet_id    = subnetId;
+  partial.gui_address  = "http://" + publicIp + ":50001";
   addLog("  ✓ Instance running", "ok");
   addLog("  → Public IP:  " + publicIp, "info");
   addLog("  → Private IP: " + privateIp, "info");
@@ -448,6 +458,8 @@ async function provision(cfg, creds, addLog, onPartialState, onKeyReady, signal)
     object_storage_port: cfg.objectStoragePort,
     scheduler_address: schedAddr,
     object_storage_address: objAddr,
+    monitor_address: cfg.transport + "://" + publicIp + ":" + (cfg.schedulerPort + 2) + addrSlash,
+    gui_address: "http://" + publicIp + ":50001",
     iam: iamState,
     worker_name: "scaler-worker-" + suffix,
   };
@@ -593,6 +605,8 @@ function DeploymentCard({ state, onDestroy, onDownload, hasCredentials, isRunnin
   const rows = [
     { label: "Scheduler",      value: state.scheduler_address },
     { label: "Object storage", value: state.object_storage_address },
+    { label: "Monitor",        value: state.monitor_address },
+    { label: "GUI",            value: state.gui_address, href: state.gui_address },
     { label: "SSH",            value: state.public_ip ? "chmod 400 " + state.key_file + " &&\nssh -i " + state.key_file + " ec2-user@" + state.public_ip : null },
     { label: "Instance",       value: state.instance_id },
   ];
@@ -607,12 +621,15 @@ function DeploymentCard({ state, onDestroy, onDownload, hasCredentials, isRunnin
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {rows.map(({ label, value }) => (
+        {rows.map(({ label, value, href }) => (
           <div key={label} style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
             <span style={{ fontSize: 10, color: "oklch(0.42 0.04 220)", letterSpacing: "0.05em", width: 120, flexShrink: 0, textTransform: "uppercase" }}>{label}</span>
             <div style={{ display: "flex", alignItems: "baseline", gap: 6, flex: 1 }}>
               {value
-                ? <><span style={{ fontSize: 12, color: "oklch(0.82 0.08 200)", fontWeight: 500, wordBreak: "break-all", whiteSpace: "pre-wrap" }}>{value}</span><CopyBtn value={value} /></>
+                ? <>{href
+                    ? <a href={href} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "oklch(0.72 0.18 200)", fontWeight: 500, wordBreak: "break-all", whiteSpace: "pre-wrap", fontFamily: "inherit", textDecoration: "none", borderBottom: "1px solid rgba(0,200,224,0.3)" }}>{value}</a>
+                    : <span style={{ fontSize: 12, color: "oklch(0.82 0.08 200)", fontWeight: 500, wordBreak: "break-all", whiteSpace: "pre-wrap" }}>{value}</span>
+                  }<CopyBtn value={value} /></>
                 : <span style={{ fontSize: 12, color: "oklch(0.32 0.03 220)", fontStyle: "italic" }}>pending…</span>
               }
             </div>
@@ -672,6 +689,7 @@ function App() {
   const [requirements, setReqs]     = useState("");
   /* advanced */
   const [transport,            setTransport]= useState("ws");
+  const [networkBackend,       setNetBack]  = useState("ymq");
   const [pythonVersion,        setPyVer]    = useState("3.14");
   const [scalerPackage,        setScalerPkg]= useState("opengris-scaler[all]");
   const [instanceProfileName,  setIPN]      = useState("");
@@ -733,7 +751,7 @@ function App() {
     const cfg = {
       region, nameSuffix: suffix,
       instanceType: schedulerType, amiId: null,
-      transport, schedulerPort: 6788, objectStoragePort: 6789,
+      transport, networkBackend, schedulerPort: 6788, objectStoragePort: 6789,
       pythonVersion, scalerPackage,
       workerInstanceType: workerType, workerPythonVersion: pythonVersion,
       workerRequirements: workerReqs,
@@ -760,7 +778,7 @@ function App() {
       abortRef.current = null;
     }
   }, [formReady, region, accessKeyId, secretKey, schedulerType, workerType,
-      derivedCount, workerInst, requirements, transport, pythonVersion, scalerPackage,
+      derivedCount, workerInst, requirements, transport, networkBackend, pythonVersion, scalerPackage,
       instanceProfileName, nameSuffix, pollTimeout, addLog, savePartial]);
 
   const handleAbort = useCallback(() => {
@@ -1004,10 +1022,10 @@ function App() {
                   <InstancePicker value={schedulerType} onChange={setSchedulerType} defaultCat="all" />
                 </div>
                 <div>
-                  <Label help={"Network transport for the scheduler and object storage.\n---\nWebSocket (ws://) — required when connecting from a browser; also works from Python clients.\n---\nTCP (tcp://) — lower overhead for Python-only clients. Browsers cannot open raw TCP connections, so the readiness check is skipped during deployment."}>Transport Protocol</Label>
+                  <Label help={"Network transport for the scheduler and object storage.\n---\nWebSocket (ws://) — required when connecting from a browser; also works from Python clients. Requires YMQ backend.\n---\nTCP (tcp://) — works with both ZMQ and YMQ. Browsers cannot open raw TCP connections, so the readiness check is skipped during deployment."}>Transport Protocol</Label>
                   <div style={{ display: "flex", borderRadius: 3, overflow: "hidden", border: "1px solid rgba(0,200,224,0.2)" }}>
                     {[["ws", "WebSocket"], ["tcp", "TCP"]].map(([val, lbl]) => (
-                      <button key={val} onClick={() => setTransport(val)} style={{
+                      <button key={val} onClick={() => { setTransport(val); if (val === "ws") setNetBack("ymq"); }} style={{
                         flex: 1, padding: "7px 0", fontFamily: "inherit", fontSize: 10, letterSpacing: "0.06em",
                         textTransform: "uppercase", cursor: "pointer", border: "none",
                         background: transport === val ? "rgba(0,200,224,0.18)" : "transparent",
@@ -1019,6 +1037,28 @@ function App() {
                   {transport === "tcp" && (
                     <div style={{ marginTop: 6, fontSize: 10, color: "oklch(0.56 0.1 60)", lineHeight: 1.55 }}>
                       Browsers can't open TCP connections — readiness check will be skipped.
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <Label help={"Messaging backend for scheduler/worker communication.\n---\nZMQ (default) — battle-tested, broad compatibility. TCP transport only.\n---\nYMQ — lower-latency C++ transport; required for WebSocket. All components (scheduler, workers, clients) must use the same backend."}>Network Backend</Label>
+                  <div style={{ display: "flex", borderRadius: 3, overflow: "hidden", border: "1px solid rgba(0,200,224,0.2)" }}>
+                    {[["tcp_zmq", "ZMQ"], ["ymq", "YMQ"]].map(([val, lbl]) => {
+                      const disabled = val === "tcp_zmq" && transport === "ws";
+                      return (
+                        <button key={val} disabled={disabled} onClick={() => { setNetBack(val); if (val === "tcp_zmq") setTransport("tcp"); }} style={{
+                          flex: 1, padding: "7px 0", fontFamily: "inherit", fontSize: 10, letterSpacing: "0.06em",
+                          textTransform: "uppercase", cursor: disabled ? "not-allowed" : "pointer", border: "none",
+                          background: networkBackend === val ? "rgba(0,200,224,0.18)" : "transparent",
+                          color: disabled ? "oklch(0.35 0.03 220)" : networkBackend === val ? "oklch(0.78 0.16 200)" : "oklch(0.48 0.05 220)",
+                          transition: "background 0.15s, color 0.15s",
+                        }}>{lbl}</button>
+                      );
+                    })}
+                  </div>
+                  {transport === "ws" && (
+                    <div style={{ marginTop: 6, fontSize: 10, color: "oklch(0.52 0.08 200)", lineHeight: 1.55 }}>
+                      WebSocket requires YMQ.
                     </div>
                   )}
                 </div>

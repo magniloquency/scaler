@@ -5,6 +5,7 @@ from scaler.config.common.logging import LoggingConfig
 from scaler.config.common.worker import WorkerConfig
 from scaler.config.common.worker_manager import WorkerManagerConfig
 from scaler.config.config_class import ConfigClass
+from scaler.config.types.network_backend import NetworkBackendType
 
 
 @dataclasses.dataclass
@@ -92,4 +93,8 @@ class ORBAWSEC2WorkerAdapterConfig(ConfigClass):
     debug_dump_path: Optional[str] = dataclasses.field(
         default=None,
         metadata=dict(help="If set, dump config and template kwargs as JSON files to this directory for debugging"),
+    )
+    network_backend: NetworkBackendType = dataclasses.field(
+        default=NetworkBackendType.tcp_zmq,
+        metadata=dict(help="Network backend for worker communication (tcp_zmq or ymq)"),
     )
