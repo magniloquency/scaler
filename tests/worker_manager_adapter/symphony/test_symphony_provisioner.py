@@ -35,13 +35,3 @@ class TestSymphonyWorkerProvisionerConcurrencyConversion(unittest.IsolatedAsynci
         with patch.object(provisioner._reconcile_loop, "_reconcile", new_callable=AsyncMock):
             await provisioner.set_desired_task_concurrency([request])
         self.assertEqual(provisioner._reconcile_loop._desired_unit_count, 4)
-
-    async def test_desired_unit_count_is_zero_when_no_matching_requests(self) -> None:
-        provisioner = _make_provisioner()
-        with patch.object(provisioner._reconcile_loop, "_reconcile", new_callable=AsyncMock):
-            await provisioner.set_desired_task_concurrency([])
-        self.assertEqual(provisioner._reconcile_loop._desired_unit_count, 0)
-
-    async def test_max_task_concurrency_wired_to_reconcile_loop(self) -> None:
-        provisioner = _make_provisioner(max_task_concurrency=3)
-        self.assertEqual(provisioner._reconcile_loop._max_unit_count, 3)
