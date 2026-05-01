@@ -26,7 +26,7 @@ class BatchWorkerProvisioner(DeclarativeWorkerProvisioner):
             start_units=self.start_units,
             stop_units=self.stop_units,
             get_current_unit_count=lambda: len(self._units),
-            max_unit_count=None,
+            max_unit_count=-1,
         )
 
     async def set_desired_task_concurrency(

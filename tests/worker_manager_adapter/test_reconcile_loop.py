@@ -1,12 +1,11 @@
 import asyncio
 import unittest
-from typing import Optional
 from unittest.mock import AsyncMock
 
 from scaler.worker_manager_adapter.reconcile_loop import ReconcileLoop
 
 
-def _make_loop(units: list, max_unit_count: Optional[int] = None) -> tuple[ReconcileLoop, AsyncMock, AsyncMock]:
+def _make_loop(units: list, max_unit_count: int = -1) -> tuple[ReconcileLoop, AsyncMock, AsyncMock]:
     start_mock = AsyncMock()
     stop_mock = AsyncMock()
     loop = ReconcileLoop(
@@ -60,7 +59,7 @@ class TestReconcileLoopReconcile(unittest.IsolatedAsyncioTestCase):
     async def test_reconcile_exception_is_caught_and_does_not_propagate(self) -> None:
         start_mock = AsyncMock(side_effect=RuntimeError("boom"))
         loop = ReconcileLoop(
-            start_units=start_mock, stop_units=AsyncMock(), get_current_unit_count=lambda: 0, max_unit_count=None
+            start_units=start_mock, stop_units=AsyncMock(), get_current_unit_count=lambda: 0, max_unit_count=-1
         )
         loop._desired_unit_count = 1
         await loop._reconcile()  # must not raise
@@ -68,7 +67,7 @@ class TestReconcileLoopReconcile(unittest.IsolatedAsyncioTestCase):
     async def test_reconcile_clears_active_task_on_exception(self) -> None:
         start_mock = AsyncMock(side_effect=RuntimeError("boom"))
         loop = ReconcileLoop(
-            start_units=start_mock, stop_units=AsyncMock(), get_current_unit_count=lambda: 0, max_unit_count=None
+            start_units=start_mock, stop_units=AsyncMock(), get_current_unit_count=lambda: 0, max_unit_count=-1
         )
         loop._desired_unit_count = 1
         await loop._reconcile()
