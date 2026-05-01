@@ -39,8 +39,9 @@ class ReconcileLoop:
 
     async def set_desired_unit_count(self, count: int) -> None:
         """Set the desired number of units and schedule a reconcile if needed."""
-        if count != self._desired_unit_count:
-            logging.info(f"Desired unit count changed: {self._desired_unit_count} → {count}")
+        if count == self._desired_unit_count:
+            return
+        logging.info(f"Desired unit count changed: {self._desired_unit_count} → {count}")
         self._desired_unit_count = count
         if self._pending_reconcile_task is None:
             self._pending_reconcile_task = asyncio.create_task(self._reconcile())
