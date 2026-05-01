@@ -45,24 +45,27 @@ class SymphonyWorkerProvisioner(DeclarativeWorkerProvisioner):
         task_concurrency = extract_desired_count(requests, self._capabilities)
         await self._reconcile_loop.set_desired(task_concurrency)
 
+    async def _start_unit(self) -> None:
+        worker = create_symphony_worker(
+            address=self._worker_scheduler_address,
+            object_storage_address=self._object_storage_address,
+            service_name=self._service_name,
+            capabilities=self._capabilities,
+            base_concurrency=self._max_task_concurrency,
+            heartbeat_interval_seconds=self._heartbeat_interval_seconds,
+            death_timeout_seconds=self._death_timeout_seconds,
+            task_queue_size=self._task_queue_size,
+            io_threads=self._io_threads,
+            event_loop=self._event_loop,
+            worker_manager_id=self._worker_manager_id,
+        )
+        worker.start()
+        self._workers.append(worker)
+        logging.info(f"Started Symphony worker {worker.identity!r}")
+
     async def start_units(self, count: int) -> None:
         for _ in range(count):
-            worker = create_symphony_worker(
-                address=self._worker_scheduler_address,
-                object_storage_address=self._object_storage_address,
-                service_name=self._service_name,
-                capabilities=self._capabilities,
-                base_concurrency=self._max_task_concurrency,
-                heartbeat_interval_seconds=self._heartbeat_interval_seconds,
-                death_timeout_seconds=self._death_timeout_seconds,
-                task_queue_size=self._task_queue_size,
-                io_threads=self._io_threads,
-                event_loop=self._event_loop,
-                worker_manager_id=self._worker_manager_id,
-            )
-            worker.start()
-            self._workers.append(worker)
-            logging.info(f"Started Symphony worker {worker.identity!r}")
+            await self._start_unit()
 
     async def stop_units(self, count: int) -> None:
         to_stop = self._workers[:count]

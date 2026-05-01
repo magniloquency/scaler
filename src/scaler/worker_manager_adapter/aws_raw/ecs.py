@@ -140,43 +140,44 @@ class ECSWorkerProvisioner(DeclarativeWorkerProvisioner):
         task_concurrency = extract_desired_count(requests, self._capabilities)
         await self._reconcile_loop.set_desired(math.ceil(task_concurrency / self._ecs_task_cpu))
 
+    async def _start_unit(self, command: str) -> None:
+        resp = self._ecs_client.run_task(
+            cluster=self._ecs_cluster,
+            taskDefinition=self._ecs_task_definition,
+            launchType="FARGATE",
+            overrides={
+                "containerOverrides": [
+                    {
+                        "name": "scaler-container",
+                        "environment": [
+                            {"name": "COMMAND", "value": command},
+                            {"name": "PYTHON_REQUIREMENTS", "value": self._ecs_python_requirements},
+                            {"name": "PYTHON_VERSION", "value": self._ecs_python_version},
+                        ],
+                    }
+                ]
+            },
+            networkConfiguration={"awsvpcConfiguration": {"subnets": self._ecs_subnets, "assignPublicIp": "ENABLED"}},
+        )
+
+        failures = resp.get("failures") or []
+        if failures:
+            raise RuntimeError(f"ECS run task failed: {failures}")
+
+        tasks = resp.get("tasks") or []
+        if not tasks:
+            raise RuntimeError("ECS run task returned no tasks")
+        if len(tasks) > 1:
+            raise RuntimeError("ECS run task returned multiple tasks, expected only one")
+
+        task_arn = tasks[0]["taskArn"]
+        self._units.append(task_arn)
+        logging.info(f"Started ECS task {task_arn!r}")
+
     async def start_units(self, count: int) -> None:
         command = self._build_task_command()
         for _ in range(count):
-            resp = self._ecs_client.run_task(
-                cluster=self._ecs_cluster,
-                taskDefinition=self._ecs_task_definition,
-                launchType="FARGATE",
-                overrides={
-                    "containerOverrides": [
-                        {
-                            "name": "scaler-container",
-                            "environment": [
-                                {"name": "COMMAND", "value": command},
-                                {"name": "PYTHON_REQUIREMENTS", "value": self._ecs_python_requirements},
-                                {"name": "PYTHON_VERSION", "value": self._ecs_python_version},
-                            ],
-                        }
-                    ]
-                },
-                networkConfiguration={
-                    "awsvpcConfiguration": {"subnets": self._ecs_subnets, "assignPublicIp": "ENABLED"}
-                },
-            )
-
-            failures = resp.get("failures") or []
-            if failures:
-                raise RuntimeError(f"ECS run task failed: {failures}")
-
-            tasks = resp.get("tasks") or []
-            if not tasks:
-                raise RuntimeError("ECS run task returned no tasks")
-            if len(tasks) > 1:
-                raise RuntimeError("ECS run task returned multiple tasks, expected only one")
-
-            task_arn = tasks[0]["taskArn"]
-            self._units.append(task_arn)
-            logging.info(f"Started ECS task {task_arn!r}")
+            await self._start_unit(command)
 
     async def stop_units(self, count: int) -> None:
         to_stop = self._units[:count]

@@ -33,31 +33,34 @@ class BatchWorkerProvisioner(DeclarativeWorkerProvisioner):
         new_desired = math.ceil(task_concurrency / self._base_concurrency) if task_concurrency > 0 else 0
         await self._reconcile_loop.set_desired(new_desired)
 
-    async def start_units(self, count: int) -> None:
+    async def _start_unit(self) -> None:
         config = self._config
+        worker = create_aws_batch_worker(
+            name=config.name,
+            address=config.worker_manager_config.effective_worker_scheduler_address,
+            object_storage_address=config.worker_manager_config.object_storage_address,
+            job_queue=config.job_queue,
+            job_definition=config.job_definition,
+            aws_region=config.aws_region,
+            s3_bucket=config.s3_bucket,
+            s3_prefix=config.s3_prefix,
+            capabilities=self._capabilities,
+            base_concurrency=self._base_concurrency,
+            heartbeat_interval_seconds=config.worker_config.heartbeat_interval_seconds,
+            death_timeout_seconds=config.worker_config.death_timeout_seconds,
+            task_queue_size=config.worker_config.per_worker_task_queue_size,
+            io_threads=config.worker_config.io_threads,
+            event_loop=config.worker_config.event_loop,
+            job_timeout_seconds=config.job_timeout_minutes * 60,
+            worker_manager_id=config.worker_manager_config.worker_manager_id.encode(),
+        )
+        worker.start()
+        self._units.append(worker)
+        logging.info(f"Started Batch worker process {worker.name!r}")
+
+    async def start_units(self, count: int) -> None:
         for _ in range(count):
-            worker = create_aws_batch_worker(
-                name=config.name,
-                address=config.worker_manager_config.effective_worker_scheduler_address,
-                object_storage_address=config.worker_manager_config.object_storage_address,
-                job_queue=config.job_queue,
-                job_definition=config.job_definition,
-                aws_region=config.aws_region,
-                s3_bucket=config.s3_bucket,
-                s3_prefix=config.s3_prefix,
-                capabilities=self._capabilities,
-                base_concurrency=self._base_concurrency,
-                heartbeat_interval_seconds=config.worker_config.heartbeat_interval_seconds,
-                death_timeout_seconds=config.worker_config.death_timeout_seconds,
-                task_queue_size=config.worker_config.per_worker_task_queue_size,
-                io_threads=config.worker_config.io_threads,
-                event_loop=config.worker_config.event_loop,
-                job_timeout_seconds=config.job_timeout_minutes * 60,
-                worker_manager_id=config.worker_manager_config.worker_manager_id.encode(),
-            )
-            worker.start()
-            self._units.append(worker)
-            logging.info(f"Started Batch worker process {worker.name!r}")
+            await self._start_unit()
 
     async def stop_units(self, count: int) -> None:
         to_stop = self._units[:count]
