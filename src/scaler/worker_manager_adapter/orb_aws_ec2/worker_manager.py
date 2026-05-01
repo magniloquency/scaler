@@ -46,8 +46,8 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
         self._reconcile_loop = ReconcileLoop(
             start_units=self.start_units,
             stop_units=self.stop_units,
-            get_current_count=lambda: len(self._units),
-            max_units=max_instances,
+            get_current_unit_count=lambda: len(self._units),
+            max_unit_count=max_instances,
         )
 
     async def set_desired_task_concurrency(
@@ -55,7 +55,7 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
     ) -> None:
         own_capabilities = self._config.worker_config.per_worker_capabilities.capabilities
         task_concurrency = extract_desired_count(requests, own_capabilities)
-        await self._reconcile_loop.set_desired(math.ceil(task_concurrency / self._workers_per_instance))
+        await self._reconcile_loop.set_desired_unit_count(math.ceil(task_concurrency / self._workers_per_instance))
 
     async def start_units(self, count: int) -> None:
         logging.info(f"Submitting ORB batch machine request for template {self._template_id} (count={count})...")

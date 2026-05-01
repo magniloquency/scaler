@@ -31,17 +31,17 @@ class TestORBWorkerProvisionerConcurrencyConversion(unittest.IsolatedAsyncioTest
         request = _make_request(task_concurrency=100, capabilities={"cpu": 4})
         with patch.object(provisioner._reconcile_loop, "_reconcile", new_callable=AsyncMock):
             await provisioner.set_desired_task_concurrency([request])
-        self.assertEqual(provisioner._reconcile_loop._desired_count, 7)  # ceil(100 / 16) = 7
+        self.assertEqual(provisioner._reconcile_loop._desired_unit_count, 7)  # ceil(100 / 16) = 7
 
-    async def test_desired_count_is_zero_when_no_matching_requests(self) -> None:
+    async def test_desired_unit_count_is_zero_when_no_matching_requests(self) -> None:
         provisioner = _make_provisioner()
         with patch.object(provisioner._reconcile_loop, "_reconcile", new_callable=AsyncMock):
             await provisioner.set_desired_task_concurrency([])
-        self.assertEqual(provisioner._reconcile_loop._desired_count, 0)
+        self.assertEqual(provisioner._reconcile_loop._desired_unit_count, 0)
 
     async def test_max_instances_wired_to_reconcile_loop(self) -> None:
         provisioner = _make_provisioner(max_instances=5)
-        self.assertEqual(provisioner._reconcile_loop._max_units, 5)
+        self.assertEqual(provisioner._reconcile_loop._max_unit_count, 5)
 
 
 class TestExtractDesiredCount(unittest.TestCase):

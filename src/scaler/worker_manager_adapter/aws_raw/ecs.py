@@ -50,8 +50,8 @@ class ECSWorkerProvisioner(DeclarativeWorkerProvisioner):
         self._reconcile_loop = ReconcileLoop(
             start_units=self.start_units,
             stop_units=self.stop_units,
-            get_current_count=lambda: len(self._units),
-            max_units=self._max_instances,
+            get_current_unit_count=lambda: len(self._units),
+            max_unit_count=self._max_instances,
         )
 
         aws_session = boto3.Session(
@@ -138,7 +138,7 @@ class ECSWorkerProvisioner(DeclarativeWorkerProvisioner):
         self, requests: List[WorkerManagerCommand.DesiredTaskConcurrencyRequest]
     ) -> None:
         task_concurrency = extract_desired_count(requests, self._capabilities)
-        await self._reconcile_loop.set_desired(math.ceil(task_concurrency / self._ecs_task_cpu))
+        await self._reconcile_loop.set_desired_unit_count(math.ceil(task_concurrency / self._ecs_task_cpu))
 
     async def _start_unit(self, command: str) -> None:
         resp = self._ecs_client.run_task(

@@ -35,15 +35,15 @@ class SymphonyWorkerProvisioner(DeclarativeWorkerProvisioner):
         self._reconcile_loop = ReconcileLoop(
             start_units=self.start_units,
             stop_units=self.stop_units,
-            get_current_count=lambda: len(self._workers),
-            max_units=self._max_task_concurrency,
+            get_current_unit_count=lambda: len(self._workers),
+            max_unit_count=self._max_task_concurrency,
         )
 
     async def set_desired_task_concurrency(
         self, requests: List[WorkerManagerCommand.DesiredTaskConcurrencyRequest]
     ) -> None:
         task_concurrency = extract_desired_count(requests, self._capabilities)
-        await self._reconcile_loop.set_desired(task_concurrency)
+        await self._reconcile_loop.set_desired_unit_count(task_concurrency)
 
     async def _start_unit(self) -> None:
         worker = create_symphony_worker(
