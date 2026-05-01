@@ -80,6 +80,11 @@ class DeclarativeWorkerProvisioner(ABC):
         ...
 
     @abstractmethod
+    def active_unit_count(self) -> int:
+        """Return the number of currently active units."""
+        ...
+
+    @abstractmethod
     async def terminate(self) -> None:
         """Cancel the reconcile loop and stop all running units."""
         ...

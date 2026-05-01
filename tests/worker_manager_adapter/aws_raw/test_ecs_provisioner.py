@@ -18,7 +18,7 @@ def _make_provisioner(max_task_concurrency: int = -1, ecs_task_cpu: int = 4) -> 
         provisioner._reconcile_loop = ReconcileLoop(
             start_units=lambda n: provisioner.start_units(n),
             stop_units=lambda n: provisioner.stop_units(n),
-            get_current_unit_count=lambda: len(provisioner._units),
+            active_unit_count=lambda: len(provisioner._units),
             max_unit_count=max_instances,
         )
         provisioner._ecs_client = MagicMock()

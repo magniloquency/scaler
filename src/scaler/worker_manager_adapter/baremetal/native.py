@@ -52,7 +52,7 @@ class NativeWorkerProvisioner(DeclarativeWorkerProvisioner):
         self._reconcile_loop = ReconcileLoop(
             start_units=self.start_units,
             stop_units=self.stop_units,
-            get_current_unit_count=lambda: len(self._workers),
+            active_unit_count=self.active_unit_count,
             max_unit_count=self._max_task_concurrency,
         )
 
@@ -101,6 +101,9 @@ class NativeWorkerProvisioner(DeclarativeWorkerProvisioner):
     ) -> None:
         task_concurrency = extract_desired_count(requests, self._capabilities)
         await self._reconcile_loop.set_desired_unit_count(task_concurrency)
+
+    def active_unit_count(self) -> int:
+        return len(self._workers)
 
     async def start_units(self, count: int) -> None:
         for _ in range(count):

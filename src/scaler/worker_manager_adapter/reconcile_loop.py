@@ -9,7 +9,7 @@ class ReconcileLoop:
     """Manages async scale-up/down reconciliation for a pool of homogeneous units.
 
     Callers set a desired unit count via `set_desired_unit_count`. The loop
-    compares that against the live count returned by `get_current_unit_count` and
+    compares that against the live count returned by `active_unit_count` and
     calls `start_units` or `stop_units` with the delta. A single long-lived task
     blocks on an asyncio.Event between reconciles so it only wakes when a new
     desired count has been signalled; rapid successive calls are coalesced because
@@ -20,7 +20,7 @@ class ReconcileLoop:
     Args:
         start_units: Async callable that launches `n` new units.
         stop_units: Async callable that terminates `n` existing units.
-        get_current_unit_count: Callable that returns the current live unit count.
+        active_unit_count: Callable that returns the current live unit count.
         max_unit_count: Hard cap on the number of units. -1 means unlimited.
     """
 
@@ -28,12 +28,12 @@ class ReconcileLoop:
         self,
         start_units: Callable[[int], Awaitable[None]],
         stop_units: Callable[[int], Awaitable[None]],
-        get_current_unit_count: Callable[[], int],
+        active_unit_count: Callable[[], int],
         max_unit_count: int,
     ) -> None:
         self._start_units = start_units
         self._stop_units = stop_units
-        self._get_current_unit_count = get_current_unit_count
+        self._active_unit_count = active_unit_count
         self._max_unit_count = max_unit_count
         self._desired_unit_count: int = 0
         self._active_reconcile_task: Optional[asyncio.Task] = None
@@ -69,7 +69,7 @@ class ReconcileLoop:
                     break
 
                 desired = self._desired_unit_count
-                current = self._get_current_unit_count()
+                current = self._active_unit_count()
                 delta = desired - current
                 if self._max_unit_count != -1:
                     delta = min(delta, self._max_unit_count - current)

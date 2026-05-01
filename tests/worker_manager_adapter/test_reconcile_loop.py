@@ -11,7 +11,7 @@ def _make_loop(units: list, max_unit_count: int = -1) -> tuple[ReconcileLoop, As
     loop = ReconcileLoop(
         start_units=start_mock,
         stop_units=stop_mock,
-        get_current_unit_count=lambda: len(units),
+        active_unit_count=lambda: len(units),
         max_unit_count=max_unit_count,
     )
     return loop, start_mock, stop_mock
@@ -59,7 +59,7 @@ class TestReconcileLoopReconcile(unittest.IsolatedAsyncioTestCase):
     async def test_reconcile_exception_is_caught_and_task_stays_alive(self) -> None:
         start_mock = AsyncMock(side_effect=RuntimeError("boom"))
         loop = ReconcileLoop(
-            start_units=start_mock, stop_units=AsyncMock(), get_current_unit_count=lambda: 0, max_unit_count=-1
+            start_units=start_mock, stop_units=AsyncMock(), active_unit_count=lambda: 0, max_unit_count=-1
         )
         await loop.set_desired_unit_count(1)
         await asyncio.sleep(0)  # exception is caught internally; must not propagate here
