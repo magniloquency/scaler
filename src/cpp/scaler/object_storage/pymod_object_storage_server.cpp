@@ -33,14 +33,13 @@ static void PyObjectStorageServerDealloc(PyObject* self)
 static PyObject* PyObjectStorageServerRun(PyObject* self, PyObject* args)
 {
     const char* addr;
-    int port;
     const char* identity;
     const char* log_level;
     const char* log_format;
     PyObject* logging_paths_tuple = nullptr;
 
     if (!PyArg_ParseTuple(
-            args, "sisssO!", &addr, &port, &identity, &log_level, &log_format, &PyTuple_Type, &logging_paths_tuple))
+            args, "ssssO!", &addr, &identity, &log_level, &log_format, &PyTuple_Type, &logging_paths_tuple))
         return nullptr;
 
     std::vector<std::string> logging_paths;
@@ -65,7 +64,6 @@ static PyObject* PyObjectStorageServerRun(PyObject* self, PyObject* args)
     // we have to copy this memory before releasing the GIL
     // because it's owned by Python
     std::string addressString(addr);
-    std::string portString = std::to_string(port);
     std::string identityString(identity);
     std::string logLevelString(log_level);
     std::string logFormatString(log_format);
@@ -74,7 +72,6 @@ static PyObject* PyObjectStorageServerRun(PyObject* self, PyObject* args)
     ((PyObjectStorageServer*)self)
         ->server.run(
             std::move(addressString),
-            std::move(portString),
             std::move(identityString),
             std::move(logLevelString),
             std::move(logFormatString),

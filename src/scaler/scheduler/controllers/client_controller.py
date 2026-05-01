@@ -70,7 +70,9 @@ class VanillaClientController(ClientController, Looper, Reporter):
             client_id,
             ClientHeartbeatEcho(
                 objectStorageAddress=ObjectStorageAddress(
-                    host=object_storage_address.host, port=object_storage_address.port
+                    host=object_storage_address.host,
+                    port=object_storage_address.port,
+                    scheme=object_storage_address.type.value,
                 )
             ),
         )
