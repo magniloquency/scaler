@@ -115,6 +115,9 @@ class WorkerManagerRunner:
         except Exception:
             logging.exception(f"{self._ident!r}: failed with unhandled exception")
 
+        if isinstance(self._worker_provisioner, DeclarativeWorkerProvisioner):
+            await self._worker_provisioner.terminate()
+
     async def _on_receive_external(self, message: BaseMessage) -> None:
         try:
             if isinstance(message, WorkerManagerCommand):

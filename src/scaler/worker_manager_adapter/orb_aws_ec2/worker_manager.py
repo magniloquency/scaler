@@ -110,7 +110,8 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
         del self._units[:count]
         logging.info(f"Successfully stopped {count} unit(s): instances {unit_ids}")
 
-    async def terminate_all_workers(self) -> None:
+    async def terminate(self) -> None:
+        self._reconcile_loop.cancel()
         if not self._units:
             return
         logging.info(f"Terminating {len(self._units)} unit(s)...")
@@ -260,8 +261,6 @@ class ORBAWSEC2WorkerAdapter:
                 await self._runner.run_in_loop(self._loop)
             except asyncio.CancelledError:
                 pass
-            finally:
-                await self._orb_pool.terminate_all_workers()
 
     def _cleanup(self) -> None:
         if self._cleaned_up:

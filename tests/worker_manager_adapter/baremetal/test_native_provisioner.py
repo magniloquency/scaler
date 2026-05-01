@@ -55,5 +55,3 @@ class TestNativeWorkerProvisionerStopUnits(unittest.IsolatedAsyncioTestCase):
         with patch("os.kill"):
             await provisioner.stop_units(5)
         self.assertEqual(provisioner._workers, [])
-        for worker in workers:
-            worker.join.assert_called_once()

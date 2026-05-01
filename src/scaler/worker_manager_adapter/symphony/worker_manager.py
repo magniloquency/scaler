@@ -73,9 +73,12 @@ class SymphonyWorkerProvisioner(DeclarativeWorkerProvisioner):
             logging.warning(f"Requested to stop {count} worker(s) but only {len(to_stop)} available.")
         for worker in to_stop:
             os.kill(worker.pid, signal.SIGINT)
-            worker.join()
             self._workers.pop(0)
             logging.info(f"Stopped Symphony worker {worker.identity!r}")
+
+    async def terminate(self) -> None:
+        self._reconcile_loop.cancel()
+        await self.stop_units(len(self._workers))
 
 
 class SymphonyWorkerManager:

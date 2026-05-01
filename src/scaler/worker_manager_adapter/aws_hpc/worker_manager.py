@@ -71,14 +71,13 @@ class BatchWorkerProvisioner(DeclarativeWorkerProvisioner):
             logging.warning(f"Requested to stop {count} worker process(es) but only {len(to_stop)} available.")
         for worker in to_stop:
             worker.terminate()
-            worker.join()
             self._units.pop(0)
             logging.info(f"Stopped Batch worker process {worker.name!r}")
 
-    def terminate_all(self) -> None:
+    async def terminate(self) -> None:
+        self._reconcile_loop.cancel()
         for worker in self._units:
             worker.terminate()
-            worker.join()
         self._units.clear()
 
 
@@ -104,7 +103,4 @@ class AWSHPCWorkerManager:
             io_threads=config.worker_config.io_threads,
             workers_per_provisioner_unit=config.max_concurrent_jobs,
         )
-        try:
-            runner.run()
-        finally:
-            provisioner.terminate_all()
+        runner.run()

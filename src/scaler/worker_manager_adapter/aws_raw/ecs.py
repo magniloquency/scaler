@@ -194,6 +194,10 @@ class ECSWorkerProvisioner(DeclarativeWorkerProvisioner):
                 self._units.remove(task_arn)
                 logging.info(f"Stopped ECS task {task_arn!r}")
 
+    async def terminate(self) -> None:
+        self._reconcile_loop.cancel()
+        await self.stop_units(len(self._units))
+
 
 class ECSWorkerManager:
     def __init__(self, config: ECSWorkerManagerConfig) -> None:

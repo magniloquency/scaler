@@ -78,3 +78,8 @@ class DeclarativeWorkerProvisioner(ABC):
     async def stop_units(self, count: int) -> None:
         """Shut down `count` units."""
         ...
+
+    @abstractmethod
+    async def terminate(self) -> None:
+        """Cancel the reconcile loop and stop all running units."""
+        ...
