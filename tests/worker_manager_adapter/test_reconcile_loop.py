@@ -104,3 +104,34 @@ class TestReconcileLoopSetDesiredUnitCount(unittest.IsolatedAsyncioTestCase):
         await loop.set_desired_unit_count(1)
         loop.cancel()
         self.assertTrue(loop._stop.is_set())
+
+    async def test_reconcile_fires_again_after_exception(self) -> None:
+        call_count = 0
+
+        async def flaky_start(n: int) -> None:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("first call fails")
+
+        loop = ReconcileLoop(
+            start_units=flaky_start, stop_units=AsyncMock(), active_unit_count=lambda: 0, max_unit_count=-1
+        )
+        await loop.set_desired_unit_count(1)
+        await asyncio.sleep(0)
+        self.assertEqual(call_count, 1)
+
+        await loop.set_desired_unit_count(2)
+        await asyncio.sleep(0)
+        self.assertEqual(call_count, 2)
+
+
+class TestReconcileLoopCapEdgeCases(unittest.IsolatedAsyncioTestCase):
+    async def test_reconcile_noop_when_pool_already_at_max_capacity(self) -> None:
+        units = [object(), object()]
+        loop, start_mock, stop_mock = _make_loop(units=units, max_unit_count=2)
+        await loop.set_desired_unit_count(5)
+        await asyncio.sleep(0)
+        # delta = min(5 - 2, 2 - 2) = 0: pool is full, nothing to start
+        start_mock.assert_not_called()
+        stop_mock.assert_not_called()

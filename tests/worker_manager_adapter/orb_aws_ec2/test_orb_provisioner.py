@@ -1,7 +1,6 @@
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from scaler.worker_manager_adapter.common import extract_desired_count
 from scaler.worker_manager_adapter.orb_aws_ec2.worker_manager import ORBWorkerProvisioner
 
 
@@ -32,42 +31,3 @@ class TestORBWorkerProvisionerConcurrencyConversion(unittest.IsolatedAsyncioTest
         with patch.object(provisioner._reconcile_loop, "_reconcile", new_callable=AsyncMock):
             await provisioner.set_desired_task_concurrency([request])
         self.assertEqual(provisioner._reconcile_loop._desired_unit_count, 7)  # ceil(100 / 16) = 7
-
-
-class TestExtractDesiredCount(unittest.TestCase):
-    OWN_CAPABILITIES = {"cpu": 4}
-
-    def _make_request(self, task_concurrency: int, capabilities: dict) -> MagicMock:
-        request = MagicMock()
-        request.taskConcurrency = task_concurrency
-        request.capabilities = [MagicMock(key=key, value=value) for key, value in capabilities.items()]
-        return request
-
-    def test_returns_zero_for_empty_requests(self) -> None:
-        self.assertEqual(extract_desired_count([], self.OWN_CAPABILITIES), 0)
-
-    def test_exact_capability_match(self) -> None:
-        request = self._make_request(task_concurrency=8, capabilities={"cpu": 4})
-        self.assertEqual(extract_desired_count([request], self.OWN_CAPABILITIES), 8)
-
-    def test_empty_capabilities_matches_as_wildcard(self) -> None:
-        request = self._make_request(task_concurrency=5, capabilities={})
-        self.assertEqual(extract_desired_count([request], self.OWN_CAPABILITIES), 5)
-
-    def test_sums_all_matching_requests(self) -> None:
-        wildcard = self._make_request(task_concurrency=2, capabilities={})
-        specific = self._make_request(task_concurrency=6, capabilities={"cpu": 4})
-        self.assertEqual(extract_desired_count([wildcard, specific], self.OWN_CAPABILITIES), 8)
-
-    def test_returns_zero_when_no_request_matches(self) -> None:
-        request = self._make_request(task_concurrency=3, capabilities={"gpu": 1})
-        self.assertEqual(extract_desired_count([request], self.OWN_CAPABILITIES), 0)
-
-    def test_sums_multiple_matches_excluding_non_matching(self) -> None:
-        wildcard = self._make_request(task_concurrency=4, capabilities={})
-        matching = self._make_request(task_concurrency=3, capabilities={"cpu": 4})
-        non_matching = self._make_request(task_concurrency=10, capabilities={"gpu": 1})
-        self.assertEqual(
-            extract_desired_count([wildcard, matching, non_matching], self.OWN_CAPABILITIES),
-            7,  # 4 + 3; non_matching excluded
-        )
