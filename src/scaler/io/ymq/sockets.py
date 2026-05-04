@@ -74,6 +74,25 @@ class ConnectorSocket:
         return ConnectorSocket(base_socket)
 
     @staticmethod
+    async def async_connect(
+        context: _ymq.IOContext,
+        identity: str,
+        address: str,
+        max_retry_times: int = _ymq.DEFAULT_MAX_RETRY_TIMES,
+        init_retry_delay: int = _ymq.DEFAULT_INIT_RETRY_DELAY,
+    ) -> "ConnectorSocket":
+        base_socket: Optional[_ymq.ConnectorSocket] = None
+
+        def create(callback, *args, **kwargs):
+            nonlocal base_socket
+            base_socket = _ymq.ConnectorSocket.connect(callback, *args, **kwargs)
+
+        await call_async(create, context, identity, address, max_retry_times, init_retry_delay)
+        assert base_socket is not None
+
+        return ConnectorSocket(base_socket)
+
+    @staticmethod
     def bind(context: _ymq.IOContext, identity: str, address: str) -> "ConnectorSocket":
         base_socket: Optional[_ymq.ConnectorSocket] = None
 
