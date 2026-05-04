@@ -36,7 +36,7 @@ class BatchWorkerProvisioner(DeclarativeWorkerProvisioner):
         self, requests: List[WorkerManagerCommand.DesiredTaskConcurrencyRequest]
     ) -> None:
         task_concurrency = extract_desired_count(requests, self._capabilities)
-        new_desired = math.ceil(task_concurrency / self._base_concurrency) if task_concurrency > 0 else 0
+        new_desired = math.ceil(task_concurrency / self._base_concurrency)
         await self._reconcile_loop.set_desired_unit_count(new_desired)
 
     def _start_unit(self) -> None:
