@@ -95,6 +95,5 @@ class ORBAWSEC2WorkerAdapterConfig(ConfigClass):
         metadata=dict(help="If set, dump config and template kwargs as JSON files to this directory for debugging"),
     )
     network_backend: NetworkBackendType = dataclasses.field(
-        default=NetworkBackendType.zmq,
-        metadata=dict(help="Network backend for worker communication (zmq or ymq)"),
+        default=NetworkBackendType.zmq, metadata=dict(help="Network backend for worker communication (zmq or ymq)")
     )
