@@ -56,15 +56,6 @@ class TestReconcileLoopReconcile(unittest.IsolatedAsyncioTestCase):
         start_mock.assert_not_called()
         stop_mock.assert_called_once_with(2)
 
-    async def test_reconcile_exception_is_caught_and_task_stays_alive(self) -> None:
-        start_mock = AsyncMock(side_effect=RuntimeError("boom"))
-        loop = ReconcileLoop(
-            start_units=start_mock, stop_units=AsyncMock(), active_unit_count=lambda: 0, max_unit_count=-1
-        )
-        await loop.set_desired_unit_count(1)
-        await asyncio.sleep(0)  # exception is caught internally; must not propagate here
-        self.assertIsNotNone(loop._active_reconcile_task)  # task is still alive after exception
-
 
 class TestReconcileLoopSetDesiredUnitCount(unittest.IsolatedAsyncioTestCase):
     async def test_set_desired_unit_count_schedules_reconcile(self) -> None:

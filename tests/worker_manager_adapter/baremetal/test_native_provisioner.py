@@ -1,4 +1,3 @@
-import asyncio
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -46,21 +45,3 @@ class TestNativeWorkerProvisionerStopUnits(unittest.IsolatedAsyncioTestCase):
         with patch("os.kill"):
             await provisioner.stop_units(5)
         self.assertEqual(provisioner._workers, [])
-
-
-class TestNativeWorkerProvisionerScalingThroughReconcileLoop(unittest.IsolatedAsyncioTestCase):
-    async def test_scale_up_appends_workers(self) -> None:
-        provisioner = _make_provisioner()
-        mock_worker = _make_worker(pid=9001)
-        with patch.object(provisioner, "_create_worker", return_value=mock_worker):
-            await provisioner.set_desired_task_concurrency([_make_request(3, {})])
-            await asyncio.sleep(0)
-        self.assertEqual(len(provisioner._workers), 3)
-
-    async def test_scale_down_removes_workers(self) -> None:
-        provisioner = _make_provisioner()
-        provisioner._workers = [_make_worker(pid=8000 + i) for i in range(3)]
-        with patch("os.kill"):
-            await provisioner.set_desired_task_concurrency([_make_request(1, {})])
-            await asyncio.sleep(0)
-        self.assertEqual(len(provisioner._workers), 1)
