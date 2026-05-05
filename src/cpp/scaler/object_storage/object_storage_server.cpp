@@ -39,8 +39,7 @@ ObjectStorageServer::~ObjectStorageServer()
 }
 
 void ObjectStorageServer::run(
-    std::string name,
-    std::string port,
+    std::string address,
     ObjectStorageServer::Identity identity,
     std::string log_level,
     std::string log_format,
@@ -51,7 +50,7 @@ void ObjectStorageServer::run(
 
     try {
         _socket = std::make_unique<scaler::ymq::future::BinderSocket>(_ioContext, std::move(identity));
-        const std::string networkAddress {"tcp://" + name + ':' + port};
+        const std::string networkAddress {std::move(address)};
 
         std::expected<scaler::ymq::Address, scaler::ymq::Error> bindResult = _socket->bindTo(networkAddress).get();
         if (!bindResult) {

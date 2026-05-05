@@ -32,8 +32,7 @@ public:
     ~ObjectStorageServer();
 
     void run(
-        std::string name,
-        std::string port,
+        std::string address,
         Identity identity                  = "ObjectStorageServer",
         std::string log_level              = "INFO",
         std::string log_format             = "%(levelname)s: %(message)s",

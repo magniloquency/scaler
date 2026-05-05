@@ -22,8 +22,6 @@ dependencies = [
     "bidict",
     "cloudpickle",
     "psutil==7.2.2",
-    "pyzmq<27; python_version < '3.9'",
-    "pyzmq; python_version >= '3.9'",
     "sortedcontainers==2.4.0",
     "tblib",
     "typing-extensions",
@@ -31,13 +29,17 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+zmq = [
+    "pyzmq<27; python_version < '3.9'",
+    "pyzmq; python_version >= '3.9'",
+]
 uvloop = [
     "uvloop; platform_system != 'Windows'",
 ]
 gui = [
     "fastapi>=0.100.0",
     "uvicorn[standard]>=0.20.0",
-    "websockets>=11.0",
+    "websockets>=12.0",
 ]
 graphblas = [
     "python-graphblas==2025.2.0",
@@ -70,6 +72,7 @@ dev = [
     "flake8-pyproject>=1.2.3",
     "mypy>=1.14.1",
     "sphinx>=7.1.2",
+    "websockets>=12.0",
 ]
 
 [tool.scikit-build.metadata.version]
