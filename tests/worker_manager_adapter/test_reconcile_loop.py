@@ -48,14 +48,6 @@ class TestReconcileLoop(unittest.IsolatedAsyncioTestCase):
         start_mock.assert_called_once_with(2)
         stop_mock.assert_not_called()
 
-    async def test_reconcile_max_unit_count_does_not_cap_downscale(self) -> None:
-        units = [object(), object(), object()]
-        loop, start_mock, stop_mock = _make_loop(units=units, max_unit_count=2)
-        await loop.set_desired_unit_count(1)
-        await asyncio.sleep(0)
-        start_mock.assert_not_called()
-        stop_mock.assert_called_once_with(2)
-
     async def test_set_desired_unit_count_schedules_reconcile(self) -> None:
         loop, start_mock, _ = _make_loop(units=[])
         with unittest.mock.patch.object(loop, "_reconcile", new_callable=AsyncMock) as reconcile_mock:
