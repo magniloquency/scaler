@@ -199,12 +199,12 @@ function buildUserData(cfg, creds) {
     "subnet_id = \"$SUBNET_ID\"\n" +
     "security_group_ids = [\"" + cfg.securityGroupId + "\"]\n" +
     "logging_level = \"INFO\"" + concLine + tagLine + dbgLine +
-    "\nnetwork_backend = \"" + (cfg.networkBackend || "tcp_zmq") + "\"\n" +
+    "\nnetwork_backend = \"" + (cfg.networkBackend || "ymq") + "\"\n" +
     "[gui]\n" +
     "monitor_address = \"" + proto + "://127.0.0.1:" + (sp + 2) + wsSlash + "\"\n" +
     "gui_address = \"0.0.0.0:50001\"\n" +
     "CONFIG_EOF\n\n" +
-    (cfg.networkBackend === "ymq" ? "SCALER_NETWORK_BACKEND=ymq " : "") +
+    (cfg.networkBackend === "zmq" ? "SCALER_NETWORK_BACKEND=zmq " : "") +
     "/opt/scaler-venv/bin/scaler /opt/scaler/config.toml >> /var/log/scaler.log 2>&1 &\n" +
     "echo \"Scaler started (PID=$!)\"\n";
 }
@@ -1041,12 +1041,12 @@ function App() {
                   )}
                 </div>
                 <div>
-                  <Label help={"Messaging backend for scheduler/worker communication.\n---\nZMQ (default) — battle-tested, broad compatibility. TCP transport only.\n---\nYMQ — lower-latency C++ transport; required for WebSocket. All components (scheduler, workers, clients) must use the same backend."}>Network Backend</Label>
+                  <Label help={"Messaging backend for scheduler/worker communication.\n---\nYMQ (default) — lower-latency C++ transport; required for WebSocket. All components (scheduler, workers, clients) must use the same backend.\n---\nZMQ — battle-tested, broad compatibility. TCP transport only."}>Network Backend</Label>
                   <div style={{ display: "flex", borderRadius: 3, overflow: "hidden", border: "1px solid rgba(0,200,224,0.2)" }}>
-                    {[["tcp_zmq", "ZMQ"], ["ymq", "YMQ"]].map(([val, lbl]) => {
-                      const disabled = val === "tcp_zmq" && transport === "ws";
+                    {[["ymq", "YMQ"], ["zmq", "ZMQ"]].map(([val, lbl]) => {
+                      const disabled = val === "zmq" && transport === "ws";
                       return (
-                        <button key={val} disabled={disabled} onClick={() => { setNetBack(val); if (val === "tcp_zmq") setTransport("tcp"); }} style={{
+                        <button key={val} disabled={disabled} onClick={() => { setNetBack(val); if (val === "zmq") setTransport("tcp"); }} style={{
                           flex: 1, padding: "7px 0", fontFamily: "inherit", fontSize: 10, letterSpacing: "0.06em",
                           textTransform: "uppercase", cursor: disabled ? "not-allowed" : "pointer", border: "none",
                           background: networkBackend === val ? "rgba(0,200,224,0.18)" : "transparent",
