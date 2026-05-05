@@ -17,7 +17,7 @@ def _make_loop(units: list, max_unit_count: int = -1) -> tuple[ReconcileLoop, As
     return loop, start_mock, stop_mock
 
 
-class TestReconcileLoopReconcile(unittest.IsolatedAsyncioTestCase):
+class TestReconcileLoop(unittest.IsolatedAsyncioTestCase):
     async def test_reconcile_calls_start_when_desired_exceeds_current(self) -> None:
         loop, start_mock, stop_mock = _make_loop(units=[])
         await loop.set_desired_unit_count(3)
@@ -56,8 +56,6 @@ class TestReconcileLoopReconcile(unittest.IsolatedAsyncioTestCase):
         start_mock.assert_not_called()
         stop_mock.assert_called_once_with(2)
 
-
-class TestReconcileLoopSetDesiredUnitCount(unittest.IsolatedAsyncioTestCase):
     async def test_set_desired_unit_count_schedules_reconcile(self) -> None:
         loop, start_mock, _ = _make_loop(units=[])
         with unittest.mock.patch.object(loop, "_reconcile", new_callable=AsyncMock) as reconcile_mock:
@@ -116,8 +114,6 @@ class TestReconcileLoopSetDesiredUnitCount(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(0)
         self.assertEqual(call_count, 2)
 
-
-class TestReconcileLoopCapEdgeCases(unittest.IsolatedAsyncioTestCase):
     async def test_reconcile_noop_when_pool_already_at_max_capacity(self) -> None:
         units = [object(), object()]
         loop, start_mock, stop_mock = _make_loop(units=units, max_unit_count=2)
