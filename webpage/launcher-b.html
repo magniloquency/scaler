@@ -100,15 +100,10 @@ function downloadText(filename, content) {
 }
 
 function buildUserData(cfg, creds) {
-  var proto    = cfg.transport || "ws";
-  var sp       = cfg.schedulerPort;
-  var op       = cfg.objectStoragePort;
-  var wsSlash  = proto === "ws" ? "/" : "";
-  var concLine = cfg.workerMaxConcurrency != null
-    ? "\nmax_task_concurrency = " + cfg.workerMaxConcurrency : "";
-  var tagLine  = '\ninstance_tags = {scaler-deployment = "' + cfg.nameSuffix + '"}';
-  var dbgLine  = cfg.debugDumpPath ? '\ndebug_dump_path = "' + cfg.debugDumpPath + '"' : "";
-  var req      = cfg.workerRequirements.trim();
+  var proto   = cfg.transport || "ws";
+  var sp      = cfg.schedulerPort;
+  var op      = cfg.objectStoragePort;
+  var wsSlash = proto === "ws" ? "/" : "";
 
   var isGitInstall = cfg.scalerPackage.indexOf("git+") >= 0;
 
@@ -151,6 +146,55 @@ function buildUserData(cfg, creds) {
       "  uv pip install '" + cfg.scalerPackage + "'\n";
   }
 
+  // Build one [[worker_manager]] TOML block per configured manager.
+  var wmToml = (cfg.workerManagers || []).map(function(wm) {
+    var block = "[[worker_manager]]\n";
+    block += "type = \"" + wm.type + "\"\n";
+    block += "scheduler_address = \"" + proto + "://127.0.0.1:" + sp + wsSlash + "\"\n";
+    block += "worker_manager_id = \"" + wm.id + "\"\n";
+
+    if (wm.type === "orb_aws_ec2") {
+      var req     = (wm.requirements || "").trim();
+      var tagLine = '\ninstance_tags = {scaler-deployment = "' + cfg.nameSuffix + '"}';
+      block += "worker_scheduler_address = \"" + proto + "://$PRIVATE_IP:" + sp + wsSlash + "\"\n";
+      block += "object_storage_address = \"" + proto + "://$PRIVATE_IP:" + op + wsSlash + "\"\n";
+      block += "python_version = \"" + cfg.pythonVersion + "\"\n";
+      block += "requirements_txt = \"\"\"\n" + req + "\n\"\"\"\n";
+      block += "instance_type = \"" + wm.instanceType + "\"\n";
+      block += "aws_region = \"" + cfg.region + "\"\n";
+      block += "key_name = \"scaler-key-" + cfg.nameSuffix + "\"\n";
+      block += "subnet_id = \"$SUBNET_ID\"\n";
+      block += "security_group_ids = [\"" + cfg.securityGroupId + "\"]\n";
+      block += "logging_level = \"INFO\"" + tagLine + "\n";
+      block += "network_backend = \"" + (cfg.networkBackend || "ymq") + "\"\n";
+    } else if (wm.type === "aws_raw_ecs") {
+      block += "aws_region = \"" + cfg.region + "\"\n";
+      block += "ecs_cluster = \"" + (wm.ecsCluster || "scaler-cluster") + "\"\n";
+      block += "ecs_task_image = \"" + (wm.ecsTaskImage || "") + "\"\n";
+      block += "ecs_subnets = \"" + (wm.ecsSubnets || "") + "\"\n";
+      block += "ecs_task_definition = \"" + (wm.ecsTaskDefinition || "scaler-task-definition") + "\"\n";
+      block += "ecs_task_cpu = " + (wm.ecsTaskCpu || 4) + "\n";
+      block += "ecs_task_memory = " + (wm.ecsTaskMemory || 30) + "\n";
+      block += "ecs_python_version = \"" + (wm.ecsPythonVersion || "3.12.11") + "\"\n";
+      block += "ecs_python_requirements = \"" + (wm.ecsPythonRequirements || "") + "\"\n";
+    } else if (wm.type === "aws_hpc") {
+      block += "aws_region = \"" + cfg.region + "\"\n";
+      block += "job_queue = \"" + (wm.jobQueue || "") + "\"\n";
+      block += "job_definition = \"" + (wm.jobDefinition || "") + "\"\n";
+      block += "s3_bucket = \"" + (wm.s3Bucket || "") + "\"\n";
+      block += "s3_prefix = \"" + (wm.s3Prefix || "scaler-tasks") + "\"\n";
+      block += "max_concurrent_jobs = " + (wm.maxConcurrentJobs || 100) + "\n";
+      block += "job_timeout_minutes = " + (wm.jobTimeoutMinutes || 60) + "\n";
+    } else if (wm.type === "baremetal_native") {
+      block += "mode = \"" + (wm.mode || "dynamic") + "\"\n";
+      if (wm.workerType) block += "worker_type = \"" + wm.workerType + "\"\n";
+      if (wm.maxTaskConcurrency != null && wm.maxTaskConcurrency >= 0)
+        block += "max_task_concurrency = " + wm.maxTaskConcurrency + "\n";
+    }
+
+    return block;
+  }).join("\n");
+
   // $IMDS_TOKEN / $PUBLIC_IP / $PRIVATE_IP / $! are bash variables — they appear literally in the
   // output string and are expanded by bash at runtime on the EC2 instance.
   return "#!/bin/bash\nset -euxo pipefail\n\n" +
@@ -185,21 +229,7 @@ function buildUserData(cfg, creds) {
     "bind_address = \"" + proto + "://0.0.0.0:" + sp + wsSlash + "\"\n" +
     "object_storage_address = \"" + proto + "://127.0.0.1:" + op + wsSlash + "\"\n" +
     "advertised_object_storage_address = \"" + proto + "://$PUBLIC_IP:" + op + wsSlash + "\"\n\n" +
-    "[[worker_manager]]\n" +
-    "type = \"orb_aws_ec2\"\n" +
-    "scheduler_address = \"" + proto + "://127.0.0.1:" + sp + wsSlash + "\"\n" +
-    "worker_manager_id = \"wm-orb\"\n" +
-    "worker_scheduler_address = \"" + proto + "://$PRIVATE_IP:" + sp + wsSlash + "\"\n" +
-    "object_storage_address = \"" + proto + "://$PRIVATE_IP:" + op + wsSlash + "\"\n" +
-    "python_version = \"" + cfg.workerPythonVersion + "\"\n" +
-    "requirements_txt = \"\"\"\n" + req + "\n\"\"\"\n" +
-    "instance_type = \"" + cfg.workerInstanceType + "\"\n" +
-    "aws_region = \"" + cfg.region + "\"\n" +
-    "key_name = \"scaler-key-" + cfg.nameSuffix + "\"\n" +
-    "subnet_id = \"$SUBNET_ID\"\n" +
-    "security_group_ids = [\"" + cfg.securityGroupId + "\"]\n" +
-    "logging_level = \"INFO\"" + concLine + tagLine + dbgLine +
-    "\nnetwork_backend = \"" + (cfg.networkBackend || "ymq") + "\"\n" +
+    wmToml + "\n" +
     "[gui]\n" +
     "monitor_address = \"" + proto + "://127.0.0.1:" + (sp + 2) + wsSlash + "\"\n" +
     "gui_address = \"0.0.0.0:50001\"\n" +
@@ -549,7 +579,7 @@ async function destroyResources(state, creds, addLog, signal) {
 
 <!-- ─── React Application ─── -->
 <script type="text/babel">
-const { useState, useCallback, useRef, useEffect } = React;
+const { useState, useCallback, useRef } = React;
 
 /* ── NumericStepper ── */
 function NumericStepper({ value, onChange, min = 0, max = Infinity, step = 1, width = 56 }) {
@@ -563,7 +593,7 @@ function NumericStepper({ value, onChange, min = 0, max = Infinity, step = 1, wi
     flexShrink: 0, transition: "background 0.12s, color 0.12s", padding: 0,
   });
   return (
-    <div style={{ display: "flex", alignItems: "stretch", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(0,200,224,0.15)", borderRadius: 3, height: 36, overflow: "hidden" }}>
+    <div style={{ display: "flex", alignItems: "stretch", width: "fit-content", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(0,200,224,0.15)", borderRadius: 3, height: 36, overflow: "hidden" }}>
       <button style={{ ...btnStyle("minus"), background: hov === "minus" ? "rgba(0,200,224,0.1)" : "transparent" }}
         onMouseEnter={() => setHov("minus")} onMouseLeave={() => setHov(null)}
         onClick={() => onChange(Math.max(min, value - step))}>−</button>
@@ -577,6 +607,145 @@ function NumericStepper({ value, onChange, min = 0, max = Infinity, step = 1, wi
   );
 }
 
+/* ── PanelBox ── */
+function PanelBox({ title, children, style }) {
+  return (
+    <div style={{ background: "#09101a", border: "1px solid rgba(0,200,224,0.12)", borderRadius: 6, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 14, ...style }}>
+      {title && (
+        <div style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: "oklch(0.55 0.1 200)", borderBottom: "1px solid rgba(0,200,224,0.08)", paddingBottom: 10, marginBottom: 2, fontWeight: 600 }}>
+          {title}
+        </div>
+      )}
+      {children}
+    </div>
+  );
+}
+
+/* ── WorkerManagerCard ── */
+function WorkerManagerCard({ wm, onChange, onRemove, allInstances, canRemove }) {
+  const Label = ({ children, help }) => (
+    <div style={{ fontSize: 10, letterSpacing: "0.1em", color: "oklch(0.72 0.14 200)", marginBottom: 5, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 6 }}>
+      <span>{children}</span>{help && <HelpTip text={help} />}
+    </div>
+  );
+  const inp = { width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(0,200,224,0.15)", borderRadius: 3, padding: "7px 10px", color: "oklch(0.85 0.06 200)", fontFamily: "inherit", fontSize: 12, outline: "none" };
+  const set = (k, v) => onChange({ ...wm, [k]: v });
+
+  const WM_TYPES = [
+    { value: "orb_aws_ec2",      label: "ORB / AWS EC2" },
+    { value: "aws_raw_ecs",      label: "AWS ECS" },
+    { value: "aws_hpc",          label: "AWS Batch (HPC)" },
+    { value: "baremetal_native", label: "Bare Metal" },
+  ];
+  const ToggleRow = ({ options, value, onChange: onTog }) => (
+    <div style={{ display: "flex", borderRadius: 3, overflow: "hidden", border: "1px solid rgba(0,200,224,0.2)" }}>
+      {options.map(([val, lbl, disabled]) => (
+        <button key={val} disabled={!!disabled} onClick={() => !disabled && onTog(val)} style={{
+          flex: 1, padding: "6px 0", fontFamily: "inherit", fontSize: 10, letterSpacing: "0.06em",
+          textTransform: "uppercase", cursor: disabled ? "not-allowed" : "pointer", border: "none",
+          background: value === val ? "rgba(0,200,224,0.18)" : "transparent",
+          color: disabled ? "oklch(0.35 0.03 220)" : value === val ? "oklch(0.78 0.16 200)" : "oklch(0.48 0.05 220)",
+          transition: "background 0.15s, color 0.15s",
+        }}>{lbl}</button>
+      ))}
+    </div>
+  );
+
+  const workerInst   = allInstances.find(i => i.type === wm.instanceType) || { price: 0 };
+  const derivedCount = wm.capMode === "instances"
+    ? Math.max(0, wm.instanceCap || 0)
+    : Math.max(0, Math.floor((wm.budgetCap || 0) / (workerInst.price || 1)));
+  const costPerHr = derivedCount * workerInst.price;
+
+  return (
+    <div style={{ background: "rgba(0,200,224,0.03)", border: "1px solid rgba(0,200,224,0.15)", borderRadius: 5, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12, width: 340, flexShrink: 0 }}>
+      {/* header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <select value={wm.type} onChange={e => set("type", e.target.value)}
+          style={{ flex: 1, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(0,200,224,0.15)", borderRadius: 3, padding: "5px 8px", color: "oklch(0.85 0.06 200)", fontFamily: "inherit", fontSize: 11, outline: "none" }}>
+          {WM_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+        </select>
+        <input value={wm.id} onChange={e => set("id", e.target.value)} placeholder="wm-id"
+          style={{ width: 88, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(0,200,224,0.15)", borderRadius: 3, padding: "5px 8px", color: "oklch(0.85 0.06 200)", fontFamily: "inherit", fontSize: 11, outline: "none" }} />
+        {canRemove && (
+          <button onClick={onRemove}
+            style={{ background: "none", border: "1px solid rgba(255,80,60,0.3)", borderRadius: 3, color: "oklch(0.58 0.12 30)", fontFamily: "inherit", fontSize: 12, width: 28, height: 28, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "border-color 0.15s" }}
+            onMouseEnter={e => e.currentTarget.style.borderColor = "rgba(255,80,60,0.6)"}
+            onMouseLeave={e => e.currentTarget.style.borderColor = "rgba(255,80,60,0.3)"}>✕</button>
+        )}
+      </div>
+
+      {/* orb_aws_ec2 */}
+      {wm.type === "orb_aws_ec2" && (<>
+        <div><Label>Worker Instance Type</Label><InstancePicker value={wm.instanceType} onChange={v => set("instanceType", v)} defaultCat="all" /></div>
+        <div>
+          <Label>Scale Limit</Label>
+          <ToggleRow options={[["instances","Instance cap"],["budget","$/hr cap"]]} value={wm.capMode} onChange={v => set("capMode", v)} />
+          <div style={{ marginTop: 7 }}>
+            {wm.capMode === "instances"
+              ? <div style={{ display:"flex", alignItems:"center", gap:8 }}><NumericStepper value={wm.instanceCap||1} onChange={v=>set("instanceCap",v)} min={1} max={1000} /><span style={{fontSize:11,color:"oklch(0.5 0.04 220)"}}>max instances</span></div>
+              : <div style={{ display:"flex", alignItems:"center", gap:8 }}><span style={{fontSize:12,color:"oklch(0.62 0.1 150)"}}>$</span><NumericStepper value={wm.budgetCap||10} onChange={v=>set("budgetCap",v)} min={0} step={0.5} width={64} /><span style={{fontSize:11,color:"oklch(0.5 0.04 220)"}}>max USD/h</span></div>
+            }
+          </div>
+        </div>
+        <div style={{ padding:"8px 10px", background:"rgba(0,255,136,0.04)", border:"1px solid rgba(0,255,136,0.1)", borderRadius:3, display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
+          <span style={{ fontSize:10, color:"oklch(0.55 0.04 220)", textTransform:"uppercase", letterSpacing:"0.06em" }}>Workers cost</span>
+          <span style={{ fontSize:13, fontWeight:600, color:"oklch(0.65 0.12 150)" }}>${costPerHr.toFixed(3)}/h</span>
+        </div>
+      </>)}
+
+      {/* aws_raw_ecs */}
+      {wm.type === "aws_raw_ecs" && (<>
+        <div><Label>ECS Cluster</Label><input value={wm.ecsCluster||""} onChange={e=>set("ecsCluster",e.target.value)} style={inp} placeholder="scaler-cluster" /></div>
+        <div><Label>Container Image</Label><input value={wm.ecsTaskImage||""} onChange={e=>set("ecsTaskImage",e.target.value)} style={inp} placeholder="public.ecr.aws/v4u8j8r6/scaler:latest" /></div>
+        <div><Label>Subnets (comma-separated)</Label><input value={wm.ecsSubnets||""} onChange={e=>set("ecsSubnets",e.target.value)} style={inp} placeholder="subnet-abc123, subnet-def456" /></div>
+        <div><Label>Task Definition</Label><input value={wm.ecsTaskDefinition||""} onChange={e=>set("ecsTaskDefinition",e.target.value)} style={inp} placeholder="scaler-task-definition" /></div>
+        <div style={{ display:"flex", gap:10 }}>
+          <div style={{ flex:1 }}><Label>vCPU</Label><NumericStepper value={wm.ecsTaskCpu||4} onChange={v=>set("ecsTaskCpu",v)} min={1} max={64} /></div>
+          <div style={{ flex:1 }}><Label>Memory (GB)</Label><NumericStepper value={wm.ecsTaskMemory||30} onChange={v=>set("ecsTaskMemory",v)} min={1} max={512} /></div>
+        </div>
+        <div><Label>Python Version</Label><input value={wm.ecsPythonVersion||""} onChange={e=>set("ecsPythonVersion",e.target.value)} style={inp} placeholder="3.12.11" /></div>
+        <div><Label>Requirements</Label><input value={wm.ecsPythonRequirements||""} onChange={e=>set("ecsPythonRequirements",e.target.value)} style={inp} placeholder="pandas; numpy" /></div>
+      </>)}
+
+      {/* aws_hpc */}
+      {wm.type === "aws_hpc" && (<>
+        <div><Label>Job Queue</Label><input value={wm.jobQueue||""} onChange={e=>set("jobQueue",e.target.value)} style={inp} placeholder="scaler-batch-queue" /></div>
+        <div><Label>Job Definition</Label><input value={wm.jobDefinition||""} onChange={e=>set("jobDefinition",e.target.value)} style={inp} placeholder="scaler-job-definition" /></div>
+        <div><Label>S3 Bucket</Label><input value={wm.s3Bucket||""} onChange={e=>set("s3Bucket",e.target.value)} style={inp} placeholder="my-scaler-bucket" /></div>
+        <div><Label>S3 Prefix</Label><input value={wm.s3Prefix||"scaler-tasks"} onChange={e=>set("s3Prefix",e.target.value)} style={inp} placeholder="scaler-tasks" /></div>
+        <div style={{ display:"flex", gap:10 }}>
+          <div style={{ flex:1 }}><Label>Max Concurrent Jobs</Label><NumericStepper value={wm.maxConcurrentJobs||100} onChange={v=>set("maxConcurrentJobs",v)} min={1} max={10000} /></div>
+          <div style={{ flex:1 }}><Label>Timeout (min)</Label><NumericStepper value={wm.jobTimeoutMinutes||60} onChange={v=>set("jobTimeoutMinutes",v)} min={1} max={1440} /></div>
+        </div>
+      </>)}
+
+      {/* baremetal_native */}
+      {wm.type === "baremetal_native" && (<>
+        <div>
+          <Label>Mode</Label>
+          <ToggleRow options={[["dynamic","Dynamic"],["fixed","Fixed"]]} value={wm.mode||"dynamic"} onChange={v=>set("mode",v)} />
+        </div>
+        <div><Label>Worker Type Prefix</Label><input value={wm.workerType||""} onChange={e=>set("workerType",e.target.value)} style={inp} placeholder="optional" /></div>
+        {(wm.mode||"dynamic") === "fixed" ? (
+          <div>
+            <Label help="Exact number of worker processes to pre-spawn.">Number of Workers</Label>
+            <NumericStepper value={wm.maxTaskConcurrency!=null&&wm.maxTaskConcurrency>=1?wm.maxTaskConcurrency:4} onChange={v=>set("maxTaskConcurrency",Math.max(1,v))} min={1} />
+          </div>
+        ) : (
+          <div>
+            <Label help="Maximum concurrent workers the scheduler may spawn. -1 = no limit (uses cpu_count).">Max Task Concurrency</Label>
+            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+              <NumericStepper value={wm.maxTaskConcurrency!=null?wm.maxTaskConcurrency:-1} onChange={v=>set("maxTaskConcurrency",v)} min={-1} />
+              <span style={{ fontSize:11, color:"oklch(0.5 0.04 220)" }}>(-1 = no limit)</span>
+            </div>
+          </div>
+        )}
+      </>)}
+    </div>
+  );
+}
+
 /* ── CopyBtn ── */
 function CopyBtn({ value }) {
   const [copied, setCopied] = useState(false);
@@ -584,17 +753,8 @@ function CopyBtn({ value }) {
   return (
     <button
       onClick={() => navigator.clipboard.writeText(value).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); })}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        background: hov && !copied ? "rgba(0,200,224,0.08)" : "none",
-        border: "1px solid " + (copied ? "rgba(0,255,136,0.4)" : hov ? "rgba(0,200,224,0.5)" : "rgba(0,200,224,0.2)"),
-        borderRadius: 3,
-        color: copied ? "oklch(0.72 0.18 150)" : hov ? "oklch(0.72 0.14 200)" : "oklch(0.5 0.08 200)",
-        fontFamily: "inherit", fontSize: 10, padding: "2px 7px", cursor: "pointer",
-        letterSpacing: "0.06em", transition: "color 0.12s, border-color 0.12s, background 0.12s",
-        flexShrink: 0,
-      }}>
+      onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      style={{ background: hov && !copied ? "rgba(0,200,224,0.08)" : "none", border: "1px solid " + (copied ? "rgba(0,255,136,0.4)" : hov ? "rgba(0,200,224,0.5)" : "rgba(0,200,224,0.2)"), borderRadius: 3, color: copied ? "oklch(0.72 0.18 150)" : hov ? "oklch(0.72 0.14 200)" : "oklch(0.5 0.08 200)", fontFamily: "inherit", fontSize: 10, padding: "2px 7px", cursor: "pointer", letterSpacing: "0.06em", transition: "color 0.12s, border-color 0.12s, background 0.12s", flexShrink: 0 }}>
       {copied ? "COPIED" : "COPY"}
     </button>
   );
@@ -677,31 +837,32 @@ function DeploymentCard({ state, onDestroy, onDownload, hasCredentials, isRunnin
 
 /* ── App ── */
 function App() {
-  /* form */
-  const [region, setRegion]         = useState("us-east-1");
-  const [accessKeyId, setAKI]       = useState("");
-  const [secretKey,   setSK]        = useState("");
+  const [region, setRegion]               = useState("us-east-1");
+  const [accessKeyId, setAKI]             = useState("");
+  const [secretKey, setSK]                = useState("");
+  const [transport, setTransport]         = useState("ws");
+  const [networkBackend, setNetBack]      = useState("ymq");
+  const [pythonVersion, setPyVer]         = useState("3.14");
+  const [scalerPackage, setScalerPkg]     = useState("opengris-scaler[all]");
+  const [instanceProfileName, setIPN]     = useState("");
+  const [nameSuffix, setSuffix]           = useState("");
+  const [pollTimeout, setPollTO]          = useState(600);
   const [schedulerType, setSchedulerType] = useState("c5.xlarge");
-  const [workerType,  setWorkerType]= useState("t3.medium");
-  const [capMode,     setCapMode]   = useState("instances");
-  const [instanceCap, setInstanceCap] = useState(4);
-  const [budgetCap,   setBudgetCap]   = useState(10);
-  const [requirements, setReqs]     = useState("");
-  /* advanced */
-  const [transport,            setTransport]= useState("ws");
-  const [networkBackend,       setNetBack]  = useState("ymq");
-  const [pythonVersion,        setPyVer]    = useState("3.14");
-  const [scalerPackage,        setScalerPkg]= useState("opengris-scaler[all]");
-  const [instanceProfileName,  setIPN]      = useState("");
-  const [nameSuffix,           setSuffix]   = useState("");
-  const [pollTimeout,          setPollTO]   = useState(600);
-  const [showAdvanced,         setShowAdv]  = useState(false);
+  const [schedulerPort, setSchedPort]     = useState(6788);
+  const [objectStoragePort, setObjPort]   = useState(6789);
+  const [requirements, setReqs]           = useState("");
+  const [showSchedAdv, setShowSchedAdv]   = useState(false);
+  const [showGenAdv, setShowGenAdv]       = useState(false);
 
-  /* phase + persistent state */
+  const wmCounterRef = useRef(1);
+  const [workerManagers, setWorkerManagers] = useState([
+    { id: "wm-1", type: "orb_aws_ec2", instanceType: "t3.medium", capMode: "instances", instanceCap: 4, budgetCap: 10 }
+  ]);
+
   const [phase, setPhase] = useState(() => {
     try { return localStorage.getItem("scaler_state") ? "ready" : "idle"; } catch { return "idle"; }
   });
-  const [log, setLog] = useState([]);
+  const [log, setLog]           = useState([]);
   const [provState, setProvState] = useState(() => {
     try { const s = localStorage.getItem("scaler_state"); return s ? JSON.parse(s) : null; } catch { return null; }
   });
@@ -709,58 +870,61 @@ function App() {
   const abortRef = useRef(null);
 
   const addLog = useCallback((text, cls) => {
-    cls = cls || "info";
-    setLog(prev => [...prev, { text, cls }]);
+    setLog(prev => [...prev, { text, cls: cls || "info" }]);
   }, []);
-
   const savePartial = useCallback((partial) => {
     setProvState(partial);
     try { localStorage.setItem("scaler_state", JSON.stringify(partial)); } catch (_) {}
   }, []);
 
-  /* cost calculations */
   const allInstances  = window.SCALER_INSTANCES || [];
-  const workerInst    = allInstances.find(i => i.type === workerType)    || { vcpu: 1, price: 0 };
   const schedulerInst = allInstances.find(i => i.type === schedulerType) || { price: 0.17 };
-  const derivedCount  = capMode === "instances"
-    ? Math.max(0, instanceCap)
-    : Math.max(0, Math.floor((budgetCap - schedulerInst.price) / (workerInst.price || 1)));
-  const workerCount       = derivedCount * workerInst.vcpu;
-  const workersCostPerHr  = derivedCount * workerInst.price;
-  const totalCostPerHr    = schedulerInst.price + workersCostPerHr;
+  const wmCosts = workerManagers.map(wm => {
+    if (wm.type !== "orb_aws_ec2") return 0;
+    const inst  = allInstances.find(i => i.type === wm.instanceType) || { price: 0 };
+    const count = wm.capMode === "instances" ? Math.max(0, wm.instanceCap || 0) : Math.max(0, Math.floor((wm.budgetCap || 0) / (inst.price || 1)));
+    return count * inst.price;
+  });
+  const totalCostPerHr = schedulerInst.price + wmCosts.reduce((a, b) => a + b, 0);
 
-  /* readiness */
+  const addWorkerManager = useCallback(() => {
+    wmCounterRef.current += 1;
+    const n = wmCounterRef.current;
+    setWorkerManagers(prev => [...prev, { id: "wm-" + n, type: "orb_aws_ec2", instanceType: "t3.medium", capMode: "instances", instanceCap: 4, budgetCap: 10 }]);
+  }, []);
+  const removeWorkerManager = useCallback((id) => setWorkerManagers(prev => prev.filter(wm => wm.id !== id)), []);
+  const updateWorkerManager = useCallback((id, updated) => setWorkerManagers(prev => prev.map(wm => wm.id === id ? updated : wm)), []);
+
+  const hasCredentials = accessKeyId.trim().length > 0 && secretKey.trim().length > 0;
   const checks = [
-    { key: "aki",    label: "Access Key ID required",                           ok: accessKeyId.trim().length > 0 },
-    { key: "sk",     label: "Secret Access Key required",                       ok: secretKey.trim().length > 0 },
-    { key: "budget", label: "Budget too low to launch any worker instances",    ok: capMode !== "budget" || derivedCount >= 1 },
+    { key: "aki", label: "Access Key ID required",          ok: accessKeyId.trim().length > 0 },
+    { key: "sk",  label: "Secret Access Key required",      ok: secretKey.trim().length > 0 },
+    { key: "wm",  label: "At least one worker manager required", ok: workerManagers.length > 0 },
   ];
-  const blocking      = checks.filter(c => !c.ok);
-  const formReady     = blocking.length === 0;
-  const hasCredentials= accessKeyId.trim().length > 0 && secretKey.trim().length > 0;
+  const blocking  = checks.filter(c => !c.ok);
+  const formReady = blocking.length === 0;
+  const isRunning = phase === "provisioning" || phase === "destroying";
 
-  /* actions */
   const handleLaunch = useCallback(async () => {
     if (!formReady) return;
     setLog([]);
     setPhase("provisioning");
-
-    const suffix   = nameSuffix.trim() || randomSuffix();
-    const workerReqs = "opengris-scaler[all]\n" + requirements.trim();
-
+    const suffix = nameSuffix.trim() || randomSuffix();
     const cfg = {
       region, nameSuffix: suffix,
       instanceType: schedulerType, amiId: null,
-      transport, networkBackend, schedulerPort: 6788, objectStoragePort: 6789,
+      transport, networkBackend,
+      schedulerPort, objectStoragePort,
       pythonVersion, scalerPackage,
-      workerInstanceType: workerType, workerPythonVersion: pythonVersion,
-      workerRequirements: workerReqs,
-      workerMaxConcurrency: null,
       instanceProfileName: instanceProfileName.trim() || null,
-      pollTimeout, pollInterval: 15,
-      debugDumpPath: null,
+      pollTimeout, pollInterval: 15, debugDumpPath: null,
+      workerManagers: workerManagers.map(wm => ({
+        ...wm,
+        requirements: wm.type === "orb_aws_ec2"
+          ? "opengris-scaler[all]\n" + requirements.trim()
+          : "",
+      })),
     };
-
     const controller = new AbortController();
     abortRef.current = controller;
     try {
@@ -768,22 +932,16 @@ function App() {
       savePartial(state);
       setPhase("ready");
     } catch (err) {
-      if (err.name === "AbortError") {
-        addLog("\nAborted. Any resources created so far are saved — use Destroy to clean them up.", "warn");
-      } else {
-        addLog("\nError: " + err.message, "err");
-      }
+      addLog(err.name === "AbortError"
+        ? "\nAborted. Any resources created so far are saved — use Destroy to clean them up."
+        : "\nError: " + err.message, err.name === "AbortError" ? "warn" : "err");
       setPhase("error");
-    } finally {
-      abortRef.current = null;
-    }
-  }, [formReady, region, accessKeyId, secretKey, schedulerType, workerType,
-      derivedCount, workerInst, requirements, transport, networkBackend, pythonVersion, scalerPackage,
-      instanceProfileName, nameSuffix, pollTimeout, addLog, savePartial]);
+    } finally { abortRef.current = null; }
+  }, [formReady, region, schedulerType, transport, networkBackend, schedulerPort, objectStoragePort,
+      pythonVersion, scalerPackage, instanceProfileName, nameSuffix, pollTimeout,
+      workerManagers, accessKeyId, secretKey, addLog, savePartial]);
 
-  const handleAbort = useCallback(() => {
-    if (abortRef.current) abortRef.current.abort();
-  }, []);
+  const handleAbort = useCallback(() => { if (abortRef.current) abortRef.current.abort(); }, []);
 
   const handleDestroy = useCallback(async () => {
     if (!provState || !hasCredentials) return;
@@ -795,382 +953,284 @@ function App() {
       (provState.iam && provState.iam.created ? "• IAM role & profile\n" : "") +
       "\nThis cannot be undone."
     )) return;
-    setLog([]);
-    setPhase("destroying");
+    setLog([]); setPhase("destroying");
     const controller = new AbortController();
     abortRef.current = controller;
     try {
       await destroyResources(provState, { accessKeyId, secretKey }, addLog, controller.signal);
       try { localStorage.removeItem("scaler_state"); } catch (_) {}
-      setProvState(null);
-      setKeyMaterial(null);
-      setLog([]);
-      setPhase("idle");
+      setProvState(null); setKeyMaterial(null); setLog([]); setPhase("idle");
     } catch (err) {
-      if (err.name === "AbortError") {
-        addLog("\nTeardown aborted. Some resources may still exist — run Destroy again to retry.", "warn");
-      } else {
-        addLog("\nError during teardown: " + err.message, "err");
-      }
-    } finally {
-      abortRef.current = null;
-    }
+      addLog(err.name === "AbortError"
+        ? "\nTeardown aborted. Some resources may still exist — run Destroy again to retry."
+        : "\nError during teardown: " + err.message, err.name === "AbortError" ? "warn" : "err");
+    } finally { abortRef.current = null; }
   }, [provState, hasCredentials, accessKeyId, secretKey, addLog]);
 
   const handleReset = useCallback(() => {
-    setLog([]);
-    setPhase("idle");
-    setProvState(null);
-    setKeyMaterial(null);
+    setLog([]); setPhase("idle"); setProvState(null); setKeyMaterial(null);
     try { localStorage.removeItem("scaler_state"); } catch (_) {}
   }, []);
 
   const handleLoadState = useCallback((e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    const file = e.target.files[0]; if (!file) return;
     const reader = new FileReader();
     reader.onload = ev => {
-      try {
-        const state = JSON.parse(ev.target.result);
-        savePartial(state);
-        setLog([]);
-        setPhase("ready");
-      } catch { alert("Invalid state file — expected JSON from a previous provision run."); }
+      try { const state = JSON.parse(ev.target.result); savePartial(state); setLog([]); setPhase("ready"); }
+      catch { alert("Invalid state file — expected JSON from a previous provision run."); }
     };
-    reader.readAsText(file);
-    e.target.value = "";
+    reader.readAsText(file); e.target.value = "";
   }, [savePartial]);
-
-  const isRunning = phase === "provisioning" || phase === "destroying";
 
   const Label = ({ children, help }) => (
     <div style={{ fontSize: 10, letterSpacing: "0.1em", color: "oklch(0.72 0.14 200)", marginBottom: 5, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 6 }}>
-      <span>{children}</span>
-      {help && <HelpTip text={help} />}
+      <span>{children}</span>{help && <HelpTip text={help} />}
+    </div>
+  );
+  const inp = { width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(0,200,224,0.15)", borderRadius: 3, padding: "7px 10px", color: "oklch(0.85 0.06 200)", fontFamily: "inherit", fontSize: 12, outline: "none" };
+  const TogglePair = ({ options, value, onSelect }) => (
+    <div style={{ display: "flex", borderRadius: 3, overflow: "hidden", border: "1px solid rgba(0,200,224,0.2)" }}>
+      {options.map(([val, lbl, dis]) => (
+        <button key={val} disabled={!!dis} onClick={() => !dis && onSelect(val)} style={{
+          flex: 1, padding: "7px 0", fontFamily: "inherit", fontSize: 10, letterSpacing: "0.06em",
+          textTransform: "uppercase", cursor: dis ? "not-allowed" : "pointer", border: "none",
+          background: value === val ? "rgba(0,200,224,0.18)" : "transparent",
+          color: dis ? "oklch(0.35 0.03 220)" : value === val ? "oklch(0.78 0.16 200)" : "oklch(0.48 0.05 220)",
+          transition: "background 0.15s, color 0.15s",
+        }}>{lbl}</button>
+      ))}
     </div>
   );
 
-  const inputStyle = {
-    width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(0,200,224,0.15)",
-    borderRadius: 3, padding: "7px 10px", color: "oklch(0.85 0.06 200)",
-    fontFamily: "inherit", fontSize: 12, outline: "none",
-  };
-
-  /* ── Left rail launch/status button ── */
-  let launchBtn;
+  let launchControl;
   if (phase === "idle" || phase === "error") {
-    launchBtn = (
-      <button onClick={handleLaunch} disabled={!formReady}
-        style={{
-          marginTop: 20, padding: "16px",
-          background: !formReady ? "rgba(0,200,224,0.05)" : "linear-gradient(135deg, oklch(0.38 0.16 155) 0%, oklch(0.32 0.14 200) 100%)",
-          border: "1px solid " + (!formReady ? "rgba(0,200,224,0.15)" : "oklch(0.55 0.16 155)"),
-          borderRadius: 4, color: !formReady ? "oklch(0.45 0.08 200)" : "oklch(0.92 0.1 155)",
-          fontFamily: "inherit", fontSize: 13, fontWeight: 700, letterSpacing: "0.15em",
-          cursor: !formReady ? "default" : "pointer", textTransform: "uppercase", transition: "all 0.2s",
-          animation: formReady ? "launchPulse 3s ease-in-out infinite" : "none", flexShrink: 0,
-        }}>
-        ▶  Launch Cluster
-      </button>
+    launchControl = (
+      <button onClick={handleLaunch} disabled={!formReady} style={{
+        width: "100%", padding: "16px",
+        background: !formReady ? "rgba(0,200,224,0.05)" : "linear-gradient(135deg, oklch(0.38 0.16 155) 0%, oklch(0.32 0.14 200) 100%)",
+        border: "1px solid " + (!formReady ? "rgba(0,200,224,0.15)" : "oklch(0.55 0.16 155)"),
+        borderRadius: 4, color: !formReady ? "oklch(0.45 0.08 200)" : "oklch(0.92 0.1 155)",
+        fontFamily: "inherit", fontSize: 13, fontWeight: 700, letterSpacing: "0.15em",
+        cursor: !formReady ? "default" : "pointer", textTransform: "uppercase", transition: "all 0.2s",
+        animation: formReady ? "launchPulse 3s ease-in-out infinite" : "none",
+      }}>▶  Launch Cluster</button>
     );
-  } else if (phase === "provisioning") {
-    launchBtn = (
-      <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 8, flexShrink: 0 }}>
-        <div style={{ padding: "16px", textAlign: "center", background: "rgba(0,200,224,0.04)", border: "1px solid rgba(0,200,224,0.15)", borderRadius: 4, color: "oklch(0.6 0.1 200)", fontSize: 12, letterSpacing: "0.1em" }}>
-          Deploying…
+  } else if (isRunning) {
+    launchControl = (
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ padding: "16px", textAlign: "center", background: phase === "destroying" ? "rgba(255,80,60,0.04)" : "rgba(0,200,224,0.04)", border: "1px solid " + (phase === "destroying" ? "rgba(255,80,60,0.2)" : "rgba(0,200,224,0.15)"), borderRadius: 4, color: phase === "destroying" ? "oklch(0.6 0.1 30)" : "oklch(0.6 0.1 200)", fontSize: 12, letterSpacing: "0.1em" }}>
+          {phase === "destroying" ? "Tearing down…" : "Deploying…"}
         </div>
         <button onClick={handleAbort} style={{ padding: "9px", background: "transparent", border: "1px solid rgba(255,160,60,0.3)", borderRadius: 4, color: "oklch(0.62 0.12 60)", fontFamily: "inherit", fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", cursor: "pointer", transition: "border-color 0.15s, color 0.15s" }}
           onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(255,160,60,0.6)"; e.currentTarget.style.color = "oklch(0.72 0.14 60)"; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,160,60,0.3)"; e.currentTarget.style.color = "oklch(0.62 0.12 60)"; }}>
-          ✕  Abort
-        </button>
-      </div>
-    );
-  } else if (phase === "ready") {
-    launchBtn = null;
-  } else if (phase === "destroying") {
-    launchBtn = (
-      <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 8, flexShrink: 0 }}>
-        <div style={{ padding: "16px", textAlign: "center", background: "rgba(255,80,60,0.04)", border: "1px solid rgba(255,80,60,0.2)", borderRadius: 4, color: "oklch(0.6 0.1 30)", fontSize: 12, letterSpacing: "0.1em" }}>
-          Tearing down…
-        </div>
-        <button onClick={handleAbort} style={{ padding: "9px", background: "transparent", border: "1px solid rgba(255,160,60,0.3)", borderRadius: 4, color: "oklch(0.62 0.12 60)", fontFamily: "inherit", fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", cursor: "pointer", transition: "border-color 0.15s, color 0.15s" }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(255,160,60,0.6)"; e.currentTarget.style.color = "oklch(0.72 0.14 60)"; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,160,60,0.3)"; e.currentTarget.style.color = "oklch(0.62 0.12 60)"; }}>
-          ✕  Abort
-        </button>
+          onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,160,60,0.3)"; e.currentTarget.style.color = "oklch(0.62 0.12 60)"; }}>✕  Abort</button>
       </div>
     );
   }
 
+  const advBtn = (show, onToggle, label) => (
+    <button onClick={onToggle} style={{
+      background:"none", border:"1px solid rgba(0,200,224,0.12)", borderRadius:3, padding:"6px 10px",
+      color:"oklch(0.5 0.06 200)", fontFamily:"inherit", fontSize:10, letterSpacing:"0.06em",
+      textTransform:"uppercase", cursor:"pointer", display:"flex", alignItems:"center",
+      justifyContent:"space-between", width:"100%",
+    }}>
+      <span>{label}</span>
+      <span style={{fontSize:11}}>{show ? "▴" : "▾"}</span>
+    </button>
+  );
+
   return (
-    <div style={{ display: "flex", height: "100%", background: "#06090d" }}>
+    <div style={{ minHeight: "100%", background: "#06090d", display: "flex", flexDirection: "column" }}>
 
-      {/* ── LEFT RAIL ── */}
-      <div style={{ width: 560, flexShrink: 0, background: "#09101a", borderRight: "1px solid rgba(0,200,224,0.1)", padding: "32px 44px", display: "flex", flexDirection: "column", overflowY: "auto" }}>
-
-        {/* Logo */}
-        <div style={{ marginBottom: 32 }}>
-          <img src="https://raw.githubusercontent.com/finos/branding/master/project-logos/active-project-logos/OpenGRIS/Scaler/2025_OpenGRIS_Scaler.svg"
-               alt="OpenGRIS Scaler"
-               style={{ height: 48, width: "auto", display: "block" }} />
-        </div>
-
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 18 }}>
-
-          {/* Region */}
-          <div>
-            <Label help="The AWS region where your cluster will be deployed.">AWS Region</Label>
-            <RegionSelect value={region} onChange={setRegion} />
-          </div>
-
-          {/* Credentials */}
-          <div>
-            <Label help={"IAM credentials with EC2FullAccess and IAM permissions.\n---\nTo get keys: AWS Console → IAM → Users → your user → Security credentials → Create access key.\n---\nCredentials are kept in memory only and never stored."}>AWS Credentials</Label>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(0,200,224,0.15)", borderRadius: 3, padding: "8px 10px", display: "flex", alignItems: "center" }}>
-                <span style={{ fontSize: 10, color: "oklch(0.64 0.08 200)", marginRight: 8, flexShrink: 0 }}>KEY_ID</span>
-                <SecretInput value={accessKeyId} onChange={setAKI} placeholder="AKIA…" style={{ flex: 1, fontSize: 12, color: "oklch(0.85 0.06 200)" }} />
-              </div>
-              <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(0,200,224,0.15)", borderRadius: 3, padding: "8px 10px", display: "flex", alignItems: "center" }}>
-                <span style={{ fontSize: 10, color: "oklch(0.64 0.08 200)", marginRight: 8, flexShrink: 0 }}>SECRET</span>
-                <SecretInput value={secretKey} onChange={setSK} placeholder="wJalr…" style={{ flex: 1, fontSize: 12, color: "oklch(0.85 0.06 200)" }} />
-              </div>
-            </div>
-          </div>
-
-          {/* Worker instance */}
-          <div>
-            <Label help="Worker instance type for ORB-provisioned compute nodes. Choose based on your workload: compute (c5/c6i) for CPU jobs, memory (r5/r6i) for large datasets, GPU (g4dn/g5) for ML workloads.">Worker Instance Type</Label>
-            <InstancePicker value={workerType} onChange={setWorkerType} defaultCat="all" />
-          </div>
-
-          {/* Scale cap */}
-          <div>
-            <Label help="Cap cluster size by instance count or total $/hr spend. The worker count is derived automatically (1 worker per vCPU).">Scale Limit</Label>
-            <div style={{ display: "flex", marginBottom: 8, borderRadius: 3, overflow: "hidden", border: "1px solid rgba(0,200,224,0.2)" }}>
-              {[["instances", "Worker instance cap"], ["budget", "$/hr cap"]].map(([val, lbl]) => (
-                <button key={val} onClick={() => setCapMode(val)} style={{
-                  flex: 1, padding: "7px 0", fontFamily: "inherit", fontSize: 10, letterSpacing: "0.06em",
-                  textTransform: "uppercase", cursor: "pointer", border: "none",
-                  background: capMode === val ? "rgba(0,200,224,0.18)" : "transparent",
-                  color: capMode === val ? "oklch(0.78 0.16 200)" : "oklch(0.48 0.05 220)",
-                  transition: "background 0.15s, color 0.15s",
-                }}>{lbl}</button>
-              ))}
-            </div>
-            {capMode === "instances" ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <NumericStepper value={instanceCap} onChange={setInstanceCap} min={1} max={1000} />
-                <span style={{ fontSize: 11, color: "oklch(0.5 0.04 220)" }}>max EC2 instances</span>
-              </div>
-            ) : (
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span style={{ fontSize: 12, color: "oklch(0.62 0.1 150)", marginRight: 2 }}>$</span>
-                <NumericStepper value={budgetCap} onChange={setBudgetCap} min={0} step={0.5} width={64} />
-                <span style={{ fontSize: 11, color: "oklch(0.5 0.04 220)" }}>max USD/h</span>
-              </div>
-            )}
-            <div style={{ marginTop: 10, padding: "10px 12px", background: "rgba(0,255,136,0.04)", border: "1px solid rgba(0,255,136,0.12)", borderRadius: 3, display: "flex", flexDirection: "column", gap: 5 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                <span style={{ fontSize: 10, color: "oklch(0.55 0.04 220)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Max workers spawned</span>
-                <span style={{ fontSize: 16, fontWeight: 700, color: "oklch(0.78 0.18 150)" }}>{workerCount.toLocaleString()}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                <span style={{ fontSize: 10, color: "oklch(0.55 0.04 220)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Max worker EC2 instances</span>
-                <span style={{ fontSize: 12, color: "oklch(0.65 0.08 200)" }}>{derivedCount}</span>
-              </div>
-              <div style={{ borderTop: "1px solid rgba(0,255,136,0.1)", margin: "3px 0" }} />
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                <span style={{ fontSize: 10, color: "oklch(0.55 0.04 220)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Scheduler (USD/h)</span>
-                <span style={{ fontSize: 12, color: "oklch(0.55 0.06 200)" }}>${schedulerInst.price.toFixed(3)}/h</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                <span style={{ fontSize: 10, color: "oklch(0.55 0.04 220)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Workers (USD/h)</span>
-                <span style={{ fontSize: 12, color: "oklch(0.55 0.06 200)" }}>${workersCostPerHr.toFixed(3)}/h</span>
-              </div>
-              <div style={{ borderTop: "1px solid rgba(0,255,136,0.1)", margin: "3px 0" }} />
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                <span style={{ fontSize: 10, color: "oklch(0.55 0.04 220)", letterSpacing: "0.06em", textTransform: "uppercase" }}>Max est. total (USD/h)</span>
-                <span style={{ fontSize: 13, fontWeight: 600, color: "oklch(0.65 0.12 150)" }}>${totalCostPerHr.toFixed(3)}/h</span>
-              </div>
-            </div>
-          </div>
-
-          {/* requirements.txt */}
-          <div>
-            <Label help="Python packages installed on every worker node. opengris-scaler[all] is always included. Add one package per line in pip requirements format (e.g. numpy==1.26.0).">requirements.txt</Label>
-            <div style={{ fontFamily: "inherit", fontSize: 12, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(0,200,224,0.15)", borderRadius: "3px 3px 0 0", padding: "7px 10px", display: "flex", alignItems: "center", gap: 8, borderBottom: "1px dashed rgba(0,200,224,0.1)" }}>
-              <span style={{ color: "oklch(0.72 0.16 150)", fontWeight: 600 }}>opengris-scaler[all]</span>
-              <span style={{ color: "oklch(0.42 0.06 200)", fontSize: 11 }}>&nbsp;# required</span>
-              <span style={{ marginLeft: "auto", fontSize: 9, color: "oklch(0.38 0.04 220)", letterSpacing: "0.06em", textTransform: "uppercase", userSelect: "none" }}>locked</span>
-            </div>
-            <textarea value={requirements} onChange={e => setReqs(e.target.value)}
-              placeholder={"numpy>=1.26\ntorch>=2.0\n# add more packages…"} rows={4} spellCheck={false}
-              style={{ width: "100%", display: "block", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(0,200,224,0.15)", borderTop: "none", borderRadius: "0 0 3px 3px", padding: "8px 10px", color: "oklch(0.82 0.06 200)", fontFamily: "inherit", fontSize: 12, lineHeight: 1.65, resize: "vertical", outline: "none", caretColor: "oklch(0.72 0.18 150)" }} />
-          </div>
-
-          {/* Advanced */}
-          <div>
-            <button onClick={() => setShowAdv(v => !v)} style={{ background: "none", border: "none", cursor: "pointer", color: "oklch(0.52 0.08 200)", fontFamily: "inherit", fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", padding: 0, display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontSize: 8 }}>{showAdvanced ? "▼" : "▶"}</span> Advanced Options
-            </button>
-            {showAdvanced && (
-              <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 14 }}>
-                <div>
-                  <Label help="The EC2 instance type for the scheduler. Compute-optimized instances (c5/c6i) work well for most deployments.">Scheduler Instance</Label>
-                  <InstancePicker value={schedulerType} onChange={setSchedulerType} defaultCat="all" />
-                </div>
-                <div>
-                  <Label help={"Network transport for the scheduler and object storage.\n---\nWebSocket (ws://) — required when connecting from a browser; also works from Python clients. Requires YMQ backend.\n---\nTCP (tcp://) — works with both ZMQ and YMQ. Browsers cannot open raw TCP connections, so the readiness check is skipped during deployment."}>Transport Protocol</Label>
-                  <div style={{ display: "flex", borderRadius: 3, overflow: "hidden", border: "1px solid rgba(0,200,224,0.2)" }}>
-                    {[["ws", "WebSocket"], ["tcp", "TCP"]].map(([val, lbl]) => (
-                      <button key={val} onClick={() => { setTransport(val); if (val === "ws") setNetBack("ymq"); }} style={{
-                        flex: 1, padding: "7px 0", fontFamily: "inherit", fontSize: 10, letterSpacing: "0.06em",
-                        textTransform: "uppercase", cursor: "pointer", border: "none",
-                        background: transport === val ? "rgba(0,200,224,0.18)" : "transparent",
-                        color: transport === val ? "oklch(0.78 0.16 200)" : "oklch(0.48 0.05 220)",
-                        transition: "background 0.15s, color 0.15s",
-                      }}>{lbl}</button>
-                    ))}
-                  </div>
-                  {transport === "tcp" && (
-                    <div style={{ marginTop: 6, fontSize: 10, color: "oklch(0.56 0.1 60)", lineHeight: 1.55 }}>
-                      Browsers can't open TCP connections — readiness check will be skipped.
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <Label help={"Messaging backend for scheduler/worker communication.\n---\nYMQ (default) — lower-latency C++ transport; required for WebSocket. All components (scheduler, workers, clients) must use the same backend.\n---\nZMQ — battle-tested, broad compatibility. TCP transport only."}>Network Backend</Label>
-                  <div style={{ display: "flex", borderRadius: 3, overflow: "hidden", border: "1px solid rgba(0,200,224,0.2)" }}>
-                    {[["ymq", "YMQ"], ["zmq", "ZMQ"]].map(([val, lbl]) => {
-                      const disabled = val === "zmq" && transport === "ws";
-                      return (
-                        <button key={val} disabled={disabled} onClick={() => { setNetBack(val); if (val === "zmq") setTransport("tcp"); }} style={{
-                          flex: 1, padding: "7px 0", fontFamily: "inherit", fontSize: 10, letterSpacing: "0.06em",
-                          textTransform: "uppercase", cursor: disabled ? "not-allowed" : "pointer", border: "none",
-                          background: networkBackend === val ? "rgba(0,200,224,0.18)" : "transparent",
-                          color: disabled ? "oklch(0.35 0.03 220)" : networkBackend === val ? "oklch(0.78 0.16 200)" : "oklch(0.48 0.05 220)",
-                          transition: "background 0.15s, color 0.15s",
-                        }}>{lbl}</button>
-                      );
-                    })}
-                  </div>
-                  {transport === "ws" && (
-                    <div style={{ marginTop: 6, fontSize: 10, color: "oklch(0.52 0.08 200)", lineHeight: 1.55 }}>
-                      WebSocket requires YMQ.
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <Label help="Python version to install on the scheduler and workers via uv.">Python Version</Label>
-                  <input value={pythonVersion} onChange={e => setPyVer(e.target.value)} style={inputStyle} placeholder="3.12" />
-                </div>
-                <div>
-                  <Label help="pip package spec for scaler on the scheduler instance. Use the git+https:// form to install from a branch, e.g. opengris-scaler[all] @ git+https://github.com/finos/opengris-scaler@my-branch">Scaler Package</Label>
-                  <input value={scalerPackage} onChange={e => setScalerPkg(e.target.value)} style={inputStyle} placeholder="opengris-scaler[all]" />
-                </div>
-                <div>
-                  <Label help="Existing IAM instance profile to attach to the scheduler. If blank, a new role and profile are created and deleted on destroy.">Existing Instance Profile</Label>
-                  <input value={instanceProfileName} onChange={e => setIPN(e.target.value)} style={inputStyle} placeholder="my-scaler-profile (optional)" />
-                </div>
-                <div>
-                  <Label help="Fixed name suffix for all AWS resources (default: random 8-char). Use this for reproducible resource names.">Resource Name Suffix</Label>
-                  <input value={nameSuffix} onChange={e => setSuffix(e.target.value)} style={inputStyle} placeholder="random (optional)" />
-                </div>
-                <div>
-                  <Label help="Seconds to wait for the scheduler to become reachable after instance launch.">Poll Timeout (seconds)</Label>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <NumericStepper value={pollTimeout} onChange={setPollTO} min={60} max={1800} step={60} width={72} />
-                    <span style={{ fontSize: 11, color: "oklch(0.5 0.04 220)" }}>seconds</span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-        </div>
-
-        {/* Load state from file — visible only in idle state */}
-        {phase === "idle" && (
-          <div style={{ marginTop: 16, display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 10, color: "oklch(0.42 0.04 220)" }}>Have a state file?</span>
-            <label style={{ fontSize: 10, color: "oklch(0.58 0.1 200)", cursor: "pointer", textDecoration: "underline", textDecorationColor: "rgba(0,200,224,0.3)" }}>
-              Load for teardown
-              <input type="file" accept=".json" onChange={handleLoadState} style={{ display: "none" }} />
-            </label>
-          </div>
-        )}
-
-        {/* Reset link when in error state */}
-        {phase === "error" && (
-          <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
-            <button onClick={handleReset} style={{ background: "none", border: "none", cursor: "pointer", color: "oklch(0.48 0.06 220)", fontFamily: "inherit", fontSize: 10, padding: 0, letterSpacing: "0.06em" }}>
-              ← Clear state
-            </button>
-          </div>
-        )}
-
-        {launchBtn}
+      {/* Header */}
+      <div style={{ padding: "14px 28px", borderBottom: "1px solid rgba(0,200,224,0.1)", background: "#090f18", flexShrink: 0 }}>
+        <img src="https://raw.githubusercontent.com/finos/branding/master/project-logos/active-project-logos/OpenGRIS/Scaler/2025_OpenGRIS_Scaler.svg"
+             alt="OpenGRIS Scaler" style={{ height: 38, width: "auto", display: "block" }} />
       </div>
 
-      {/* ── RIGHT PANEL ── */}
-      <div style={{ flex: 1, padding: "32px 32px", display: "flex", flexDirection: "column", gap: 20, overflowY: "auto" }}>
+      {/* Body */}
+      <div style={{ flex: 1, padding: "24px 28px", display: "flex", flexDirection: "column", gap: 20, overflowY: "auto" }}>
 
-        {/* Idle — no saved state */}
-        {phase === "idle" && (
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12 }}>
-            <div style={{ fontSize: 32, color: formReady ? "rgba(0,200,224,0.35)" : "rgba(255,160,60,0.35)" }}>◈</div>
-            {formReady ? (
-              <>
-                <div style={{ fontSize: 12, color: "oklch(0.62 0.1 200)", letterSpacing: "0.08em" }}>READY TO DEPLOY</div>
-                <div style={{ fontSize: 11, color: "oklch(0.54 0.04 220)", textAlign: "center", maxWidth: 260, lineHeight: 1.7 }}>Press Launch Cluster to provision a scheduler EC2 instance and configure it as an openGRIS Scaler node.</div>
-              </>
-            ) : (
-              <>
-                <div style={{ fontSize: 12, color: "oklch(0.7 0.14 60)", letterSpacing: "0.08em" }}>NOT READY</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "center" }}>
-                  {blocking.map(c => (
-                    <div key={c.key} style={{ fontSize: 11, color: "oklch(0.58 0.08 60)", display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ fontSize: 9, color: "oklch(0.6 0.14 60)" }}>✕</span> {c.label}
-                    </div>
-                  ))}
+        {/* Main 2-col: left panel stack | right worker managers */}
+        <div style={{ display: "grid", gridTemplateColumns: "340px 1fr", gap: 16, alignItems: "start" }}>
+
+          {/* Left column: Credentials + General + Scheduler */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+            <PanelBox title="Credentials">
+              {/* Cloud provider tab bar */}
+              <div style={{ display:"flex", borderBottom:"1px solid rgba(0,200,224,0.1)", gap:0, marginBottom:2 }}>
+                {[["aws","AWS"],["ibm","IBM"],["gcp","GCP"],["oci","OCI"]].map(([id,lbl]) => {
+                  const active = id === "aws";
+                  const disabled = id !== "aws";
+                  return (
+                    <button key={id} disabled={disabled} style={{
+                      padding:"5px 12px", fontFamily:"inherit", fontSize:10, letterSpacing:"0.08em",
+                      textTransform:"uppercase", cursor: disabled ? "default" : "pointer", border:"none", marginBottom:-1,
+                      borderBottom: active ? "2px solid oklch(0.62 0.16 200)" : "2px solid transparent",
+                      background:"transparent",
+                      color: active ? "oklch(0.72 0.14 200)" : "oklch(0.32 0.03 220)",
+                    }}>{lbl}</button>
+                  );
+                })}
+              </div>
+              <div><Label help="The AWS region where your cluster will be deployed.">AWS Region</Label><RegionSelect value={region} onChange={setRegion} /></div>
+              <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                <div style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(0,200,224,0.15)", borderRadius:3, padding:"8px 10px", display:"flex", alignItems:"center" }}>
+                  <span style={{ fontSize:10, color:"oklch(0.64 0.08 200)", marginRight:8, flexShrink:0 }}>KEY_ID</span>
+                  <SecretInput value={accessKeyId} onChange={setAKI} placeholder="AKIA…" style={{ flex:1, fontSize:12, color:"oklch(0.85 0.06 200)" }} />
                 </div>
-              </>
-            )}
-          </div>
-        )}
+                <div style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(0,200,224,0.15)", borderRadius:3, padding:"8px 10px", display:"flex", alignItems:"center" }}>
+                  <span style={{ fontSize:10, color:"oklch(0.64 0.08 200)", marginRight:8, flexShrink:0 }}>SECRET</span>
+                  <SecretInput value={secretKey} onChange={setSK} placeholder="wJalr…" style={{ flex:1, fontSize:12, color:"oklch(0.85 0.06 200)" }} />
+                </div>
+              </div>
+            </PanelBox>
 
-        {/* Log — shown whenever there are entries */}
-        {log.length > 0 && (
-          <div style={{ animation: "fadeSlideIn 0.3s ease" }}>
-            <LiveTerminal
-              lines={log}
-              isRunning={isRunning}
-              title={phase === "destroying" ? "openGRIS Scaler — teardown" : "openGRIS Scaler — deploy log"}
-            />
-          </div>
-        )}
+            <PanelBox title="General Options">
+              {advBtn(showGenAdv, () => setShowGenAdv(v => !v), "Advanced Options")}
+              {showGenAdv && (<>
+                <div>
+                  <Label help={"WebSocket (ws://) — required when connecting from a browser; requires YMQ.\n---\nTCP (tcp://) — works with ZMQ or YMQ; readiness check skipped (browsers can't open raw TCP)."}>Transport Protocol</Label>
+                  <TogglePair options={[["ws","WebSocket"],["tcp","TCP"]]} value={transport} onSelect={v => { setTransport(v); if (v === "ws") setNetBack("ymq"); }} />
+                </div>
+                <div>
+                  <Label help={"YMQ (default) — lower-latency C++ transport; required for WebSocket.\n---\nZMQ — battle-tested, TCP transport only."}>Network Backend</Label>
+                  <TogglePair options={[["ymq","YMQ"],["zmq","ZMQ",transport==="ws"]]} value={networkBackend} onSelect={v => { setNetBack(v); if (v === "zmq") setTransport("tcp"); }} />
+                </div>
+                <div><Label help="Python version installed via uv on the scheduler and all ORB workers.">Python Version</Label><input value={pythonVersion} onChange={e=>setPyVer(e.target.value)} style={inp} placeholder="3.14" /></div>
+                <div><Label help="pip spec for scaler on the scheduler. Use git+https:// to install from a branch.">Scaler Package</Label><input value={scalerPackage} onChange={e=>setScalerPkg(e.target.value)} style={inp} placeholder="opengris-scaler[all]" /></div>
+                <div><Label help="Existing IAM instance profile to attach to the scheduler. Blank = create new.">Instance Profile</Label><input value={instanceProfileName} onChange={e=>setIPN(e.target.value)} style={inp} placeholder="my-scaler-profile (optional)" /></div>
+                <div><Label help="Fixed suffix for all AWS resource names. Blank = random 8-char.">Resource Name Suffix</Label><input value={nameSuffix} onChange={e=>setSuffix(e.target.value)} style={inp} placeholder="random (optional)" /></div>
+                <div>
+                  <Label help="Seconds to wait for the scheduler to become reachable after instance launch.">Poll Timeout (s)</Label>
+                  <div style={{ display:"flex", alignItems:"center", gap:10 }}><NumericStepper value={pollTimeout} onChange={setPollTO} min={60} max={1800} step={60} width={72} /><span style={{fontSize:11,color:"oklch(0.5 0.04 220)"}}>seconds</span></div>
+                </div>
+                <div>
+                  <Label help="Python requirements installed on all ORB / AWS EC2 workers. opengris-scaler[all] is always prepended.">Requirements (ORB workers)</Label>
+                  <textarea value={requirements} onChange={e=>setReqs(e.target.value)} placeholder={"numpy\npandas"} style={{ ...inp, resize:"vertical", minHeight:72, fontFamily:"inherit", fontSize:11, lineHeight:1.6 }} />
+                </div>
+              </>)}
+            </PanelBox>
 
-        {/* Deployment card — shown as soon as any state is known, hidden during teardown */}
-        {provState && phase !== "destroying" && (
-          <div style={{ animation: "fadeSlideIn 0.3s ease" }}>
-            {phase === "ready" && log.length === 0 && (
-              <div style={{ marginBottom: 12, padding: "10px 14px", background: "rgba(0,200,224,0.05)", border: "1px solid rgba(0,200,224,0.15)", borderRadius: 3, fontSize: 11, color: "oklch(0.58 0.08 200)" }}>
-                Deployment loaded from saved state.
+            <PanelBox title="Scheduler · EC2">
+              <div><Label help="EC2 instance type for the scheduler. Compute-optimized (c5/c6i) works well for most deployments.">Instance Type</Label><InstancePicker value={schedulerType} onChange={setSchedulerType} defaultCat="all" /></div>
+              <div style={{ padding:"10px 12px", background:"rgba(0,255,136,0.04)", border:"1px solid rgba(0,255,136,0.1)", borderRadius:3, display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
+                <span style={{fontSize:10,color:"oklch(0.55 0.04 220)",textTransform:"uppercase",letterSpacing:"0.06em"}}>Scheduler cost</span>
+                <span style={{fontSize:13,fontWeight:600,color:"oklch(0.65 0.12 150)"}}>${schedulerInst.price.toFixed(3)}/h</span>
+              </div>
+              {advBtn(showSchedAdv, () => setShowSchedAdv(v => !v), "Advanced")}
+              {showSchedAdv && (
+                <div style={{ display:"flex", gap:10 }}>
+                  <div style={{flex:1}}>
+                    <Label>Scheduler Port</Label>
+                    <NumericStepper value={schedulerPort} onChange={setSchedPort} min={1024} max={65535} width={80} />
+                  </div>
+                  <div style={{flex:1}}>
+                    <Label>Object Storage Port</Label>
+                    <NumericStepper value={objectStoragePort} onChange={setObjPort} min={1024} max={65535} width={80} />
+                  </div>
+                </div>
+              )}
+            </PanelBox>
+
+          </div>
+
+          {/* Right column: Worker Managers */}
+          <PanelBox title={`Worker Managers (${workerManagers.length})`} style={{ gap: 12 }}>
+            <div style={{ display:"flex", gap:14, flexWrap:"wrap" }}>
+              {workerManagers.map(wm => (
+                <WorkerManagerCard key={wm.id} wm={wm}
+                  onChange={updated => updateWorkerManager(wm.id, updated)}
+                  onRemove={() => removeWorkerManager(wm.id)}
+                  allInstances={allInstances}
+                  canRemove={workerManagers.length > 1} />
+              ))}
+              <button onClick={addWorkerManager}
+                style={{ width:130, flexShrink:0, background:"rgba(0,200,224,0.03)", border:"1px dashed rgba(0,200,224,0.25)", borderRadius:5, color:"oklch(0.55 0.1 200)", fontFamily:"inherit", fontSize:11, cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:8, transition:"background 0.15s, border-color 0.15s", minHeight: 120 }}
+                onMouseEnter={e=>{e.currentTarget.style.background="rgba(0,200,224,0.07)";e.currentTarget.style.borderColor="rgba(0,200,224,0.45)";}}
+                onMouseLeave={e=>{e.currentTarget.style.background="rgba(0,200,224,0.03)";e.currentTarget.style.borderColor="rgba(0,200,224,0.25)";}}>
+                <span style={{fontSize:22,lineHeight:1}}>+</span>
+                <span style={{letterSpacing:"0.06em",textTransform:"uppercase"}}>Add Worker Manager</span>
+              </button>
+            </div>
+          </PanelBox>
+
+        </div>
+
+        {/* Bottom row: Cost Summary | Launch */}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 2fr", gap:16, alignItems:"start" }}>
+
+          <PanelBox title="Cost Summary">
+            {workerManagers.map((wm) => {
+              if (wm.type !== "orb_aws_ec2") return (
+                <div key={wm.id} style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
+                  <span style={{fontSize:10,color:"oklch(0.55 0.04 220)",textTransform:"uppercase",letterSpacing:"0.05em"}}>{wm.id}</span>
+                  <span style={{fontSize:11,color:"oklch(0.45 0.04 220)",fontStyle:"italic"}}>n/a</span>
+                </div>
+              );
+              const inst  = allInstances.find(i => i.type === wm.instanceType) || { price: 0 };
+              const count = wm.capMode === "instances" ? Math.max(0, wm.instanceCap||0) : Math.max(0, Math.floor((wm.budgetCap||0)/(inst.price||1)));
+              return (
+                <div key={wm.id} style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
+                  <span style={{fontSize:10,color:"oklch(0.55 0.04 220)",textTransform:"uppercase",letterSpacing:"0.05em"}}>{wm.id} · {count}× {wm.instanceType}</span>
+                  <span style={{fontSize:12,color:"oklch(0.65 0.08 200)"}}>${(count*inst.price).toFixed(3)}/h</span>
+                </div>
+              );
+            })}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
+              <span style={{fontSize:10,color:"oklch(0.55 0.04 220)",textTransform:"uppercase",letterSpacing:"0.05em"}}>Scheduler · {schedulerType}</span>
+              <span style={{fontSize:12,color:"oklch(0.65 0.08 200)"}}>${schedulerInst.price.toFixed(3)}/h</span>
+            </div>
+            <div style={{borderTop:"1px solid rgba(0,255,136,0.12)",paddingTop:10,display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
+              <span style={{fontSize:10,color:"oklch(0.62 0.08 200)",textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:600}}>Max est. total</span>
+              <span style={{fontSize:16,fontWeight:700,color:"oklch(0.72 0.18 150)"}}>${totalCostPerHr.toFixed(3)}/h</span>
+            </div>
+          </PanelBox>
+
+          <PanelBox title="Launch" style={{ gap: 16 }}>
+            {(phase === "idle" || phase === "error") && !formReady && (
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {blocking.map(c => (
+                  <div key={c.key} style={{fontSize:11,color:"oklch(0.58 0.08 60)",display:"flex",alignItems:"center",gap:6}}>
+                    <span style={{fontSize:9,color:"oklch(0.6 0.14 60)"}}>✕</span> {c.label}
+                  </div>
+                ))}
               </div>
             )}
-            <DeploymentCard
-              state={provState}
-              onDestroy={handleDestroy}
-              onDownload={() => downloadText("scaler-state-" + provState.name_suffix + ".json", JSON.stringify(provState, null, 2))}
-              hasCredentials={hasCredentials}
-              isRunning={isRunning}
-              keyMaterial={keyMaterial}
-            />
-          </div>
-        )}
+            {log.length > 0 && (
+              <LiveTerminal lines={log} isRunning={isRunning}
+                title={phase === "destroying" ? "openGRIS Scaler — teardown" : "openGRIS Scaler — deploy log"} />
+            )}
+            {provState && phase !== "destroying" && (
+              <div style={{animation:"fadeSlideIn 0.3s ease"}}>
+                {phase === "ready" && log.length === 0 && (
+                  <div style={{marginBottom:10,padding:"10px 14px",background:"rgba(0,200,224,0.05)",border:"1px solid rgba(0,200,224,0.15)",borderRadius:3,fontSize:11,color:"oklch(0.58 0.08 200)"}}>
+                    Deployment loaded from saved state.
+                  </div>
+                )}
+                <DeploymentCard state={provState} onDestroy={handleDestroy}
+                  onDownload={() => downloadText("scaler-state-" + provState.name_suffix + ".json", JSON.stringify(provState, null, 2))}
+                  hasCredentials={hasCredentials} isRunning={isRunning} keyMaterial={keyMaterial} />
+              </div>
+            )}
+            {launchControl}
+            <div style={{display:"flex",gap:16,alignItems:"center",flexWrap:"wrap"}}>
+              {phase === "idle" && (
+                <label style={{fontSize:10,color:"oklch(0.52 0.08 200)",cursor:"pointer",textDecoration:"underline",textDecorationColor:"rgba(0,200,224,0.3)"}}>
+                  Load state from file<input type="file" accept=".json" onChange={handleLoadState} style={{display:"none"}} />
+                </label>
+              )}
+              {phase === "error" && (
+                <button onClick={handleReset} style={{background:"none",border:"none",cursor:"pointer",color:"oklch(0.48 0.06 220)",fontFamily:"inherit",fontSize:10,padding:0,letterSpacing:"0.06em"}}>
+                  ← Clear state
+                </button>
+              )}
+            </div>
+          </PanelBox>
 
+        </div>
 
       </div>
     </div>

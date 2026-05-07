@@ -1,0 +1,109 @@
+{
+  "scheduler_type": "default",
+  "templates": [
+    {
+      "template_id": "3e8aa608323306f3",
+      "name": "opengris-orb-3e8aa608323306f3",
+      "image_id": "ami-0e1e769742d1cfb49",
+      "max_instances": 4,
+      "machine_types": {
+        "t3.medium": 1
+      },
+      "machine_types_ondemand": {},
+      "machine_types_priority": {},
+      "subnet_ids": [
+        "subnet-5a78073f"
+      ],
+      "security_group_ids": [
+        "sg-0407cb9e863450d6a"
+      ],
+      "price_type": "ondemand",
+      "network_zones": [],
+      "key_name": "opengris-orb-key-3e8aa608323306f3",
+      "user_data": "#!/bin/bash\nset -e\ndnf update -y\ndnf install -y python3.14 python3.14-pip\npython3.14 -m venv /opt/opengris-scaler\n/opt/opengris-scaler/bin/python -m pip install --upgrade pip\ncat > /tmp/requirements.txt << 'REQUIREMENTS_EOF'\nopengris-scaler>=2.2.0\n\nREQUIREMENTS_EOF\n/opt/opengris-scaler/bin/pip install -r /tmp/requirements.txt\nln -sf /opt/opengris-scaler/bin/scaler_* /usr/local/bin/\nset +e\n\nINSTANCE_ID=$(ec2-metadata --instance-id --quiet)\nnohup scaler_worker_manager baremetal_native tcp://38.61.51.10:8516 \\\n    --mode fixed \\\n    --worker-type ORB \\\n    --worker-manager-id \"${INSTANCE_ID}\" \\\n    --per-worker-task-queue-size 1000 \\\n    --heartbeat-interval-seconds 2 \\\n    --task-timeout-seconds 60 \\\n    --garbage-collect-interval-seconds 30 \\\n    --death-timeout-seconds 300 \\\n    --trim-memory-threshold-bytes 1073741824 \\\n    --event-loop builtin \\\n    --io-threads 1 \\\n    --object-storage-address tcp://38.61.51.10:8517 > /var/log/opengris-scaler.log 2>&1 &\n",
+      "tags": {},
+      "metadata": {},
+      "provider_name": "aws-default",
+      "provider_api": "RunInstances",
+      "is_active": true
+    },
+    {
+      "template_id": "95a98b76fac6d18f",
+      "name": "opengris-orb-95a98b76fac6d18f",
+      "image_id": "ami-0e1e769742d1cfb49",
+      "max_instances": 4,
+      "machine_types": {
+        "t3.medium": 1
+      },
+      "machine_types_ondemand": {},
+      "machine_types_priority": {},
+      "subnet_ids": [
+        "subnet-5a78073f"
+      ],
+      "security_group_ids": [
+        "sg-001888488728f7294"
+      ],
+      "price_type": "ondemand",
+      "network_zones": [],
+      "key_name": "opengris-orb-key-95a98b76fac6d18f",
+      "user_data": "#!/bin/bash\nset -e\ndnf update -y\ndnf install -y python3.14 python3.14-pip\npython3.14 -m venv /opt/opengris-scaler\n/opt/opengris-scaler/bin/python -m pip install --upgrade pip\ncat > /tmp/requirements.txt << 'REQUIREMENTS_EOF'\nopengris-scaler>=2.2.0\n\nREQUIREMENTS_EOF\n/opt/opengris-scaler/bin/pip install -r /tmp/requirements.txt\nln -sf /opt/opengris-scaler/bin/scaler_* /usr/local/bin/\nset +e\n\nINSTANCE_ID=$(ec2-metadata --instance-id --quiet)\nnohup scaler_worker_manager baremetal_native tcp://38.61.51.10:8516 \\\n    --mode fixed \\\n    --worker-type ORB \\\n    --worker-manager-id \"${INSTANCE_ID}\" \\\n    --per-worker-task-queue-size 1000 \\\n    --heartbeat-interval-seconds 2 \\\n    --task-timeout-seconds 60 \\\n    --garbage-collect-interval-seconds 30 \\\n    --death-timeout-seconds 300 \\\n    --trim-memory-threshold-bytes 1073741824 \\\n    --event-loop builtin \\\n    --io-threads 1 \\\n    --object-storage-address tcp://38.61.51.10:8517 > /var/log/opengris-scaler.log 2>&1 &\n",
+      "tags": {},
+      "metadata": {},
+      "provider_name": "aws-default",
+      "provider_api": "RunInstances",
+      "is_active": true
+    },
+    {
+      "template_id": "c7b706efbe2a5ab8",
+      "name": "opengris-orb-c7b706efbe2a5ab8",
+      "image_id": "ami-0e1e769742d1cfb49",
+      "max_instances": 4,
+      "machine_types": {
+        "t3.medium": 1
+      },
+      "machine_types_ondemand": {},
+      "machine_types_priority": {},
+      "subnet_ids": [
+        "subnet-5a78073f"
+      ],
+      "security_group_ids": [
+        "sg-0634c7087781d32d0"
+      ],
+      "price_type": "ondemand",
+      "network_zones": [],
+      "key_name": "opengris-orb-key-c7b706efbe2a5ab8",
+      "user_data": "#!/bin/bash\nset -e\ndnf update -y\ndnf install -y python3.14 python3.14-pip\npython3.14 -m venv /opt/opengris-scaler\n/opt/opengris-scaler/bin/python -m pip install --upgrade pip\ncat > /tmp/requirements.txt << 'REQUIREMENTS_EOF'\nopengris-scaler>=2.2.0\n\nREQUIREMENTS_EOF\n/opt/opengris-scaler/bin/pip install -r /tmp/requirements.txt\nln -sf /opt/opengris-scaler/bin/scaler_* /usr/local/bin/\nset +e\n\nINSTANCE_ID=$(ec2-metadata --instance-id --quiet)\nnohup scaler_worker_manager baremetal_native tcp://38.61.51.10:8516 \\\n    --mode fixed \\\n    --worker-type ORB \\\n    --worker-manager-id \"${INSTANCE_ID}\" \\\n    --per-worker-task-queue-size 1000 \\\n    --heartbeat-interval-seconds 2 \\\n    --task-timeout-seconds 60 \\\n    --garbage-collect-interval-seconds 30 \\\n    --death-timeout-seconds 300 \\\n    --trim-memory-threshold-bytes 1073741824 \\\n    --event-loop builtin \\\n    --io-threads 1 \\\n    --object-storage-address tcp://38.61.51.10:8517 > /var/log/opengris-scaler.log 2>&1 &\n",
+      "tags": {},
+      "metadata": {},
+      "provider_name": "aws-default",
+      "provider_api": "RunInstances",
+      "is_active": true
+    },
+    {
+      "template_id": "f30044dac1fdf5b9",
+      "name": "opengris-orb-f30044dac1fdf5b9",
+      "image_id": "ami-0e1e769742d1cfb49",
+      "max_instances": 4,
+      "machine_types": {
+        "t3.medium": 1
+      },
+      "machine_types_ondemand": {},
+      "machine_types_priority": {},
+      "subnet_ids": [
+        "subnet-5a78073f"
+      ],
+      "security_group_ids": [
+        "sg-0a991fd8f1aa000c2"
+      ],
+      "price_type": "ondemand",
+      "network_zones": [],
+      "key_name": "opengris-orb-key-f30044dac1fdf5b9",
+      "user_data": "#!/bin/bash\nset -e\ndnf update -y\ndnf install -y python3.14 python3.14-pip\npython3.14 -m venv /opt/opengris-scaler\n/opt/opengris-scaler/bin/python -m pip install --upgrade pip\ncat > /tmp/requirements.txt << 'REQUIREMENTS_EOF'\nopengris-scaler>=2.2.0\n\nREQUIREMENTS_EOF\n/opt/opengris-scaler/bin/pip install -r /tmp/requirements.txt\nln -sf /opt/opengris-scaler/bin/scaler_* /usr/local/bin/\nset +e\n\nINSTANCE_ID=$(ec2-metadata --instance-id --quiet)\nnohup scaler_worker_manager baremetal_native tcp://38.61.51.10:8516 \\\n    --mode fixed \\\n    --worker-type ORB \\\n    --worker-manager-id \"${INSTANCE_ID}\" \\\n    --per-worker-task-queue-size 1000 \\\n    --heartbeat-interval-seconds 2 \\\n    --task-timeout-seconds 60 \\\n    --garbage-collect-interval-seconds 30 \\\n    --death-timeout-seconds 300 \\\n    --trim-memory-threshold-bytes 1073741824 \\\n    --event-loop builtin \\\n    --io-threads 1 \\\n    --object-storage-address tcp://38.61.51.10:8517 > /var/log/opengris-scaler.log 2>&1 &\n",
+      "tags": {},
+      "metadata": {},
+      "provider_name": "aws-default",
+      "provider_api": "RunInstances",
+      "is_active": true
+    }
+  ]
+}
