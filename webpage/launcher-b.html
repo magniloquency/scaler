@@ -43,6 +43,32 @@
       --tab-active:     oklch(0.62 0.16 200);
       --scrollbar-thumb: rgba(0,200,224,0.2);
     }
+    [data-theme="light"] {
+      --bg-page:        #f0f4f8;
+      --bg-panel:       #e8edf3;
+      --bg-surface:     rgba(0,0,0,0.04);
+      --bg-elevated:    #dde3eb;
+      --bg-popup:       #d8e0ea;
+      --border-accent:  rgba(0,100,160,0.18);
+      --border-strong:  rgba(0,100,160,0.32);
+      --border-success: rgba(0,140,80,0.2);
+      --border-danger:  rgba(200,40,20,0.25);
+      --text-primary:   #1a2433;
+      --text-secondary: #2e4460;
+      --text-muted:     #5a7090;
+      --text-dim:       #8aa0b8;
+      --text-accent:    #006699;
+      --text-success:   #007840;
+      --text-warning:   #8a5a00;
+      --text-danger:    #c02020;
+      --text-label:     #005580;
+      --accent-cyan:    #0077aa;
+      --term-bg:        #e4ecf4;
+      --term-border:    rgba(0,140,80,0.2);
+      --term-titlebar:  rgba(0,140,80,0.06);
+      --tab-active:     #0077aa;
+      --scrollbar-thumb: rgba(0,100,160,0.2);
+    }
     [data-theme="zenburn"] {
       --bg-page:        #3f3f3f;
       --bg-panel:       #4a4a4a;
@@ -244,6 +270,8 @@ function buildUserData(cfg, creds) {
       if (wm.workerType) block += "worker_type = \"" + wm.workerType + "\"\n";
       if (wm.maxTaskConcurrency != null && wm.maxTaskConcurrency >= 0)
         block += "max_task_concurrency = " + wm.maxTaskConcurrency + "\n";
+    } else if (wm.type === "symphony") {
+      block += "service_name = \"" + (wm.serviceName || "") + "\"\n";
     }
 
     return block;
@@ -768,6 +796,11 @@ function WorkerManagerCard({ wm, onChange, onRemove, allInstances, canRemove, fu
         </div>
       </>)}
 
+      {/* symphony */}
+      {wm.type === "symphony" && (<>
+        <div><Label>Service Name</Label><input value={wm.serviceName||""} onChange={e=>set("serviceName",e.target.value)} style={inp} placeholder="my-symphony-service" /></div>
+      </>)}
+
       {/* baremetal_native */}
       {wm.type === "baremetal_native" && (<>
         <div>
@@ -912,6 +945,7 @@ function TopNav({ activeTab, setActiveTab, theme, setTheme, showPostLaunch }) {
         fontSize: 10, padding: "4px 8px", cursor: "pointer", outline: "none",
       }}>
         <option value="dark">Scaler Dark</option>
+        <option value="light">Scaler Light</option>
         <option value="zenburn">Zenburn</option>
       </select>
     </div>
@@ -937,7 +971,7 @@ function App() {
   const [showSchedAdv, setShowSchedAdv]   = useState(false);
   const [showGenAdv, setShowGenAdv]       = useState(false);
   const [activeTab, setActiveTab]         = useState("config");
-  const [theme, setTheme]                 = useState("dark");
+  const [theme, setTheme]                 = useState("light");
 
   const wmCounterRef = useRef(1);
   const [workerManagers, setWorkerManagers] = useState([

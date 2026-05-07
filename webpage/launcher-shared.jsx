@@ -759,10 +759,12 @@ function SchedulerLogTerminal({ instanceId, region, credentials, isActive }) {
 
 /* ── WorkerManagerTypeSelect ── */
 const WM_TYPE_DEFS = [
-  { value: "orb_aws_ec2",      label: "ORB / AWS EC2",     badge: "EC2",  desc: "Managed EC2 instances via ORB adapter" },
-  { value: "aws_raw_ecs",      label: "AWS ECS",            badge: "ECS",  desc: "Container tasks on Elastic Container Service" },
-  { value: "aws_hpc",          label: "AWS Batch (HPC)",    badge: "HPC",  desc: "High-performance compute via AWS Batch" },
-  { value: "baremetal_native", label: "Bare Metal",         badge: "BARE", desc: "Directly attached bare-metal workers" },
+  { value: "orb_aws_ec2",      label: "ORB / AWS EC2",          badge: "EC2",  desc: "Managed EC2 instances via ORB adapter" },
+  { value: "aws_raw_ecs",      label: "AWS ECS",                 badge: "ECS",  desc: "Container tasks on Elastic Container Service" },
+  { value: "aws_hpc",          label: "AWS Batch (HPC)",         badge: "HPC",  desc: "High-performance compute via AWS Batch" },
+  { value: "baremetal_native", label: "Bare Metal",              badge: "BARE", desc: "Directly attached bare-metal workers" },
+  { value: "symphony",         label: "IBM Spectrum Symphony",   badge: "SYM",  desc: "IBM Spectrum Symphony grid via soamapi" },
+  { value: "oci",              label: "OCI Compute",             badge: "OCI",  desc: "Oracle Cloud Infrastructure — coming soon", disabled: true },
 ];
 
 function WorkerManagerTypeSelect({ value, onChange }) {
@@ -841,18 +843,19 @@ function WorkerManagerTypeSelect({ value, onChange }) {
           {WM_TYPE_DEFS.map(t => (
             <div
               key={t.value}
-              onClick={() => { onChange(t.value); setOpen(false); }}
+              onClick={() => { if (!t.disabled) { onChange(t.value); setOpen(false); } }}
               style={{
                 padding: "9px 12px",
-                cursor: "pointer",
+                cursor: t.disabled ? "not-allowed" : "pointer",
                 display: "flex",
                 alignItems: "center",
                 gap: 10,
+                opacity: t.disabled ? 0.4 : 1,
                 background: t.value === value ? "rgba(0,200,224,0.08)" : "transparent",
                 borderBottom: "1px solid rgba(255,255,255,0.04)",
               }}
-              onMouseEnter={e => { if (t.value !== value) e.currentTarget.style.background = "var(--bg-surface)"; }}
-              onMouseLeave={e => { if (t.value !== value) e.currentTarget.style.background = "transparent"; }}
+              onMouseEnter={e => { if (!t.disabled && t.value !== value) e.currentTarget.style.background = "var(--bg-surface)"; }}
+              onMouseLeave={e => { if (!t.disabled && t.value !== value) e.currentTarget.style.background = "transparent"; }}
             >
               <span style={{
                 fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",
@@ -866,6 +869,7 @@ function WorkerManagerTypeSelect({ value, onChange }) {
                 <span style={{ display: "block", fontSize: 10, color: "var(--text-dim)", marginTop: 1 }}>{t.desc}</span>
               </span>
               {t.value === value && <span style={{ color: "var(--text-success)", fontSize: 10, flexShrink: 0 }}>✓</span>}
+              {t.disabled && <span style={{ color: "var(--text-dim)", fontSize: 9, flexShrink: 0, letterSpacing: "0.06em" }}>SOON</span>}
             </div>
           ))}
         </div>,
