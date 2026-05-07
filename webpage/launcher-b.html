@@ -228,8 +228,9 @@ function buildUserData(cfg, creds) {
       block += "ecs_task_definition = \"" + (wm.ecsTaskDefinition || "scaler-task-definition") + "\"\n";
       block += "ecs_task_cpu = " + (wm.ecsTaskCpu || 4) + "\n";
       block += "ecs_task_memory = " + (wm.ecsTaskMemory || 30) + "\n";
-      block += "ecs_python_version = \"" + (wm.ecsPythonVersion || "3.12.11") + "\"\n";
-      block += "ecs_python_requirements = \"" + (wm.ecsPythonRequirements || "") + "\"\n";
+      block += "ecs_python_version = \"" + cfg.pythonVersion + "\"\n";
+      if (wm.requirements) block += "ecs_python_requirements = \"" + wm.requirements + "\"\n";
+
     } else if (wm.type === "aws_hpc") {
       block += "aws_region = \"" + cfg.region + "\"\n";
       block += "job_queue = \"" + (wm.jobQueue || "") + "\"\n";
@@ -676,6 +677,9 @@ function PanelBox({ title, children, style }) {
 
 /* ── WorkerManagerCard ── */
 function WorkerManagerCard({ wm, onChange, onRemove, allInstances, canRemove, fullWidth }) {
+  const [localId, setLocalId] = useState(wm.id);
+  useEffect(() => { setLocalId(wm.id); }, [wm.id]);
+
   const Label = ({ children, help }) => (
     <div style={{ fontSize: 10, letterSpacing: "0.1em", color: "var(--text-label)", marginBottom: 5, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 6 }}>
       <span>{children}</span>{help && <HelpTip text={help} />}
@@ -684,12 +688,6 @@ function WorkerManagerCard({ wm, onChange, onRemove, allInstances, canRemove, fu
   const inp = { width: "100%", background: "var(--bg-surface)", border: "1px solid var(--border-accent)", borderRadius: 3, padding: "7px 10px", color: "var(--text-primary)", fontFamily: "inherit", fontSize: 12, outline: "none" };
   const set = (k, v) => onChange({ ...wm, [k]: v });
 
-  const WM_TYPES = [
-    { value: "orb_aws_ec2",      label: "ORB / AWS EC2" },
-    { value: "aws_raw_ecs",      label: "AWS ECS" },
-    { value: "aws_hpc",          label: "AWS Batch (HPC)" },
-    { value: "baremetal_native", label: "Bare Metal" },
-  ];
   const ToggleRow = ({ options, value, onChange: onTog }) => (
     <div style={{ display: "flex", borderRadius: 3, overflow: "hidden", border: "1px solid var(--border-accent)" }}>
       {options.map(([val, lbl, disabled]) => (
@@ -714,11 +712,10 @@ function WorkerManagerCard({ wm, onChange, onRemove, allInstances, canRemove, fu
     <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-accent)", borderRadius: 5, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12, width: fullWidth ? "100%" : 340, flexShrink: fullWidth ? 1 : 0 }}>
       {/* header */}
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <select value={wm.type} onChange={e => set("type", e.target.value)}
-          style={{ flex: 1, background: "var(--bg-surface)", border: "1px solid var(--border-accent)", borderRadius: 3, padding: "5px 8px", color: "var(--text-primary)", fontFamily: "inherit", fontSize: 11, outline: "none" }}>
-          {WM_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-        </select>
-        <input value={wm.id} onChange={e => set("id", e.target.value)} placeholder="wm-id"
+        <WorkerManagerTypeSelect value={wm.type} onChange={v => set("type", v)} />
+        <input value={localId} onChange={e => setLocalId(e.target.value)}
+          onBlur={() => { const v = localId.trim(); if (!v) setLocalId(wm.id); else if (v !== wm.id) set("id", v); }}
+          placeholder="wm-id"
           style={{ width: 88, background: "var(--bg-surface)", border: "1px solid var(--border-accent)", borderRadius: 3, padding: "5px 8px", color: "var(--text-primary)", fontFamily: "inherit", fontSize: 11, outline: "none" }} />
         {canRemove && (
           <button onClick={onRemove}
@@ -757,8 +754,6 @@ function WorkerManagerCard({ wm, onChange, onRemove, allInstances, canRemove, fu
           <div style={{ flex:1 }}><Label>vCPU</Label><NumericStepper value={wm.ecsTaskCpu||4} onChange={v=>set("ecsTaskCpu",v)} min={1} max={64} /></div>
           <div style={{ flex:1 }}><Label>Memory (GB)</Label><NumericStepper value={wm.ecsTaskMemory||30} onChange={v=>set("ecsTaskMemory",v)} min={1} max={512} /></div>
         </div>
-        <div><Label>Python Version</Label><input value={wm.ecsPythonVersion||""} onChange={e=>set("ecsPythonVersion",e.target.value)} style={inp} placeholder="3.12.11" /></div>
-        <div><Label>Requirements</Label><input value={wm.ecsPythonRequirements||""} onChange={e=>set("ecsPythonRequirements",e.target.value)} style={inp} placeholder="pandas; numpy" /></div>
       </>)}
 
       {/* aws_hpc */}
@@ -946,22 +941,59 @@ function App() {
 
   const wmCounterRef = useRef(1);
   const [workerManagers, setWorkerManagers] = useState([
-    { id: "wm-1", type: "orb_aws_ec2", instanceType: "t3.medium", capMode: "instances", instanceCap: 4, budgetCap: 10 }
+    { _uid: 1, id: "wm-1", type: "orb_aws_ec2", instanceType: "t3.medium", capMode: "instances", instanceCap: 4, budgetCap: 10 }
   ]);
+  const [selectedWmId, setSelectedWmId] = useState("wm-1");
 
   const [phase, setPhase] = useState(() => {
     try { return localStorage.getItem("scaler_state") ? "ready" : "idle"; } catch { return "idle"; }
   });
-  const [log, setLog]             = useState([]);
+  const [log, setLog]             = useState(() => {
+    try { const s = localStorage.getItem("scaler_log"); return s ? JSON.parse(s) : []; } catch { return []; }
+  });
   const [provState, setProvState] = useState(() => {
     try { const s = localStorage.getItem("scaler_state"); return s ? JSON.parse(s) : null; } catch { return null; }
   });
   const [keyMaterial, setKeyMaterial] = useState(null);
   const abortRef = useRef(null);
 
+  const [guiReady, setGuiReady] = useState(false);
+  const [guiElapsed, setGuiElapsed] = useState(0);
+
+  useEffect(() => {
+    const addr = provState?.gui_address;
+    if (!addr) { setGuiReady(false); setGuiElapsed(0); return; }
+    setGuiReady(false);
+    setGuiElapsed(0);
+    let cancelled = false;
+    const start = Date.now();
+    const ticker = setInterval(() => {
+      if (!cancelled) setGuiElapsed(Math.floor((Date.now() - start) / 1000));
+    }, 1000);
+    const poll = async () => {
+      if (cancelled) return;
+      const ctrl = new AbortController();
+      const timeout = setTimeout(() => ctrl.abort(), 4000);
+      try {
+        await fetch(addr, { mode: "no-cors", cache: "no-store", signal: ctrl.signal });
+        clearTimeout(timeout);
+        if (!cancelled) { setGuiReady(true); clearInterval(ticker); }
+      } catch {
+        clearTimeout(timeout);
+        if (!cancelled) setTimeout(poll, 5000);
+      }
+    };
+    poll();
+    return () => { cancelled = true; clearInterval(ticker); };
+  }, [provState?.gui_address]);
+
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    try { localStorage.setItem("scaler_log", JSON.stringify(log)); } catch (_) {}
+  }, [log]);
 
   useEffect(() => {
     if (phase === "provisioning") setActiveTab("deployment");
@@ -988,9 +1020,17 @@ function App() {
   const addWorkerManager = useCallback(() => {
     wmCounterRef.current += 1;
     const n = wmCounterRef.current;
-    setWorkerManagers(prev => [...prev, { id: "wm-" + n, type: "orb_aws_ec2", instanceType: "t3.medium", capMode: "instances", instanceCap: 4, budgetCap: 10 }]);
+    const newId = "wm-" + n;
+    setWorkerManagers(prev => [...prev, { _uid: n, id: newId, type: "orb_aws_ec2", instanceType: "t3.medium", capMode: "instances", instanceCap: 4, budgetCap: 10 }]);
+    setSelectedWmId(newId);
   }, []);
-  const removeWorkerManager = useCallback((id) => setWorkerManagers(prev => prev.filter(wm => wm.id !== id)), []);
+  const removeWorkerManager = useCallback((id) => {
+    setWorkerManagers(prev => {
+      const next = prev.filter(wm => wm.id !== id);
+      setSelectedWmId(s => s === id ? (next[0]?.id || "") : s);
+      return next;
+    });
+  }, []);
   const updateWorkerManager = useCallback((id, updated) => setWorkerManagers(prev => prev.map(wm => wm.id === id ? updated : wm)), []);
 
   const hasCredentials = accessKeyId.trim().length > 0 && secretKey.trim().length > 0;
@@ -1005,7 +1045,7 @@ function App() {
 
   const handleLaunch = useCallback(async () => {
     if (!formReady) return;
-    setLog([]);
+    setLog([]); try { localStorage.removeItem("scaler_log"); } catch (_) {}
     setPhase("provisioning");
     const suffix = nameSuffix.trim() || randomSuffix();
     const cfg = {
@@ -1020,7 +1060,7 @@ function App() {
         ...wm,
         requirements: wm.type === "orb_aws_ec2"
           ? "opengris-scaler[all]\n" + requirements.trim()
-          : "",
+          : requirements.trim(),
       })),
     };
     const controller = new AbortController();
@@ -1051,12 +1091,13 @@ function App() {
       (provState.iam && provState.iam.created ? "• IAM role & profile\n" : "") +
       "\nThis cannot be undone."
     )) return;
-    setLog([]); setPhase("destroying");
+    setLog([]); try { localStorage.removeItem("scaler_log"); } catch (_) {}
+    setPhase("destroying");
     const controller = new AbortController();
     abortRef.current = controller;
     try {
       await destroyResources(provState, { accessKeyId, secretKey }, addLog, controller.signal);
-      try { localStorage.removeItem("scaler_state"); } catch (_) {}
+      try { localStorage.removeItem("scaler_state"); localStorage.removeItem("scaler_log"); } catch (_) {}
       setProvState(null); setKeyMaterial(null); setLog([]); setPhase("idle");
     } catch (err) {
       addLog(err.name === "AbortError"
@@ -1067,14 +1108,14 @@ function App() {
 
   const handleReset = useCallback(() => {
     setLog([]); setPhase("idle"); setProvState(null); setKeyMaterial(null);
-    try { localStorage.removeItem("scaler_state"); } catch (_) {}
+    try { localStorage.removeItem("scaler_state"); localStorage.removeItem("scaler_log"); } catch (_) {}
   }, []);
 
   const handleLoadState = useCallback((e) => {
     const file = e.target.files[0]; if (!file) return;
     const reader = new FileReader();
     reader.onload = ev => {
-      try { const state = JSON.parse(ev.target.result); savePartial(state); setLog([]); setPhase("ready"); }
+      try { const state = JSON.parse(ev.target.result); savePartial(state); setLog([]); try { localStorage.removeItem("scaler_log"); } catch (_) {} setPhase("ready"); }
       catch { alert("Invalid state file — expected JSON from a previous provision run."); }
     };
     reader.readAsText(file); e.target.value = "";
@@ -1163,7 +1204,7 @@ function App() {
 
               <PanelBox title="Credentials">
                 <div style={{ display:"flex", borderBottom:"1px solid var(--border-accent)", gap:0, marginBottom:2 }}>
-                  {[["aws","AWS"],["ibm","IBM"],["gcp","GCP"],["oci","OCI"]].map(([id,lbl]) => {
+                  {[["aws","AWS"],["ibm","IBM"],["oci","OCI"]].map(([id,lbl]) => {
                     const active = id === "aws";
                     const disabled = id !== "aws";
                     return (
@@ -1218,64 +1259,122 @@ function App() {
 
             </div>
 
-            {/* Column 2: Scheduler EC2 */}
-            <PanelBox title="Scheduler · EC2">
-              <div><Label help="EC2 instance type for the scheduler. Compute-optimized (c5/c6i) works well for most deployments.">Instance Type</Label><InstancePicker value={schedulerType} onChange={setSchedulerType} defaultCat="all" /></div>
-              <div style={{ padding:"10px 12px", background:"rgba(0,255,136,0.04)", border:"1px solid var(--border-success)", borderRadius:3, display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
-                <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:"0.06em"}}>Scheduler cost</span>
-                <span style={{fontSize:13,fontWeight:600,color:"var(--text-success)"}}>${schedulerInst.price.toFixed(3)}/h</span>
-              </div>
-              {advBtn(showSchedAdv, () => setShowSchedAdv(v => !v), "Advanced")}
-              {showSchedAdv && (
-                <div style={{ display:"flex", gap:10 }}>
-                  <div style={{flex:1}}>
-                    <Label>Scheduler Port</Label>
-                    <NumericStepper value={schedulerPort} onChange={setSchedPort} min={1024} max={65535} width={80} />
-                  </div>
-                  <div style={{flex:1}}>
-                    <Label>Object Storage Port</Label>
-                    <NumericStepper value={objectStoragePort} onChange={setObjPort} min={1024} max={65535} width={80} />
-                  </div>
+            {/* Column 2: Scheduler EC2 + Policy */}
+            <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+
+              <PanelBox title="Scheduler · EC2">
+                <div><Label help="EC2 instance type for the scheduler. Compute-optimized (c5/c6i) works well for most deployments.">Instance Type</Label><InstancePicker value={schedulerType} onChange={setSchedulerType} defaultCat="all" /></div>
+                <div style={{ padding:"10px 12px", background:"rgba(0,255,136,0.04)", border:"1px solid var(--border-success)", borderRadius:3, display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
+                  <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:"0.06em"}}>Scheduler cost</span>
+                  <span style={{fontSize:13,fontWeight:600,color:"var(--text-success)"}}>${schedulerInst.price.toFixed(3)}/h</span>
                 </div>
-              )}
-            </PanelBox>
+                {advBtn(showSchedAdv, () => setShowSchedAdv(v => !v), "Advanced")}
+                {showSchedAdv && (
+                  <div style={{ display:"flex", gap:10 }}>
+                    <div style={{flex:1}}>
+                      <Label>Scheduler Port</Label>
+                      <NumericStepper value={schedulerPort} onChange={setSchedPort} min={1024} max={65535} width={80} />
+                    </div>
+                    <div style={{flex:1}}>
+                      <Label>Object Storage Port</Label>
+                      <NumericStepper value={objectStoragePort} onChange={setObjPort} min={1024} max={65535} width={80} />
+                    </div>
+                  </div>
+                )}
+              </PanelBox>
+
+              {/* Policy panel — display only, not yet wired up */}
+              <div style={{ opacity:0.45, pointerEvents:"none", userSelect:"none" }}>
+                <PanelBox title="Policy">
+                  <div>
+                    <Label help="Policy engine that controls task allocation and worker scaling.">Engine</Label>
+                    <select disabled style={{ width:"100%", background:"var(--bg-surface)", border:"1px solid var(--border-accent)", borderRadius:3, padding:"7px 10px", color:"var(--text-primary)", fontFamily:"inherit", fontSize:12, outline:"none" }}>
+                      <option value="simple">simple</option>
+                      <option value="waterfall_v1">waterfall_v1</option>
+                    </select>
+                  </div>
+                  <div>
+                    <Label help="How tasks are assigned to workers. even_load distributes work evenly; capability routes tasks to workers that advertise matching capabilities.">Allocate</Label>
+                    <select disabled style={{ width:"100%", background:"var(--bg-surface)", border:"1px solid var(--border-accent)", borderRadius:3, padding:"7px 10px", color:"var(--text-primary)", fontFamily:"inherit", fontSize:12, outline:"none" }}>
+                      <option value="even_load">even_load</option>
+                      <option value="capability">capability</option>
+                    </select>
+                  </div>
+                  <div>
+                    <Label help="How the scheduler scales worker counts up or down. vanilla uses a task-to-worker ratio; capability scales per-capability group; no disables autoscaling.">Scaling</Label>
+                    <select disabled style={{ width:"100%", background:"var(--bg-surface)", border:"1px solid var(--border-accent)", borderRadius:3, padding:"7px 10px", color:"var(--text-primary)", fontFamily:"inherit", fontSize:12, outline:"none" }}>
+                      <option value="vanilla">vanilla</option>
+                      <option value="no">no</option>
+                      <option value="capability">capability</option>
+                    </select>
+                  </div>
+                </PanelBox>
+              </div>
+
+            </div>
 
             {/* Column 3: Worker Managers + Cost Summary */}
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
-              <PanelBox title={`Worker Managers (${workerManagers.length})`} style={{ gap: 12 }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {workerManagers.map(wm => (
-                    <WorkerManagerCard key={wm.id} wm={wm}
-                      onChange={updated => updateWorkerManager(wm.id, updated)}
-                      onRemove={() => removeWorkerManager(wm.id)}
-                      allInstances={allInstances}
-                      canRemove={workerManagers.length > 1}
-                      fullWidth={true} />
-                  ))}
-                  <button onClick={addWorkerManager}
-                    style={{ width:"100%", background:"rgba(0,200,224,0.03)", border:"1px dashed var(--border-accent)", borderRadius:5, color:"var(--accent-cyan)", fontFamily:"inherit", fontSize:11, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8, transition:"background 0.15s, border-color 0.15s", minHeight:48, padding:"12px" }}
-                    onMouseEnter={e=>{e.currentTarget.style.background="rgba(0,200,224,0.07)";e.currentTarget.style.borderColor="rgba(0,200,224,0.45)";}}
-                    onMouseLeave={e=>{e.currentTarget.style.background="rgba(0,200,224,0.03)";e.currentTarget.style.borderColor="rgba(0,200,224,0.25)";}}>
-                    <span style={{fontSize:16,lineHeight:1}}>+</span>
-                    <span style={{letterSpacing:"0.06em",textTransform:"uppercase"}}>Add Worker Manager</span>
-                  </button>
+              <PanelBox title={`Worker Managers (${workerManagers.length})`} style={{ gap: 8, padding: "16px 22px 0" }}>
+                <div style={{ display: "flex", marginLeft: -22, marginRight: -22, borderTop: "1px solid var(--border-accent)", height: 360, overflow: "hidden" }}>
+                  {/* vertical tab list */}
+                  <div style={{ width: 96, borderRight: "1px solid var(--border-accent)", display: "flex", flexDirection: "column", flexShrink: 0, overflowY: "auto" }}>
+                    {workerManagers.map(wm => (
+                      <button key={wm.id} onClick={() => setSelectedWmId(wm.id)} style={{
+                        background: selectedWmId === wm.id ? "rgba(0,200,224,0.1)" : "transparent",
+                        borderLeft: selectedWmId === wm.id ? "2px solid var(--tab-active)" : "2px solid transparent",
+                        borderRight: "none", borderTop: "none",
+                        borderBottom: "1px solid rgba(255,255,255,0.04)",
+                        color: selectedWmId === wm.id ? "var(--text-accent)" : "var(--text-muted)",
+                        fontFamily: "inherit", fontSize: 10, padding: "10px 10px",
+                        textAlign: "left", cursor: "pointer", letterSpacing: "0.05em",
+                        transition: "background 0.12s, color 0.12s",
+                        width: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      }}>{wm.id}</button>
+                    ))}
+                    <button onClick={addWorkerManager}
+                      onMouseEnter={e => { e.currentTarget.style.background = "rgba(0,200,224,0.08)"; e.currentTarget.style.color = "var(--text-accent)"; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--accent-cyan)"; }}
+                      style={{
+                        background: "transparent", border: "none",
+                        borderTop: "1px dashed rgba(0,200,224,0.2)",
+                        color: "var(--accent-cyan)", fontFamily: "inherit", fontSize: 10,
+                        padding: "10px 10px", cursor: "pointer", textAlign: "left",
+                        marginTop: "auto", letterSpacing: "0.05em", transition: "background 0.12s, color 0.12s",
+                      }}>+ Add</button>
+                  </div>
+                  {/* selected card */}
+                  <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px" }}>
+                    {workerManagers.filter(wm => wm.id === selectedWmId).map(wm => (
+                      <WorkerManagerCard key={wm._uid} wm={wm}
+                        onChange={updated => {
+                          if (updated.id !== wm.id) setSelectedWmId(updated.id);
+                          updateWorkerManager(wm.id, updated);
+                        }}
+                        onRemove={() => removeWorkerManager(wm.id)}
+                        allInstances={allInstances}
+                        canRemove={workerManagers.length > 1}
+                        fullWidth={true} />
+                    ))}
+                  </div>
                 </div>
               </PanelBox>
 
               <PanelBox title="Cost Summary">
-                {workerManagers.map((wm) => {
+                {workerManagers.map((wm, idx) => {
+                  const label = wm.id || `(wm ${idx + 1})`;
                   if (wm.type !== "orb_aws_ec2") return (
-                    <div key={wm.id} style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
-                      <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:"0.05em"}}>{wm.id}</span>
+                    <div key={wm._uid} style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
+                      <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:"0.05em"}}>{label}</span>
                       <span style={{fontSize:11,color:"var(--text-dim)",fontStyle:"italic"}}>n/a</span>
                     </div>
                   );
                   const inst  = allInstances.find(i => i.type === wm.instanceType) || { price: 0 };
                   const count = wm.capMode === "instances" ? Math.max(0, wm.instanceCap||0) : Math.max(0, Math.floor((wm.budgetCap||0)/(inst.price||1)));
                   return (
-                    <div key={wm.id} style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
-                      <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:"0.05em"}}>{wm.id} · {count}× {wm.instanceType}</span>
+                    <div key={wm._uid} style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
+                      <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:"0.05em"}}>{label} · {count}× {wm.instanceType}</span>
                       <span style={{fontSize:12,color:"var(--text-secondary)"}}>${(count*inst.price).toFixed(3)}/h</span>
                     </div>
                   );
@@ -1334,7 +1433,7 @@ function App() {
 
       {/* ── Scheduler Logs Tab ── */}
       <div style={{ display: activeTab === "logs" ? "flex" : "none", flex: 1, flexDirection: "column", minHeight: 0 }}>
-        <div style={{ flex: 1, padding: "20px 28px", display: "flex", flexDirection: "column" }}>
+        <div style={{ flex: 1, minHeight: 0, padding: "20px 28px", display: "flex", flexDirection: "column" }}>
           {!provState?.instance_id
             ? <div style={{ color: "var(--text-muted)", fontSize: 12 }}>No instance deployed yet.</div>
             : <SchedulerLogTerminal instanceId={provState.instance_id} region={provState.region}
@@ -1354,9 +1453,17 @@ function App() {
                    style={{ fontSize: 10, color: "var(--text-accent)", border: "1px solid var(--border-accent)", borderRadius: 3, padding: "2px 8px", textDecoration: "none" }}>
                   Open in new tab
                 </a>
-                <span style={{ fontSize: 10, color: "var(--text-dim)" }}>Note: iframe requires HTTP origin or local file</span>
+                {guiReady
+                  ? <span style={{ fontSize: 10, color: "var(--text-success)" }}>server ready</span>
+                  : <span style={{ fontSize: 10, color: "var(--text-dim)" }}>waiting for server… {guiElapsed}s</span>}
               </div>
-              <iframe src={provState.gui_address} style={{ flex: 1, border: "none", background: "var(--bg-page)" }} title="Scaler GUI" />
+              {guiReady
+                ? <iframe src={provState.gui_address} style={{ flex: 1, border: "none", background: "var(--bg-page)" }} title="Scaler GUI" />
+                : <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 10, color: "var(--text-muted)" }}>
+                    <div style={{ fontSize: 13 }}>Waiting for GUI server to start</div>
+                    <div style={{ fontSize: 11, color: "var(--text-dim)" }}>{guiElapsed}s elapsed · retrying every 5s</div>
+                  </div>
+              }
             </>
         }
       </div>

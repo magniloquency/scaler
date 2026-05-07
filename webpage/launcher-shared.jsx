@@ -7,7 +7,7 @@ const { useState, useEffect, useRef, useCallback } = React;
 function SecretInput({ value, onChange, placeholder, style }) {
   const [visible, setVisible] = useState(false);
   return (
-    <div style={{ position: "relative", display: "flex", ...style }}>
+    <div style={{ position: "relative", display: "flex", alignItems: "center", ...style }}>
       <input
         type={visible ? "text" : "password"}
         value={value}
@@ -23,13 +23,15 @@ function SecretInput({ value, onChange, placeholder, style }) {
           color: "inherit",
           font: "inherit",
           padding: 0,
-          letterSpacing: visible ? "normal" : "0.12em",
+          paddingRight: "36px",
         }}
       />
       <button
         onClick={() => setVisible(v => !v)}
         title={visible ? "Hide" : "Show"}
         style={{
+          position: "absolute",
+          right: 0,
           background: "none",
           border: "none",
           cursor: "pointer",
@@ -37,7 +39,6 @@ function SecretInput({ value, onChange, placeholder, style }) {
           color: visible ? "var(--text-accent)" : "var(--text-muted)",
           fontSize: "11px",
           fontFamily: "inherit",
-          flexShrink: 0,
           letterSpacing: "normal",
         }}
       >
@@ -679,8 +680,8 @@ function LiveTerminal({ lines, isRunning, title, style }) {
   };
 
   return (
-    <div style={{ background: "var(--term-bg)", border: "1px solid var(--term-border)", borderRadius: "4px", overflow: "hidden", ...style }}>
-      <div style={{ background: "var(--term-titlebar)", borderBottom: "1px solid var(--term-border)", padding: "7px 14px", display: "flex", alignItems: "center", gap: 8 }}>
+    <div style={{ background: "var(--term-bg)", border: "1px solid var(--term-border)", borderRadius: "4px", display: "flex", flexDirection: "column", ...style }}>
+      <div style={{ background: "var(--term-titlebar)", borderBottom: "1px solid var(--term-border)", padding: "7px 14px", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
         <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#ff5f57", display: "inline-block" }} />
         <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#febc2e", display: "inline-block" }} />
         <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#28c840", display: "inline-block" }} />
@@ -690,7 +691,7 @@ function LiveTerminal({ lines, isRunning, title, style }) {
       </div>
       <div
         ref={scrollRef}
-        style={{ padding: "14px 16px", fontFamily: "inherit", fontSize: "12px", lineHeight: "1.7", minHeight: 300, maxHeight: 520, overflowY: "auto", color: "var(--text-secondary)" }}
+        style={{ padding: "14px 16px", fontFamily: "inherit", fontSize: "12px", lineHeight: "1.7", flex: 1, overflowY: "auto", color: "var(--text-secondary)" }}
       >
         {lines.map((line, i) => (
           <div
@@ -756,4 +757,122 @@ function SchedulerLogTerminal({ instanceId, region, credentials, isActive }) {
     title="scheduler — /var/log/scaler.log (polling every 15s)" style={{ flex:1, minHeight:0 }} />;
 }
 
-Object.assign(window, { SecretInput, RegionSelect, InstancePicker, TerminalWindow, DeployDetails, HelpTip, LiveTerminal, SchedulerLogTerminal });
+/* ── WorkerManagerTypeSelect ── */
+const WM_TYPE_DEFS = [
+  { value: "orb_aws_ec2",      label: "ORB / AWS EC2",     badge: "EC2",  desc: "Managed EC2 instances via ORB adapter" },
+  { value: "aws_raw_ecs",      label: "AWS ECS",            badge: "ECS",  desc: "Container tasks on Elastic Container Service" },
+  { value: "aws_hpc",          label: "AWS Batch (HPC)",    badge: "HPC",  desc: "High-performance compute via AWS Batch" },
+  { value: "baremetal_native", label: "Bare Metal",         badge: "BARE", desc: "Directly attached bare-metal workers" },
+];
+
+function WorkerManagerTypeSelect({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef(null);
+  const dropdownRef = useRef(null);
+  const [dropdownStyle, setDropdownStyle] = useState({});
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (
+        triggerRef.current && !triggerRef.current.contains(e.target) &&
+        dropdownRef.current && !dropdownRef.current.contains(e.target)
+      ) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const openDropdown = () => {
+    if (!triggerRef.current) return;
+    const r = triggerRef.current.getBoundingClientRect();
+    setDropdownStyle({ position: "fixed", top: r.bottom + 4, left: r.left, minWidth: r.width });
+    setOpen(true);
+  };
+
+  const selected = WM_TYPE_DEFS.find(t => t.value === value);
+
+  return (
+    <div ref={triggerRef} style={{ position: "relative", flex: 1 }}>
+      <button
+        onClick={() => open ? setOpen(false) : openDropdown()}
+        style={{
+          width: "100%",
+          background: "var(--bg-surface)",
+          border: "1px solid var(--border-accent)",
+          borderRadius: 3,
+          padding: "5px 8px",
+          color: "var(--text-primary)",
+          fontFamily: "inherit",
+          fontSize: 11,
+          cursor: "pointer",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 6,
+          textAlign: "left",
+          outline: "none",
+        }}
+      >
+        <span style={{ display: "flex", alignItems: "center", gap: 6, flex: 1, overflow: "hidden" }}>
+          {selected && (
+            <span style={{
+              fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",
+              color: "var(--text-accent)", background: "rgba(0,200,224,0.12)",
+              border: "1px solid rgba(0,200,224,0.2)", borderRadius: 2,
+              padding: "1px 5px", flexShrink: 0,
+            }}>{selected.badge}</span>
+          )}
+          <span style={{ color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {selected ? selected.label : "Select type…"}
+          </span>
+        </span>
+        <span style={{ color: "var(--text-muted)", fontSize: 9, flexShrink: 0 }}>{open ? "▲" : "▼"}</span>
+      </button>
+      {open && ReactDOM.createPortal(
+        <div ref={dropdownRef} style={{
+          ...dropdownStyle,
+          background: "var(--bg-elevated)",
+          border: "1px solid var(--border-strong)",
+          borderRadius: 4,
+          zIndex: 9999,
+          boxShadow: "0 16px 48px rgba(0,0,0,0.7)",
+          overflow: "hidden",
+        }}>
+          {WM_TYPE_DEFS.map(t => (
+            <div
+              key={t.value}
+              onClick={() => { onChange(t.value); setOpen(false); }}
+              style={{
+                padding: "9px 12px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                background: t.value === value ? "rgba(0,200,224,0.08)" : "transparent",
+                borderBottom: "1px solid rgba(255,255,255,0.04)",
+              }}
+              onMouseEnter={e => { if (t.value !== value) e.currentTarget.style.background = "var(--bg-surface)"; }}
+              onMouseLeave={e => { if (t.value !== value) e.currentTarget.style.background = "transparent"; }}
+            >
+              <span style={{
+                fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",
+                color: t.value === value ? "var(--text-success)" : "var(--text-accent)",
+                background: t.value === value ? "rgba(0,255,136,0.1)" : "rgba(0,200,224,0.1)",
+                border: `1px solid ${t.value === value ? "rgba(0,255,136,0.2)" : "rgba(0,200,224,0.18)"}`,
+                borderRadius: 2, padding: "1px 5px", flexShrink: 0, minWidth: 34, textAlign: "center",
+              }}>{t.badge}</span>
+              <span style={{ flex: 1 }}>
+                <span style={{ display: "block", fontSize: 12, color: t.value === value ? "var(--text-success)" : "var(--text-primary)", fontWeight: 600 }}>{t.label}</span>
+                <span style={{ display: "block", fontSize: 10, color: "var(--text-dim)", marginTop: 1 }}>{t.desc}</span>
+              </span>
+              {t.value === value && <span style={{ color: "var(--text-success)", fontSize: 10, flexShrink: 0 }}>✓</span>}
+            </div>
+          ))}
+        </div>,
+        document.body,
+      )}
+    </div>
+  );
+}
+
+Object.assign(window, { SecretInput, RegionSelect, InstancePicker, TerminalWindow, DeployDetails, HelpTip, LiveTerminal, SchedulerLogTerminal, WorkerManagerTypeSelect });
