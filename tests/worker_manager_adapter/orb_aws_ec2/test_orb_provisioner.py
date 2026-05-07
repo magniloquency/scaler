@@ -28,6 +28,6 @@ class TestORBWorkerProvisionerConcurrencyConversion(unittest.IsolatedAsyncioTest
     async def test_converts_workers_to_instance_count(self) -> None:
         provisioner = _make_provisioner(workers_per_instance=16)
         request = _make_request(task_concurrency=100, capabilities={"cpu": 4})
-        with patch.object(provisioner._reconcile_loop, "_reconcile", new_callable=AsyncMock):
+        with patch.object(provisioner._capacity_coordinator, "_reconcile", new_callable=AsyncMock):
             await provisioner.set_desired_task_concurrency([request])
-        self.assertEqual(provisioner._reconcile_loop._desired_unit_count, 7)  # ceil(100 / 16) = 7
+        self.assertEqual(provisioner._capacity_coordinator._desired_unit_count, 7)  # ceil(100 / 16) = 7

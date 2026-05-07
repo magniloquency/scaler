@@ -5,7 +5,7 @@ import logging
 from typing import Awaitable, Callable, Optional
 
 
-class ReconcileLoop:
+class CapacityCoordinator:
     """Manages async scale-up/down reconciliation for a pool of homogeneous units.
 
     Callers set a desired unit count via `set_desired_unit_count`. The loop

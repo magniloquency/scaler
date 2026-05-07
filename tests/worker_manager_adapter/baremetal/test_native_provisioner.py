@@ -31,9 +31,9 @@ class TestNativeWorkerProvisionerConcurrencyConversion(unittest.IsolatedAsyncioT
     async def test_passes_task_concurrency_directly_as_desired_unit_count(self) -> None:
         provisioner = _make_provisioner()
         request = _make_request(task_concurrency=3, capabilities={})
-        with patch.object(provisioner._reconcile_loop, "_reconcile", new_callable=AsyncMock):
+        with patch.object(provisioner._capacity_coordinator, "_reconcile", new_callable=AsyncMock):
             await provisioner.set_desired_task_concurrency([request])
-        self.assertEqual(provisioner._reconcile_loop._desired_unit_count, 3)
+        self.assertEqual(provisioner._capacity_coordinator._desired_unit_count, 3)
 
 
 class TestNativeWorkerProvisionerStopUnits(unittest.IsolatedAsyncioTestCase):

@@ -22,15 +22,15 @@ class TestBatchWorkerProvisionerConcurrencyConversion(unittest.IsolatedAsyncioTe
     async def test_converts_task_concurrency_to_process_count(self) -> None:
         provisioner = _make_provisioner(max_concurrent_jobs=100)
         request = _make_request(task_concurrency=150, capabilities={})
-        with patch.object(provisioner._reconcile_loop, "_reconcile", new_callable=AsyncMock):
+        with patch.object(provisioner._capacity_coordinator, "_reconcile", new_callable=AsyncMock):
             await provisioner.set_desired_task_concurrency([request])
-        self.assertEqual(provisioner._reconcile_loop._desired_unit_count, 2)  # ceil(150 / 100) = 2
+        self.assertEqual(provisioner._capacity_coordinator._desired_unit_count, 2)  # ceil(150 / 100) = 2
 
     async def test_task_concurrency_zero_sets_desired_to_zero(self) -> None:
         provisioner = _make_provisioner()
-        with patch.object(provisioner._reconcile_loop, "_reconcile", new_callable=AsyncMock):
+        with patch.object(provisioner._capacity_coordinator, "_reconcile", new_callable=AsyncMock):
             await provisioner.set_desired_task_concurrency([_make_request(task_concurrency=100, capabilities={})])
-        self.assertEqual(provisioner._reconcile_loop._desired_unit_count, 1)
-        with patch.object(provisioner._reconcile_loop, "_reconcile", new_callable=AsyncMock):
+        self.assertEqual(provisioner._capacity_coordinator._desired_unit_count, 1)
+        with patch.object(provisioner._capacity_coordinator, "_reconcile", new_callable=AsyncMock):
             await provisioner.set_desired_task_concurrency([_make_request(task_concurrency=0, capabilities={})])
-        self.assertEqual(provisioner._reconcile_loop._desired_unit_count, 0)
+        self.assertEqual(provisioner._capacity_coordinator._desired_unit_count, 0)

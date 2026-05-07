@@ -6,9 +6,9 @@ from typing import TYPE_CHECKING, List
 
 from scaler.config.section.aws_hpc_worker_manager import AWSBatchWorkerManagerConfig, AWSHPCBackend
 from scaler.worker_manager_adapter.aws_hpc.worker import create_aws_batch_worker
+from scaler.worker_manager_adapter.capacity_coordinator import CapacityCoordinator
 from scaler.worker_manager_adapter.common import extract_desired_count
 from scaler.worker_manager_adapter.mixins import DeclarativeWorkerProvisioner
-from scaler.worker_manager_adapter.reconcile_loop import ReconcileLoop
 from scaler.worker_manager_adapter.worker_manager_runner import WorkerManagerRunner
 from scaler.worker_manager_adapter.worker_process import WorkerProcess
 
@@ -22,7 +22,7 @@ class BatchWorkerProvisioner(DeclarativeWorkerProvisioner):
         self._base_concurrency = config.max_concurrent_jobs
         self._capabilities = config.worker_config.per_worker_capabilities.capabilities
         self._units: List[WorkerProcess] = []
-        self._reconcile_loop = ReconcileLoop(
+        self._capacity_coordinator = CapacityCoordinator(
             start_units=self.start_units,
             stop_units=self.stop_units,
             active_unit_count=self.active_unit_count,
@@ -37,7 +37,7 @@ class BatchWorkerProvisioner(DeclarativeWorkerProvisioner):
     ) -> None:
         task_concurrency = extract_desired_count(requests, self._capabilities)
         new_desired = math.ceil(task_concurrency / self._base_concurrency)
-        await self._reconcile_loop.set_desired_unit_count(new_desired)
+        await self._capacity_coordinator.set_desired_unit_count(new_desired)
 
     def _start_unit(self) -> None:
         config = self._config
@@ -78,7 +78,7 @@ class BatchWorkerProvisioner(DeclarativeWorkerProvisioner):
             logging.info(f"Stopped Batch worker process {worker.name!r}")
 
     async def terminate(self) -> None:
-        self._reconcile_loop.cancel()
+        self._capacity_coordinator.cancel()
         for worker in self._units:
             worker.terminate()
         self._units.clear()

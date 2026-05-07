@@ -9,9 +9,9 @@ from typing import TYPE_CHECKING, Dict, List
 from scaler.config.section.native_worker_manager import NativeWorkerManagerConfig, NativeWorkerManagerMode
 from scaler.utility.identifiers import WorkerID
 from scaler.worker.worker import Worker
+from scaler.worker_manager_adapter.capacity_coordinator import CapacityCoordinator
 from scaler.worker_manager_adapter.common import extract_desired_count
 from scaler.worker_manager_adapter.mixins import DeclarativeWorkerProvisioner
-from scaler.worker_manager_adapter.reconcile_loop import ReconcileLoop
 from scaler.worker_manager_adapter.worker_manager_runner import WorkerManagerRunner
 
 if TYPE_CHECKING:
@@ -49,7 +49,7 @@ class NativeWorkerProvisioner(DeclarativeWorkerProvisioner):
             raise ValueError(f"worker_type is not set and mode is unrecognised: {config.mode!r}")
 
         self._workers: List[Worker] = []
-        self._reconcile_loop = ReconcileLoop(
+        self._capacity_coordinator = CapacityCoordinator(
             start_units=self.start_units,
             stop_units=self.stop_units,
             active_unit_count=self.active_unit_count,
@@ -100,7 +100,7 @@ class NativeWorkerProvisioner(DeclarativeWorkerProvisioner):
         self, requests: List[WorkerManagerCommand.DesiredTaskConcurrencyRequest]
     ) -> None:
         task_concurrency = extract_desired_count(requests, self._capabilities)
-        await self._reconcile_loop.set_desired_unit_count(task_concurrency)
+        await self._capacity_coordinator.set_desired_unit_count(task_concurrency)
 
     def active_unit_count(self) -> int:
         return len(self._workers)
@@ -122,7 +122,7 @@ class NativeWorkerProvisioner(DeclarativeWorkerProvisioner):
             logging.info(f"Stopped native worker {worker.identity!r}")
 
     async def terminate(self) -> None:
-        self._reconcile_loop.cancel()
+        self._capacity_coordinator.cancel()
         await self.stop_units(len(self._workers))
 
 

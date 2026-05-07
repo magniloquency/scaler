@@ -6,9 +6,9 @@ import signal
 from typing import TYPE_CHECKING, List
 
 from scaler.config.section.symphony_worker_manager import SymphonyWorkerManagerConfig
+from scaler.worker_manager_adapter.capacity_coordinator import CapacityCoordinator
 from scaler.worker_manager_adapter.common import extract_desired_count
 from scaler.worker_manager_adapter.mixins import DeclarativeWorkerProvisioner
-from scaler.worker_manager_adapter.reconcile_loop import ReconcileLoop
 from scaler.worker_manager_adapter.symphony.worker import create_symphony_worker
 from scaler.worker_manager_adapter.worker_manager_runner import WorkerManagerRunner
 from scaler.worker_manager_adapter.worker_process import WorkerProcess
@@ -32,7 +32,7 @@ class SymphonyWorkerProvisioner(DeclarativeWorkerProvisioner):
         self._worker_manager_id = config.worker_manager_config.worker_manager_id.encode()
 
         self._workers: List[WorkerProcess] = []
-        self._reconcile_loop = ReconcileLoop(
+        self._capacity_coordinator = CapacityCoordinator(
             start_units=self.start_units,
             stop_units=self.stop_units,
             active_unit_count=self.active_unit_count,
@@ -46,7 +46,7 @@ class SymphonyWorkerProvisioner(DeclarativeWorkerProvisioner):
         self, requests: List[WorkerManagerCommand.DesiredTaskConcurrencyRequest]
     ) -> None:
         task_concurrency = extract_desired_count(requests, self._capabilities)
-        await self._reconcile_loop.set_desired_unit_count(task_concurrency)
+        await self._capacity_coordinator.set_desired_unit_count(task_concurrency)
 
     def _start_unit(self) -> None:
         worker = create_symphony_worker(
@@ -80,7 +80,7 @@ class SymphonyWorkerProvisioner(DeclarativeWorkerProvisioner):
             logging.info(f"Stopped Symphony worker {worker.identity!r}")
 
     async def terminate(self) -> None:
-        self._reconcile_loop.cancel()
+        self._capacity_coordinator.cancel()
         await self.stop_units(len(self._workers))
 
 

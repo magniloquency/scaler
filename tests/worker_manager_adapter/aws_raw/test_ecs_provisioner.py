@@ -3,7 +3,7 @@ import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from scaler.worker_manager_adapter.aws_raw.ecs import ECSWorkerProvisioner
-from scaler.worker_manager_adapter.reconcile_loop import ReconcileLoop
+from scaler.worker_manager_adapter.capacity_coordinator import CapacityCoordinator
 
 
 def _make_provisioner(max_task_concurrency: int = -1, ecs_task_cpu: int = 4) -> ECSWorkerProvisioner:
@@ -15,7 +15,7 @@ def _make_provisioner(max_task_concurrency: int = -1, ecs_task_cpu: int = 4) -> 
         provisioner._max_task_concurrency = max_task_concurrency
         provisioner._max_instances = max_instances
         provisioner._units = []
-        provisioner._reconcile_loop = ReconcileLoop(
+        provisioner._capacity_coordinator = CapacityCoordinator(
             start_units=lambda n: provisioner.start_units(n),
             stop_units=lambda n: provisioner.stop_units(n),
             active_unit_count=lambda: len(provisioner._units),
@@ -39,10 +39,10 @@ class TestECSWorkerProvisionerConcurrencyConversion(unittest.IsolatedAsyncioTest
     async def test_converts_task_concurrency_to_instance_count(self) -> None:
         provisioner = _make_provisioner(ecs_task_cpu=4)
         request = _make_request(task_concurrency=10, capabilities={})
-        with patch.object(provisioner._reconcile_loop, "_reconcile", new_callable=AsyncMock):
+        with patch.object(provisioner._capacity_coordinator, "_reconcile", new_callable=AsyncMock):
             await provisioner.set_desired_task_concurrency([request])
-        self.assertEqual(provisioner._reconcile_loop._desired_unit_count, 3)  # ceil(10 / 4) = 3
+        self.assertEqual(provisioner._capacity_coordinator._desired_unit_count, 3)  # ceil(10 / 4) = 3
 
-    async def test_max_instances_wired_to_reconcile_loop(self) -> None:
+    async def test_max_instances_wired_to_capacity_coordinator(self) -> None:
         provisioner = _make_provisioner(max_task_concurrency=8, ecs_task_cpu=4)
-        self.assertEqual(provisioner._reconcile_loop._max_unit_count, 2)  # ceil(8 / 4) = 2
+        self.assertEqual(provisioner._capacity_coordinator._max_unit_count, 2)  # ceil(8 / 4) = 2

@@ -17,9 +17,9 @@ from scaler.config.section.orb_aws_ec2_worker_adapter import ORBAWSEC2WorkerAdap
 from scaler.protocol.capnp import WorkerManagerCommand, WorkerManagerCommandResponse
 from scaler.utility.event_loop import register_event_loop, run_task_forever
 from scaler.utility.logging.utility import setup_logger
+from scaler.worker_manager_adapter.capacity_coordinator import CapacityCoordinator
 from scaler.worker_manager_adapter.common import extract_desired_count, format_capabilities
 from scaler.worker_manager_adapter.mixins import DeclarativeWorkerProvisioner
-from scaler.worker_manager_adapter.reconcile_loop import ReconcileLoop
 from scaler.worker_manager_adapter.worker_manager_runner import WorkerManagerRunner
 
 Status = WorkerManagerCommandResponse.Status
@@ -43,7 +43,7 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
         self._template_id = template_id
         self._workers_per_instance = workers_per_instance
         self._units: List[str] = []  # EC2 instance IDs of active units
-        self._reconcile_loop = ReconcileLoop(
+        self._capacity_coordinator = CapacityCoordinator(
             start_units=self.start_units,
             stop_units=self.stop_units,
             active_unit_count=self.active_unit_count,
@@ -58,7 +58,9 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
     ) -> None:
         own_capabilities = self._config.worker_config.per_worker_capabilities.capabilities
         task_concurrency = extract_desired_count(requests, own_capabilities)
-        await self._reconcile_loop.set_desired_unit_count(math.ceil(task_concurrency / self._workers_per_instance))
+        await self._capacity_coordinator.set_desired_unit_count(
+            math.ceil(task_concurrency / self._workers_per_instance)
+        )
 
     async def start_units(self, count: int) -> None:
         logging.info(f"Submitting ORB batch machine request for template {self._template_id} (count={count})...")
@@ -114,7 +116,7 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
         logging.info(f"Successfully stopped {count} unit(s): instances {unit_ids}")
 
     async def terminate(self) -> None:
-        self._reconcile_loop.cancel()
+        self._capacity_coordinator.cancel()
         if not self._units:
             return
         logging.info(f"Terminating {len(self._units)} unit(s)...")

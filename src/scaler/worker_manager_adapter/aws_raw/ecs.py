@@ -8,9 +8,9 @@ from typing import TYPE_CHECKING, List
 import boto3
 
 from scaler.config.section.ecs_worker_manager import ECSWorkerManagerConfig
+from scaler.worker_manager_adapter.capacity_coordinator import CapacityCoordinator
 from scaler.worker_manager_adapter.common import extract_desired_count, format_capabilities
 from scaler.worker_manager_adapter.mixins import DeclarativeWorkerProvisioner
-from scaler.worker_manager_adapter.reconcile_loop import ReconcileLoop
 from scaler.worker_manager_adapter.worker_manager_runner import WorkerManagerRunner
 
 if TYPE_CHECKING:
@@ -47,7 +47,7 @@ class ECSWorkerProvisioner(DeclarativeWorkerProvisioner):
         self._ecs_subnets = config.ecs_subnets
         self._worker_manager_id = config.worker_manager_config.worker_manager_id.encode()
         self._units: List[str] = []  # ECS task ARNs of active units
-        self._reconcile_loop = ReconcileLoop(
+        self._capacity_coordinator = CapacityCoordinator(
             start_units=self.start_units,
             stop_units=self.stop_units,
             active_unit_count=self.active_unit_count,
@@ -141,7 +141,7 @@ class ECSWorkerProvisioner(DeclarativeWorkerProvisioner):
         self, requests: List[WorkerManagerCommand.DesiredTaskConcurrencyRequest]
     ) -> None:
         task_concurrency = extract_desired_count(requests, self._capabilities)
-        await self._reconcile_loop.set_desired_unit_count(math.ceil(task_concurrency / self._ecs_task_cpu))
+        await self._capacity_coordinator.set_desired_unit_count(math.ceil(task_concurrency / self._ecs_task_cpu))
 
     async def _start_unit(self, command: str) -> None:
         resp = self._ecs_client.run_task(
@@ -198,7 +198,7 @@ class ECSWorkerProvisioner(DeclarativeWorkerProvisioner):
                 logging.info(f"Stopped ECS task {task_arn!r}")
 
     async def terminate(self) -> None:
-        self._reconcile_loop.cancel()
+        self._capacity_coordinator.cancel()
         await self.stop_units(len(self._units))
 
 
