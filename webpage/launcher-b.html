@@ -14,8 +14,61 @@
   <script type="text/babel" src="launcher-shared.jsx"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body, #root { height: 100%; background: #06090d; }
+    html, body, #root { height: 100%; background: var(--bg-page); }
     body { font-family: 'JetBrains Mono', monospace; }
+
+    :root, [data-theme="dark"] {
+      --bg-page:        #06090d;
+      --bg-panel:       #09101a;
+      --bg-surface:     rgba(255,255,255,0.04);
+      --bg-elevated:    #0c1219;
+      --bg-popup:       #0c1624;
+      --border-accent:  rgba(0,200,224,0.15);
+      --border-strong:  rgba(0,200,224,0.25);
+      --border-success: rgba(0,255,136,0.15);
+      --border-danger:  rgba(255,80,60,0.3);
+      --text-primary:   oklch(0.88 0.08 200);
+      --text-secondary: oklch(0.65 0.06 220);
+      --text-muted:     oklch(0.5 0.04 220);
+      --text-dim:       oklch(0.38 0.04 220);
+      --text-accent:    oklch(0.72 0.14 200);
+      --text-success:   oklch(0.72 0.18 150);
+      --text-warning:   oklch(0.72 0.16 60);
+      --text-danger:    oklch(0.72 0.16 30);
+      --text-label:     oklch(0.72 0.14 200);
+      --accent-cyan:    oklch(0.62 0.1 200);
+      --term-bg:        #050810;
+      --term-border:    rgba(0,255,136,0.15);
+      --term-titlebar:  rgba(0,255,136,0.06);
+      --tab-active:     oklch(0.62 0.16 200);
+      --scrollbar-thumb: rgba(0,200,224,0.2);
+    }
+    [data-theme="zenburn"] {
+      --bg-page:        #3f3f3f;
+      --bg-panel:       #4a4a4a;
+      --bg-surface:     rgba(255,255,255,0.06);
+      --bg-elevated:    #383838;
+      --bg-popup:       #383838;
+      --border-accent:  rgba(240,223,175,0.2);
+      --border-strong:  rgba(240,223,175,0.35);
+      --border-success: rgba(127,159,127,0.3);
+      --border-danger:  rgba(204,147,147,0.35);
+      --text-primary:   #dcdccc;
+      --text-secondary: #e3ceab;
+      --text-muted:     #9f9f9f;
+      --text-dim:       #7f7f7f;
+      --text-accent:    #f0dfaf;
+      --text-success:   #7f9f7f;
+      --text-warning:   #e3ceab;
+      --text-danger:    #cc9393;
+      --text-label:     #dfaf8f;
+      --accent-cyan:    #f0dfaf;
+      --term-bg:        #383838;
+      --term-border:    rgba(127,159,127,0.3);
+      --term-titlebar:  rgba(127,159,127,0.08);
+      --tab-active:     #f0dfaf;
+      --scrollbar-thumb: rgba(240,223,175,0.2);
+    }
 
     @keyframes blink { 50% { opacity: 0; } }
     @keyframes fadeSlideIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
@@ -27,8 +80,8 @@
     input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
     ::-webkit-scrollbar { width: 4px; height: 4px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: rgba(0,200,224,0.2); border-radius: 2px; }
-    select option { background: #0c1219; color: #c0d4e8; }
+    ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 2px; }
+    select option { background: var(--bg-elevated); color: var(--text-primary); }
   </style>
 </head>
 <body>
@@ -579,27 +632,27 @@ async function destroyResources(state, creds, addLog, signal) {
 
 <!-- ─── React Application ─── -->
 <script type="text/babel">
-const { useState, useCallback, useRef } = React;
+const { useState, useEffect, useCallback, useRef } = React;
 
 /* ── NumericStepper ── */
 function NumericStepper({ value, onChange, min = 0, max = Infinity, step = 1, width = 56 }) {
   const [hov, setHov] = useState(null);
   const btnStyle = (side) => ({
     width: 28, height: "100%", background: "transparent", border: "none",
-    borderLeft:  side === "plus"  ? "1px solid rgba(0,200,224,0.15)" : "none",
-    borderRight: side === "minus" ? "1px solid rgba(0,200,224,0.15)" : "none",
-    color: "oklch(0.62 0.1 200)", fontFamily: "inherit", fontSize: 16, lineHeight: 1,
+    borderLeft:  side === "plus"  ? "1px solid var(--border-accent)" : "none",
+    borderRight: side === "minus" ? "1px solid var(--border-accent)" : "none",
+    color: "var(--accent-cyan)", fontFamily: "inherit", fontSize: 16, lineHeight: 1,
     cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
     flexShrink: 0, transition: "background 0.12s, color 0.12s", padding: 0,
   });
   return (
-    <div style={{ display: "flex", alignItems: "stretch", width: "fit-content", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(0,200,224,0.15)", borderRadius: 3, height: 36, overflow: "hidden" }}>
+    <div style={{ display: "flex", alignItems: "stretch", width: "fit-content", background: "var(--bg-surface)", border: "1px solid var(--border-accent)", borderRadius: 3, height: 36, overflow: "hidden" }}>
       <button style={{ ...btnStyle("minus"), background: hov === "minus" ? "rgba(0,200,224,0.1)" : "transparent" }}
         onMouseEnter={() => setHov("minus")} onMouseLeave={() => setHov(null)}
         onClick={() => onChange(Math.max(min, value - step))}>−</button>
       <input type="number" value={value}
         onChange={e => { const v = parseFloat(e.target.value); if (!isNaN(v)) onChange(Math.min(max, Math.max(min, v))); }}
-        style={{ width, background: "transparent", border: "none", outline: "none", color: "oklch(0.88 0.08 200)", fontFamily: "inherit", fontSize: 13, fontWeight: 600, textAlign: "center", padding: "0 4px" }} />
+        style={{ width, background: "transparent", border: "none", outline: "none", color: "var(--text-primary)", fontFamily: "inherit", fontSize: 13, fontWeight: 600, textAlign: "center", padding: "0 4px" }} />
       <button style={{ ...btnStyle("plus"), background: hov === "plus" ? "rgba(0,200,224,0.1)" : "transparent" }}
         onMouseEnter={() => setHov("plus")} onMouseLeave={() => setHov(null)}
         onClick={() => onChange(Math.min(max, value + step))}>+</button>
@@ -610,9 +663,9 @@ function NumericStepper({ value, onChange, min = 0, max = Infinity, step = 1, wi
 /* ── PanelBox ── */
 function PanelBox({ title, children, style }) {
   return (
-    <div style={{ background: "#09101a", border: "1px solid rgba(0,200,224,0.12)", borderRadius: 6, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 14, ...style }}>
+    <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border-accent)", borderRadius: 6, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 14, ...style }}>
       {title && (
-        <div style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: "oklch(0.55 0.1 200)", borderBottom: "1px solid rgba(0,200,224,0.08)", paddingBottom: 10, marginBottom: 2, fontWeight: 600 }}>
+        <div style={{ fontSize: 10, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--accent-cyan)", borderBottom: "1px solid var(--border-accent)", paddingBottom: 10, marginBottom: 2, fontWeight: 600 }}>
           {title}
         </div>
       )}
@@ -622,13 +675,13 @@ function PanelBox({ title, children, style }) {
 }
 
 /* ── WorkerManagerCard ── */
-function WorkerManagerCard({ wm, onChange, onRemove, allInstances, canRemove }) {
+function WorkerManagerCard({ wm, onChange, onRemove, allInstances, canRemove, fullWidth }) {
   const Label = ({ children, help }) => (
-    <div style={{ fontSize: 10, letterSpacing: "0.1em", color: "oklch(0.72 0.14 200)", marginBottom: 5, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 6 }}>
+    <div style={{ fontSize: 10, letterSpacing: "0.1em", color: "var(--text-label)", marginBottom: 5, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 6 }}>
       <span>{children}</span>{help && <HelpTip text={help} />}
     </div>
   );
-  const inp = { width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(0,200,224,0.15)", borderRadius: 3, padding: "7px 10px", color: "oklch(0.85 0.06 200)", fontFamily: "inherit", fontSize: 12, outline: "none" };
+  const inp = { width: "100%", background: "var(--bg-surface)", border: "1px solid var(--border-accent)", borderRadius: 3, padding: "7px 10px", color: "var(--text-primary)", fontFamily: "inherit", fontSize: 12, outline: "none" };
   const set = (k, v) => onChange({ ...wm, [k]: v });
 
   const WM_TYPES = [
@@ -638,13 +691,13 @@ function WorkerManagerCard({ wm, onChange, onRemove, allInstances, canRemove }) 
     { value: "baremetal_native", label: "Bare Metal" },
   ];
   const ToggleRow = ({ options, value, onChange: onTog }) => (
-    <div style={{ display: "flex", borderRadius: 3, overflow: "hidden", border: "1px solid rgba(0,200,224,0.2)" }}>
+    <div style={{ display: "flex", borderRadius: 3, overflow: "hidden", border: "1px solid var(--border-accent)" }}>
       {options.map(([val, lbl, disabled]) => (
         <button key={val} disabled={!!disabled} onClick={() => !disabled && onTog(val)} style={{
           flex: 1, padding: "6px 0", fontFamily: "inherit", fontSize: 10, letterSpacing: "0.06em",
           textTransform: "uppercase", cursor: disabled ? "not-allowed" : "pointer", border: "none",
           background: value === val ? "rgba(0,200,224,0.18)" : "transparent",
-          color: disabled ? "oklch(0.35 0.03 220)" : value === val ? "oklch(0.78 0.16 200)" : "oklch(0.48 0.05 220)",
+          color: disabled ? "var(--text-dim)" : value === val ? "var(--text-accent)" : "var(--text-muted)",
           transition: "background 0.15s, color 0.15s",
         }}>{lbl}</button>
       ))}
@@ -658,20 +711,20 @@ function WorkerManagerCard({ wm, onChange, onRemove, allInstances, canRemove }) 
   const costPerHr = derivedCount * workerInst.price;
 
   return (
-    <div style={{ background: "rgba(0,200,224,0.03)", border: "1px solid rgba(0,200,224,0.15)", borderRadius: 5, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12, width: 340, flexShrink: 0 }}>
+    <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-accent)", borderRadius: 5, padding: "16px 18px", display: "flex", flexDirection: "column", gap: 12, width: fullWidth ? "100%" : 340, flexShrink: fullWidth ? 1 : 0 }}>
       {/* header */}
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <select value={wm.type} onChange={e => set("type", e.target.value)}
-          style={{ flex: 1, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(0,200,224,0.15)", borderRadius: 3, padding: "5px 8px", color: "oklch(0.85 0.06 200)", fontFamily: "inherit", fontSize: 11, outline: "none" }}>
+          style={{ flex: 1, background: "var(--bg-surface)", border: "1px solid var(--border-accent)", borderRadius: 3, padding: "5px 8px", color: "var(--text-primary)", fontFamily: "inherit", fontSize: 11, outline: "none" }}>
           {WM_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
         </select>
         <input value={wm.id} onChange={e => set("id", e.target.value)} placeholder="wm-id"
-          style={{ width: 88, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(0,200,224,0.15)", borderRadius: 3, padding: "5px 8px", color: "oklch(0.85 0.06 200)", fontFamily: "inherit", fontSize: 11, outline: "none" }} />
+          style={{ width: 88, background: "var(--bg-surface)", border: "1px solid var(--border-accent)", borderRadius: 3, padding: "5px 8px", color: "var(--text-primary)", fontFamily: "inherit", fontSize: 11, outline: "none" }} />
         {canRemove && (
           <button onClick={onRemove}
-            style={{ background: "none", border: "1px solid rgba(255,80,60,0.3)", borderRadius: 3, color: "oklch(0.58 0.12 30)", fontFamily: "inherit", fontSize: 12, width: 28, height: 28, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "border-color 0.15s" }}
+            style={{ background: "none", border: "1px solid var(--border-danger)", borderRadius: 3, color: "var(--text-danger)", fontFamily: "inherit", fontSize: 12, width: 28, height: 28, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "border-color 0.15s" }}
             onMouseEnter={e => e.currentTarget.style.borderColor = "rgba(255,80,60,0.6)"}
-            onMouseLeave={e => e.currentTarget.style.borderColor = "rgba(255,80,60,0.3)"}>✕</button>
+            onMouseLeave={e => e.currentTarget.style.borderColor = "var(--border-danger)"}>✕</button>
         )}
       </div>
 
@@ -683,14 +736,14 @@ function WorkerManagerCard({ wm, onChange, onRemove, allInstances, canRemove }) 
           <ToggleRow options={[["instances","Instance cap"],["budget","$/hr cap"]]} value={wm.capMode} onChange={v => set("capMode", v)} />
           <div style={{ marginTop: 7 }}>
             {wm.capMode === "instances"
-              ? <div style={{ display:"flex", alignItems:"center", gap:8 }}><NumericStepper value={wm.instanceCap||1} onChange={v=>set("instanceCap",v)} min={1} max={1000} /><span style={{fontSize:11,color:"oklch(0.5 0.04 220)"}}>max instances</span></div>
-              : <div style={{ display:"flex", alignItems:"center", gap:8 }}><span style={{fontSize:12,color:"oklch(0.62 0.1 150)"}}>$</span><NumericStepper value={wm.budgetCap||10} onChange={v=>set("budgetCap",v)} min={0} step={0.5} width={64} /><span style={{fontSize:11,color:"oklch(0.5 0.04 220)"}}>max USD/h</span></div>
+              ? <div style={{ display:"flex", alignItems:"center", gap:8 }}><NumericStepper value={wm.instanceCap||1} onChange={v=>set("instanceCap",v)} min={1} max={1000} /><span style={{fontSize:11,color:"var(--text-muted)"}}>max instances</span></div>
+              : <div style={{ display:"flex", alignItems:"center", gap:8 }}><span style={{fontSize:12,color:"var(--text-success)"}}>$</span><NumericStepper value={wm.budgetCap||10} onChange={v=>set("budgetCap",v)} min={0} step={0.5} width={64} /><span style={{fontSize:11,color:"var(--text-muted)"}}>max USD/h</span></div>
             }
           </div>
         </div>
-        <div style={{ padding:"8px 10px", background:"rgba(0,255,136,0.04)", border:"1px solid rgba(0,255,136,0.1)", borderRadius:3, display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
-          <span style={{ fontSize:10, color:"oklch(0.55 0.04 220)", textTransform:"uppercase", letterSpacing:"0.06em" }}>Workers cost</span>
-          <span style={{ fontSize:13, fontWeight:600, color:"oklch(0.65 0.12 150)" }}>${costPerHr.toFixed(3)}/h</span>
+        <div style={{ padding:"8px 10px", background:"rgba(0,255,136,0.04)", border:"1px solid var(--border-success)", borderRadius:3, display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
+          <span style={{ fontSize:10, color:"var(--text-muted)", textTransform:"uppercase", letterSpacing:"0.06em" }}>Workers cost</span>
+          <span style={{ fontSize:13, fontWeight:600, color:"var(--text-success)" }}>${costPerHr.toFixed(3)}/h</span>
         </div>
       </>)}
 
@@ -737,7 +790,7 @@ function WorkerManagerCard({ wm, onChange, onRemove, allInstances, canRemove }) 
             <Label help="Maximum concurrent workers the scheduler may spawn. -1 = no limit (uses cpu_count).">Max Task Concurrency</Label>
             <div style={{ display:"flex", alignItems:"center", gap:8 }}>
               <NumericStepper value={wm.maxTaskConcurrency!=null?wm.maxTaskConcurrency:-1} onChange={v=>set("maxTaskConcurrency",v)} min={-1} />
-              <span style={{ fontSize:11, color:"oklch(0.5 0.04 220)" }}>(-1 = no limit)</span>
+              <span style={{ fontSize:11, color:"var(--text-muted)" }}>(-1 = no limit)</span>
             </div>
           </div>
         )}
@@ -754,7 +807,7 @@ function CopyBtn({ value }) {
     <button
       onClick={() => navigator.clipboard.writeText(value).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); })}
       onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-      style={{ background: hov && !copied ? "rgba(0,200,224,0.08)" : "none", border: "1px solid " + (copied ? "rgba(0,255,136,0.4)" : hov ? "rgba(0,200,224,0.5)" : "rgba(0,200,224,0.2)"), borderRadius: 3, color: copied ? "oklch(0.72 0.18 150)" : hov ? "oklch(0.72 0.14 200)" : "oklch(0.5 0.08 200)", fontFamily: "inherit", fontSize: 10, padding: "2px 7px", cursor: "pointer", letterSpacing: "0.06em", transition: "color 0.12s, border-color 0.12s, background 0.12s", flexShrink: 0 }}>
+      style={{ background: hov && !copied ? "rgba(0,200,224,0.08)" : "none", border: "1px solid " + (copied ? "var(--border-success)" : hov ? "var(--border-strong)" : "var(--border-accent)"), borderRadius: 3, color: copied ? "var(--text-success)" : hov ? "var(--text-accent)" : "var(--text-muted)", fontFamily: "inherit", fontSize: 10, padding: "2px 7px", cursor: "pointer", letterSpacing: "0.06em", transition: "color 0.12s, border-color 0.12s, background 0.12s", flexShrink: 0 }}>
       {copied ? "COPIED" : "COPY"}
     </button>
   );
@@ -771,11 +824,11 @@ function DeploymentCard({ state, onDestroy, onDownload, hasCredentials, isRunnin
     { label: "Instance",       value: state.instance_id },
   ];
   return (
-    <div style={{ background: "rgba(0,255,136,0.03)", border: "1px solid rgba(0,255,136,0.15)", borderRadius: 4, padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16, animation: "fadeSlideIn 0.3s ease" }}>
+    <div style={{ background: "rgba(0,255,136,0.03)", border: "1px solid var(--border-success)", borderRadius: 4, padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16, animation: "fadeSlideIn 0.3s ease" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ fontSize: 11, letterSpacing: "0.1em", color: "oklch(0.72 0.18 150)", textTransform: "uppercase" }}>Active Deployment</div>
+        <div style={{ fontSize: 11, letterSpacing: "0.1em", color: "var(--text-success)", textTransform: "uppercase" }}>Active Deployment</div>
         <button onClick={onDownload}
-          style={{ background: "none", border: "1px solid rgba(0,200,224,0.2)", borderRadius: 3, color: "oklch(0.55 0.08 200)", fontFamily: "inherit", fontSize: 10, padding: "3px 9px", cursor: "pointer", letterSpacing: "0.05em" }}>
+          style={{ background: "none", border: "1px solid var(--border-accent)", borderRadius: 3, color: "var(--text-muted)", fontFamily: "inherit", fontSize: 10, padding: "3px 9px", cursor: "pointer", letterSpacing: "0.05em" }}>
           ↓ State JSON
         </button>
       </div>
@@ -783,47 +836,47 @@ function DeploymentCard({ state, onDestroy, onDownload, hasCredentials, isRunnin
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {rows.map(({ label, value, href }) => (
           <div key={label} style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-            <span style={{ fontSize: 10, color: "oklch(0.42 0.04 220)", letterSpacing: "0.05em", width: 120, flexShrink: 0, textTransform: "uppercase" }}>{label}</span>
+            <span style={{ fontSize: 10, color: "var(--text-dim)", letterSpacing: "0.05em", width: 120, flexShrink: 0, textTransform: "uppercase" }}>{label}</span>
             <div style={{ display: "flex", alignItems: "baseline", gap: 6, flex: 1 }}>
               {value
                 ? <>{href
-                    ? <a href={href} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "oklch(0.72 0.18 200)", fontWeight: 500, wordBreak: "break-all", whiteSpace: "pre-wrap", fontFamily: "inherit", textDecoration: "none", borderBottom: "1px solid rgba(0,200,224,0.3)" }}>{value}</a>
-                    : <span style={{ fontSize: 12, color: "oklch(0.82 0.08 200)", fontWeight: 500, wordBreak: "break-all", whiteSpace: "pre-wrap" }}>{value}</span>
+                    ? <a href={href} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "var(--text-accent)", fontWeight: 500, wordBreak: "break-all", whiteSpace: "pre-wrap", fontFamily: "inherit", textDecoration: "none", borderBottom: "1px solid var(--border-accent)" }}>{value}</a>
+                    : <span style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 500, wordBreak: "break-all", whiteSpace: "pre-wrap" }}>{value}</span>
                   }<CopyBtn value={value} /></>
-                : <span style={{ fontSize: 12, color: "oklch(0.32 0.03 220)", fontStyle: "italic" }}>pending…</span>
+                : <span style={{ fontSize: 12, color: "var(--text-dim)", fontStyle: "italic" }}>pending…</span>
               }
             </div>
           </div>
         ))}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 10, color: "oklch(0.42 0.04 220)", letterSpacing: "0.05em", width: 120, flexShrink: 0, textTransform: "uppercase" }}>SSH Key</span>
+          <span style={{ fontSize: 10, color: "var(--text-dim)", letterSpacing: "0.05em", width: 120, flexShrink: 0, textTransform: "uppercase" }}>SSH Key</span>
           {keyMaterial
             ? <button onClick={() => downloadText(keyMaterial.name + ".pem", keyMaterial.mat)}
-                style={{ background: "none", border: "1px solid rgba(0,200,224,0.2)", borderRadius: 3, color: "oklch(0.62 0.14 200)", fontFamily: "inherit", fontSize: 10, padding: "3px 9px", cursor: "pointer", letterSpacing: "0.05em" }}>
+                style={{ background: "none", border: "1px solid var(--border-accent)", borderRadius: 3, color: "var(--text-accent)", fontFamily: "inherit", fontSize: 10, padding: "3px 9px", cursor: "pointer", letterSpacing: "0.05em" }}>
                 ↓ {keyMaterial.name}.pem
               </button>
-            : <span style={{ fontSize: 12, color: "oklch(0.32 0.03 220)", fontStyle: "italic" }}>pending…</span>
+            : <span style={{ fontSize: 12, color: "var(--text-dim)", fontStyle: "italic" }}>pending…</span>
           }
         </div>
       </div>
 
       {!isRunning && (
-        <div style={{ borderTop: "1px solid rgba(255,80,60,0.12)", paddingTop: 16 }}>
+        <div style={{ borderTop: "1px solid var(--border-danger)", paddingTop: 16 }}>
           {!hasCredentials && (
-            <div style={{ fontSize: 11, color: "oklch(0.6 0.1 60)", marginBottom: 10 }}>
-              ↑ Enter AWS credentials in the panel on the left to enable teardown.
+            <div style={{ fontSize: 11, color: "var(--text-warning)", marginBottom: 10 }}>
+              ↑ Enter AWS credentials on the Config tab to enable teardown.
             </div>
           )}
           <button onClick={onDestroy} disabled={!hasCredentials}
             style={{
               width: "100%", padding: "14px", fontFamily: "inherit", fontSize: 13, fontWeight: 700,
               letterSpacing: "0.15em", textTransform: "uppercase", cursor: hasCredentials ? "pointer" : "default",
-              border: "1px solid " + (hasCredentials ? "oklch(0.48 0.18 15)" : "rgba(255,80,60,0.15)"),
+              border: "1px solid " + (hasCredentials ? "oklch(0.48 0.18 15)" : "var(--border-danger)"),
               borderRadius: 4,
               background: hasCredentials
                 ? "linear-gradient(135deg, oklch(0.32 0.18 15) 0%, oklch(0.26 0.14 30) 100%)"
                 : "rgba(255,80,60,0.04)",
-              color: hasCredentials ? "oklch(0.88 0.1 30)" : "oklch(0.45 0.08 30)",
+              color: hasCredentials ? "oklch(0.88 0.1 30)" : "var(--text-danger)",
               transition: "all 0.2s",
               animation: hasCredentials ? "destroyPulse 4s ease-in-out infinite" : "none",
             }}>
@@ -831,6 +884,41 @@ function DeploymentCard({ state, onDestroy, onDownload, hasCredentials, isRunnin
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ── TopNav ── */
+function TopNav({ activeTab, setActiveTab, theme, setTheme, showPostLaunch }) {
+  const tabs = [
+    { id: "config",     label: "Config" },
+    { id: "deployment", label: "Deployment", postLaunch: true },
+    { id: "logs",       label: "Scheduler Logs", postLaunch: true },
+    { id: "gui",        label: "GUI", postLaunch: true },
+  ];
+  return (
+    <div style={{ padding: "0 28px", borderBottom: "1px solid var(--border-accent)", background: "var(--bg-panel)", flexShrink: 0, display: "flex", alignItems: "center" }}>
+      <img src="https://raw.githubusercontent.com/finos/branding/master/project-logos/active-project-logos/OpenGRIS/Scaler/2025_OpenGRIS_Scaler.svg"
+           alt="OpenGRIS Scaler" style={{ height: 34, marginRight: 28, flexShrink: 0 }} />
+      <div style={{ display: "flex", flex: 1 }}>
+        {tabs.filter(t => !t.postLaunch || showPostLaunch).map(t => (
+          <button key={t.id} onClick={() => setActiveTab(t.id)} style={{
+            padding: "14px 18px", background: "transparent", border: "none",
+            borderBottom: activeTab === t.id ? "2px solid var(--tab-active)" : "2px solid transparent",
+            color: activeTab === t.id ? "var(--text-accent)" : "var(--text-muted)",
+            fontFamily: "inherit", fontSize: 11, letterSpacing: "0.08em",
+            textTransform: "uppercase", cursor: "pointer",
+          }}>{t.label}</button>
+        ))}
+      </div>
+      <select value={theme} onChange={e => setTheme(e.target.value)} style={{
+        background: "var(--bg-surface)", border: "1px solid var(--border-accent)",
+        borderRadius: 3, color: "var(--text-secondary)", fontFamily: "inherit",
+        fontSize: 10, padding: "4px 8px", cursor: "pointer", outline: "none",
+      }}>
+        <option value="dark">Scaler Dark</option>
+        <option value="zenburn">Zenburn</option>
+      </select>
     </div>
   );
 }
@@ -853,6 +941,8 @@ function App() {
   const [requirements, setReqs]           = useState("");
   const [showSchedAdv, setShowSchedAdv]   = useState(false);
   const [showGenAdv, setShowGenAdv]       = useState(false);
+  const [activeTab, setActiveTab]         = useState("config");
+  const [theme, setTheme]                 = useState("dark");
 
   const wmCounterRef = useRef(1);
   const [workerManagers, setWorkerManagers] = useState([
@@ -862,12 +952,20 @@ function App() {
   const [phase, setPhase] = useState(() => {
     try { return localStorage.getItem("scaler_state") ? "ready" : "idle"; } catch { return "idle"; }
   });
-  const [log, setLog]           = useState([]);
+  const [log, setLog]             = useState([]);
   const [provState, setProvState] = useState(() => {
     try { const s = localStorage.getItem("scaler_state"); return s ? JSON.parse(s) : null; } catch { return null; }
   });
   const [keyMaterial, setKeyMaterial] = useState(null);
   const abortRef = useRef(null);
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+  }, [theme]);
+
+  useEffect(() => {
+    if (phase === "provisioning") setActiveTab("deployment");
+  }, [phase]);
 
   const addLog = useCallback((text, cls) => {
     setLog(prev => [...prev, { text, cls: cls || "info" }]);
@@ -983,55 +1081,29 @@ function App() {
   }, [savePartial]);
 
   const Label = ({ children, help }) => (
-    <div style={{ fontSize: 10, letterSpacing: "0.1em", color: "oklch(0.72 0.14 200)", marginBottom: 5, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 6 }}>
+    <div style={{ fontSize: 10, letterSpacing: "0.1em", color: "var(--text-label)", marginBottom: 5, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 6 }}>
       <span>{children}</span>{help && <HelpTip text={help} />}
     </div>
   );
-  const inp = { width: "100%", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(0,200,224,0.15)", borderRadius: 3, padding: "7px 10px", color: "oklch(0.85 0.06 200)", fontFamily: "inherit", fontSize: 12, outline: "none" };
+  const inp = { width: "100%", background: "var(--bg-surface)", border: "1px solid var(--border-accent)", borderRadius: 3, padding: "7px 10px", color: "var(--text-primary)", fontFamily: "inherit", fontSize: 12, outline: "none" };
   const TogglePair = ({ options, value, onSelect }) => (
-    <div style={{ display: "flex", borderRadius: 3, overflow: "hidden", border: "1px solid rgba(0,200,224,0.2)" }}>
+    <div style={{ display: "flex", borderRadius: 3, overflow: "hidden", border: "1px solid var(--border-accent)" }}>
       {options.map(([val, lbl, dis]) => (
         <button key={val} disabled={!!dis} onClick={() => !dis && onSelect(val)} style={{
           flex: 1, padding: "7px 0", fontFamily: "inherit", fontSize: 10, letterSpacing: "0.06em",
           textTransform: "uppercase", cursor: dis ? "not-allowed" : "pointer", border: "none",
           background: value === val ? "rgba(0,200,224,0.18)" : "transparent",
-          color: dis ? "oklch(0.35 0.03 220)" : value === val ? "oklch(0.78 0.16 200)" : "oklch(0.48 0.05 220)",
+          color: dis ? "var(--text-dim)" : value === val ? "var(--text-accent)" : "var(--text-muted)",
           transition: "background 0.15s, color 0.15s",
         }}>{lbl}</button>
       ))}
     </div>
   );
 
-  let launchControl;
-  if (phase === "idle" || phase === "error") {
-    launchControl = (
-      <button onClick={handleLaunch} disabled={!formReady} style={{
-        width: "100%", padding: "16px",
-        background: !formReady ? "rgba(0,200,224,0.05)" : "linear-gradient(135deg, oklch(0.38 0.16 155) 0%, oklch(0.32 0.14 200) 100%)",
-        border: "1px solid " + (!formReady ? "rgba(0,200,224,0.15)" : "oklch(0.55 0.16 155)"),
-        borderRadius: 4, color: !formReady ? "oklch(0.45 0.08 200)" : "oklch(0.92 0.1 155)",
-        fontFamily: "inherit", fontSize: 13, fontWeight: 700, letterSpacing: "0.15em",
-        cursor: !formReady ? "default" : "pointer", textTransform: "uppercase", transition: "all 0.2s",
-        animation: formReady ? "launchPulse 3s ease-in-out infinite" : "none",
-      }}>▶  Launch Cluster</button>
-    );
-  } else if (isRunning) {
-    launchControl = (
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <div style={{ padding: "16px", textAlign: "center", background: phase === "destroying" ? "rgba(255,80,60,0.04)" : "rgba(0,200,224,0.04)", border: "1px solid " + (phase === "destroying" ? "rgba(255,80,60,0.2)" : "rgba(0,200,224,0.15)"), borderRadius: 4, color: phase === "destroying" ? "oklch(0.6 0.1 30)" : "oklch(0.6 0.1 200)", fontSize: 12, letterSpacing: "0.1em" }}>
-          {phase === "destroying" ? "Tearing down…" : "Deploying…"}
-        </div>
-        <button onClick={handleAbort} style={{ padding: "9px", background: "transparent", border: "1px solid rgba(255,160,60,0.3)", borderRadius: 4, color: "oklch(0.62 0.12 60)", fontFamily: "inherit", fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", cursor: "pointer", transition: "border-color 0.15s, color 0.15s" }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(255,160,60,0.6)"; e.currentTarget.style.color = "oklch(0.72 0.14 60)"; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,160,60,0.3)"; e.currentTarget.style.color = "oklch(0.62 0.12 60)"; }}>✕  Abort</button>
-      </div>
-    );
-  }
-
   const advBtn = (show, onToggle, label) => (
     <button onClick={onToggle} style={{
-      background:"none", border:"1px solid rgba(0,200,224,0.12)", borderRadius:3, padding:"6px 10px",
-      color:"oklch(0.5 0.06 200)", fontFamily:"inherit", fontSize:10, letterSpacing:"0.06em",
+      background:"none", border:"1px solid var(--border-accent)", borderRadius:3, padding:"6px 10px",
+      color:"var(--text-muted)", fontFamily:"inherit", fontSize:10, letterSpacing:"0.06em",
       textTransform:"uppercase", cursor:"pointer", display:"flex", alignItems:"center",
       justifyContent:"space-between", width:"100%",
     }}>
@@ -1040,85 +1112,118 @@ function App() {
     </button>
   );
 
-  return (
-    <div style={{ minHeight: "100%", background: "#06090d", display: "flex", flexDirection: "column" }}>
-
-      {/* Header */}
-      <div style={{ padding: "14px 28px", borderBottom: "1px solid rgba(0,200,224,0.1)", background: "#090f18", flexShrink: 0 }}>
-        <img src="https://raw.githubusercontent.com/finos/branding/master/project-logos/active-project-logos/OpenGRIS/Scaler/2025_OpenGRIS_Scaler.svg"
-             alt="OpenGRIS Scaler" style={{ height: 38, width: "auto", display: "block" }} />
+  let launchControl;
+  if (phase === "idle" || phase === "error") {
+    launchControl = (
+      <button onClick={handleLaunch} disabled={!formReady} style={{
+        padding: "12px 28px",
+        background: !formReady ? "var(--bg-surface)" : "linear-gradient(135deg, oklch(0.38 0.16 155) 0%, oklch(0.32 0.14 200) 100%)",
+        border: "1px solid " + (!formReady ? "var(--border-accent)" : "oklch(0.55 0.16 155)"),
+        borderRadius: 4, color: !formReady ? "var(--text-muted)" : "oklch(0.92 0.1 155)",
+        fontFamily: "inherit", fontSize: 13, fontWeight: 700, letterSpacing: "0.15em",
+        cursor: !formReady ? "default" : "pointer", textTransform: "uppercase", transition: "all 0.2s",
+        animation: formReady ? "launchPulse 3s ease-in-out infinite" : "none",
+        flexShrink: 0,
+      }}>▶  Launch Cluster</button>
+    );
+  } else if (isRunning) {
+    launchControl = (
+      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div style={{ padding: "10px 16px", background: phase === "destroying" ? "rgba(255,80,60,0.04)" : "rgba(0,200,224,0.04)", border: "1px solid " + (phase === "destroying" ? "var(--border-danger)" : "var(--border-accent)"), borderRadius: 4, color: phase === "destroying" ? "var(--text-danger)" : "var(--text-muted)", fontSize: 12, letterSpacing: "0.1em" }}>
+          {phase === "destroying" ? "Tearing down…" : "Deploying…"}
+        </div>
+        <button onClick={handleAbort} style={{ padding: "10px 14px", background: "transparent", border: "1px solid rgba(255,160,60,0.3)", borderRadius: 4, color: "var(--text-warning)", fontFamily: "inherit", fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", cursor: "pointer", transition: "border-color 0.15s, color 0.15s", flexShrink: 0 }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(255,160,60,0.6)"; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,160,60,0.3)"; }}>✕  Abort</button>
       </div>
+    );
+  }
 
-      {/* Body */}
-      <div style={{ flex: 1, padding: "24px 28px", display: "flex", flexDirection: "column", gap: 20, overflowY: "auto" }}>
+  return (
+    <div style={{ height: "100%", background: "var(--bg-page)", display: "flex", flexDirection: "column" }}>
+      <TopNav activeTab={activeTab} setActiveTab={setActiveTab}
+              theme={theme} setTheme={setTheme} showPostLaunch={phase !== "idle"} />
 
-        {/* Main 2-col: left panel stack | right worker managers */}
-        <div style={{ display: "grid", gridTemplateColumns: "340px 1fr", gap: 16, alignItems: "start" }}>
+      {/* ── Config Tab ── */}
+      <div style={{ display: activeTab === "config" ? "flex" : "none", flex: 1, flexDirection: "column", minHeight: 0 }}>
+        <div style={{ flex: 1, padding: "20px 28px", overflowY: "auto", display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* Top-right launch control */}
+          <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            {!formReady && blocking.map(c => (
+              <span key={c.key} style={{ fontSize: 11, color: "var(--text-warning)" }}>✕ {c.label}</span>
+            ))}
+            {launchControl}
+          </div>
 
-          {/* Left column: Credentials + General + Scheduler */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {/* Three columns */}
+          <div style={{ display: "grid", gridTemplateColumns: "320px 300px 1fr", gap: 16, alignItems: "start" }}>
 
-            <PanelBox title="Credentials">
-              {/* Cloud provider tab bar */}
-              <div style={{ display:"flex", borderBottom:"1px solid rgba(0,200,224,0.1)", gap:0, marginBottom:2 }}>
-                {[["aws","AWS"],["ibm","IBM"],["gcp","GCP"],["oci","OCI"]].map(([id,lbl]) => {
-                  const active = id === "aws";
-                  const disabled = id !== "aws";
-                  return (
-                    <button key={id} disabled={disabled} style={{
-                      padding:"5px 12px", fontFamily:"inherit", fontSize:10, letterSpacing:"0.08em",
-                      textTransform:"uppercase", cursor: disabled ? "default" : "pointer", border:"none", marginBottom:-1,
-                      borderBottom: active ? "2px solid oklch(0.62 0.16 200)" : "2px solid transparent",
-                      background:"transparent",
-                      color: active ? "oklch(0.72 0.14 200)" : "oklch(0.32 0.03 220)",
-                    }}>{lbl}</button>
-                  );
-                })}
-              </div>
-              <div><Label help="The AWS region where your cluster will be deployed.">AWS Region</Label><RegionSelect value={region} onChange={setRegion} /></div>
-              <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                <div style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(0,200,224,0.15)", borderRadius:3, padding:"8px 10px", display:"flex", alignItems:"center" }}>
-                  <span style={{ fontSize:10, color:"oklch(0.64 0.08 200)", marginRight:8, flexShrink:0 }}>KEY_ID</span>
-                  <SecretInput value={accessKeyId} onChange={setAKI} placeholder="AKIA…" style={{ flex:1, fontSize:12, color:"oklch(0.85 0.06 200)" }} />
-                </div>
-                <div style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(0,200,224,0.15)", borderRadius:3, padding:"8px 10px", display:"flex", alignItems:"center" }}>
-                  <span style={{ fontSize:10, color:"oklch(0.64 0.08 200)", marginRight:8, flexShrink:0 }}>SECRET</span>
-                  <SecretInput value={secretKey} onChange={setSK} placeholder="wJalr…" style={{ flex:1, fontSize:12, color:"oklch(0.85 0.06 200)" }} />
-                </div>
-              </div>
-            </PanelBox>
+            {/* Column 1: Credentials + General */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 
-            <PanelBox title="General Options">
-              {advBtn(showGenAdv, () => setShowGenAdv(v => !v), "Advanced Options")}
-              {showGenAdv && (<>
-                <div>
-                  <Label help={"WebSocket (ws://) — required when connecting from a browser; requires YMQ.\n---\nTCP (tcp://) — works with ZMQ or YMQ; readiness check skipped (browsers can't open raw TCP)."}>Transport Protocol</Label>
-                  <TogglePair options={[["ws","WebSocket"],["tcp","TCP"]]} value={transport} onSelect={v => { setTransport(v); if (v === "ws") setNetBack("ymq"); }} />
+              <PanelBox title="Credentials">
+                <div style={{ display:"flex", borderBottom:"1px solid var(--border-accent)", gap:0, marginBottom:2 }}>
+                  {[["aws","AWS"],["ibm","IBM"],["gcp","GCP"],["oci","OCI"]].map(([id,lbl]) => {
+                    const active = id === "aws";
+                    const disabled = id !== "aws";
+                    return (
+                      <button key={id} disabled={disabled} style={{
+                        padding:"5px 12px", fontFamily:"inherit", fontSize:10, letterSpacing:"0.08em",
+                        textTransform:"uppercase", cursor: disabled ? "default" : "pointer", border:"none", marginBottom:-1,
+                        borderBottom: active ? "2px solid var(--tab-active)" : "2px solid transparent",
+                        background:"transparent",
+                        color: active ? "var(--text-label)" : "var(--text-dim)",
+                      }}>{lbl}</button>
+                    );
+                  })}
                 </div>
-                <div>
-                  <Label help={"YMQ (default) — lower-latency C++ transport; required for WebSocket.\n---\nZMQ — battle-tested, TCP transport only."}>Network Backend</Label>
-                  <TogglePair options={[["ymq","YMQ"],["zmq","ZMQ",transport==="ws"]]} value={networkBackend} onSelect={v => { setNetBack(v); if (v === "zmq") setTransport("tcp"); }} />
+                <div><Label help="The AWS region where your cluster will be deployed.">AWS Region</Label><RegionSelect value={region} onChange={setRegion} /></div>
+                <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                  <div style={{ background:"var(--bg-surface)", border:"1px solid var(--border-accent)", borderRadius:3, padding:"8px 10px", display:"flex", alignItems:"center" }}>
+                    <span style={{ fontSize:10, color:"var(--text-muted)", marginRight:8, flexShrink:0 }}>KEY_ID</span>
+                    <SecretInput value={accessKeyId} onChange={setAKI} placeholder="AKIA…" style={{ flex:1, fontSize:12, color:"var(--text-primary)" }} />
+                  </div>
+                  <div style={{ background:"var(--bg-surface)", border:"1px solid var(--border-accent)", borderRadius:3, padding:"8px 10px", display:"flex", alignItems:"center" }}>
+                    <span style={{ fontSize:10, color:"var(--text-muted)", marginRight:8, flexShrink:0 }}>SECRET</span>
+                    <SecretInput value={secretKey} onChange={setSK} placeholder="wJalr…" style={{ flex:1, fontSize:12, color:"var(--text-primary)" }} />
+                  </div>
                 </div>
-                <div><Label help="Python version installed via uv on the scheduler and all ORB workers.">Python Version</Label><input value={pythonVersion} onChange={e=>setPyVer(e.target.value)} style={inp} placeholder="3.14" /></div>
-                <div><Label help="pip spec for scaler on the scheduler. Use git+https:// to install from a branch.">Scaler Package</Label><input value={scalerPackage} onChange={e=>setScalerPkg(e.target.value)} style={inp} placeholder="opengris-scaler[all]" /></div>
-                <div><Label help="Existing IAM instance profile to attach to the scheduler. Blank = create new.">Instance Profile</Label><input value={instanceProfileName} onChange={e=>setIPN(e.target.value)} style={inp} placeholder="my-scaler-profile (optional)" /></div>
-                <div><Label help="Fixed suffix for all AWS resource names. Blank = random 8-char.">Resource Name Suffix</Label><input value={nameSuffix} onChange={e=>setSuffix(e.target.value)} style={inp} placeholder="random (optional)" /></div>
-                <div>
-                  <Label help="Seconds to wait for the scheduler to become reachable after instance launch.">Poll Timeout (s)</Label>
-                  <div style={{ display:"flex", alignItems:"center", gap:10 }}><NumericStepper value={pollTimeout} onChange={setPollTO} min={60} max={1800} step={60} width={72} /><span style={{fontSize:11,color:"oklch(0.5 0.04 220)"}}>seconds</span></div>
-                </div>
-                <div>
-                  <Label help="Python requirements installed on all ORB / AWS EC2 workers. opengris-scaler[all] is always prepended.">Requirements (ORB workers)</Label>
-                  <textarea value={requirements} onChange={e=>setReqs(e.target.value)} placeholder={"numpy\npandas"} style={{ ...inp, resize:"vertical", minHeight:72, fontFamily:"inherit", fontSize:11, lineHeight:1.6 }} />
-                </div>
-              </>)}
-            </PanelBox>
+              </PanelBox>
 
+              <PanelBox title="General Options">
+                {advBtn(showGenAdv, () => setShowGenAdv(v => !v), "Advanced Options")}
+                {showGenAdv && (<>
+                  <div>
+                    <Label help={"WebSocket (ws://) — required when connecting from a browser; requires YMQ.\n---\nTCP (tcp://) — works with ZMQ or YMQ; readiness check skipped (browsers can't open raw TCP)."}>Transport Protocol</Label>
+                    <TogglePair options={[["ws","WebSocket"],["tcp","TCP"]]} value={transport} onSelect={v => { setTransport(v); if (v === "ws") setNetBack("ymq"); }} />
+                  </div>
+                  <div>
+                    <Label help={"YMQ (default) — lower-latency C++ transport; required for WebSocket.\n---\nZMQ — battle-tested, TCP transport only."}>Network Backend</Label>
+                    <TogglePair options={[["ymq","YMQ"],["zmq","ZMQ",transport==="ws"]]} value={networkBackend} onSelect={v => { setNetBack(v); if (v === "zmq") setTransport("tcp"); }} />
+                  </div>
+                  <div><Label help="Python version installed via uv on the scheduler and all ORB workers.">Python Version</Label><input value={pythonVersion} onChange={e=>setPyVer(e.target.value)} style={inp} placeholder="3.14" /></div>
+                  <div><Label help="pip spec for scaler on the scheduler. Use git+https:// to install from a branch.">Scaler Package</Label><input value={scalerPackage} onChange={e=>setScalerPkg(e.target.value)} style={inp} placeholder="opengris-scaler[all]" /></div>
+                  <div><Label help="Existing IAM instance profile to attach to the scheduler. Blank = create new.">Instance Profile</Label><input value={instanceProfileName} onChange={e=>setIPN(e.target.value)} style={inp} placeholder="my-scaler-profile (optional)" /></div>
+                  <div><Label help="Fixed suffix for all AWS resource names. Blank = random 8-char.">Resource Name Suffix</Label><input value={nameSuffix} onChange={e=>setSuffix(e.target.value)} style={inp} placeholder="random (optional)" /></div>
+                  <div>
+                    <Label help="Seconds to wait for the scheduler to become reachable after instance launch.">Poll Timeout (s)</Label>
+                    <div style={{ display:"flex", alignItems:"center", gap:10 }}><NumericStepper value={pollTimeout} onChange={setPollTO} min={60} max={1800} step={60} width={72} /><span style={{fontSize:11,color:"var(--text-muted)"}}>seconds</span></div>
+                  </div>
+                  <div>
+                    <Label help="Python requirements installed on all ORB / AWS EC2 workers. opengris-scaler[all] is always prepended.">Requirements (ORB workers)</Label>
+                    <textarea value={requirements} onChange={e=>setReqs(e.target.value)} placeholder={"numpy\npandas"} style={{ ...inp, resize:"vertical", minHeight:72, fontFamily:"inherit", fontSize:11, lineHeight:1.6 }} />
+                  </div>
+                </>)}
+              </PanelBox>
+
+            </div>
+
+            {/* Column 2: Scheduler EC2 */}
             <PanelBox title="Scheduler · EC2">
               <div><Label help="EC2 instance type for the scheduler. Compute-optimized (c5/c6i) works well for most deployments.">Instance Type</Label><InstancePicker value={schedulerType} onChange={setSchedulerType} defaultCat="all" /></div>
-              <div style={{ padding:"10px 12px", background:"rgba(0,255,136,0.04)", border:"1px solid rgba(0,255,136,0.1)", borderRadius:3, display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
-                <span style={{fontSize:10,color:"oklch(0.55 0.04 220)",textTransform:"uppercase",letterSpacing:"0.06em"}}>Scheduler cost</span>
-                <span style={{fontSize:13,fontWeight:600,color:"oklch(0.65 0.12 150)"}}>${schedulerInst.price.toFixed(3)}/h</span>
+              <div style={{ padding:"10px 12px", background:"rgba(0,255,136,0.04)", border:"1px solid var(--border-success)", borderRadius:3, display:"flex", justifyContent:"space-between", alignItems:"baseline" }}>
+                <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:"0.06em"}}>Scheduler cost</span>
+                <span style={{fontSize:13,fontWeight:600,color:"var(--text-success)"}}>${schedulerInst.price.toFixed(3)}/h</span>
               </div>
               {advBtn(showSchedAdv, () => setShowSchedAdv(v => !v), "Advanced")}
               {showSchedAdv && (
@@ -1135,103 +1240,125 @@ function App() {
               )}
             </PanelBox>
 
+            {/* Column 3: Worker Managers + Cost Summary */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+              <PanelBox title={`Worker Managers (${workerManagers.length})`} style={{ gap: 12 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {workerManagers.map(wm => (
+                    <WorkerManagerCard key={wm.id} wm={wm}
+                      onChange={updated => updateWorkerManager(wm.id, updated)}
+                      onRemove={() => removeWorkerManager(wm.id)}
+                      allInstances={allInstances}
+                      canRemove={workerManagers.length > 1}
+                      fullWidth={true} />
+                  ))}
+                  <button onClick={addWorkerManager}
+                    style={{ width:"100%", background:"rgba(0,200,224,0.03)", border:"1px dashed var(--border-accent)", borderRadius:5, color:"var(--accent-cyan)", fontFamily:"inherit", fontSize:11, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8, transition:"background 0.15s, border-color 0.15s", minHeight:48, padding:"12px" }}
+                    onMouseEnter={e=>{e.currentTarget.style.background="rgba(0,200,224,0.07)";e.currentTarget.style.borderColor="rgba(0,200,224,0.45)";}}
+                    onMouseLeave={e=>{e.currentTarget.style.background="rgba(0,200,224,0.03)";e.currentTarget.style.borderColor="rgba(0,200,224,0.25)";}}>
+                    <span style={{fontSize:16,lineHeight:1}}>+</span>
+                    <span style={{letterSpacing:"0.06em",textTransform:"uppercase"}}>Add Worker Manager</span>
+                  </button>
+                </div>
+              </PanelBox>
+
+              <PanelBox title="Cost Summary">
+                {workerManagers.map((wm) => {
+                  if (wm.type !== "orb_aws_ec2") return (
+                    <div key={wm.id} style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
+                      <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:"0.05em"}}>{wm.id}</span>
+                      <span style={{fontSize:11,color:"var(--text-dim)",fontStyle:"italic"}}>n/a</span>
+                    </div>
+                  );
+                  const inst  = allInstances.find(i => i.type === wm.instanceType) || { price: 0 };
+                  const count = wm.capMode === "instances" ? Math.max(0, wm.instanceCap||0) : Math.max(0, Math.floor((wm.budgetCap||0)/(inst.price||1)));
+                  return (
+                    <div key={wm.id} style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
+                      <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:"0.05em"}}>{wm.id} · {count}× {wm.instanceType}</span>
+                      <span style={{fontSize:12,color:"var(--text-secondary)"}}>${(count*inst.price).toFixed(3)}/h</span>
+                    </div>
+                  );
+                })}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
+                  <span style={{fontSize:10,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:"0.05em"}}>Scheduler · {schedulerType}</span>
+                  <span style={{fontSize:12,color:"var(--text-secondary)"}}>${schedulerInst.price.toFixed(3)}/h</span>
+                </div>
+                <div style={{borderTop:"1px solid var(--border-success)",paddingTop:10,display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
+                  <span style={{fontSize:10,color:"var(--text-accent)",textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:600}}>Max est. total</span>
+                  <span style={{fontSize:16,fontWeight:700,color:"var(--text-success)"}}>${totalCostPerHr.toFixed(3)}/h</span>
+                </div>
+              </PanelBox>
+
+            </div>
           </div>
 
-          {/* Right column: Worker Managers */}
-          <PanelBox title={`Worker Managers (${workerManagers.length})`} style={{ gap: 12 }}>
-            <div style={{ display:"flex", gap:14, flexWrap:"wrap" }}>
-              {workerManagers.map(wm => (
-                <WorkerManagerCard key={wm.id} wm={wm}
-                  onChange={updated => updateWorkerManager(wm.id, updated)}
-                  onRemove={() => removeWorkerManager(wm.id)}
-                  allInstances={allInstances}
-                  canRemove={workerManagers.length > 1} />
-              ))}
-              <button onClick={addWorkerManager}
-                style={{ width:130, flexShrink:0, background:"rgba(0,200,224,0.03)", border:"1px dashed rgba(0,200,224,0.25)", borderRadius:5, color:"oklch(0.55 0.1 200)", fontFamily:"inherit", fontSize:11, cursor:"pointer", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:8, transition:"background 0.15s, border-color 0.15s", minHeight: 120 }}
-                onMouseEnter={e=>{e.currentTarget.style.background="rgba(0,200,224,0.07)";e.currentTarget.style.borderColor="rgba(0,200,224,0.45)";}}
-                onMouseLeave={e=>{e.currentTarget.style.background="rgba(0,200,224,0.03)";e.currentTarget.style.borderColor="rgba(0,200,224,0.25)";}}>
-                <span style={{fontSize:22,lineHeight:1}}>+</span>
-                <span style={{letterSpacing:"0.06em",textTransform:"uppercase"}}>Add Worker Manager</span>
+          {/* Load state link (idle only) */}
+          {phase === "idle" && (
+            <div style={{display:"flex",gap:16,alignItems:"center"}}>
+              <label style={{fontSize:10,color:"var(--text-accent)",cursor:"pointer",textDecoration:"underline",textDecorationColor:"var(--border-accent)"}}>
+                Load state from file<input type="file" accept=".json" onChange={handleLoadState} style={{display:"none"}} />
+              </label>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Deployment Tab ── */}
+      <div style={{ display: activeTab === "deployment" ? "flex" : "none", flex: 1, flexDirection: "column", minHeight: 0 }}>
+        <div style={{ flex: 1, padding: "20px 28px", display: "flex", flexDirection: "column", gap: 16, overflowY: "auto" }}>
+          <LiveTerminal lines={log} isRunning={isRunning}
+            title={phase === "destroying" ? "openGRIS Scaler — teardown" : "openGRIS Scaler — deploy log"}
+            style={{ flex: 1, minHeight: 400 }} />
+          {provState && phase !== "destroying" && (
+            <div style={{ animation: "fadeSlideIn 0.3s ease" }}>
+              {phase === "ready" && log.length === 0 && (
+                <div style={{marginBottom:10,padding:"10px 14px",background:"var(--bg-surface)",border:"1px solid var(--border-accent)",borderRadius:3,fontSize:11,color:"var(--text-muted)"}}>
+                  Deployment loaded from saved state.
+                </div>
+              )}
+              <DeploymentCard state={provState} onDestroy={handleDestroy}
+                onDownload={() => downloadText("scaler-state-" + provState.name_suffix + ".json", JSON.stringify(provState, null, 2))}
+                hasCredentials={hasCredentials} isRunning={isRunning} keyMaterial={keyMaterial} />
+            </div>
+          )}
+          <div style={{display:"flex",gap:16,alignItems:"center",flexWrap:"wrap"}}>
+            {phase === "error" && (
+              <button onClick={handleReset} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-muted)",fontFamily:"inherit",fontSize:10,padding:0,letterSpacing:"0.06em"}}>
+                ← Clear state
               </button>
-            </div>
-          </PanelBox>
-
+            )}
+          </div>
         </div>
+      </div>
 
-        {/* Bottom row: Cost Summary | Launch */}
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 2fr", gap:16, alignItems:"start" }}>
-
-          <PanelBox title="Cost Summary">
-            {workerManagers.map((wm) => {
-              if (wm.type !== "orb_aws_ec2") return (
-                <div key={wm.id} style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
-                  <span style={{fontSize:10,color:"oklch(0.55 0.04 220)",textTransform:"uppercase",letterSpacing:"0.05em"}}>{wm.id}</span>
-                  <span style={{fontSize:11,color:"oklch(0.45 0.04 220)",fontStyle:"italic"}}>n/a</span>
-                </div>
-              );
-              const inst  = allInstances.find(i => i.type === wm.instanceType) || { price: 0 };
-              const count = wm.capMode === "instances" ? Math.max(0, wm.instanceCap||0) : Math.max(0, Math.floor((wm.budgetCap||0)/(inst.price||1)));
-              return (
-                <div key={wm.id} style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
-                  <span style={{fontSize:10,color:"oklch(0.55 0.04 220)",textTransform:"uppercase",letterSpacing:"0.05em"}}>{wm.id} · {count}× {wm.instanceType}</span>
-                  <span style={{fontSize:12,color:"oklch(0.65 0.08 200)"}}>${(count*inst.price).toFixed(3)}/h</span>
-                </div>
-              );
-            })}
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
-              <span style={{fontSize:10,color:"oklch(0.55 0.04 220)",textTransform:"uppercase",letterSpacing:"0.05em"}}>Scheduler · {schedulerType}</span>
-              <span style={{fontSize:12,color:"oklch(0.65 0.08 200)"}}>${schedulerInst.price.toFixed(3)}/h</span>
-            </div>
-            <div style={{borderTop:"1px solid rgba(0,255,136,0.12)",paddingTop:10,display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
-              <span style={{fontSize:10,color:"oklch(0.62 0.08 200)",textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:600}}>Max est. total</span>
-              <span style={{fontSize:16,fontWeight:700,color:"oklch(0.72 0.18 150)"}}>${totalCostPerHr.toFixed(3)}/h</span>
-            </div>
-          </PanelBox>
-
-          <PanelBox title="Launch" style={{ gap: 16 }}>
-            {(phase === "idle" || phase === "error") && !formReady && (
-              <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                {blocking.map(c => (
-                  <div key={c.key} style={{fontSize:11,color:"oklch(0.58 0.08 60)",display:"flex",alignItems:"center",gap:6}}>
-                    <span style={{fontSize:9,color:"oklch(0.6 0.14 60)"}}>✕</span> {c.label}
-                  </div>
-                ))}
-              </div>
-            )}
-            {log.length > 0 && (
-              <LiveTerminal lines={log} isRunning={isRunning}
-                title={phase === "destroying" ? "openGRIS Scaler — teardown" : "openGRIS Scaler — deploy log"} />
-            )}
-            {provState && phase !== "destroying" && (
-              <div style={{animation:"fadeSlideIn 0.3s ease"}}>
-                {phase === "ready" && log.length === 0 && (
-                  <div style={{marginBottom:10,padding:"10px 14px",background:"rgba(0,200,224,0.05)",border:"1px solid rgba(0,200,224,0.15)",borderRadius:3,fontSize:11,color:"oklch(0.58 0.08 200)"}}>
-                    Deployment loaded from saved state.
-                  </div>
-                )}
-                <DeploymentCard state={provState} onDestroy={handleDestroy}
-                  onDownload={() => downloadText("scaler-state-" + provState.name_suffix + ".json", JSON.stringify(provState, null, 2))}
-                  hasCredentials={hasCredentials} isRunning={isRunning} keyMaterial={keyMaterial} />
-              </div>
-            )}
-            {launchControl}
-            <div style={{display:"flex",gap:16,alignItems:"center",flexWrap:"wrap"}}>
-              {phase === "idle" && (
-                <label style={{fontSize:10,color:"oklch(0.52 0.08 200)",cursor:"pointer",textDecoration:"underline",textDecorationColor:"rgba(0,200,224,0.3)"}}>
-                  Load state from file<input type="file" accept=".json" onChange={handleLoadState} style={{display:"none"}} />
-                </label>
-              )}
-              {phase === "error" && (
-                <button onClick={handleReset} style={{background:"none",border:"none",cursor:"pointer",color:"oklch(0.48 0.06 220)",fontFamily:"inherit",fontSize:10,padding:0,letterSpacing:"0.06em"}}>
-                  ← Clear state
-                </button>
-              )}
-            </div>
-          </PanelBox>
-
+      {/* ── Scheduler Logs Tab ── */}
+      <div style={{ display: activeTab === "logs" ? "flex" : "none", flex: 1, flexDirection: "column", minHeight: 0 }}>
+        <div style={{ flex: 1, padding: "20px 28px", display: "flex", flexDirection: "column" }}>
+          {!provState?.instance_id
+            ? <div style={{ color: "var(--text-muted)", fontSize: 12 }}>No instance deployed yet.</div>
+            : <SchedulerLogTerminal instanceId={provState.instance_id} region={provState.region}
+                credentials={{ accessKeyId, secretKey }} isActive={activeTab === "logs"} />
+          }
         </div>
+      </div>
 
+      {/* ── GUI Tab ── */}
+      <div style={{ display: activeTab === "gui" ? "flex" : "none", flex: 1, flexDirection: "column", minHeight: 0 }}>
+        {!provState?.gui_address
+          ? <div style={{ padding: "20px 28px", color: "var(--text-muted)", fontSize: 12 }}>GUI address not yet available.</div>
+          : <>
+              <div style={{ padding: "8px 14px", background: "var(--bg-panel)", borderBottom: "1px solid var(--border-accent)", display: "flex", gap: 10, alignItems: "center", flexShrink: 0 }}>
+                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{provState.gui_address}</span>
+                <a href={provState.gui_address} target="_blank" rel="noopener noreferrer"
+                   style={{ fontSize: 10, color: "var(--text-accent)", border: "1px solid var(--border-accent)", borderRadius: 3, padding: "2px 8px", textDecoration: "none" }}>
+                  Open in new tab
+                </a>
+                <span style={{ fontSize: 10, color: "var(--text-dim)" }}>Note: iframe requires HTTP origin or local file</span>
+              </div>
+              <iframe src={provState.gui_address} style={{ flex: 1, border: "none", background: "var(--bg-page)" }} title="Scaler GUI" />
+            </>
+        }
       </div>
     </div>
   );
