@@ -86,5 +86,5 @@ class DeclarativeWorkerProvisioner(ABC):
 
     @abstractmethod
     async def terminate(self) -> None:
-        """Cancel the reconcile loop and stop all running units."""
+        """Cancel the capacity coordinator and stop all running units."""
         ...
