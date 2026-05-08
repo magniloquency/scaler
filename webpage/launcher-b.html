@@ -461,9 +461,6 @@ async function createIamStack(iam, suffix, addLog, signal) {
     throw err;
   }
 
-  addLog("Waiting 15s for IAM profile to propagate...", "info");
-  await sleep(15000, signal);
-
   return { instance_profile_name: profileName, role_name: roleName, created: true };
 }
 
@@ -568,7 +565,7 @@ async function provision(cfg, creds, addLog, onPartialState, onKeyReady, signal)
   cfg = Object.assign({}, cfg, { securityGroupId: sgId });
   var userData = buildUserData(cfg, creds);
   addLog("Launching " + cfg.instanceType + " instance...", "cmd");
-  var runResp = await withAbort(ec2.runInstances({
+  var runParams = {
     ImageId: amiId,
     InstanceType: cfg.instanceType,
     KeyName: keyPairName,
@@ -580,7 +577,20 @@ async function provision(cfg, creds, addLog, onPartialState, onKeyReady, signal)
       { Key: "Name", Value: "scaler-scheduler-" + suffix },
       { Key: "scaler-deployment", Value: suffix },
     ]}],
-  }).promise(), signal);
+  };
+  var runResp;
+  var iamDeadline = Date.now() + 60000;
+  while (true) {
+    try {
+      runResp = await withAbort(ec2.runInstances(runParams).promise(), signal);
+      break;
+    } catch (err) {
+      var iamNotReady = err.code === "InvalidParameterValue" && err.message && err.message.includes("Invalid IAM Instance Profile");
+      if (!iamNotReady || Date.now() >= iamDeadline) throw err;
+      addLog("  → IAM profile not yet visible to EC2, retrying in 5s…", "dim");
+      await sleep(5000, signal);
+    }
+  }
   var instanceId = runResp.Instances[0].InstanceId;
   partial.instance_id = instanceId;
   onPartialState(partial);
@@ -1304,7 +1314,7 @@ function App() {
   return (
     <div style={{ height: "100%", background: "var(--bg-page)", display: "flex", flexDirection: "column" }}>
       <TopNav activeTab={activeTab} setActiveTab={setActiveTab}
-              theme={theme} setTheme={setTheme} showPostLaunch={phase !== "idle"}
+              theme={theme} setTheme={setTheme} showPostLaunch={phase !== "idle" || ["deployment", "logs", "gui"].includes(activeTab)}
               launchControl={launchControl} />
 
       {/* ── Config Tab ── */}
