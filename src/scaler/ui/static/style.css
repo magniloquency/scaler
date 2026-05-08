@@ -21,7 +21,7 @@
     --row-hover: #eff6ff;
     --radius: 6px;
     --shadow: 0 1px 3px rgba(0,0,0,0.08);
-    --font: monospace;
+    --font: "Consolas", "Monaco", "Courier New", monospace;
 }
 
 *, *::before, *::after {
