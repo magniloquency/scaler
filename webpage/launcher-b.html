@@ -1172,6 +1172,7 @@ function App() {
       "\nThis cannot be undone."
     )) return;
     setPhase("destroying");
+    setActiveTab("deployment");
     const controller = new AbortController();
     abortRef.current = controller;
     try {
@@ -1183,7 +1184,7 @@ function App() {
         ? "\nTeardown aborted. Some resources may still exist — run Destroy again to retry."
         : "\nError during teardown: " + err.message, err.name === "AbortError" ? "warn" : "err");
     } finally { abortRef.current = null; }
-  }, [provState, hasCredentials, accessKeyId, secretKey, addLog]);
+  }, [provState, hasCredentials, accessKeyId, secretKey, addLog, setActiveTab]);
 
   const handleDownloadConfig = useCallback(() => {
     const cfg = {
@@ -1248,7 +1249,20 @@ function App() {
   );
 
   let launchControl;
-  if (phase === "idle" || phase === "error") {
+  if (phase === "error" && provState) {
+    launchControl = (
+      <button onClick={handleDestroy} disabled={!hasCredentials} style={{
+        padding: "8px 20px",
+        background: !hasCredentials ? "rgba(255,80,60,0.04)" : "linear-gradient(135deg, oklch(0.32 0.18 15) 0%, oklch(0.26 0.14 30) 100%)",
+        border: "1px solid " + (!hasCredentials ? "var(--border-danger)" : "oklch(0.48 0.18 15)"),
+        borderRadius: 4, color: !hasCredentials ? "var(--text-danger)" : "oklch(0.88 0.1 30)",
+        fontFamily: "inherit", fontSize: 11, fontWeight: 700, letterSpacing: "0.12em",
+        cursor: !hasCredentials ? "default" : "pointer", textTransform: "uppercase", transition: "all 0.2s",
+        animation: hasCredentials ? "destroyPulse 4s ease-in-out infinite" : "none",
+        flexShrink: 0,
+      }}>▼  Destroy Cluster{!hasCredentials ? " (missing credentials)" : ""}</button>
+    );
+  } else if (phase === "idle" || phase === "error") {
     launchControl = (
       <button onClick={handleLaunch} disabled={!formReady} style={{
         padding: "8px 20px",
