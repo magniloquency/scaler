@@ -75,6 +75,7 @@ html_theme_options = {
     "nav_links": [
         {"title": "Release Notes", "url": "release_notes"},
         {"title": "Example Gallery", "url": "gallery/index"},
+        {"title": "Scaler Launcher", "url": "scaler-launcher.html", "resource": True},
     ]
 }
 
@@ -82,6 +83,7 @@ html_theme_options = {
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ["_static"]
+html_extra_path = ["../web"]
 html_css_files = ["style.css"]
 
 # html_static_path = []
