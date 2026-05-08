@@ -319,7 +319,7 @@ function InstancePicker({ value, onChange, label, defaultCat = "gpu" }) {
             <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
               <thead>
                 <tr style={{ borderBottom:"1px solid rgba(255,255,255,0.06)" }}>
-                  {["Instance","vCPU","Mem (GB)","GPU","Network","$/h"].map(h => (
+                  {["Instance","vCPU","Mem (GB)","GPU","Network","USD/h"].map(h => (
                     <th key={h} style={{ padding:"6px 10px", color:"var(--text-dim)", fontWeight:500, textAlign:"left", fontSize:10, letterSpacing:"0.05em" }}>{h}</th>
                   ))}
                 </tr>
@@ -348,7 +348,7 @@ function InstancePicker({ value, onChange, label, defaultCat = "gpu" }) {
                       {i.gpu > 0 ? `${i.gpu}× ${i.gpuType} (${i.gpuMem}GB)` : "—"}
                     </td>
                     <td style={{ padding:"7px 10px", color:"var(--text-muted)", fontSize:11 }}>{i.net}</td>
-                    <td style={{ padding:"7px 10px", color:"var(--text-success)", textAlign:"right" }}>${i.price.toFixed(2)}/h</td>
+                    <td style={{ padding:"7px 10px", color:"var(--text-success)", textAlign:"right" }}>{i.price.toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -392,7 +392,7 @@ function InstancePicker({ value, onChange, label, defaultCat = "gpu" }) {
             <span>Select instance type…</span>
           )}
         </span>
-        {selected && <span style={{ color: "var(--text-success)", fontSize: 11, flexShrink: 0 }}>${selected.price.toFixed(2)}/h</span>}
+        {selected && <span style={{ color: "var(--text-success)", fontSize: 11, flexShrink: 0 }}>USD {selected.price.toFixed(2)}/h</span>}
         <span style={{ color: "var(--text-muted)", fontSize: 10 }}>{open ? "▲" : "▼"}</span>
       </button>
       {open && ReactDOM.createPortal(dropdown, document.body)}
@@ -661,7 +661,7 @@ function HelpTip({ text }) {
 }
 
 /* ── LiveTerminal ── */
-function LiveTerminal({ lines, isRunning, title, style }) {
+function LiveTerminal({ lines, isRunning, title, style, bare }) {
   const scrollRef = useRef(null);
 
   useEffect(() => {
@@ -679,6 +679,27 @@ function LiveTerminal({ lines, isRunning, title, style }) {
     addr: "var(--text-accent)",
   };
 
+  const content = (
+    <div
+      ref={scrollRef}
+      style={{ padding: bare ? "0" : "14px 16px", fontFamily: "inherit", fontSize: "12px", lineHeight: "1.7", flex: 1, overflowY: "auto", color: "var(--text-secondary)" }}
+    >
+      {lines.map((line, i) => (
+        <div
+          key={i}
+          style={{ color: clsColor[line.cls] || "var(--text-secondary)", fontWeight: line.cls === "done" ? 700 : 400, letterSpacing: line.cls === "done" ? "0.08em" : "normal", whiteSpace: "pre-wrap", wordBreak: "break-all" }}
+        >
+          {line.text}
+        </div>
+      ))}
+      {isRunning && <span style={{ color: "var(--text-success)", animation: "blink 1s step-end infinite" }}>▌</span>}
+    </div>
+  );
+
+  if (bare) {
+    return <div style={{ display: "flex", flexDirection: "column", ...style }}>{content}</div>;
+  }
+
   return (
     <div style={{ background: "var(--term-bg)", border: "1px solid var(--term-border)", borderRadius: "4px", display: "flex", flexDirection: "column", ...style }}>
       <div style={{ background: "var(--term-titlebar)", borderBottom: "1px solid var(--term-border)", padding: "7px 14px", display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
@@ -689,20 +710,7 @@ function LiveTerminal({ lines, isRunning, title, style }) {
           {title || "openGRIS Scaler — deploy log"}
         </span>
       </div>
-      <div
-        ref={scrollRef}
-        style={{ padding: "14px 16px", fontFamily: "inherit", fontSize: "12px", lineHeight: "1.7", flex: 1, overflowY: "auto", color: "var(--text-secondary)" }}
-      >
-        {lines.map((line, i) => (
-          <div
-            key={i}
-            style={{ color: clsColor[line.cls] || "var(--text-secondary)", fontWeight: line.cls === "done" ? 700 : 400, letterSpacing: line.cls === "done" ? "0.08em" : "normal", whiteSpace: "pre-wrap", wordBreak: "break-all" }}
-          >
-            {line.text}
-          </div>
-        ))}
-        {isRunning && <span style={{ color: "var(--text-success)", animation: "blink 1s step-end infinite" }}>▌</span>}
-      </div>
+      {content}
     </div>
   );
 }
@@ -729,6 +737,8 @@ function SchedulerLogTerminal({ instanceId, region, credentials, isActive }) {
       setStatus("error");
       setError(err.code === "AccessDeniedException"
         ? "Permission denied. Your IAM user needs ssm:SendCommand and ssm:GetCommandInvocation."
+        : (err.code === "InvalidClientTokenId" || err.code === "AuthFailure" || /invalid.*token/i.test(err.message))
+        ? "Invalid AWS credentials. Re-enter your Access Key ID and Secret Access Key in the Configuration tab."
         : "SSM error: " + err.message);
       return;
     }
@@ -744,14 +754,17 @@ function SchedulerLogTerminal({ instanceId, region, credentials, isActive }) {
     }
   }, [instanceId, region, credentials]);
 
+  const hasCredentials = credentials.accessKeyId && credentials.secretKey;
+
   useEffect(() => {
-    if (!isActive || !instanceId) return;
+    if (!isActive || !instanceId || !hasCredentials) return;
     setStatus("polling");
     fetchLogs();
     pollRef.current = setInterval(fetchLogs, 15000);
     return () => clearInterval(pollRef.current);
-  }, [isActive, instanceId, fetchLogs]);
+  }, [isActive, instanceId, hasCredentials, fetchLogs]);
 
+  if (!hasCredentials) return <div style={{ padding:24, color:"var(--text-secondary)", fontSize:12 }}>Re-enter your AWS credentials in the Configuration tab to view scheduler logs.</div>;
   if (status === "error") return <div style={{ padding:24, color:"var(--text-danger)", fontSize:12 }}>{errorMsg}</div>;
   return <LiveTerminal lines={lines} isRunning={status === "polling"}
     title="scheduler — /var/log/scaler.log (polling every 15s)" style={{ flex:1, minHeight:0 }} />;
