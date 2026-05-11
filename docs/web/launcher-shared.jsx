@@ -1,4 +1,4 @@
-// Shared components for openGRIS Scaler Launcher
+// Shared components for openGRIS Scaler Launchpad
 // Exports to window.SC
 
 const { useState, useEffect, useRef, useCallback } = React;

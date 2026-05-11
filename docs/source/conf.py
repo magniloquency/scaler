@@ -75,7 +75,7 @@ html_theme_options = {
     "nav_links": [
         {"title": "Release Notes", "url": "release_notes"},
         {"title": "Example Gallery", "url": "gallery/index"},
-        {"title": "Scaler Launcher", "url": "scaler-launcher.html", "resource": True},
+        {"title": "Launchpad", "url": "scaler-launcher.html", "resource": True},
     ]
 }
 

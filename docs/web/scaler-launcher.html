@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>openGRIS Scaler — EC2 Launcher</title>
+  <title>openGRIS Scaler — Launchpad</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" />
   <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
@@ -927,7 +927,7 @@ function DeploymentCard({ state, onDownload, isRunning, keyMaterial }) {
     { label: "Object storage", value: state.object_storage_address },
     { label: "Monitor",        value: state.monitor_address },
     { label: "GUI",            value: state.gui_address, href: state.gui_address },
-    { label: "SSH",            value: state.public_ip ? "chmod 400 " + state.key_file + " &&\nssh -i " + state.key_file + " ec2-user@" + state.public_ip : null },
+    { label: "SSH",            value: state.public_ip ? "chmod 400 " + state.key_file + " &&\nssh -i " + state.key_file + " ec2-user@" + state.public_ip : null, code: true },
     { label: "Instance",       value: state.instance_id },
   ];
   return (
@@ -941,14 +941,16 @@ function DeploymentCard({ state, onDownload, isRunning, keyMaterial }) {
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {rows.map(({ label, value, href }) => (
-          <div key={label} style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-            <span style={{ fontSize: 10, color: "var(--text-dim)", letterSpacing: "0.05em", width: 120, flexShrink: 0, textTransform: "uppercase" }}>{label}</span>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 6, flex: 1 }}>
+        {rows.map(({ label, value, href, code }) => (
+          <div key={label} style={{ display: "flex", alignItems: code ? "flex-start" : "baseline", gap: 10 }}>
+            <span style={{ fontSize: 10, color: "var(--text-dim)", letterSpacing: "0.05em", width: 120, flexShrink: 0, textTransform: "uppercase", paddingTop: code ? 2 : 0 }}>{label}</span>
+            <div style={{ display: "flex", alignItems: code ? "flex-start" : "baseline", gap: 6, flex: 1, minWidth: 0 }}>
               {value
-                ? <>{href
-                    ? <a href={href} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "var(--text-accent)", fontWeight: 500, wordBreak: "break-all", whiteSpace: "pre-wrap", fontFamily: "inherit", textDecoration: "none", borderBottom: "1px solid var(--border-accent)" }}>{value}</a>
-                    : <span style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 500, wordBreak: "break-all", whiteSpace: "pre-wrap" }}>{value}</span>
+                ? <>{code
+                    ? <pre style={{ fontSize: 11, color: "var(--text-primary)", fontFamily: "inherit", margin: 0, whiteSpace: "pre", overflowX: "auto", flex: 1, minWidth: 0 }}>{value}</pre>
+                    : href
+                      ? <a href={href} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "var(--text-accent)", fontWeight: 500, overflowWrap: "anywhere", whiteSpace: "pre-wrap", fontFamily: "inherit", textDecoration: "none", borderBottom: "1px solid var(--border-accent)" }}>{value}</a>
+                      : <span style={{ fontSize: 12, color: "var(--text-primary)", fontWeight: 500, overflowWrap: "anywhere", whiteSpace: "pre-wrap" }}>{value}</span>
                   }<CopyBtn value={value} /></>
                 : <span style={{ fontSize: 12, color: "var(--text-dim)", fontStyle: "italic" }}>pending…</span>
               }
@@ -995,6 +997,13 @@ function TopNav({ activeTab, setActiveTab, theme, setTheme, showPostLaunch, laun
         ))}
       </div>
       {launchControl && <div style={{ marginRight: 16 }}>{launchControl}</div>}
+      <a href="index.html" style={{
+        marginRight: 16, padding: "5px 12px", background: "transparent",
+        border: "1px solid var(--border-accent)", borderRadius: 3,
+        color: "var(--text-muted)", fontFamily: "inherit", fontSize: 10,
+        letterSpacing: "0.08em", textTransform: "uppercase", textDecoration: "none",
+        cursor: "pointer", whiteSpace: "nowrap",
+      }}>← Docs</a>
       <select value={theme} onChange={e => setTheme(e.target.value)} style={{
         background: "var(--bg-surface)", border: "1px solid var(--border-accent)",
         borderRadius: 3, color: "var(--text-secondary)", fontFamily: "inherit",
@@ -1027,7 +1036,7 @@ function App() {
   const [showSchedAdv, setShowSchedAdv]   = useState(false);
   const [showGenAdv, setShowGenAdv]       = useState(false);
   const [activeTab, setActiveTab]         = useState("config");
-  const [theme, setTheme]                 = useState("light");
+  const [theme, setTheme]                 = useState(() => window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
 
   const wmCounterRef = useRef(1);
   const [workerManagers, setWorkerManagers] = useState([
@@ -1534,7 +1543,7 @@ function App() {
 
       {/* ── Deployment Tab ── */}
       <div style={{ display: activeTab === "deployment" ? "flex" : "none", flex: 1, flexDirection: "column", minHeight: 0 }}>
-        <div style={{ flex: 1, padding: "20px 28px", display: "grid", gridTemplateColumns: "1fr 480px", gap: 20, minHeight: 0, overflow: "hidden" }}>
+        <div style={{ flex: 1, padding: "20px 28px", display: "grid", gridTemplateColumns: "1fr 600px", gap: 20, minHeight: 0, overflow: "hidden" }}>
           {/* Left: terminal only */}
           <LiveTerminal lines={log} isRunning={isRunning} bare
             style={{ minHeight: 0 }} />
