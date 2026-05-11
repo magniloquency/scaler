@@ -217,7 +217,7 @@ class Processor(multiprocessing.get_context("spawn").Process):  # type: ignore
                 continue
 
             object_content = self._connector_storage.get_object(object_id)
-            self._object_cache.add_object(task.source, object_id, object_content)
+            self._object_cache.add_object(task.source, object_id, bytes(object_content))
 
     @staticmethod
     def __get_required_object_ids_for_task(task: Task) -> List[ObjectID]:
