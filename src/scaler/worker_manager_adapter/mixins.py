@@ -78,3 +78,13 @@ class DeclarativeWorkerProvisioner(ABC):
     async def stop_units(self, count: int) -> None:
         """Shut down `count` units."""
         ...
+
+    @abstractmethod
+    def active_unit_count(self) -> int:
+        """Return the number of currently active units."""
+        ...
+
+    @abstractmethod
+    async def terminate(self) -> None:
+        """Cancel the capacity coordinator and stop all running units."""
+        ...

@@ -1,7 +1,6 @@
-import signal
 import unittest
 from typing import Optional
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 from scaler.protocol.capnp import (
     ClientDisconnect,
@@ -20,7 +19,6 @@ from scaler.utility.exceptions import ClientShutdownException
 from scaler.utility.identifiers import ClientID, ObjectID, TaskID, WorkerID
 from scaler.utility.logging.utility import setup_logger
 from scaler.utility.metadata.task_flags import TaskFlags
-from scaler.worker_manager_adapter.baremetal.native import NativeWorkerProvisioner
 from scaler.worker_manager_adapter.mixins import DeclarativeWorkerProvisioner, ImperativeWorkerProvisioner
 from scaler.worker_manager_adapter.worker_manager_runner import WorkerManagerRunner
 from scaler.worker_manager_adapter.worker_process import WorkerProcess
@@ -263,60 +261,6 @@ class TestWorkerProcessOnReceiveExternal(unittest.IsolatedAsyncioTestCase):
             await self._dispatch(_Unknown())
 
 
-class TestNativeWorkerProvisioner(unittest.IsolatedAsyncioTestCase):
-    def setUp(self) -> None:
-        setup_logger()
-        logging_test_name(self)
-
-    async def test_start_worker_at_capacity_returns_too_many_workers(self) -> None:
-        provisioner = _make_native_provisioner(max_workers=1)
-        provisioner._workers[WorkerID.generate_worker_id("existing")] = MagicMock()
-
-        ids, status = await provisioner.start_worker()
-
-        self.assertEqual(ids, [])
-        self.assertEqual(status, Status.tooManyWorkers)
-
-    async def test_start_worker_success_starts_and_registers_worker(self) -> None:
-        provisioner = _make_native_provisioner(max_workers=2)
-        mock_worker = MagicMock()
-        mock_worker.identity = WorkerID.generate_worker_id("w0")
-
-        with patch.object(provisioner, "_create_worker", return_value=mock_worker):
-            ids, status = await provisioner.start_worker()
-
-        mock_worker.start.assert_called_once()
-        self.assertEqual(status, Status.success)
-        self.assertEqual(ids, [bytes(mock_worker.identity)])
-        self.assertIn(mock_worker.identity, provisioner._workers)
-
-    async def test_shutdown_workers_unknown_id_returns_worker_not_found(self) -> None:
-        provisioner = _make_native_provisioner()
-        unknown_bytes = bytes(WorkerID.generate_worker_id("ghost"))
-
-        ids, status = await provisioner.shutdown_workers([WorkerID(unknown_bytes)])
-
-        self.assertEqual(ids, [])
-        self.assertEqual(status, Status.workerNotFound)
-
-    async def test_shutdown_workers_kills_joins_and_returns_id(self) -> None:
-        provisioner = _make_native_provisioner()
-        worker_id = WorkerID.generate_worker_id("w0")
-        mock_worker = MagicMock()
-        mock_worker.pid = 99999
-        provisioner._workers[worker_id] = mock_worker
-        worker_id_bytes = bytes(worker_id)
-
-        with patch("os.kill") as mock_kill:
-            ids, status = await provisioner.shutdown_workers([WorkerID(worker_id_bytes)])
-
-        mock_kill.assert_called_once_with(99999, signal.SIGINT)
-        mock_worker.join.assert_called_once()
-        self.assertEqual(ids, [worker_id_bytes])
-        self.assertEqual(status, Status.success)
-        self.assertNotIn(worker_id, provisioner._workers)
-
-
 def _make_task(source: Optional[ClientID] = None) -> Task:
     source = source or ClientID.generate_client_id()
     return Task(
@@ -342,11 +286,3 @@ def _make_object_instruction() -> ObjectInstruction:
             objectIds=(ObjectID.generate_object_id(client_id),), objectTypes=(), objectNames=()
         ),
     )
-
-
-def _make_native_provisioner(max_workers: int = 2) -> NativeWorkerProvisioner:
-    config = MagicMock()
-    config.worker_manager_config.max_task_concurrency = max_workers
-    config.worker_manager_config.worker_manager_id.encode.return_value = b"mgr"
-    config.worker_type = "NAT"
-    return NativeWorkerProvisioner(config)

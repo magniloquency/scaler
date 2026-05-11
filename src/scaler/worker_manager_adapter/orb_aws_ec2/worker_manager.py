@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import logging
 import math
@@ -15,6 +17,7 @@ from scaler.config.section.orb_aws_ec2_worker_adapter import ORBAWSEC2WorkerAdap
 from scaler.protocol.capnp import WorkerManagerCommand, WorkerManagerCommandResponse
 from scaler.utility.event_loop import register_event_loop, run_task_forever
 from scaler.utility.logging.utility import setup_logger
+from scaler.worker_manager_adapter.capacity_coordinator import CapacityCoordinator
 from scaler.worker_manager_adapter.common import extract_desired_count, format_capabilities
 from scaler.worker_manager_adapter.mixins import DeclarativeWorkerProvisioner
 from scaler.worker_manager_adapter.worker_manager_runner import WorkerManagerRunner
@@ -40,57 +43,24 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
         self._template_id = template_id
         self._workers_per_instance = workers_per_instance
         self._units: List[str] = []  # EC2 instance IDs of active units
-        self._desired_count: int = 0
-        self._reconcile_lock: asyncio.Lock = asyncio.Lock()
+        self._capacity_coordinator = CapacityCoordinator(
+            start_units=self.start_units,
+            stop_units=self.stop_units,
+            active_unit_count=self.active_unit_count,
+            max_unit_count=max_instances,
+        )
 
-        # keeps a strong reference to the running task
-        self._active_reconcile_task: Optional[asyncio.Task] = None
-        self._pending_reconcile_task: Optional[asyncio.Task] = None
+    def active_unit_count(self) -> int:
+        return len(self._units)
 
     async def set_desired_task_concurrency(
         self, requests: List[WorkerManagerCommand.DesiredTaskConcurrencyRequest]
     ) -> None:
         own_capabilities = self._config.worker_config.per_worker_capabilities.capabilities
         task_concurrency = extract_desired_count(requests, own_capabilities)
-        new_desired = math.ceil(task_concurrency / self._workers_per_instance)
-        if new_desired != self._desired_count:
-            logging.info(
-                f"Desired instance count changed: {self._desired_count} → {new_desired} "
-                f"(task_concurrency={task_concurrency}, workers_per_instance={self._workers_per_instance})"
-            )
-        self._desired_count = new_desired
-
-        # reconciling the ec2 instances can take some time
-        # so we launch a task to handle it in the background
-        # `_reconcile_lock` ensures only one runs at a time
-        if self._pending_reconcile_task is None:
-            self._pending_reconcile_task = asyncio.create_task(self._reconcile())
-
-    async def _reconcile(self) -> None:
-        async with self._reconcile_lock:
-            self._active_reconcile_task = asyncio.current_task()
-            self._pending_reconcile_task = None
-            try:
-                current = len(self._units)
-                delta = self._desired_count - current
-                if self._max_instances != -1:
-                    delta = min(delta, self._max_instances - current)
-                capped = self._max_instances != -1 and delta != self._desired_count - current
-                msg = f"Reconcile: desired={self._desired_count}, current={current}, delta={delta:+d}" + (
-                    f" (capped by max_instances={self._max_instances})" if capped else ""
-                )
-                if delta != 0:
-                    logging.info(msg)
-                else:
-                    logging.debug(msg)
-                if delta > 0:
-                    await self.start_units(delta)
-                elif delta < 0:
-                    await self.stop_units(abs(delta))
-            except Exception as exc:
-                logging.exception(f"Reconcile failed: {exc}")
-            finally:
-                self._active_reconcile_task = None
+        await self._capacity_coordinator.set_desired_unit_count(
+            math.ceil(task_concurrency / self._workers_per_instance)
+        )
 
     async def start_units(self, count: int) -> None:
         logging.info(f"Submitting ORB batch machine request for template {self._template_id} (count={count})...")
@@ -145,7 +115,8 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
         del self._units[:count]
         logging.info(f"Successfully stopped {count} unit(s): instances {unit_ids}")
 
-    async def terminate_all_workers(self) -> None:
+    async def terminate(self) -> None:
+        self._capacity_coordinator.cancel()
         if not self._units:
             return
         logging.info(f"Terminating {len(self._units)} unit(s)...")
@@ -295,8 +266,6 @@ class ORBAWSEC2WorkerAdapter:
                 await self._runner.run_in_loop(self._loop)
             except asyncio.CancelledError:
                 pass
-            finally:
-                await self._orb_pool.terminate_all_workers()
 
     def _cleanup(self) -> None:
         if self._cleaned_up:
