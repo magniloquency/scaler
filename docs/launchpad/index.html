@@ -10,8 +10,8 @@
   <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
   <!-- AWS SDK v2 for browser — pin this version for production -->
   <script src="https://unpkg.com/aws-sdk@2.1692.0/dist/aws-sdk.min.js"></script>
-  <script src="launcher-data.js"></script>
-  <script type="text/babel" src="launcher-shared.jsx"></script>
+  <script src="data.js"></script>
+  <script type="text/babel" src="components.jsx"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body, #root { height: 100%; background: var(--bg-page); }
@@ -114,9 +114,9 @@
 <div id="root"></div>
 
 <!-- ─── AWS EC2 Provisioning Logic (plain JS, no Babel needed) ─── -->
-<script src="launcher-ec2.js"></script>
+<script src="provisioner.js"></script>
 
 <!-- ─── React Application ─── -->
-<script type="text/babel" src="launcher-app.jsx"></script>
+<script type="text/babel" src="app.jsx"></script>
 </body>
 </html>

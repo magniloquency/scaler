@@ -589,7 +589,7 @@ async function provision(cfg, creds, addLog, onPartialState, onKeyReady, signal)
   return state;
 }
 
-async function destroyResources(state, creds, addLog, signal) {
+async function teardown(state, creds, addLog, signal) {
   var clients = makeAwsClients(state.region, creds);
   var ec2 = clients.ec2, iam = clients.iam;
 

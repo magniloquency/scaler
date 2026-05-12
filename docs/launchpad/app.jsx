@@ -453,7 +453,7 @@ function App() {
     const controller = new AbortController();
     abortRef.current = controller;
     try {
-      await destroyResources(provState, { accessKeyId, secretKey }, addLog, controller.signal);
+      await teardown(provState, { accessKeyId, secretKey }, addLog, controller.signal);
       try { localStorage.removeItem("scaler_state"); localStorage.removeItem("scaler_log"); } catch (_) {}
       setProvState(null); setKeyMaterial(null); setPhase("idle");
     } catch (err) {
