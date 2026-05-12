@@ -142,10 +142,10 @@ function WorkerManagerCard({ wm, onChange, onRemove, allInstances, canRemove, fu
       {wm.type === "baremetal_native" && (<>
         <div>
           <Label>Mode</Label>
-          <ToggleRow options={[["dynamic","Dynamic"],["fixed","Fixed"]]} value={wm.mode||"dynamic"} onChange={v=>set("mode",v)} />
+          <ToggleRow options={[["dynamic","Dynamic"],["fixed","Fixed"]]} value={wm.mode||"fixed"} onChange={v=>set("mode",v)} />
         </div>
         <div><Label>Worker Type Prefix</Label><input value={wm.workerType||""} onChange={e=>set("workerType",e.target.value)} style={inp} placeholder="optional" /></div>
-        {(wm.mode||"dynamic") === "fixed" ? (
+        {(wm.mode||"fixed") === "fixed" ? (
           <div>
             <Label help="Exact number of worker processes to pre-spawn.">Number of Workers</Label>
             <NumericStepper value={wm.maxTaskConcurrency!=null&&wm.maxTaskConcurrency>=1?wm.maxTaskConcurrency:4} onChange={v=>set("maxTaskConcurrency",Math.max(1,v))} min={1} />

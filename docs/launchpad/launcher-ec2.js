@@ -107,7 +107,7 @@ function buildConfigToml(cfg) {
       block += "max_concurrent_jobs = " + (wm.maxConcurrentJobs || 100) + "\n";
       block += "job_timeout_minutes = " + (wm.jobTimeoutMinutes || 60) + "\n";
     } else if (wm.type === "baremetal_native") {
-      block += "mode = \"" + (wm.mode || "dynamic") + "\"\n";
+      block += "mode = \"" + (wm.mode || "fixed") + "\"\n";
       block += "object_storage_address = \"" + proto + "://127.0.0.1:" + op + wsSlash + "\"\n";
       if (wm.workerType) block += "worker_type = \"" + wm.workerType + "\"\n";
       if (wm.maxTaskConcurrency != null && wm.maxTaskConcurrency >= 0)
@@ -219,7 +219,7 @@ function buildUserData(cfg, creds) {
       block += "max_concurrent_jobs = " + (wm.maxConcurrentJobs || 100) + "\n";
       block += "job_timeout_minutes = " + (wm.jobTimeoutMinutes || 60) + "\n";
     } else if (wm.type === "baremetal_native") {
-      block += "mode = \"" + (wm.mode || "dynamic") + "\"\n";
+      block += "mode = \"" + (wm.mode || "fixed") + "\"\n";
       block += "object_storage_address = \"" + proto + "://127.0.0.1:" + op + wsSlash + "\"\n";
       if (wm.workerType) block += "worker_type = \"" + wm.workerType + "\"\n";
       if (wm.maxTaskConcurrency != null && wm.maxTaskConcurrency >= 0)
