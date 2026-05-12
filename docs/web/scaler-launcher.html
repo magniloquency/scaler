@@ -204,7 +204,7 @@ function buildConfigToml(cfg) {
       block += "security_group_ids = [\"<SECURITY_GROUP_ID>\"]\n";
       block += "logging_level = \"INFO\"\n";
       block += "instance_tags = {scaler-deployment = \"" + suffix + "\"}\n";
-      block += "network_backend = \"" + (cfg.networkBackend || "ymq") + "\"\n";
+      if (cfg.networkBackend !== "zmq") block += "network_backend = \"" + (cfg.networkBackend || "ymq") + "\"\n";
     } else if (wm.type === "aws_raw_ecs") {
       block += "aws_region = \"" + cfg.region + "\"\n";
       block += "ecs_cluster = \"" + (wm.ecsCluster || "scaler-cluster") + "\"\n";
@@ -314,7 +314,7 @@ function buildUserData(cfg, creds) {
       block += "subnet_id = \"$SUBNET_ID\"\n";
       block += "security_group_ids = [\"" + cfg.securityGroupId + "\"]\n";
       block += "logging_level = \"INFO\"" + tagLine + "\n";
-      block += "network_backend = \"" + (cfg.networkBackend || "ymq") + "\"\n";
+      if (cfg.networkBackend !== "zmq") block += "network_backend = \"" + (cfg.networkBackend || "ymq") + "\"\n";
     } else if (wm.type === "aws_raw_ecs") {
       block += "aws_region = \"" + cfg.region + "\"\n";
       block += "ecs_cluster = \"" + (wm.ecsCluster || "scaler-cluster") + "\"\n";
@@ -1003,7 +1003,7 @@ function TopNav({ activeTab, setActiveTab, theme, setTheme, showPostLaunch, laun
         color: "var(--text-muted)", fontFamily: "inherit", fontSize: 10,
         letterSpacing: "0.08em", textTransform: "uppercase", textDecoration: "none",
         cursor: "pointer", whiteSpace: "nowrap",
-      }}>← Docs</a>
+      }}><svg width="12" height="10" viewBox="0 0 12 10" fill="none" style={{ marginRight: 6, verticalAlign: "middle", flexShrink: 0 }}><path d="M5 1L1 5L5 9M1 5H11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>Docs</a>
       <select value={theme} onChange={e => setTheme(e.target.value)} style={{
         background: "var(--bg-surface)", border: "1px solid var(--border-accent)",
         borderRadius: 3, color: "var(--text-secondary)", fontFamily: "inherit",
@@ -1022,8 +1022,8 @@ function App() {
   const [region, setRegion]               = useState("us-east-1");
   const [accessKeyId, setAKI]             = useState("");
   const [secretKey, setSK]                = useState("");
-  const [transport, setTransport]         = useState("ws");
-  const [networkBackend, setNetBack]      = useState("ymq");
+  const [transport, setTransport]         = useState("tcp");
+  const [networkBackend, setNetBack]      = useState("zmq");
   const [pythonVersion, setPyVer]         = useState("3.14");
   const [scalerPackage, setScalerPkg]     = useState("opengris-scaler[all]");
   const [instanceProfileName, setIPN]     = useState("");
@@ -1199,9 +1199,12 @@ function App() {
       try { localStorage.removeItem("scaler_state"); localStorage.removeItem("scaler_log"); } catch (_) {}
       setProvState(null); setKeyMaterial(null); setPhase("idle");
     } catch (err) {
-      addLog(err.name === "AbortError"
-        ? "\nTeardown aborted. Some resources may still exist — run Destroy again to retry."
-        : "\nError during teardown: " + err.message, err.name === "AbortError" ? "warn" : "err");
+      if (err.name === "AbortError") {
+        addLog("\nTeardown aborted. Some resources may still exist — run Destroy again to retry.", "warn");
+      } else {
+        addLog("\nError during teardown: " + err.message + "\nFix the issue and run Destroy again to retry.", "err");
+      }
+      setPhase("ready");
     } finally { abortRef.current = null; }
   }, [provState, hasCredentials, accessKeyId, secretKey, addLog, setActiveTab]);
 
