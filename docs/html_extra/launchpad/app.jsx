@@ -812,7 +812,7 @@ function TopNav({ activeTab, setActiveTab, theme, setTheme, showPostLaunch, laun
       </div>
       {launchControl && <div style={{ marginRight: 16 }}>{launchControl}</div>}
       <a
-        href="index.html"
+        href="../index.html"
         style={{
           marginRight: 16,
           padding: "5px 12px",
