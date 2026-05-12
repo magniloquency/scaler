@@ -167,8 +167,8 @@ OwnedPyObject<> struct_from_bytes(const char* type_name, PyObject* data, unsigne
             PyBuffer_Release(&buffer);
             return {};
         }
-        OwnedPyObject<> result {
-            dynamic_value_to_py_object(root, schema, source.get(), traversal_limit, schema.getProto().getId(), path.get())};
+        OwnedPyObject<> result {dynamic_value_to_py_object(
+            root, schema, source.get(), traversal_limit, schema.getProto().getId(), path.get())};
         PyBuffer_Release(&buffer);
         return result;
     } catch (const kj::Exception& e) {
