@@ -179,7 +179,7 @@ function CopyBtn({ value }) {
 }
 
 /* ── DeploymentCard ── */
-function DeploymentCard({ state, onDownload, isRunning, keyMaterial }) {
+function DeploymentCard({ state, onDownload, keyMaterial }) {
   const rows = [
     { label: "Scheduler",      value: state.scheduler_address },
     { label: "Object storage", value: state.object_storage_address },

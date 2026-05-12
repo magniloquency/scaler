@@ -182,7 +182,7 @@ const CAT_COLORS = {
   hpc:     "oklch(0.65 0.14 30)",
 };
 
-function InstancePicker({ value, onChange, label, defaultCat = "gpu" }) {
+function InstancePicker({ value, onChange, defaultCat = "gpu" }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [filterCat, setFilterCat] = useState(defaultCat);
@@ -408,7 +408,7 @@ function TerminalWindow({ lines, config, style }) {
   useEffect(() => {
     if (!lines || lines.length === 0) return;
     setDisplayed([]);
-    const timers = lines.map((line, i) => {
+    const timers = lines.map((line) => {
       const text = line.text
         .replace("{schedulerType}", config.schedulerType || "c5.xlarge")
         .replace("{workerType}", config.workerType || "c5.2xlarge")

@@ -20,15 +20,6 @@ function randomSuffix(n) {
   return Array.from({ length: n }, function() { return chars[Math.floor(Math.random() * chars.length)]; }).join("");
 }
 
-function gitPipUrl(gitRef, extras) {
-  extras = extras || "[all]";
-  var atIdx = gitRef.indexOf("@");
-  var repo = atIdx >= 0 ? gitRef.slice(0, atIdx) : gitRef;
-  var ref  = atIdx >= 0 ? gitRef.slice(atIdx + 1) : "";
-  var url  = "git+https://github.com/" + repo;
-  if (ref) url += "@" + ref;
-  return "opengris-scaler" + extras + " @ " + url;
-}
 
 function sleep(ms, signal) {
   return new Promise(function(resolve, reject) {
