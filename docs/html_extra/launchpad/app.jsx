@@ -812,7 +812,7 @@ function TopNav({ activeTab, setActiveTab, theme, setTheme, showPostLaunch, laun
       </div>
       {launchControl && <div style={{ marginRight: 16 }}>{launchControl}</div>}
       <a
-        href="index.html"
+        href="../index.html"
         style={{
           marginRight: 16,
           padding: "5px 12px",
@@ -1545,6 +1545,7 @@ function App() {
                           borderBottom: active ? "2px solid var(--tab-active)" : "2px solid transparent",
                           background: "transparent",
                           color: active ? "var(--text-label)" : "var(--text-dim)",
+                          opacity: disabled ? 0.35 : 1,
                         }}
                       >
                         {lbl}
