@@ -69,66 +69,76 @@ function buildConfigToml(cfg) {
   var suffix  = cfg.nameSuffix || "<suffix>";
 
   var wmToml = (cfg.workerManagers || []).map(function(wm) {
-    var block = "[[worker_manager]]\n";
-    block += "type = \"" + wm.type + "\"\n";
-    block += "scheduler_address = \"" + proto + "://127.0.0.1:" + sp + wsSlash + "\"\n";
-    block += "worker_manager_id = \"" + wm.id + "\"\n";
+    var block = `[[worker_manager]]
+type = "${wm.type}"
+scheduler_address = "${proto}://127.0.0.1:${sp}${wsSlash}"
+worker_manager_id = "${wm.id}"
+`;
 
     if (wm.type === "orb_aws_ec2") {
       var req = (wm.requirements || "").trim();
-      block += "worker_scheduler_address = \"" + proto + "://<PRIVATE_IP>:" + sp + wsSlash + "\"\n";
-      block += "object_storage_address = \"" + proto + "://<PRIVATE_IP>:" + op + wsSlash + "\"\n";
-      block += "python_version = \"" + cfg.pythonVersion + "\"\n";
-      block += "requirements_txt = \"\"\"\n" + req + "\n\"\"\"\n";
-      block += "instance_type = \"" + wm.instanceType + "\"\n";
-      block += "aws_region = \"" + cfg.region + "\"\n";
-      block += "key_name = \"scaler-key-" + suffix + "\"\n";
-      block += "subnet_id = \"<SUBNET_ID>\"\n";
-      block += "security_group_ids = [\"<SECURITY_GROUP_ID>\"]\n";
-      block += "logging_level = \"INFO\"\n";
-      block += "instance_tags = {scaler-deployment = \"" + suffix + "\"}\n";
-      if (cfg.networkBackend !== "zmq") block += "network_backend = \"" + (cfg.networkBackend || "ymq") + "\"\n";
+      block += `worker_scheduler_address = "${proto}://<PRIVATE_IP>:${sp}${wsSlash}"
+object_storage_address = "${proto}://<PRIVATE_IP>:${op}${wsSlash}"
+python_version = "${cfg.pythonVersion}"
+requirements_txt = """
+${req}
+"""
+instance_type = "${wm.instanceType}"
+aws_region = "${cfg.region}"
+key_name = "scaler-key-${suffix}"
+subnet_id = "<SUBNET_ID>"
+security_group_ids = ["<SECURITY_GROUP_ID>"]
+logging_level = "INFO"
+instance_tags = {scaler-deployment = "${suffix}"}
+`;
+      if (cfg.networkBackend !== "zmq") block += `network_backend = "${cfg.networkBackend || "ymq"}"\n`;
     } else if (wm.type === "aws_raw_ecs") {
-      block += "aws_region = \"" + cfg.region + "\"\n";
-      block += "ecs_cluster = \"" + (wm.ecsCluster || "scaler-cluster") + "\"\n";
-      block += "ecs_task_image = \"" + (wm.ecsTaskImage || "") + "\"\n";
-      block += "ecs_subnets = \"" + (wm.ecsSubnets || "") + "\"\n";
-      block += "ecs_task_definition = \"" + (wm.ecsTaskDefinition || "scaler-task-definition") + "\"\n";
-      block += "ecs_task_cpu = " + (wm.ecsTaskCpu || 4) + "\n";
-      block += "ecs_task_memory = " + (wm.ecsTaskMemory || 30) + "\n";
-      block += "ecs_python_version = \"" + cfg.pythonVersion + "\"\n";
-      if (wm.requirements) block += "ecs_python_requirements = \"" + wm.requirements + "\"\n";
+      block += `aws_region = "${cfg.region}"
+ecs_cluster = "${wm.ecsCluster || "scaler-cluster"}"
+ecs_task_image = "${wm.ecsTaskImage || ""}"
+ecs_subnets = "${wm.ecsSubnets || ""}"
+ecs_task_definition = "${wm.ecsTaskDefinition || "scaler-task-definition"}"
+ecs_task_cpu = ${wm.ecsTaskCpu || 4}
+ecs_task_memory = ${wm.ecsTaskMemory || 30}
+ecs_python_version = "${cfg.pythonVersion}"
+`;
+      if (wm.requirements) block += `ecs_python_requirements = "${wm.requirements}"\n`;
     } else if (wm.type === "aws_hpc") {
-      block += "aws_region = \"" + cfg.region + "\"\n";
-      block += "job_queue = \"" + (wm.jobQueue || "") + "\"\n";
-      block += "job_definition = \"" + (wm.jobDefinition || "") + "\"\n";
-      block += "s3_bucket = \"" + (wm.s3Bucket || "") + "\"\n";
-      block += "s3_prefix = \"" + (wm.s3Prefix || "scaler-tasks") + "\"\n";
-      block += "max_concurrent_jobs = " + (wm.maxConcurrentJobs || 100) + "\n";
-      block += "job_timeout_minutes = " + (wm.jobTimeoutMinutes || 60) + "\n";
+      block += `aws_region = "${cfg.region}"
+job_queue = "${wm.jobQueue || ""}"
+job_definition = "${wm.jobDefinition || ""}"
+s3_bucket = "${wm.s3Bucket || ""}"
+s3_prefix = "${wm.s3Prefix || "scaler-tasks"}"
+max_concurrent_jobs = ${wm.maxConcurrentJobs || 100}
+job_timeout_minutes = ${wm.jobTimeoutMinutes || 60}
+`;
     } else if (wm.type === "baremetal_native") {
-      block += "mode = \"" + (wm.mode || "fixed") + "\"\n";
-      block += "object_storage_address = \"" + proto + "://127.0.0.1:" + op + wsSlash + "\"\n";
-      if (wm.workerType) block += "worker_type = \"" + wm.workerType + "\"\n";
+      block += `mode = "${wm.mode || "fixed"}"
+object_storage_address = "${proto}://127.0.0.1:${op}${wsSlash}"
+`;
+      if (wm.workerType) block += `worker_type = "${wm.workerType}"\n`;
       if (wm.maxTaskConcurrency != null && wm.maxTaskConcurrency >= 0)
-        block += "max_task_concurrency = " + wm.maxTaskConcurrency + "\n";
+        block += `max_task_concurrency = ${wm.maxTaskConcurrency}\n`;
     } else if (wm.type === "symphony") {
-      block += "service_name = \"" + (wm.serviceName || "") + "\"\n";
+      block += `service_name = "${wm.serviceName || ""}"\n`;
     }
 
     return block;
   }).join("\n");
 
-  return "[object_storage_server]\n" +
-    "bind_address = \"" + proto + "://0.0.0.0:" + op + wsSlash + "\"\n\n" +
-    "[scheduler]\n" +
-    "bind_address = \"" + proto + "://0.0.0.0:" + sp + wsSlash + "\"\n" +
-    "object_storage_address = \"" + proto + "://127.0.0.1:" + op + wsSlash + "\"\n" +
-    "advertised_object_storage_address = \"" + proto + "://<PUBLIC_IP>:" + op + wsSlash + "\"\n\n" +
-    wmToml + "\n" +
-    "[gui]\n" +
-    "monitor_address = \"" + proto + "://127.0.0.1:" + (sp + 2) + wsSlash + "\"\n" +
-    "gui_address = \"0.0.0.0:50001\"\n";
+  return `[object_storage_server]
+bind_address = "${proto}://0.0.0.0:${op}${wsSlash}"
+
+[scheduler]
+bind_address = "${proto}://0.0.0.0:${sp}${wsSlash}"
+object_storage_address = "${proto}://127.0.0.1:${op}${wsSlash}"
+advertised_object_storage_address = "${proto}://<PUBLIC_IP>:${op}${wsSlash}"
+
+${wmToml}
+[gui]
+monitor_address = "${proto}://127.0.0.1:${sp + 2}${wsSlash}"
+gui_address = "0.0.0.0:50001"
+`;
 }
 
 function buildUserData(cfg, creds) {
@@ -142,7 +152,7 @@ function buildUserData(cfg, creds) {
   // When installing from a git repo, the C++ extension must be compiled from source.
   // AL2023 defaults to GCC 11 (no C++23 <expected>); Cap'n Proto must be built manually.
   var gitBuildLines = "";
-  var scalerInstallLine = "uv pip install '" + cfg.scalerPackage + "'\n";
+  var scalerInstallLine = `uv pip install '${cfg.scalerPackage}'\n`;
   if (isGitInstall) {
     // Extract the bare https:// clone URL and optional branch from the pip spec.
     // Spec form: "opengris-scaler[all] @ git+https://github.com/org/repo@branch"
@@ -152,127 +162,145 @@ function buildUserData(cfg, creds) {
     var cloneUrl    = atIdx >= 0 ? rawUrl.slice(0, atIdx) : rawUrl;
     var cloneBranch = atIdx >= 0 ? rawUrl.slice(atIdx + 1) : "";
     var cloneCmd    = cloneBranch
-      ? "git clone -b " + cloneBranch + " --depth 1 " + cloneUrl + " /opt/scaler-src\n"
-      : "git clone --depth 1 " + cloneUrl + " /opt/scaler-src\n";
+      ? `git clone -b ${cloneBranch} --depth 1 ${cloneUrl} /opt/scaler-src`
+      : `git clone --depth 1 ${cloneUrl} /opt/scaler-src`;
 
-    gitBuildLines =
-      "# C++ build deps: GCC 14 (required for C++23 <expected>) + Cap'n Proto toolchain\n" +
-      "dnf install -y git gcc14 gcc14-c++ gcc14-libstdc++-devel autoconf automake libtool libuv-devel\n\n" +
-      "# Clone repo to access build scripts\n" +
-      cloneCmd +
-      "\n# Build and install Cap'n Proto via the vendored build script\n" +
-      "cd /opt/scaler-src\n" +
-      "CC=/usr/bin/gcc14-gcc CXX=/usr/bin/gcc14-g++ bash scripts/library_tool.sh capnp download\n" +
-      "CC=/usr/bin/gcc14-gcc CXX=/usr/bin/gcc14-g++ bash scripts/library_tool.sh capnp compile\n" +
-      "bash scripts/library_tool.sh capnp install\n" +
-      "cd /\n\n" +
-      "# AL2023 excludes /usr/local/lib from ldconfig by default\n" +
-      "echo '/usr/local/lib' > /etc/ld.so.conf.d/local.conf\n" +
-      "ldconfig\n\n";
+    gitBuildLines = `# C++ build deps: GCC 14 (required for C++23 <expected>) + Cap'n Proto toolchain
+dnf install -y git gcc14 gcc14-c++ gcc14-libstdc++-devel autoconf automake libtool libuv-devel
+
+# Clone repo to access build scripts
+${cloneCmd}
+
+# Build and install Cap'n Proto via the vendored build script
+cd /opt/scaler-src
+CC=/usr/bin/gcc14-gcc CXX=/usr/bin/gcc14-g++ bash scripts/library_tool.sh capnp download
+CC=/usr/bin/gcc14-gcc CXX=/usr/bin/gcc14-g++ bash scripts/library_tool.sh capnp compile
+bash scripts/library_tool.sh capnp install
+cd /
+
+# AL2023 excludes /usr/local/lib from ldconfig by default
+echo '/usr/local/lib' > /etc/ld.so.conf.d/local.conf
+ldconfig
+
+`;
 
     // scikit-build-core spawns CMake in an isolated env — CC/CXX are not forwarded,
     // must pass via CMAKE_ARGS. Static libuv.a lacks -fPIC on AL2023; force shared via pkg-config.
-    scalerInstallLine =
-      "PKG_CONFIG_PATH=/usr/local/lib/pkgconfig \\\n" +
-      "CMAKE_ARGS='-DCMAKE_C_COMPILER=/usr/bin/gcc14-gcc -DCMAKE_CXX_COMPILER=/usr/bin/gcc14-g++ -DCMAKE_DISABLE_FIND_PACKAGE_libuv=TRUE' \\\n" +
-      "  uv pip install '" + cfg.scalerPackage + "'\n";
+    scalerInstallLine = `PKG_CONFIG_PATH=/usr/local/lib/pkgconfig \\
+CMAKE_ARGS='-DCMAKE_C_COMPILER=/usr/bin/gcc14-gcc -DCMAKE_CXX_COMPILER=/usr/bin/gcc14-g++ -DCMAKE_DISABLE_FIND_PACKAGE_libuv=TRUE' \\
+  uv pip install '${cfg.scalerPackage}'
+`;
   }
 
   // Build one [[worker_manager]] TOML block per configured manager.
   var wmToml = (cfg.workerManagers || []).map(function(wm) {
-    var block = "[[worker_manager]]\n";
-    block += "type = \"" + wm.type + "\"\n";
-    block += "scheduler_address = \"" + proto + "://127.0.0.1:" + sp + wsSlash + "\"\n";
-    block += "worker_manager_id = \"" + wm.id + "\"\n";
+    var block = `[[worker_manager]]
+type = "${wm.type}"
+scheduler_address = "${proto}://127.0.0.1:${sp}${wsSlash}"
+worker_manager_id = "${wm.id}"
+`;
 
     if (wm.type === "orb_aws_ec2") {
-      var req     = (wm.requirements || "").trim();
-      var tagLine = '\ninstance_tags = {scaler-deployment = "' + cfg.nameSuffix + '"}';
-      block += "worker_scheduler_address = \"" + proto + "://$PRIVATE_IP:" + sp + wsSlash + "\"\n";
-      block += "object_storage_address = \"" + proto + "://$PRIVATE_IP:" + op + wsSlash + "\"\n";
-      block += "python_version = \"" + cfg.pythonVersion + "\"\n";
-      block += "requirements_txt = \"\"\"\n" + req + "\n\"\"\"\n";
-      block += "instance_type = \"" + wm.instanceType + "\"\n";
-      block += "aws_region = \"" + cfg.region + "\"\n";
-      block += "key_name = \"scaler-key-" + cfg.nameSuffix + "\"\n";
-      block += "subnet_id = \"$SUBNET_ID\"\n";
-      block += "security_group_ids = [\"" + cfg.securityGroupId + "\"]\n";
-      block += "logging_level = \"INFO\"" + tagLine + "\n";
-      if (cfg.networkBackend !== "zmq") block += "network_backend = \"" + (cfg.networkBackend || "ymq") + "\"\n";
+      var req = (wm.requirements || "").trim();
+      block += `worker_scheduler_address = "${proto}://$PRIVATE_IP:${sp}${wsSlash}"
+object_storage_address = "${proto}://$PRIVATE_IP:${op}${wsSlash}"
+python_version = "${cfg.pythonVersion}"
+requirements_txt = """
+${req}
+"""
+instance_type = "${wm.instanceType}"
+aws_region = "${cfg.region}"
+key_name = "scaler-key-${cfg.nameSuffix}"
+subnet_id = "$SUBNET_ID"
+security_group_ids = ["${cfg.securityGroupId}"]
+logging_level = "INFO"
+instance_tags = {scaler-deployment = "${cfg.nameSuffix}"}
+`;
+      if (cfg.networkBackend !== "zmq") block += `network_backend = "${cfg.networkBackend || "ymq"}"\n`;
     } else if (wm.type === "aws_raw_ecs") {
-      block += "aws_region = \"" + cfg.region + "\"\n";
-      block += "ecs_cluster = \"" + (wm.ecsCluster || "scaler-cluster") + "\"\n";
-      block += "ecs_task_image = \"" + (wm.ecsTaskImage || "") + "\"\n";
-      block += "ecs_subnets = \"" + (wm.ecsSubnets || "") + "\"\n";
-      block += "ecs_task_definition = \"" + (wm.ecsTaskDefinition || "scaler-task-definition") + "\"\n";
-      block += "ecs_task_cpu = " + (wm.ecsTaskCpu || 4) + "\n";
-      block += "ecs_task_memory = " + (wm.ecsTaskMemory || 30) + "\n";
-      block += "ecs_python_version = \"" + cfg.pythonVersion + "\"\n";
-      if (wm.requirements) block += "ecs_python_requirements = \"" + wm.requirements + "\"\n";
-
+      block += `aws_region = "${cfg.region}"
+ecs_cluster = "${wm.ecsCluster || "scaler-cluster"}"
+ecs_task_image = "${wm.ecsTaskImage || ""}"
+ecs_subnets = "${wm.ecsSubnets || ""}"
+ecs_task_definition = "${wm.ecsTaskDefinition || "scaler-task-definition"}"
+ecs_task_cpu = ${wm.ecsTaskCpu || 4}
+ecs_task_memory = ${wm.ecsTaskMemory || 30}
+ecs_python_version = "${cfg.pythonVersion}"
+`;
+      if (wm.requirements) block += `ecs_python_requirements = "${wm.requirements}"\n`;
     } else if (wm.type === "aws_hpc") {
-      block += "aws_region = \"" + cfg.region + "\"\n";
-      block += "job_queue = \"" + (wm.jobQueue || "") + "\"\n";
-      block += "job_definition = \"" + (wm.jobDefinition || "") + "\"\n";
-      block += "s3_bucket = \"" + (wm.s3Bucket || "") + "\"\n";
-      block += "s3_prefix = \"" + (wm.s3Prefix || "scaler-tasks") + "\"\n";
-      block += "max_concurrent_jobs = " + (wm.maxConcurrentJobs || 100) + "\n";
-      block += "job_timeout_minutes = " + (wm.jobTimeoutMinutes || 60) + "\n";
+      block += `aws_region = "${cfg.region}"
+job_queue = "${wm.jobQueue || ""}"
+job_definition = "${wm.jobDefinition || ""}"
+s3_bucket = "${wm.s3Bucket || ""}"
+s3_prefix = "${wm.s3Prefix || "scaler-tasks"}"
+max_concurrent_jobs = ${wm.maxConcurrentJobs || 100}
+job_timeout_minutes = ${wm.jobTimeoutMinutes || 60}
+`;
     } else if (wm.type === "baremetal_native") {
-      block += "mode = \"" + (wm.mode || "fixed") + "\"\n";
-      block += "object_storage_address = \"" + proto + "://127.0.0.1:" + op + wsSlash + "\"\n";
-      if (wm.workerType) block += "worker_type = \"" + wm.workerType + "\"\n";
+      block += `mode = "${wm.mode || "fixed"}"
+object_storage_address = "${proto}://127.0.0.1:${op}${wsSlash}"
+`;
+      if (wm.workerType) block += `worker_type = "${wm.workerType}"\n`;
       if (wm.maxTaskConcurrency != null && wm.maxTaskConcurrency >= 0)
-        block += "max_task_concurrency = " + wm.maxTaskConcurrency + "\n";
+        block += `max_task_concurrency = ${wm.maxTaskConcurrency}\n`;
     } else if (wm.type === "symphony") {
-      block += "service_name = \"" + (wm.serviceName || "") + "\"\n";
+      block += `service_name = "${wm.serviceName || ""}"\n`;
     }
 
     return block;
   }).join("\n");
 
-  // $IMDS_TOKEN / $PUBLIC_IP / $PRIVATE_IP / $! are bash variables — they appear literally in the
-  // output string and are expanded by bash at runtime on the EC2 instance.
-  return "#!/bin/bash\nset -euxo pipefail\n\n" +
-    "IMDS_TOKEN=$(curl -sf -X PUT \"http://169.254.169.254/latest/api/token\" -H \"X-aws-ec2-metadata-token-ttl-seconds: 300\")\n" +
-    "PUBLIC_IP=$(curl -sf -H \"X-aws-ec2-metadata-token: $IMDS_TOKEN\" http://169.254.169.254/latest/meta-data/public-ipv4)\n" +
-    "PRIVATE_IP=$(curl -sf -H \"X-aws-ec2-metadata-token: $IMDS_TOKEN\" http://169.254.169.254/latest/meta-data/local-ipv4)\n" +
-    "MAC=$(curl -sf -H \"X-aws-ec2-metadata-token: $IMDS_TOKEN\" http://169.254.169.254/latest/meta-data/network/interfaces/macs/ | head -1 | tr -d '/')\n" +
-    "SUBNET_ID=$(curl -sf -H \"X-aws-ec2-metadata-token: $IMDS_TOKEN\" \"http://169.254.169.254/latest/meta-data/network/interfaces/macs/$MAC/subnet-id\")\n\n" +
-    "export HOME=/root\n" +
-    gitBuildLines +
-    "curl -LsSf https://astral.sh/uv/install.sh | sh\n" +
-    "source /root/.local/bin/env\n\n" +
-    "uv venv --python " + cfg.pythonVersion + " /opt/scaler-venv\n" +
-    "source /opt/scaler-venv/bin/activate\n" +
-    scalerInstallLine +
-    "uv pip install --upgrade orb-py\n\n" +
-    // WORKAROUND: ORB worker manager bug — does not pick up instance-profile credentials
-    // correctly, so we write them explicitly to ~/.aws/config. Remove once fixed in orb-py.
-    "mkdir -p /root/.aws\n" +
-    "cat > /root/.aws/config << AWS_EOF\n" +
-    "[default]\n" +
-    "aws_access_key_id = " + creds.accessKeyId + "\n" +
-    "aws_secret_access_key = " + creds.secretKey + "\n" +
-    "region = " + cfg.region + "\n" +
-    "AWS_EOF\n" +
-    "chmod 600 /root/.aws/config\n\n" +
-    "mkdir -p /opt/scaler\n\n" +
-    "cat > /opt/scaler/config.toml << CONFIG_EOF\n" +
-    "[object_storage_server]\n" +
-    "bind_address = \"" + proto + "://0.0.0.0:" + op + wsSlash + "\"\n\n" +
-    "[scheduler]\n" +
-    "bind_address = \"" + proto + "://0.0.0.0:" + sp + wsSlash + "\"\n" +
-    "object_storage_address = \"" + proto + "://127.0.0.1:" + op + wsSlash + "\"\n" +
-    "advertised_object_storage_address = \"" + proto + "://$PUBLIC_IP:" + op + wsSlash + "\"\n\n" +
-    wmToml + "\n" +
-    "[gui]\n" +
-    "monitor_address = \"" + proto + "://127.0.0.1:" + (sp + 2) + wsSlash + "\"\n" +
-    "gui_address = \"0.0.0.0:50001\"\n" +
-    "CONFIG_EOF\n\n" +
-    (cfg.networkBackend === "zmq" ? "SCALER_NETWORK_BACKEND=tcp_zmq " : "") +
-    "/opt/scaler-venv/bin/scaler /opt/scaler/config.toml >> /var/log/scaler.log 2>&1 &\n" +
-    "echo \"Scaler started (PID=$!)\"\n";
+  // $IMDS_TOKEN / $PUBLIC_IP / $PRIVATE_IP / $SUBNET_ID / $MAC / $! are bash variables expanded
+  // at runtime on the EC2 instance — JS template literals only interpolate ${...}, not $name.
+  // WORKAROUND: ORB worker manager bug — does not pick up instance-profile credentials correctly,
+  // so we write them explicitly to ~/.aws/config. Remove once fixed in orb-py.
+  return `#!/bin/bash
+set -euxo pipefail
+
+IMDS_TOKEN=$(curl -sf -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
+PUBLIC_IP=$(curl -sf -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.169.254/latest/meta-data/public-ipv4)
+PRIVATE_IP=$(curl -sf -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.169.254/latest/meta-data/local-ipv4)
+MAC=$(curl -sf -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.169.254/latest/meta-data/network/interfaces/macs/ | head -1 | tr -d '/')
+SUBNET_ID=$(curl -sf -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" "http://169.254.169.254/latest/meta-data/network/interfaces/macs/$MAC/subnet-id")
+
+export HOME=/root
+${gitBuildLines}curl -LsSf https://astral.sh/uv/install.sh | sh
+source /root/.local/bin/env
+
+uv venv --python ${cfg.pythonVersion} /opt/scaler-venv
+source /opt/scaler-venv/bin/activate
+${scalerInstallLine}uv pip install --upgrade orb-py
+
+mkdir -p /root/.aws
+cat > /root/.aws/config << AWS_EOF
+[default]
+aws_access_key_id = ${creds.accessKeyId}
+aws_secret_access_key = ${creds.secretKey}
+region = ${cfg.region}
+AWS_EOF
+chmod 600 /root/.aws/config
+
+mkdir -p /opt/scaler
+
+cat > /opt/scaler/config.toml << CONFIG_EOF
+[object_storage_server]
+bind_address = "${proto}://0.0.0.0:${op}${wsSlash}"
+
+[scheduler]
+bind_address = "${proto}://0.0.0.0:${sp}${wsSlash}"
+object_storage_address = "${proto}://127.0.0.1:${op}${wsSlash}"
+advertised_object_storage_address = "${proto}://$PUBLIC_IP:${op}${wsSlash}"
+
+${wmToml}
+[gui]
+monitor_address = "${proto}://127.0.0.1:${sp + 2}${wsSlash}"
+gui_address = "0.0.0.0:50001"
+CONFIG_EOF
+
+${cfg.networkBackend === "zmq" ? "SCALER_NETWORK_BACKEND=tcp_zmq " : ""}/opt/scaler-venv/bin/scaler /opt/scaler/config.toml >> /var/log/scaler.log 2>&1 &
+echo "Scaler started (PID=$!)"
+`;
 }
 
 function makeAwsClients(region, creds) {
