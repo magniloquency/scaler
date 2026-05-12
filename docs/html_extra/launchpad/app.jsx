@@ -1545,6 +1545,7 @@ function App() {
                           borderBottom: active ? "2px solid var(--tab-active)" : "2px solid transparent",
                           background: "transparent",
                           color: active ? "var(--text-label)" : "var(--text-dim)",
+                          opacity: disabled ? 0.35 : 1,
                         }}
                       >
                         {lbl}
