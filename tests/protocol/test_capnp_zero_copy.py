@@ -3,9 +3,10 @@ buffer.  Lazy structs returned by from_bytes must read live from the original
 bytes object, so mutations to a bytearray source are visible on first field
 access."""
 
+import gc
 import unittest
 
-from scaler.protocol.capnp import StateTask, TaskState
+from scaler.protocol.capnp import Message, StateTask, TaskState
 
 
 class TestZeroCopyDeserialization(unittest.TestCase):
@@ -29,6 +30,32 @@ class TestZeroCopyDeserialization(unittest.TestCase):
 
         buf[state_offset] = success_ordinal
         self.assertEqual(st.state, TaskState.success)
+
+    def test_lazy_struct_keeps_buffer_alive(self):
+        # The lazy struct stores a memoryview of the source buffer as
+        # _capnp_source, keeping the underlying bytes alive even after the
+        # caller's reference is dropped.  Field access must still succeed.
+        buf = bytearray(StateTask(state=TaskState.success, taskId=b"t", functionName=b"f", worker=b"w").to_bytes())
+        st = StateTask.from_bytes(buf)
+        del buf
+        gc.collect()
+        self.assertEqual(st.state, TaskState.success)
+
+    def test_lazy_union_to_bytes_round_trips(self):
+        # to_bytes() on a lazily-deserialized union (capnp_union_to_bytes path)
+        # must produce a valid, re-deserializable payload identical to the
+        # original wire bytes.
+        from scaler.io.utility import deserialize, serialize
+
+        original = StateTask(state=TaskState.success, taskId=b"task", functionName=b"func", worker=b"w")
+        wire = serialize(original)
+        lazy_msg = Message.from_bytes(wire)
+        result = deserialize(lazy_msg.to_bytes())
+        assert isinstance(result, StateTask)
+        self.assertEqual(result.state, original.state)
+        self.assertEqual(result.taskId, original.taskId)
+        self.assertEqual(result.functionName, original.functionName)
+        self.assertEqual(result.worker, original.worker)
 
 
 if __name__ == "__main__":
