@@ -2,11 +2,12 @@ import logging
 import time
 from typing import Dict, List, Optional, Set, Tuple
 
-from scaler.io.mixins import AsyncBinder, AsyncConnector
+from scaler.io.mixins import AsyncBinder, AsyncPublisher
 from scaler.protocol.capnp import (
     ClientDisconnect,
     DisconnectRequest,
     DisconnectResponse,
+    ObjectStorageAddress,
     ProcessorStatus,
     Resource,
     StateWorker,
@@ -18,7 +19,7 @@ from scaler.protocol.capnp import (
     WorkerState,
     WorkerStatus,
 )
-from scaler.protocol.helpers import capabilities_to_dict
+from scaler.protocol.helpers import capabilities_to_dict, dict_to_capabilities
 from scaler.scheduler.controllers.config_controller import VanillaConfigController
 from scaler.scheduler.controllers.mixins import PolicyController, TaskController, WorkerController
 from scaler.utility.identifiers import ClientID, TaskID, WorkerID
@@ -32,7 +33,7 @@ class VanillaWorkerController(WorkerController, Looper, Reporter):
         self._config_controller = config_controller
 
         self._binder: Optional[AsyncBinder] = None
-        self._binder_monitor: Optional[AsyncConnector] = None
+        self._binder_monitor: Optional[AsyncPublisher] = None
         self._task_controller: Optional[TaskController] = None
 
         self._worker_alive_since: Dict[WorkerID, Tuple[float, WorkerHeartbeat]] = dict()
@@ -40,7 +41,7 @@ class VanillaWorkerController(WorkerController, Looper, Reporter):
         self._manager_to_workers: Dict[bytes, Set[WorkerID]] = dict()
         self._policy_controller = policy_controller
 
-    def register(self, binder: AsyncBinder, binder_monitor: AsyncConnector, task_controller: TaskController):
+    def register(self, binder: AsyncBinder, binder_monitor: AsyncPublisher, task_controller: TaskController):
         self._binder = binder
         self._binder_monitor = binder_monitor
         self._task_controller = task_controller
@@ -67,7 +68,11 @@ class VanillaWorkerController(WorkerController, Looper, Reporter):
         if self._policy_controller.add_worker(worker_id, info.capabilities, info.queueSize):
             logging.info(f"worker {worker_id!r} connected")
             await self._binder_monitor.send(
-                StateWorker(workerId=worker_id, state=WorkerState.connected, capabilities=info.capabilities)
+                StateWorker(
+                    workerId=worker_id,
+                    state=WorkerState.connected,
+                    capabilities=dict_to_capabilities(info.capabilities),
+                )
             )
             await self._task_controller.on_worker_connect(worker_id)
 
@@ -76,10 +81,16 @@ class VanillaWorkerController(WorkerController, Looper, Reporter):
             self._manager_to_workers.setdefault(info.workerManagerID, set()).add(worker_id)
 
         self._worker_alive_since[worker_id] = (time.time(), info)
+
+        object_storage_address = self._config_controller.get_config("advertised_object_storage_address")
         await self._binder.send(
             worker_id,
             WorkerHeartbeatEcho(
-                objectStorageAddress=self._config_controller.get_config("advertised_object_storage_address")
+                objectStorageAddress=ObjectStorageAddress(
+                    host=object_storage_address.host,
+                    port=object_storage_address.port,
+                    scheme=object_storage_address.type.value,
+                )
             ),
         )
 
@@ -168,7 +179,7 @@ class VanillaWorkerController(WorkerController, Looper, Reporter):
 
         logging.info(f"{worker_id!r} disconnected")
         await self._binder_monitor.send(
-            StateWorker(workerId=worker_id, state=WorkerState.disconnected, capabilities={})
+            StateWorker(workerId=worker_id, state=WorkerState.disconnected, capabilities=[])
         )
         self._worker_alive_since.pop(worker_id)
         manager_id = self._worker_to_manager.pop(worker_id)

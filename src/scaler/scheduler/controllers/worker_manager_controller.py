@@ -17,6 +17,7 @@ from scaler.protocol.helpers import capabilities_to_dict
 from scaler.scheduler.controllers.config_controller import VanillaConfigController
 from scaler.scheduler.controllers.mixins import PolicyController, TaskController, WorkerController
 from scaler.scheduler.controllers.policies.simple_policy.scaling.types import WorkerManagerSnapshot
+from scaler.scheduler.controllers.worker_manager_utilties import build_scaling_manager_status
 from scaler.utility.identifiers import WorkerID
 from scaler.utility.mixins import Looper, Reporter
 from scaler.utility.snapshot import InformationSnapshot
@@ -114,26 +115,26 @@ class WorkerManagerController(Looper, Reporter):
             if response.status == WorkerManagerCommandResponse.Status.success:
                 if response_capabilities:
                     self._manager_capabilities[source] = response_capabilities
-                self._pending_worker_count[source] = self._pending_worker_count.get(source, 0) + 1
+                new_workers = len(response.workerIDs)
+                self._pending_worker_count[source] = self._pending_worker_count.get(source, 0) + new_workers
             else:
-                logging.warning(f"StartWorkers failed: {response.status._as_str()}")
+                logging.warning(f"StartWorkers failed: {response.status.name}")
 
         elif response.command == WorkerManagerCommandType.shutdownWorkers:
             if response.status != WorkerManagerCommandResponse.Status.success:
-                logging.warning(f"ShutdownWorkers failed: {response.status._as_str()}")
+                logging.warning(f"ShutdownWorkers failed: {response.status.name}")
 
     async def routine(self):
         await self._clean_managers()
 
     def get_status(self) -> ScalingManagerStatus:
         managed_workers = self.get_managed_workers()
-        base_status = self._policy_controller.get_scaling_status(managed_workers)
 
         now = time.time()
         details = []
         for source, (last_seen, heartbeat) in self._manager_alive_since.items():
             caps = heartbeat.capabilities
-            caps_str = " ".join(sorted(caps.keys())) if caps else ""
+            caps_str = " ".join(sorted(capabilities_to_dict(caps).keys())) if caps else ""
             details.append(
                 {
                     "worker_manager_id": heartbeat.workerManagerID,
@@ -145,7 +146,7 @@ class WorkerManagerController(Looper, Reporter):
                 }
             )
 
-        return ScalingManagerStatus(managedWorkers=base_status.managedWorkers, workerManagerDetails=details)
+        return build_scaling_manager_status(managed_workers, details)
 
     def get_managed_workers(self) -> Dict[bytes, List[WorkerID]]:
         """Return managed workers keyed by worker_manager_id (from heartbeat)."""
@@ -156,7 +157,11 @@ class WorkerManagerController(Looper, Reporter):
         return result
 
     async def _send_command(self, source: bytes, command: WorkerManagerCommand):
-        self._pending_commands[source] = command
+        # setDesiredTaskConcurrency is declarative and worker managers may silently ignore it
+        # during the transition. No response is guaranteed, so it must bypass the single-
+        # in-flight gate; otherwise the gate would wedge and block all subsequent scaling.
+        if command.command != WorkerManagerCommandType.setDesiredTaskConcurrency:
+            self._pending_commands[source] = command
         await self._binder.send(source, command)
 
     def _build_manager_snapshots(self) -> Dict[bytes, WorkerManagerSnapshot]:

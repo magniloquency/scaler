@@ -255,6 +255,8 @@ _ORB_AWS_EC2_IMAGE_ARGV = [
     "tcp://127.0.0.1:6378",
     "--worker-manager-id",
     "wm-test",
+    "--aws-region",
+    "us-east-1",
     "--image-id",
     "ami-0528819f94f4f5fa5",
 ]
@@ -262,6 +264,8 @@ _ORB_AWS_EC2_AUTO_ARGV = [
     "tcp://127.0.0.1:6378",
     "--worker-manager-id",
     "wm-test",
+    "--aws-region",
+    "us-east-1",
     "--python-version",
     "3.13",
     "--requirements-txt",
@@ -300,7 +304,19 @@ class TestORBAWSEC2WorkerManagerSubcommand(unittest.TestCase):
             "scaler_worker_manager", {}, argv=_ORB_AWS_EC2_IMAGE_ARGV
         )
         self.assertEqual(config.instance_type, "t2.micro")
-        self.assertEqual(config.aws_region, "us-east-1")
+
+    def test_orb_aws_ec2_missing_aws_region_raises(self) -> None:
+        from scaler.config.section.orb_aws_ec2_worker_adapter import ORBAWSEC2WorkerAdapterConfig
+
+        argv_without_region = [
+            "tcp://127.0.0.1:6378",
+            "--worker-manager-id",
+            "wm-test",
+            "--image-id",
+            "ami-0528819f94f4f5fa5",
+        ]
+        with self.assertRaises(SystemExit):
+            ORBAWSEC2WorkerAdapterConfig.parse_with_section("scaler_worker_manager", {}, argv=argv_without_region)
 
     def test_orb_aws_ec2_instance_type_and_region_from_cli(self) -> None:
         from scaler.config.section.orb_aws_ec2_worker_adapter import ORBAWSEC2WorkerAdapterConfig
@@ -326,7 +342,9 @@ class TestORBAWSEC2WorkerManagerSubcommand(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             ORBAWSEC2WorkerAdapterConfig.parse_with_section(
-                "scaler_worker_manager", {}, argv=["tcp://127.0.0.1:6378", "--worker-manager-id", "wm-test"]
+                "scaler_worker_manager",
+                {},
+                argv=["tcp://127.0.0.1:6378", "--worker-manager-id", "wm-test", "--aws-region", "us-east-1"],
             )
 
     def test_orb_aws_ec2_image_id_and_python_version_raises(self) -> None:
@@ -340,6 +358,8 @@ class TestORBAWSEC2WorkerManagerSubcommand(unittest.TestCase):
                     "tcp://127.0.0.1:6378",
                     "--worker-manager-id",
                     "wm-test",
+                    "--aws-region",
+                    "us-east-1",
                     "--image-id",
                     "ami-0528819f94f4f5fa5",
                     "--python-version",
@@ -356,8 +376,64 @@ class TestORBAWSEC2WorkerManagerSubcommand(unittest.TestCase):
             ORBAWSEC2WorkerAdapterConfig.parse_with_section(
                 "scaler_worker_manager",
                 {},
-                argv=["tcp://127.0.0.1:6378", "--worker-manager-id", "wm-test", "--python-version", "3.13"],
+                argv=[
+                    "tcp://127.0.0.1:6378",
+                    "--worker-manager-id",
+                    "wm-test",
+                    "--aws-region",
+                    "us-east-1",
+                    "--python-version",
+                    "3.13",
+                ],
             )
+
+    def test_orb_aws_ec2_instance_tags_default_empty(self) -> None:
+        from scaler.config.section.orb_aws_ec2_worker_adapter import ORBAWSEC2WorkerAdapterConfig
+
+        config = ORBAWSEC2WorkerAdapterConfig.parse_with_section(
+            "scaler_worker_manager", {}, argv=_ORB_AWS_EC2_IMAGE_ARGV
+        )
+        self.assertEqual(config.instance_tags, {})
+
+    def test_orb_aws_ec2_instance_tags_single_tag_from_cli(self) -> None:
+        from scaler.config.section.orb_aws_ec2_worker_adapter import ORBAWSEC2WorkerAdapterConfig
+
+        config = ORBAWSEC2WorkerAdapterConfig.parse_with_section(
+            "scaler_worker_manager", {}, argv=[*_ORB_AWS_EC2_IMAGE_ARGV, "--instance-tags", "Name=my-worker"]
+        )
+        self.assertEqual(config.instance_tags, {"Name": "my-worker"})
+
+    def test_orb_aws_ec2_instance_tags_multiple_tags_from_cli(self) -> None:
+        from scaler.config.section.orb_aws_ec2_worker_adapter import ORBAWSEC2WorkerAdapterConfig
+
+        config = ORBAWSEC2WorkerAdapterConfig.parse_with_section(
+            "scaler_worker_manager",
+            {},
+            argv=[*_ORB_AWS_EC2_IMAGE_ARGV, "--instance-tags", "Name=my-worker,Env=prod,Team=data"],
+        )
+        self.assertEqual(config.instance_tags, {"Name": "my-worker", "Env": "prod", "Team": "data"})
+
+    def test_orb_aws_ec2_instance_tags_value_with_equals_from_cli(self) -> None:
+        from scaler.config.section.orb_aws_ec2_worker_adapter import ORBAWSEC2WorkerAdapterConfig
+
+        config = ORBAWSEC2WorkerAdapterConfig.parse_with_section(
+            "scaler_worker_manager", {}, argv=[*_ORB_AWS_EC2_IMAGE_ARGV, "--instance-tags", "Tag=key=val"]
+        )
+        self.assertEqual(config.instance_tags, {"Tag": "key=val"})
+
+    def test_orb_aws_ec2_instance_tags_from_toml(self) -> None:
+        from scaler.config.section.orb_aws_ec2_worker_adapter import ORBAWSEC2WorkerAdapterConfig
+
+        section_data = {
+            "type": "orb_aws_ec2",
+            "scheduler_address": "tcp://127.0.0.1:6378",
+            "worker_manager_id": "wm-test",
+            "aws_region": "us-east-1",
+            "image_id": "ami-0528819f94f4f5fa5",
+            "instance_tags": "Name=my-worker,Env=prod",
+        }
+        config = ORBAWSEC2WorkerAdapterConfig.parse_with_section("scaler_worker_manager", section_data, argv=[])
+        self.assertEqual(config.instance_tags, {"Name": "my-worker", "Env": "prod"})
 
     def test_orb_aws_ec2_requirements_without_python_version_raises(self) -> None:
         from scaler.config.section.orb_aws_ec2_worker_adapter import ORBAWSEC2WorkerAdapterConfig
@@ -370,6 +446,8 @@ class TestORBAWSEC2WorkerManagerSubcommand(unittest.TestCase):
                     "tcp://127.0.0.1:6378",
                     "--worker-manager-id",
                     "wm-test",
+                    "--aws-region",
+                    "us-east-1",
                     "--requirements-txt",
                     "opengris-scaler",
                 ],
@@ -377,22 +455,27 @@ class TestORBAWSEC2WorkerManagerSubcommand(unittest.TestCase):
 
 
 def _make_orb_config(
-    *, image_id: Optional[str] = None, python_version: Optional[str] = None, requirements_txt: Optional[str] = None
+    *,
+    image_id: Optional[str] = None,
+    python_version: Optional[str] = None,
+    requirements_txt: Optional[str] = None,
+    aws_region: str = "us-east-1",
 ):
     from scaler.config.common.logging import LoggingConfig
     from scaler.config.common.worker import WorkerConfig
     from scaler.config.common.worker_manager import WorkerManagerConfig
     from scaler.config.section.orb_aws_ec2_worker_adapter import ORBAWSEC2WorkerAdapterConfig
-    from scaler.config.types.zmq import ZMQConfig
+    from scaler.config.types.address import AddressConfig
 
     wmc = WorkerManagerConfig(
-        scheduler_address=ZMQConfig.from_string("tcp://127.0.0.1:6378"), worker_manager_id="wm-test"
+        scheduler_address=AddressConfig.from_string("tcp://127.0.0.1:6378"), worker_manager_id="wm-test"
     )
     return ORBAWSEC2WorkerAdapterConfig(
         worker_manager_config=wmc,
         image_id=image_id,
         python_version=python_version,
         requirements_txt=requirements_txt,
+        aws_region=aws_region,
         worker_config=WorkerConfig(),
         logging_config=LoggingConfig(),
     )
@@ -430,8 +513,9 @@ class TestORBAWSEC2CreateUserData(unittest.TestCase):
         import unittest.mock
 
         file_content = "opengris-scaler>=1.26.6\nboto3\nnumpy\n"
-        with unittest.mock.patch("os.path.isfile", return_value=True), unittest.mock.patch(
-            "builtins.open", unittest.mock.mock_open(read_data=file_content)
+        with (
+            unittest.mock.patch("os.path.isfile", return_value=True),
+            unittest.mock.patch("builtins.open", unittest.mock.mock_open(read_data=file_content)),
         ):
             adapter = self._make_adapter(python_version="3.13", requirements_txt="/path/to/requirements.txt")
             script = adapter._create_user_data()
@@ -533,9 +617,9 @@ class TestWorkerSchedulerAddress(unittest.TestCase):
         )
         self.assertIsNotNone(config.worker_manager_config.worker_scheduler_address)
         self.assertEqual(
-            config.worker_manager_config.effective_worker_scheduler_address.to_address(), "tcp://203.0.113.5:6378"
+            repr(config.worker_manager_config.effective_worker_scheduler_address), "tcp://203.0.113.5:6378"
         )
-        self.assertEqual(config.worker_manager_config.scheduler_address.to_address(), "tcp://127.0.0.1:6378")
+        self.assertEqual(repr(config.worker_manager_config.scheduler_address), "tcp://127.0.0.1:6378")
 
     def test_worker_scheduler_address_short_flag(self) -> None:
         from scaler.config.section.native_worker_manager import NativeWorkerManagerConfig
@@ -546,7 +630,7 @@ class TestWorkerSchedulerAddress(unittest.TestCase):
             argv=["--worker-manager-id", "wm-test", "tcp://127.0.0.1:6378", "-wsa", "tcp://203.0.113.5:6378"],
         )
         self.assertEqual(
-            config.worker_manager_config.effective_worker_scheduler_address.to_address(), "tcp://203.0.113.5:6378"
+            repr(config.worker_manager_config.effective_worker_scheduler_address), "tcp://203.0.113.5:6378"
         )
 
     def test_worker_scheduler_address_from_toml(self) -> None:
@@ -560,5 +644,5 @@ class TestWorkerSchedulerAddress(unittest.TestCase):
         }
         config = NativeWorkerManagerConfig.parse_with_section("scaler_worker_manager", section_data, argv=[])
         self.assertEqual(
-            config.worker_manager_config.effective_worker_scheduler_address.to_address(), "tcp://203.0.113.5:6378"
+            repr(config.worker_manager_config.effective_worker_scheduler_address), "tcp://203.0.113.5:6378"
         )

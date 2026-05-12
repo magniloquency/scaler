@@ -215,7 +215,7 @@ class ScalerFuture(concurrent.futures.Future):
             if self._result_object_id is None or self.cancelled() or self._result_received:
                 return
 
-            object_bytes = self._connector_storage.get_object(self._result_object_id)
+            object_bytes = bytes(self._connector_storage.get_object(self._result_object_id))
 
             if self._is_simple_task():
                 # immediately delete non graph result objects

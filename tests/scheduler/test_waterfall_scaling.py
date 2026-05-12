@@ -4,6 +4,7 @@ import unittest
 from typing import Dict, List, Optional
 
 from scaler.protocol.capnp import Resource, Task, WorkerHeartbeat, WorkerManagerCommandType, WorkerManagerHeartbeat
+from scaler.protocol.helpers import capabilities_to_dict
 from scaler.scheduler.controllers.policies.library.utility import create_policy
 from scaler.scheduler.controllers.policies.simple_policy.scaling.types import WorkerManagerSnapshot
 from scaler.scheduler.controllers.policies.waterfall_v1.scaling.types import WaterfallRule
@@ -42,6 +43,7 @@ class TestWaterfallScalingPolicy(unittest.TestCase):
         commands = policy.get_scaling_commands(
             snapshot, heartbeat, managed_worker_ids, managed_worker_capabilities, manager_snapshots
         )
+        commands = _imperative(commands)
 
         self.assertEqual(len(commands), 1)
         self.assertEqual(commands[0].command, WorkerManagerCommandType.startWorkers)
@@ -64,6 +66,7 @@ class TestWaterfallScalingPolicy(unittest.TestCase):
         commands_a = self.policy.get_scaling_commands(
             snapshot, heartbeat_a, managed_worker_ids, managed_worker_capabilities, manager_snapshots
         )
+        commands_a = _imperative(commands_a)
         self.assertEqual(len(commands_a), 1)
         self.assertEqual(commands_a[0].command, WorkerManagerCommandType.startWorkers)
 
@@ -72,6 +75,7 @@ class TestWaterfallScalingPolicy(unittest.TestCase):
         commands_b = self.policy.get_scaling_commands(
             snapshot, heartbeat_b, managed_worker_ids, managed_worker_capabilities, manager_snapshots
         )
+        commands_b = _imperative(commands_b)
         self.assertEqual(len(commands_b), 0)
 
     def test_overflow_to_lower_priority(self):
@@ -91,6 +95,7 @@ class TestWaterfallScalingPolicy(unittest.TestCase):
         commands = self.policy.get_scaling_commands(
             snapshot, heartbeat_b, managed_worker_ids, managed_worker_capabilities, manager_snapshots
         )
+        commands = _imperative(commands)
 
         self.assertEqual(len(commands), 1)
         self.assertEqual(commands[0].command, WorkerManagerCommandType.startWorkers)
@@ -111,6 +116,7 @@ class TestWaterfallScalingPolicy(unittest.TestCase):
         commands = self.policy.get_scaling_commands(
             snapshot, heartbeat_b, managed_worker_ids, managed_worker_capabilities, manager_snapshots
         )
+        commands = _imperative(commands)
 
         self.assertEqual(len(commands), 1)
         self.assertEqual(commands[0].command, WorkerManagerCommandType.startWorkers)
@@ -133,6 +139,7 @@ class TestWaterfallScalingPolicy(unittest.TestCase):
         commands_b = self.policy.get_scaling_commands(
             snapshot, heartbeat_b, managed_worker_ids_b, managed_worker_capabilities, manager_snapshots
         )
+        commands_b = _imperative(commands_b)
         self.assertEqual(len(commands_b), 1)
         self.assertEqual(commands_b[0].command, WorkerManagerCommandType.shutdownWorkers)
         self.assertEqual(len(commands_b[0].workerIDs), 2)
@@ -143,6 +150,7 @@ class TestWaterfallScalingPolicy(unittest.TestCase):
         commands_a = self.policy.get_scaling_commands(
             snapshot, heartbeat_a, managed_worker_ids_a, managed_worker_capabilities, manager_snapshots
         )
+        commands_a = _imperative(commands_a)
         self.assertEqual(len(commands_a), 0)
 
     def test_manager_not_in_config(self):
@@ -157,6 +165,7 @@ class TestWaterfallScalingPolicy(unittest.TestCase):
         commands = self.policy.get_scaling_commands(
             snapshot, heartbeat, managed_worker_ids, managed_worker_capabilities, manager_snapshots
         )
+        commands = _imperative(commands)
 
         self.assertEqual(len(commands), 0)
 
@@ -180,6 +189,7 @@ class TestWaterfallScalingPolicy(unittest.TestCase):
         commands = policy.get_scaling_commands(
             snapshot, heartbeat, managed_worker_ids, managed_worker_capabilities, manager_snapshots
         )
+        commands = _imperative(commands)
 
         # Should NOT scale up: at effective capacity (min(5, 3) = 3)
         self.assertEqual(len(commands), 0)
@@ -195,6 +205,7 @@ class TestWaterfallScalingPolicy(unittest.TestCase):
         commands = self.policy.get_scaling_commands(
             snapshot, heartbeat, managed_worker_ids, managed_worker_capabilities, manager_snapshots
         )
+        commands = _imperative(commands)
 
         self.assertEqual(len(commands), 0)
 
@@ -220,6 +231,7 @@ class TestWaterfallScalingPolicy(unittest.TestCase):
         commands_a = policy.get_scaling_commands(
             snapshot, heartbeat_a, managed_worker_ids, managed_worker_capabilities, manager_snapshots
         )
+        commands_a = _imperative(commands_a)
         self.assertEqual(len(commands_a), 1)
         self.assertEqual(commands_a[0].command, WorkerManagerCommandType.startWorkers)
 
@@ -227,6 +239,7 @@ class TestWaterfallScalingPolicy(unittest.TestCase):
         commands_b = policy.get_scaling_commands(
             snapshot, heartbeat_b, managed_worker_ids, managed_worker_capabilities, manager_snapshots
         )
+        commands_b = _imperative(commands_b)
         self.assertEqual(len(commands_b), 1)
         self.assertEqual(commands_b[0].command, WorkerManagerCommandType.startWorkers)
 
@@ -253,6 +266,7 @@ class TestWaterfallScalingPolicy(unittest.TestCase):
         commands = policy.get_scaling_commands(
             snapshot, heartbeat, managed_worker_ids, managed_worker_capabilities, manager_snapshots
         )
+        commands = _imperative(commands)
 
         # With 0 tasks, all workers should be shut down greedily
         self.assertEqual(len(commands), 1)
@@ -278,6 +292,7 @@ class TestWaterfallScalingPolicy(unittest.TestCase):
         commands = self.policy.get_scaling_commands(
             snapshot, heartbeat_b, managed_worker_ids, managed_worker_capabilities, manager_snapshots
         )
+        commands = _imperative(commands)
 
         self.assertEqual(len(commands), 1)
         self.assertEqual(commands[0].command, WorkerManagerCommandType.startWorkers)
@@ -299,6 +314,7 @@ class TestWaterfallScalingPolicy(unittest.TestCase):
         commands = self.policy.get_scaling_commands(
             snapshot, heartbeat_a, managed_worker_ids_a, managed_worker_capabilities, manager_snapshots
         )
+        commands = _imperative(commands)
 
         # With 0 tasks, all 3 workers should be shut down greedily
         self.assertEqual(len(commands), 1)
@@ -328,6 +344,7 @@ class TestWaterfallScalingPolicy(unittest.TestCase):
         commands_nat = policy.get_scaling_commands(
             snapshot, heartbeat_nat, managed_worker_ids, managed_worker_capabilities, manager_snapshots
         )
+        commands_nat = _imperative(commands_nat)
         self.assertEqual(len(commands_nat), 1)
         self.assertEqual(commands_nat[0].command, WorkerManagerCommandType.startWorkers)
 
@@ -336,6 +353,7 @@ class TestWaterfallScalingPolicy(unittest.TestCase):
         commands_ecs = policy.get_scaling_commands(
             snapshot, heartbeat_ecs, managed_worker_ids, managed_worker_capabilities, manager_snapshots
         )
+        commands_ecs = _imperative(commands_ecs)
         self.assertEqual(len(commands_ecs), 0)
 
     def test_multiple_managers_same_priority(self):
@@ -364,6 +382,7 @@ class TestWaterfallScalingPolicy(unittest.TestCase):
         commands = policy.get_scaling_commands(
             snapshot, heartbeat_ecs, managed_worker_ids, managed_worker_capabilities, manager_snapshots
         )
+        commands = _imperative(commands)
         self.assertEqual(len(commands), 1)
         self.assertEqual(commands[0].command, WorkerManagerCommandType.startWorkers)
 
@@ -393,6 +412,7 @@ class TestWaterfallScalingPolicy(unittest.TestCase):
         commands = policy.get_scaling_commands(
             snapshot, heartbeat_ecs, managed_worker_ids, managed_worker_capabilities, manager_snapshots
         )
+        commands = _imperative(commands)
         self.assertEqual(len(commands), 0)
 
     def test_greedy_shutdown_partial_with_tasks(self):
@@ -416,11 +436,36 @@ class TestWaterfallScalingPolicy(unittest.TestCase):
         commands = policy.get_scaling_commands(
             snapshot, heartbeat, managed_worker_ids, managed_worker_capabilities, manager_snapshots
         )
+        commands = _imperative(commands)
 
         self.assertEqual(len(commands), 1)
         self.assertEqual(commands[0].command, WorkerManagerCommandType.shutdownWorkers)
         # 10 workers - 1 kept = 9 shut down
         self.assertEqual(len(commands[0].workerIDs), 9)
+
+    def test_declarative_desired_zero_on_non_owning_manager(self):
+        """A non-owning manager (higher-priority has capacity) must emit desired=0."""
+        tasks = _create_tasks(5)
+        snapshot = InformationSnapshot(tasks=tasks, workers={})
+        managed_worker_ids: List[WorkerID] = []
+        managed_worker_capabilities: Dict[str, int] = {}
+
+        # Manager A (priority 1) has room; manager B is lower priority and should not scale.
+        manager_snapshots = {
+            b"manager_a": _create_manager_snapshot(b"manager_a", max_task_concurrency=10, worker_count=3),
+            b"manager_b": _create_manager_snapshot(b"manager_b", max_task_concurrency=20, worker_count=0),
+        }
+
+        heartbeat_b = _create_worker_manager_heartbeat(b"manager_b", max_task_concurrency=20)
+        commands_b = self.policy.get_scaling_commands(
+            snapshot, heartbeat_b, managed_worker_ids, managed_worker_capabilities, manager_snapshots
+        )
+
+        declarative = _declarative(commands_b)
+        self.assertEqual(len(declarative), 1)
+        requests = list(declarative[0].setDesiredTaskConcurrencyRequests)
+        self.assertEqual(len(requests), 1)
+        self.assertEqual(requests[0].taskConcurrency, 0)
 
 
 class TestWaterfallCapabilities(unittest.TestCase):
@@ -448,10 +493,11 @@ class TestWaterfallCapabilities(unittest.TestCase):
         commands = policy.get_scaling_commands(
             snapshot, heartbeat, managed_worker_ids, managed_worker_capabilities, manager_snapshots
         )
+        commands = _imperative(commands)
 
         self.assertEqual(len(commands), 1)
         self.assertEqual(commands[0].command, WorkerManagerCommandType.startWorkers)
-        self.assertIn("gpu", commands[0].capabilities)
+        self.assertIn("gpu", capabilities_to_dict(commands[0].capabilities))
 
     def test_unmet_capability_skips_incapable_higher_priority(self):
         """Higher-priority manager that cannot provide the capability should be skipped."""
@@ -476,9 +522,10 @@ class TestWaterfallCapabilities(unittest.TestCase):
         commands_cpu = policy.get_scaling_commands(
             snapshot, heartbeat_cpu, managed_worker_ids, managed_worker_capabilities, manager_snapshots
         )
+        commands_cpu = _imperative(commands_cpu)
         # Falls through to generic start (tasks exist, no workers) — but capability check returns empty
         # because manager_cpu can't provide gpu. Generic start still fires.
-        gpu_commands = [c for c in commands_cpu if c.capabilities.get("gpu")]
+        gpu_commands = [c for c in commands_cpu if capabilities_to_dict(c.capabilities).get("gpu")]
         self.assertEqual(len(gpu_commands), 0)
 
         # manager_gpu heartbeat: can provide gpu, should issue start with gpu
@@ -486,9 +533,10 @@ class TestWaterfallCapabilities(unittest.TestCase):
         commands_gpu = policy.get_scaling_commands(
             snapshot, heartbeat_gpu, managed_worker_ids, managed_worker_capabilities, manager_snapshots
         )
+        commands_gpu = _imperative(commands_gpu)
         self.assertEqual(len(commands_gpu), 1)
         self.assertEqual(commands_gpu[0].command, WorkerManagerCommandType.startWorkers)
-        self.assertIn("gpu", commands_gpu[0].capabilities)
+        self.assertIn("gpu", capabilities_to_dict(commands_gpu[0].capabilities))
 
     def test_unmet_capability_respects_waterfall_priority(self):
         """When multiple managers can provide the capability, higher priority should start first."""
@@ -513,14 +561,16 @@ class TestWaterfallCapabilities(unittest.TestCase):
         commands_a = policy.get_scaling_commands(
             snapshot, heartbeat_a, managed_worker_ids, managed_worker_capabilities, manager_snapshots
         )
+        commands_a = _imperative(commands_a)
         self.assertEqual(len(commands_a), 1)
-        self.assertIn("gpu", commands_a[0].capabilities)
+        self.assertIn("gpu", capabilities_to_dict(commands_a[0].capabilities))
 
         # manager_b should NOT start (higher-priority manager_a has capacity)
         heartbeat_b = _create_worker_manager_heartbeat(b"manager_b", capabilities={"gpu": 4})
         commands_b = policy.get_scaling_commands(
             snapshot, heartbeat_b, managed_worker_ids, managed_worker_capabilities, manager_snapshots
         )
+        commands_b = _imperative(commands_b)
         self.assertEqual(len(commands_b), 0)
 
     def test_unmet_capability_overflows_to_lower_priority(self):
@@ -549,8 +599,9 @@ class TestWaterfallCapabilities(unittest.TestCase):
         commands = policy.get_scaling_commands(
             snapshot, heartbeat_b, managed_worker_ids, managed_worker_capabilities, manager_snapshots
         )
+        commands = _imperative(commands)
         self.assertEqual(len(commands), 1)
-        self.assertIn("gpu", commands[0].capabilities)
+        self.assertIn("gpu", capabilities_to_dict(commands[0].capabilities))
 
     def test_capability_check_precedes_ratio(self):
         """Unmet capabilities should trigger start even when overall ratio is within bounds."""
@@ -574,8 +625,9 @@ class TestWaterfallCapabilities(unittest.TestCase):
         commands = policy.get_scaling_commands(
             snapshot, heartbeat, managed_worker_ids, managed_worker_capabilities, manager_snapshots
         )
+        commands = _imperative(commands)
         self.assertEqual(len(commands), 1)
-        self.assertIn("gpu", commands[0].capabilities)
+        self.assertIn("gpu", capabilities_to_dict(commands[0].capabilities))
 
     def test_start_command_includes_capabilities(self):
         """StartWorkers command for unmet capability should carry the exact capability dict."""
@@ -591,8 +643,9 @@ class TestWaterfallCapabilities(unittest.TestCase):
         }
 
         commands = policy.get_scaling_commands(snapshot, heartbeat, [], {}, manager_snapshots)
+        commands = _imperative(commands)
         self.assertEqual(len(commands), 1)
-        self.assertEqual(commands[0].capabilities, {"gpu": 2, "nvlink": 1})
+        self.assertEqual(capabilities_to_dict(commands[0].capabilities), {"gpu": 2, "nvlink": 1})
 
     def test_shutdown_prefers_no_capability_workers(self):
         """When shutting down, workers without capabilities should be shut down first."""
@@ -610,6 +663,7 @@ class TestWaterfallCapabilities(unittest.TestCase):
 
         heartbeat = _create_worker_manager_heartbeat(b"mgr")
         commands = policy.get_scaling_commands(snapshot, heartbeat, managed_worker_ids, {}, manager_snapshots)
+        commands = _imperative(commands)
 
         # With 0 tasks, both workers are shut down greedily; no-cap worker comes first
         self.assertEqual(len(commands), 1)
@@ -634,6 +688,7 @@ class TestWaterfallCapabilities(unittest.TestCase):
 
         heartbeat = _create_worker_manager_heartbeat(b"mgr")
         commands = policy.get_scaling_commands(snapshot, heartbeat, managed_worker_ids, {}, manager_snapshots)
+        commands = _imperative(commands)
 
         # With 0 tasks, both shut down greedily; least busy first
         self.assertEqual(len(commands), 1)
@@ -654,9 +709,10 @@ class TestWaterfallCapabilities(unittest.TestCase):
         manager_snapshots = {b"mgr": _create_manager_snapshot(b"mgr", worker_count=0)}
 
         commands = policy.get_scaling_commands(snapshot, heartbeat, [], {}, manager_snapshots)
+        commands = _imperative(commands)
         self.assertEqual(len(commands), 1)
         self.assertEqual(commands[0].command, WorkerManagerCommandType.startWorkers)
-        self.assertEqual(commands[0].capabilities, {})
+        self.assertEqual(capabilities_to_dict(commands[0].capabilities), {})
 
     def test_value_agnostic_matching(self):
         """Capability matching should be key-only; values are ignored."""
@@ -673,6 +729,7 @@ class TestWaterfallCapabilities(unittest.TestCase):
 
         # Should NOT issue capability start — workers already handle {a}
         commands = policy.get_scaling_commands(snapshot, heartbeat, [], {}, manager_snapshots)
+        commands = _imperative(commands)
         capability_starts = [
             c for c in commands if c.command == WorkerManagerCommandType.startWorkers and c.capabilities
         ]
@@ -761,6 +818,7 @@ class TestWaterfallV1Policy(unittest.TestCase):
         commands_a = policy.get_scaling_commands(
             snapshot, heartbeat_a, managed_worker_ids, managed_worker_capabilities, manager_snapshots
         )
+        commands_a = _imperative(commands_a)
         self.assertEqual(len(commands_a), 1)
         self.assertEqual(commands_a[0].command, WorkerManagerCommandType.startWorkers)
 
@@ -773,6 +831,7 @@ class TestWaterfallV1Policy(unittest.TestCase):
         commands_b = policy.get_scaling_commands(
             snapshot, heartbeat_b, managed_worker_ids, managed_worker_capabilities, manager_snapshots_with_both
         )
+        commands_b = _imperative(commands_b)
         self.assertEqual(len(commands_b), 0)
 
     def test_scaling_status(self):
@@ -784,6 +843,82 @@ class TestWaterfallV1Policy(unittest.TestCase):
         managed_workers = {b"mgr-1": [WorkerID(b"worker-1")]}
         status = policy.get_scaling_status(managed_workers)
         self.assertIsInstance(status, ScalingManagerStatus)
+
+
+class TestWaterfallV1PolicyAssignmentWithCapabilities(unittest.TestCase):
+    """
+    Tests that WaterfallV1Policy.assign_task respects task capabilities.
+
+    Bug being exposed:
+        WaterfallV1Policy delegates assign_task to EvenLoadAllocatePolicy,
+        which ignores task capabilities and routes a task requiring "gpu" to
+        any available worker (even one without the capability), instead of to
+        the worker that actually has it.
+    """
+
+    def setUp(self):
+        setup_logger()
+        try:
+            asyncio.get_event_loop()
+        except RuntimeError:
+            asyncio.set_event_loop(asyncio.new_event_loop())
+
+    def test_task_with_capability_assigned_to_capable_worker(self):
+        """Task requiring {"gpu": -1} must land on a worker that has gpu."""
+        policy = WaterfallV1Policy("1,manager_a,10\n2,manager_b,20")
+
+        worker_no_gpu = WorkerID(b"worker-no-gpu")
+        worker_gpu = WorkerID(b"worker-gpu")
+
+        # Insertion order matters: the no-gpu worker is queued first, so an
+        # even-load allocator will hand it out first when both have count 0.
+        self.assertTrue(policy.add_worker(worker_no_gpu, capabilities={}, queue_size=10))
+        self.assertTrue(policy.add_worker(worker_gpu, capabilities={"gpu": -1}, queue_size=10))
+
+        task = _create_mock_task(TaskID.generate_task_id(), capabilities={"gpu": -1})
+        assigned = policy.assign_task(task)
+
+        self.assertEqual(
+            assigned, worker_gpu, f"task requiring gpu was assigned to {assigned!r}, expected {worker_gpu!r}"
+        )
+
+    def test_task_with_capability_not_assigned_when_no_capable_worker(self):
+        """Task requiring gpu must not be assigned if no worker has gpu."""
+        policy = WaterfallV1Policy("1,manager_a,10")
+
+        worker_no_gpu = WorkerID(b"worker-no-gpu")
+        self.assertTrue(policy.add_worker(worker_no_gpu, capabilities={}, queue_size=10))
+
+        task = _create_mock_task(TaskID.generate_task_id(), capabilities={"gpu": -1})
+        assigned = policy.assign_task(task)
+
+        self.assertEqual(
+            assigned,
+            WorkerID.invalid_worker_id(),
+            f"task requiring gpu was incorrectly assigned to {assigned!r} that has no gpu",
+        )
+
+    def test_has_available_worker_respects_capabilities(self):
+        """has_available_worker({"gpu": -1}) must be False if no worker has gpu."""
+        policy = WaterfallV1Policy("1,manager_a,10")
+
+        worker_no_gpu = WorkerID(b"worker-no-gpu")
+        self.assertTrue(policy.add_worker(worker_no_gpu, capabilities={}, queue_size=10))
+
+        self.assertFalse(
+            policy.has_available_worker({"gpu": -1}),
+            "has_available_worker should return False when no worker has the requested capability",
+        )
+
+
+def _imperative(commands):
+    """Filter out the declarative setDesiredTaskConcurrency command emitted each policy run."""
+    return [c for c in commands if c.command != WorkerManagerCommandType.setDesiredTaskConcurrency]
+
+
+def _declarative(commands):
+    """Return the declarative setDesiredTaskConcurrency commands emitted each policy run."""
+    return [c for c in commands if c.command == WorkerManagerCommandType.setDesiredTaskConcurrency]
 
 
 def _create_mock_task(task_id: TaskID, capabilities: Optional[Dict[str, int]] = None) -> Task:

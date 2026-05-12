@@ -9,7 +9,7 @@ var workerSortField = null;  // current sort column field name
 var workerSortAsc = true;    // sort direction
 var lastWorkersData = [];    // latest workers array for re-sorting
 var taskLogCount = 0;
-var TASK_LOG_MAX_SIZE = 100;
+var TASK_LOG_MAX_SIZE = 100;  // overridden by server's task_log_max_size on initial state
 var taskRowMap = {};  // task_id -> tr element for in-place updates
 var streamBars = [];       // current bar data from server
 var streamRows = [];       // row labels (truncated)
@@ -190,6 +190,9 @@ function handleFullState(data) {
     if (data.scheduler) updateScheduler(data.scheduler);
     if (data.workers) updateWorkers(data.workers);
     if (data.worker_managers) updateWorkerManagers(data.worker_managers);
+    if (typeof data.task_log_max_size === "number" && data.task_log_max_size > 0) {
+        TASK_LOG_MAX_SIZE = data.task_log_max_size;
+    }
     if (data.task_log) {
         tasklogBody.innerHTML = "";
         taskLogCount = 0;
@@ -436,7 +439,7 @@ function updateWorkerRow(tr, w) {
 function handleWorkerEvents(events) {
     for (var i = 0; i < events.length; i++) {
         var ev = events[i];
-        if (ev.state === "Disconnected" && workerRows[ev.worker_id]) {
+        if (ev.state === "disconnected" && workerRows[ev.worker_id]) {
             workersBody.removeChild(workerRows[ev.worker_id]);
             delete workerRows[ev.worker_id];
         }
@@ -454,8 +457,8 @@ function formatTime(epoch) {
 }
 
 function statusClass(status) {
-    if (status === "Success") return "status-success";
-    if (status === "Running" || status === "Inactive" || status === "Canceling" || status === "BalanceCanceling") return "status-running";
+    if (status === "success") return "status-success";
+    if (status in {"running":1, "inactive":1, "canceling":1, "balanceCanceling":1}) return "status-running";
     return "status-fail";
 }
 
@@ -586,7 +589,26 @@ function updateTaskStream(data) {
     var legend = data.legend || [];
     var managerLegend = data.manager_legend || [];
     streamLegend.innerHTML = "";
-    // Add status patterns to legend
+
+    // Manager legend (narrow swatches matching the 4px row stripe)
+    if (managerLegend.length > 0) {
+        for (var k = 0; k < managerLegend.length; k++) {
+            var mItem = document.createElement("span");
+            mItem.className = "legend-item";
+            mItem.innerHTML = '<span class="legend-swatch legend-swatch-narrow" style="background:' +
+                managerLegend[k].color + '"></span> ' + escapeHTML(managerLegend[k].name);
+            streamLegend.appendChild(mItem);
+        }
+    }
+
+    // Separator + status patterns
+    if (managerLegend.length > 0) {
+        var sep1 = document.createElement("span");
+        sep1.className = "legend-item";
+        sep1.style.color = "#94a3b8";
+        sep1.textContent = "|";
+        streamLegend.appendChild(sep1);
+    }
     var failed = document.createElement("span");
     failed.className = "legend-item";
     failed.innerHTML = '<span class="legend-swatch pattern-x"></span> Failed';
@@ -596,22 +618,6 @@ function updateTaskStream(data) {
     canceled.className = "legend-item";
     canceled.innerHTML = '<span class="legend-swatch pattern-slash"></span> Canceled';
     streamLegend.appendChild(canceled);
-
-    // Manager legend first (with separator)
-    if (managerLegend.length > 0) {
-        var sep1 = document.createElement("span");
-        sep1.className = "legend-item";
-        sep1.style.color = "#94a3b8";
-        sep1.textContent = "|";
-        streamLegend.appendChild(sep1);
-        for (var k = 0; k < managerLegend.length; k++) {
-            var mItem = document.createElement("span");
-            mItem.className = "legend-item";
-            mItem.innerHTML = '<span class="legend-swatch" style="background:' +
-                managerLegend[k].color + '"></span> ' + escapeHTML(managerLegend[k].name);
-            streamLegend.appendChild(mItem);
-        }
-    }
 
     // Capability legend (with separator)
     if (legend.length > 0) {

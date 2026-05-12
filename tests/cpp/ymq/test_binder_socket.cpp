@@ -158,6 +158,55 @@ TEST_F(YMQBinderSocketTest, SendMessage)
     ASSERT_EQ(sendCallbackCalled.get_future().wait_for(std::chrono::seconds {5}), std::future_status::ready);
 }
 
+TEST_F(YMQBinderSocketTest, SendMulticastMessage)
+{
+    // Test that the binder can multicast and broadcast messages
+
+    bool clientMessageReceived = false;
+
+    auto onClientRecvMessage = [&](scaler::ymq::Bytes receivedPayload) {
+        ASSERT_FALSE(clientMessageReceived);
+        ASSERT_EQ(receivedPayload.as_string(), messagePayload);
+        clientMessageReceived = true;
+    };
+
+    auto onClientDisconnect = [](auto) { FAIL() << "Unexpected disconnect on client"; };
+
+    BinderClientPair connections(std::move(onClientRecvMessage), std::move(onClientDisconnect));
+
+    scaler::ymq::BinderSocket& binder = connections.binder();
+    scaler::wrapper::uv::Loop& loop   = connections.loop();
+
+    // Make sure the client is ready
+
+    binder.sendMessage(BinderClientPair::clientIdentity, scaler::ymq::Bytes(messagePayload), [](auto) {});
+
+    while (!clientMessageReceived) {
+        loop.run(UV_RUN_ONCE);
+    }
+
+    clientMessageReceived = false;
+
+    // Send a broadcast message
+
+    binder.sendMulticastMessage(scaler::ymq::Bytes(messagePayload));
+
+    while (!clientMessageReceived) {
+        loop.run(UV_RUN_ONCE);
+    }
+
+    clientMessageReceived = false;
+
+    // Send two multicast messages, should only receive the one with the matching prefix
+
+    binder.sendMulticastMessage(scaler::ymq::Bytes("unexpected multicast message"), "invalid-prefix");
+    binder.sendMulticastMessage(scaler::ymq::Bytes(messagePayload), BinderClientPair::clientIdentity.substr(0, 5));
+
+    while (!clientMessageReceived) {
+        loop.run(UV_RUN_ONCE);
+    }
+}
+
 TEST_F(YMQBinderSocketTest, RecvMessage)
 {
     // Test that the binder can receive messages
@@ -273,4 +322,46 @@ TEST_F(YMQBinderSocketTest, CloseConnection)
     }
 
     ASSERT_FALSE(client.connected());
+}
+
+TEST_F(YMQBinderSocketTest, StopRequested)
+{
+    scaler::ymq::IOContext context {};
+    scaler::wrapper::uv::Loop loop = UV_EXIT_ON_ERROR(scaler::wrapper::uv::Loop::init());
+    std::optional<scaler::ymq::BinderSocket> binder =
+        scaler::ymq::BinderSocket {context, BinderClientPair::binderIdentity};
+
+    binder->bindTo("tcp://127.0.0.1:0", [](std::expected<scaler::ymq::Address, scaler::ymq::Error> result) {
+        ASSERT_TRUE(result.has_value());
+    });
+
+    // Queue a receive call
+
+    std::optional<scaler::ymq::Error> recvError {};
+
+    binder->recvMessage([&](std::expected<scaler::ymq::Message, scaler::ymq::Error> result) {
+        ASSERT_FALSE(result.has_value());
+        recvError = result.error();
+    });
+
+    // Queue a send call to a not yet connected client
+
+    std::optional<scaler::ymq::Error> sendError {};
+
+    binder->sendMessage(
+        "unknown-client", scaler::ymq::Bytes(messagePayload), [&](std::expected<void, scaler::ymq::Error> result) {
+            ASSERT_FALSE(result.has_value());
+            sendError = result.error();
+        });
+
+    // Destroy the binder, expect the receive/send results to be filled with the SocketStopRequested error
+
+    binder = std::nullopt;
+
+    while (!recvError.has_value() || !sendError.has_value()) {
+        loop.run(UV_RUN_ONCE);
+    }
+
+    ASSERT_EQ(recvError->_errorCode, scaler::ymq::Error::ErrorCode::SocketStopRequested);
+    ASSERT_EQ(sendError->_errorCode, scaler::ymq::Error::ErrorCode::SocketStopRequested);
 }

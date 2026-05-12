@@ -3,9 +3,10 @@ from typing import Dict, Optional
 
 import psutil
 
-from scaler.config.types.object_storage_server import ObjectStorageAddressConfig
+from scaler.config.types.address import AddressConfig, SocketType
 from scaler.io.mixins import AsyncConnector, AsyncObjectStorageConnector
 from scaler.protocol.capnp import ProcessorStatus, Resource, WorkerHeartbeat, WorkerHeartbeatEcho
+from scaler.protocol.helpers import dict_to_capabilities
 from scaler.utility.mixins import Looper
 from scaler.worker.agent.mixins import HeartbeatManager, ProcessorManager, TaskManager, TimeoutManager
 from scaler.worker.agent.processor_holder import ProcessorHolder
@@ -14,7 +15,7 @@ from scaler.worker.agent.processor_holder import ProcessorHolder
 class VanillaHeartbeatManager(Looper, HeartbeatManager):
     def __init__(
         self,
-        object_storage_address: Optional[ObjectStorageAddressConfig],
+        object_storage_address: Optional[AddressConfig],
         capabilities: Dict[str, int],
         task_queue_size: int,
         worker_manager_id: bytes,
@@ -33,7 +34,7 @@ class VanillaHeartbeatManager(Looper, HeartbeatManager):
         self._start_timestamp_ns = 0
         self._latency_us = 0
 
-        self._object_storage_address: Optional[ObjectStorageAddressConfig] = object_storage_address
+        self._object_storage_address: Optional[AddressConfig] = object_storage_address
 
     def register(
         self,
@@ -60,8 +61,9 @@ class VanillaHeartbeatManager(Looper, HeartbeatManager):
 
         if self._object_storage_address is None:
             address_message = heartbeat.objectStorageAddress
-            self._object_storage_address = ObjectStorageAddressConfig(address_message.host, address_message.port)
-            await self._connector_storage.connect(self._object_storage_address.host, self._object_storage_address.port)
+            scheme = SocketType(address_message.scheme)
+            self._object_storage_address = AddressConfig(scheme, address_message.host, address_message.port)
+            await self._connector_storage.connect(self._object_storage_address)
 
     async def routine(self):
         processors = self._processor_manager.processors()
@@ -90,13 +92,13 @@ class VanillaHeartbeatManager(Looper, HeartbeatManager):
                 latencyUS=self._latency_us,
                 taskLock=self._processor_manager.can_accept_task(),
                 processors=[self.__get_processor_status_from_holder(processor) for processor in processors],
-                capabilities=self._capabilities,
+                capabilities=dict_to_capabilities(self._capabilities),
                 workerManagerID=self._worker_manager_id,
             )
         )
         self._start_timestamp_ns = time.time_ns()
 
-    def get_object_storage_address(self) -> Optional[ObjectStorageAddressConfig]:
+    def get_object_storage_address(self) -> Optional[AddressConfig]:
         return self._object_storage_address
 
     @staticmethod

@@ -40,7 +40,12 @@ void BinderSocket::shutdown(ShutdownCallback onShutdownCallback) noexcept
             callback(std::unexpected {Error {Error::ErrorCode::SocketStopRequested}});
         }
 
-        // Clear all pending messages
+        // Fail all pending send callbacks
+        for (auto& [_, pendingMessages]: state->_pendingSendMessages) {
+            for (auto& pendingMessage: pendingMessages) {
+                pendingMessage.onMessageSent(std::unexpected {Error {Error::ErrorCode::SocketStopRequested}});
+            }
+        }
         state->_pendingSendMessages.clear();
         state->_pendingRecvMessages = {};
 
@@ -92,6 +97,24 @@ void BinderSocket::sendMessage(
         internal::MessageConnection& connection = *state->_connections.at(it->second);
         connection.sendMessage(std::move(messagePayload), std::move(callback));
     });
+}
+
+void BinderSocket::sendMulticastMessage(Bytes messagePayload, std::optional<Identity> remotePrefix) noexcept
+{
+    _state->_thread.executeThreadSafe(
+        [state = _state, messagePayload = std::move(messagePayload), remotePrefix = std::move(remotePrefix)]() mutable {
+            for (const auto& [_, connectionPtr]: state->_connections) {
+                if (remotePrefix.has_value()) {
+                    const std::optional<Identity>& remoteIdentity = connectionPtr->remoteIdentity();
+                    if (!remoteIdentity.has_value() || !remoteIdentity->starts_with(remotePrefix.value())) {
+                        continue;
+                    }
+                }
+
+                connectionPtr->sendMessage(
+                    messagePayload, []([[maybe_unused]] std::expected<void, Error> result) noexcept {});
+            }
+        });
 }
 
 void BinderSocket::recvMessage(RecvMessageCallback onRecvMessage) noexcept
