@@ -13,6 +13,7 @@ using scaler::utility::pymod::OwnedPyObject;
 OwnedPyObject<> get_attr(PyObject* obj, const char* name);
 bool read_enum_raw(PyObject* obj, uint16_t& out);
 bool load_buffer(PyObject* obj, Py_buffer& buffer);
+bool check_word_alignment(const Py_buffer& buffer);
 OwnedPyObject<> capnp_struct_init_method(PyObject* self, PyObject* args, PyObject* kwargs);
 OwnedPyObject<> capnp_struct_get_attr(PyObject* self, PyObject* args);
 OwnedPyObject<> capnp_struct_to_bytes(PyObject* self);

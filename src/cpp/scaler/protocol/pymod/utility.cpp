@@ -40,6 +40,12 @@ bool load_buffer(PyObject* obj, Py_buffer& buffer)
     return true;
 }
 
+bool check_word_alignment(const Py_buffer& buffer)
+{
+    return (reinterpret_cast<uintptr_t>(buffer.buf) % alignof(capnp::word)) == 0 &&
+           (buffer.len % static_cast<Py_ssize_t>(sizeof(capnp::word))) == 0;
+}
+
 namespace {
 
 using DynamicListIndex = std::remove_cv_t<decltype(std::declval<capnp::DynamicList::Builder>().size())>;
@@ -267,8 +273,7 @@ OwnedPyObject<> with_lazy_struct_reader(PyObject* self, Handler&& handler)
         return {};
     }
 
-    if ((reinterpret_cast<uintptr_t>(buffer.buf) % alignof(capnp::word)) != 0 ||
-        (buffer.len % static_cast<Py_ssize_t>(sizeof(capnp::word))) != 0) {
+    if (!check_word_alignment(buffer)) {
         PyBuffer_Release(&buffer);
         PyErr_SetString(PyExc_ValueError, "Cap'n Proto input buffer must be word-aligned for zero-copy reads");
         return {};

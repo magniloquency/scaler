@@ -6,7 +6,6 @@
 #include <kj/array.h>
 #include <kj/exception.h>
 
-#include <cstdint>
 #include <cstring>
 #include <exception>
 #include <stdexcept>
@@ -62,8 +61,7 @@ OwnedPyObject<> message_from_bytes(PyObject* data, unsigned long long traversal_
         PyErr_SetString(PyExc_RuntimeError, "capnp module state is unavailable");
         return {};
     }
-    if ((reinterpret_cast<uintptr_t>(buffer.buf) % alignof(capnp::word)) != 0 ||
-        (buffer.len % static_cast<Py_ssize_t>(sizeof(capnp::word))) != 0) {
+    if (!check_word_alignment(buffer)) {
         PyBuffer_Release(&buffer);
         PyErr_SetString(PyExc_ValueError, "Cap'n Proto input buffer must be word-aligned for zero-copy reads");
         return {};
@@ -147,8 +145,7 @@ OwnedPyObject<> struct_from_bytes(const char* type_name, PyObject* data, unsigne
         return {};
     }
 
-    if ((reinterpret_cast<uintptr_t>(buffer.buf) % alignof(capnp::word)) != 0 ||
-        (buffer.len % static_cast<Py_ssize_t>(sizeof(capnp::word))) != 0) {
+    if (!check_word_alignment(buffer)) {
         PyBuffer_Release(&buffer);
         PyErr_SetString(PyExc_ValueError, "Cap'n Proto input buffer must be word-aligned for zero-copy reads");
         return {};
