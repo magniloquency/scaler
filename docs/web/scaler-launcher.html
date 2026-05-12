@@ -385,7 +385,7 @@ function buildUserData(cfg, creds) {
     "monitor_address = \"" + proto + "://127.0.0.1:" + (sp + 2) + wsSlash + "\"\n" +
     "gui_address = \"0.0.0.0:50001\"\n" +
     "CONFIG_EOF\n\n" +
-    (cfg.networkBackend === "zmq" ? "SCALER_NETWORK_BACKEND=zmq " : "") +
+    (cfg.networkBackend === "zmq" ? "SCALER_NETWORK_BACKEND=tcp_zmq " : "") +
     "/opt/scaler-venv/bin/scaler /opt/scaler/config.toml >> /var/log/scaler.log 2>&1 &\n" +
     "echo \"Scaler started (PID=$!)\"\n";
 }
