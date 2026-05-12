@@ -387,6 +387,54 @@ class TestORBAWSEC2WorkerManagerSubcommand(unittest.TestCase):
                 ],
             )
 
+    def test_orb_aws_ec2_instance_tags_default_empty(self) -> None:
+        from scaler.config.section.orb_aws_ec2_worker_adapter import ORBAWSEC2WorkerAdapterConfig
+
+        config = ORBAWSEC2WorkerAdapterConfig.parse_with_section(
+            "scaler_worker_manager", {}, argv=_ORB_AWS_EC2_IMAGE_ARGV
+        )
+        self.assertEqual(config.instance_tags, {})
+
+    def test_orb_aws_ec2_instance_tags_single_tag_from_cli(self) -> None:
+        from scaler.config.section.orb_aws_ec2_worker_adapter import ORBAWSEC2WorkerAdapterConfig
+
+        config = ORBAWSEC2WorkerAdapterConfig.parse_with_section(
+            "scaler_worker_manager", {}, argv=[*_ORB_AWS_EC2_IMAGE_ARGV, "--instance-tags", "Name=my-worker"]
+        )
+        self.assertEqual(config.instance_tags, {"Name": "my-worker"})
+
+    def test_orb_aws_ec2_instance_tags_multiple_tags_from_cli(self) -> None:
+        from scaler.config.section.orb_aws_ec2_worker_adapter import ORBAWSEC2WorkerAdapterConfig
+
+        config = ORBAWSEC2WorkerAdapterConfig.parse_with_section(
+            "scaler_worker_manager",
+            {},
+            argv=[*_ORB_AWS_EC2_IMAGE_ARGV, "--instance-tags", "Name=my-worker,Env=prod,Team=data"],
+        )
+        self.assertEqual(config.instance_tags, {"Name": "my-worker", "Env": "prod", "Team": "data"})
+
+    def test_orb_aws_ec2_instance_tags_value_with_equals_from_cli(self) -> None:
+        from scaler.config.section.orb_aws_ec2_worker_adapter import ORBAWSEC2WorkerAdapterConfig
+
+        config = ORBAWSEC2WorkerAdapterConfig.parse_with_section(
+            "scaler_worker_manager", {}, argv=[*_ORB_AWS_EC2_IMAGE_ARGV, "--instance-tags", "Tag=key=val"]
+        )
+        self.assertEqual(config.instance_tags, {"Tag": "key=val"})
+
+    def test_orb_aws_ec2_instance_tags_from_toml(self) -> None:
+        from scaler.config.section.orb_aws_ec2_worker_adapter import ORBAWSEC2WorkerAdapterConfig
+
+        section_data = {
+            "type": "orb_aws_ec2",
+            "scheduler_address": "tcp://127.0.0.1:6378",
+            "worker_manager_id": "wm-test",
+            "aws_region": "us-east-1",
+            "image_id": "ami-0528819f94f4f5fa5",
+            "instance_tags": "Name=my-worker,Env=prod",
+        }
+        config = ORBAWSEC2WorkerAdapterConfig.parse_with_section("scaler_worker_manager", section_data, argv=[])
+        self.assertEqual(config.instance_tags, {"Name": "my-worker", "Env": "prod"})
+
     def test_orb_aws_ec2_requirements_without_python_version_raises(self) -> None:
         from scaler.config.section.orb_aws_ec2_worker_adapter import ORBAWSEC2WorkerAdapterConfig
 

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
+import json
 import logging
 import math
 import os
@@ -156,23 +158,18 @@ class ORBAWSEC2WorkerAdapter:
             "provider": {
                 "selection_policy": "FIRST_AVAILABLE",
                 "providers": [
-                    {"name": "aws-default", "type": "aws", "enabled": True, "priority": 1, "config": {"region": region}}
-                ],
-                # ORB skips loading strategy defaults (aws_defaults.json) when config_dict is
-                # provided, so provider_defaults must be included explicitly here. Without it,
-                # get_effective_handlers() returns {} and RunInstances is not in supported_apis.
-                # This may be fixed in a more recent version of the ORB SDK.
-                "provider_defaults": {
-                    "aws": {
-                        "handlers": {
-                            "RunInstances": {
-                                "handler_class": "RunInstancesHandler",
-                                "supports_spot": False,
-                                "supports_ondemand": True,
-                            }
-                        }
+                    {
+                        "name": "aws-default",
+                        "type": "aws",
+                        "enabled": True,
+                        "priority": 1,
+                        # profile must be set explicitly: ORB's config pipeline starts from
+                        # aws_defaults.json (which has profile="default") and deep-merges our dict
+                        # on top. Omitting profile here lets "default" leak through, which breaks
+                        # environments that rely on the EC2 instance role credential chain.
+                        "config": {"region": region, "profile": self._config.aws_profile},
                     }
-                },
+                ],
             },
             "storage": {"type": "json"},
         }
@@ -224,7 +221,7 @@ class ORBAWSEC2WorkerAdapter:
             workers_per_provisioner_unit=workers_per_instance,
         )
 
-        create_result = await sdk.create_template(
+        template_kwargs = dict(
             template_id=template_id,
             name=f"opengris-orb-{template_id}",
             image_id=image_id,
@@ -237,7 +234,12 @@ class ORBAWSEC2WorkerAdapter:
             security_group_ids=security_group_ids,
             key_name=key_name,
             user_data=user_data,
+            tags=self._config.instance_tags,
         )
+        if self._config.debug_dump_path is not None:
+            self._dump_debug_state(template_id, template_kwargs)
+
+        create_result = await sdk.create_template(**template_kwargs)
         logging.info(f"create_template result: {create_result}")
 
         validate_result = await sdk.validate_template(template_id=template_id)
@@ -296,6 +298,16 @@ class ORBAWSEC2WorkerAdapter:
     def __del__(self) -> None:
         self._cleanup()
 
+    def _dump_debug_state(self, template_id: str, template_kwargs: dict) -> None:
+        dump_dir = self._config.debug_dump_path
+        config_path = os.path.join(dump_dir, f"orb_debug_config_{template_id}.json")
+        template_path = os.path.join(dump_dir, f"orb_debug_template_{template_id}.json")
+        with open(config_path, "w") as f:
+            json.dump(dataclasses.asdict(self._config), f, indent=2, default=str)
+        with open(template_path, "w") as f:
+            json.dump(template_kwargs, f, indent=2, default=str)
+        logging.info(f"[DEBUG] Dumped config to {config_path} and template to {template_path}")
+
     def _create_user_data(self) -> str:
         worker_config = self._config.worker_config
         adapter_config = self._config.worker_manager_config
@@ -326,8 +338,9 @@ set +e
 
         # --max-task-concurrency is not passed: scaler_worker_manager defaults to cpu_count - 1 workers,
         # where cpu_count is determined by the machine type the user configured in the ORB template.
+        backend_prefix = f"SCALER_NETWORK_BACKEND={self._config.network_backend.name} "
         script += f"""INSTANCE_ID=$(ec2-metadata --instance-id --quiet)
-nohup scaler_worker_manager baremetal_native {self._worker_scheduler_address!r} \\
+{backend_prefix}nohup scaler_worker_manager baremetal_native {self._worker_scheduler_address!r} \\
     --mode fixed \\
     --worker-type ORB \\
     --worker-manager-id "${{INSTANCE_ID}}" \\
