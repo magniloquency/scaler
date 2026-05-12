@@ -298,10 +298,15 @@ OwnedPyObject<> with_lazy_struct_reader(PyObject* self, Handler&& handler)
         }
 
         if (PyUnicode_Check(item)) {
-            auto current_struct = current.as<capnp::DynamicStruct>();
+            auto current_struct    = current.as<capnp::DynamicStruct>();
+            const char* field_utf8 = PyUnicode_AsUTF8(item);
+            if (!field_utf8) {
+                PyBuffer_Release(&buffer);
+                return {};
+            }
             capnp::StructSchema::Field field;
             try {
-                field = current_struct.getSchema().getFieldByName(PyUnicode_AsUTF8(item));
+                field = current_struct.getSchema().getFieldByName(field_utf8);
             } catch (const kj::Exception&) {
                 PyBuffer_Release(&buffer);
                 PyErr_SetString(PyExc_AttributeError, "unknown Cap'n Proto field");
