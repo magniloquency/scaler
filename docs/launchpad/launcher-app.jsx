@@ -623,6 +623,11 @@ function App() {
                     <span style={{ fontSize:10, color:"var(--text-muted)", marginRight:8, flexShrink:0 }}>SECRET</span>
                     <SecretInput value={secretKey} onChange={setSK} placeholder="wJalr…" style={{ flex:1, fontSize:12, color:"var(--text-primary)" }} />
                   </div>
+                  <a href="https://console.aws.amazon.com/iam/home#/security_credentials" target="_blank" rel="noopener noreferrer"
+                    style={{ fontSize:10, color:"var(--text-muted)", textDecoration:"none", alignSelf:"flex-end" }}
+                    onMouseOver={e => e.currentTarget.style.color="var(--text-accent)"}
+                    onMouseOut={e => e.currentTarget.style.color="var(--text-muted)"}
+                  >Generate access keys in AWS Console ↗</a>
                 </div>
               </PanelBox>
 
