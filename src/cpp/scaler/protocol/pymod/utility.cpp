@@ -302,6 +302,10 @@ OwnedPyObject<> with_lazy_struct_reader(PyObject* self, Handler&& handler)
             capnp::StructSchema::Field field;
             try {
                 field = current_struct.getSchema().getFieldByName(PyUnicode_AsUTF8(item));
+            } catch (const kj::Exception&) {
+                PyBuffer_Release(&buffer);
+                PyErr_SetString(PyExc_AttributeError, "unknown Cap'n Proto field");
+                return {};
             } catch (const std::out_of_range&) {
                 PyBuffer_Release(&buffer);
                 PyErr_SetString(PyExc_AttributeError, "unknown Cap'n Proto field");
@@ -333,8 +337,14 @@ OwnedPyObject<> with_lazy_struct_reader(PyObject* self, Handler&& handler)
         current_type = current_type.asList().getElementType();
     }
 
-    OwnedPyObject<> result {
-        handler(current.as<capnp::DynamicStruct>(), source.get(), traversal_limit, root_schema_id, path.get())};
+    OwnedPyObject<> result;
+    try {
+        result = OwnedPyObject<> {
+            handler(current.as<capnp::DynamicStruct>(), source.get(), traversal_limit, root_schema_id, path.get())};
+    } catch (...) {
+        PyBuffer_Release(&buffer);
+        throw;
+    }
     PyBuffer_Release(&buffer);
     return result;
 }
@@ -352,6 +362,9 @@ OwnedPyObject<> load_struct_field(PyObject* self, const char* name)
             capnp::StructSchema::Field field;
             try {
                 field = reader_struct.getSchema().getFieldByName(name);
+            } catch (const kj::Exception&) {
+                PyErr_SetString(PyExc_AttributeError, name);
+                return nullptr;
             } catch (const std::out_of_range&) {
                 PyErr_SetString(PyExc_AttributeError, name);
                 return nullptr;
