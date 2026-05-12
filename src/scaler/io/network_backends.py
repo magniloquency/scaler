@@ -186,6 +186,11 @@ def get_scaler_network_backend_type_from_env() -> NetworkBackendType:
     if backend_str is None:
         return SCALER_NETWORK_BACKEND
 
+    valid = [e.name for e in NetworkBackendType]
+    if backend_str not in valid:
+        raise ValueError(
+            f"Invalid SCALER_NETWORK_BACKEND value {backend_str!r}. Expected one of: {valid}"
+        )
     return NetworkBackendType[backend_str]
 
 
