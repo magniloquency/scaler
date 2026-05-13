@@ -1208,14 +1208,18 @@ function SchedulerLogTerminal({ instanceId, region, credentials, isActive }) {
         .promise();
       commandId = r.Command.CommandId;
     } catch (err) {
-      setStatus("error");
-      setError(
-        err.code === "AccessDeniedException"
-          ? "Permission denied. Your IAM user needs ssm:SendCommand and ssm:GetCommandInvocation."
-          : err.code === "InvalidClientTokenId" || err.code === "AuthFailure" || /invalid.*token/i.test(err.message)
-            ? "Invalid AWS credentials. Re-enter your Access Key ID and Secret Access Key in the Configuration tab."
-            : "SSM error: " + err.message,
-      );
+      if (err.code === "InvalidInstanceId") {
+        setLines([{ text: "Instance not yet registered with SSM — retrying in 15s…", cls: "warn" }]);
+      } else if (err.code === "AccessDeniedException") {
+        setStatus("error");
+        setError("Permission denied. Your IAM user needs ssm:SendCommand and ssm:GetCommandInvocation.");
+      } else if (err.code === "InvalidClientTokenId" || err.code === "AuthFailure" || /invalid.*token/i.test(err.message)) {
+        setStatus("error");
+        setError("Invalid AWS credentials. Re-enter your Access Key ID and Secret Access Key in the Configuration tab.");
+      } else {
+        setStatus("error");
+        setError("SSM error: " + err.message);
+      }
       return;
     }
     for (let i = 0; i < 12; i++) {

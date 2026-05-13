@@ -436,6 +436,15 @@ async function createIamStack(iam, suffix, addLog, signal) {
       .promise(),
     signal,
   );
+  await withAbort(
+    iam
+      .attachRolePolicy({
+        RoleName: roleName,
+        PolicyArn: "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+      })
+      .promise(),
+    signal,
+  );
 
   addLog("Creating instance profile '" + profileName + "'...", "cmd");
   try {
@@ -486,12 +495,21 @@ async function destroyIamStack(iam, iamState, addLog) {
 
   addLog("Deleting role '" + roleName + "'...", "cmd");
   try {
-    var policies = await iam.listRolePolicies({ RoleName: roleName }).promise();
-    for (var i = 0; i < policies.PolicyNames.length; i++) {
+    var attachedPolicies = await iam.listAttachedRolePolicies({ RoleName: roleName }).promise();
+    for (var i = 0; i < attachedPolicies.AttachedPolicies.length; i++) {
+      await iam
+        .detachRolePolicy({
+          RoleName: roleName,
+          PolicyArn: attachedPolicies.AttachedPolicies[i].PolicyArn,
+        })
+        .promise();
+    }
+    var inlinePolicies = await iam.listRolePolicies({ RoleName: roleName }).promise();
+    for (var j = 0; j < inlinePolicies.PolicyNames.length; j++) {
       await iam
         .deleteRolePolicy({
           RoleName: roleName,
-          PolicyName: policies.PolicyNames[i],
+          PolicyName: inlinePolicies.PolicyNames[j],
         })
         .promise();
     }
