@@ -1023,7 +1023,8 @@ function App() {
   const [showSchedAdv, setShowSchedAdv] = useState(false);
   const [activeTab, setActiveTab] = useState("config");
   const [theme, setTheme] = useState(() =>
-    window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light",
+    localStorage.getItem("launchpad-theme") ||
+    (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"),
   );
 
   const wmCounterRef = useRef(1);
@@ -1113,6 +1114,7 @@ function App() {
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("launchpad-theme", theme);
   }, [theme]);
 
   useEffect(() => {
