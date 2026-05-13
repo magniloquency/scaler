@@ -1487,11 +1487,10 @@ function App() {
           fontWeight: 700,
           cursor: !hasCredentials ? "default" : "pointer",
           transition: "all 0.2s",
-          animation: hasCredentials ? "destroyPulse 4s ease-in-out infinite" : "none",
           flexShrink: 0,
         }}
       >
-        ▼ Destroy Cluster{!hasCredentials ? " (missing credentials)" : ""}
+        Destroy Cluster{!hasCredentials ? " (missing credentials)" : ""}
       </button>
     );
   } else if (phase === "idle" || phase === "error") {
@@ -1512,11 +1511,10 @@ function App() {
           fontWeight: 700,
           cursor: !formReady ? "default" : "pointer",
           transition: "all 0.2s",
-          animation: formReady ? "launchPulse 3s ease-in-out infinite" : "none",
           flexShrink: 0,
         }}
       >
-        ▶ Launch Cluster
+        Launch Cluster
       </button>
     );
   } else if (phase === "ready") {
@@ -1537,11 +1535,10 @@ function App() {
           fontWeight: 700,
           cursor: !hasCredentials ? "default" : "pointer",
           transition: "all 0.2s",
-          animation: hasCredentials ? "destroyPulse 4s ease-in-out infinite" : "none",
           flexShrink: 0,
         }}
       >
-        ▼ Destroy Cluster{!hasCredentials ? " (missing credentials)" : ""}
+        Destroy Cluster{!hasCredentials ? " (missing credentials)" : ""}
       </button>
     );
   } else if (isRunning) {
