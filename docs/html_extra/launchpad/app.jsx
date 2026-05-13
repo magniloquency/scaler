@@ -1781,7 +1781,7 @@ function App() {
                 <div>
                   <Label
                     help={
-                      "WebSocket (ws://) — required when connecting from a browser; requires YMQ.\n---\nTCP (tcp://) — works with ZMQ or YMQ; readiness check skipped (browsers can't open raw TCP)."
+                      "WebSocket — connect to your cluster from a browser or any WebSocket client. Requires YMQ.\n---\nTCP — direct socket connection; slightly lower overhead. Works with YMQ or ZMQ."
                     }
                   >
                     Transport Protocol
@@ -1801,7 +1801,7 @@ function App() {
                 <div>
                   <Label
                     help={
-                      "YMQ (default) — lower-latency C++ transport; required for WebSocket.\n---\nZMQ — battle-tested, TCP transport only."
+                      "YMQ — OpenGRIS's built-in high-performance networking layer. Required for WebSocket connections. Recommended.\n---\nZMQ — industry-standard messaging library. TCP only. Use if you need ZMQ compatibility."
                     }
                   >
                     Network Backend
