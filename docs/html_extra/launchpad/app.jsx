@@ -3,6 +3,7 @@ const { useState, useEffect, useCallback, useRef } = React;
 /* ── NumericStepper ── */
 function NumericStepper({ value, onChange, min = 0, max = Infinity, step = 1, width = 56 }) {
   const [hov, setHov] = useState(null);
+  const [localValue, setLocalValue] = useState(null);
   const btnStyle = (side) => ({
     width: 28,
     height: "100%",
@@ -48,10 +49,13 @@ function NumericStepper({ value, onChange, min = 0, max = Infinity, step = 1, wi
       </button>
       <input
         type="number"
-        value={value}
-        onChange={(e) => {
-          const v = parseFloat(e.target.value);
-          if (!isNaN(v)) onChange(Math.min(max, Math.max(min, v)));
+        value={localValue !== null ? localValue : value}
+        onFocus={() => setLocalValue(String(value))}
+        onChange={(e) => setLocalValue(e.target.value)}
+        onBlur={() => {
+          const v = parseFloat(localValue);
+          if (!isNaN(v)) onChange(Math.min(max, Math.max(min, Math.round(v))));
+          setLocalValue(null);
         }}
         style={{
           width,
@@ -99,9 +103,7 @@ function PanelBox({ title, children, style }) {
       {title && (
         <div
           style={{
-            fontSize: 10,
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
+            fontSize: 11,
             color: "var(--accent-cyan)",
             borderBottom: "1px solid var(--border-accent)",
             paddingBottom: 10,
@@ -120,6 +122,7 @@ function PanelBox({ title, children, style }) {
 /* ── WorkerManagerCard ── */
 function WorkerManagerCard({ wm, onChange, onRemove, allInstances, canRemove, fullWidth }) {
   const [localId, setLocalId] = useState(wm.id);
+  const [showAdv, setShowAdv] = useState(false);
   useEffect(() => {
     setLocalId(wm.id);
   }, [wm.id]);
@@ -127,11 +130,9 @@ function WorkerManagerCard({ wm, onChange, onRemove, allInstances, canRemove, fu
   const Label = ({ children, help }) => (
     <div
       style={{
-        fontSize: 10,
-        letterSpacing: "0.1em",
+        fontSize: 11,
         color: "var(--text-label)",
         marginBottom: 5,
-        textTransform: "uppercase",
         display: "flex",
         alignItems: "center",
         gap: 6,
@@ -172,9 +173,7 @@ function WorkerManagerCard({ wm, onChange, onRemove, allInstances, canRemove, fu
             flex: 1,
             padding: "6px 0",
             fontFamily: "inherit",
-            fontSize: 10,
-            letterSpacing: "0.06em",
-            textTransform: "uppercase",
+            fontSize: 11,
             cursor: disabled ? "not-allowed" : "pointer",
             border: "none",
             background: value === val ? "rgba(0,200,224,0.18)" : "transparent",
@@ -208,29 +207,35 @@ function WorkerManagerCard({ wm, onChange, onRemove, allInstances, canRemove, fu
       }}
     >
       {/* header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <WorkerManagerTypeSelect value={wm.type} onChange={(v) => set("type", v)} />
-        <input
-          value={localId}
-          onChange={(e) => setLocalId(e.target.value)}
-          onBlur={() => {
-            const v = localId.trim();
-            if (!v) setLocalId(wm.id);
-            else if (v !== wm.id) set("id", v);
-          }}
-          placeholder="wm-id"
-          style={{
-            width: 315,
-            background: "var(--bg-surface)",
-            border: "1px solid var(--border-accent)",
-            borderRadius: 3,
-            padding: "5px 8px",
-            color: "var(--text-primary)",
-            fontFamily: "inherit",
-            fontSize: 11,
-            outline: "none",
-          }}
-        />
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <Label>Type</Label>
+          <WorkerManagerTypeSelect value={wm.type} onChange={(v) => set("type", v)} />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
+          <Label help="Unique name for this worker manager.">Name</Label>
+          <input
+            value={localId}
+            onChange={(e) => setLocalId(e.target.value)}
+            onBlur={() => {
+              const v = localId.trim();
+              if (!v) setLocalId(wm.id);
+              else if (v !== wm.id) set("id", v);
+            }}
+            placeholder="wm-id"
+            style={{
+              width: "100%",
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-accent)",
+              borderRadius: 3,
+              padding: "5px 8px",
+              color: "var(--text-primary)",
+              fontFamily: "inherit",
+              fontSize: 11,
+              outline: "none",
+            }}
+          />
+        </div>
         {canRemove && (
           <button
             onClick={onRemove}
@@ -315,11 +320,9 @@ function WorkerManagerCard({ wm, onChange, onRemove, allInstances, canRemove, fu
               style={{
                 fontSize: 10,
                 color: "var(--text-muted)",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
               }}
             >
-              Workers cost
+              Cost
             </span>
             <span
               style={{
@@ -331,6 +334,51 @@ function WorkerManagerCard({ wm, onChange, onRemove, allInstances, canRemove, fu
               USD {costPerHr.toFixed(2)}/h
             </span>
           </div>
+          <button
+            onClick={() => setShowAdv((v) => !v)}
+            style={{
+              background: "none",
+              border: "1px solid var(--border-accent)",
+              borderRadius: 3,
+              padding: "6px 10px",
+              color: "var(--text-muted)",
+              fontFamily: "inherit",
+              fontSize: 11,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              width: "100%",
+            }}
+          >
+            <span>Advanced</span>
+            <span style={{ fontSize: 11 }}>{showAdv ? "▴" : "▾"}</span>
+          </button>
+          {showAdv && (
+            <div>
+              <Label help={"- Installed on each worker instance\n- opengris-scaler must be included"}>
+                requirements.txt
+              </Label>
+              <textarea
+                value={wm.requirements}
+                onChange={(e) => set("requirements", e.target.value)}
+                style={{
+                  width: "100%",
+                  background: "var(--bg-surface)",
+                  border: "1px solid var(--border-accent)",
+                  borderRadius: 3,
+                  padding: "7px 10px",
+                  color: "var(--text-primary)",
+                  fontFamily: "inherit",
+                  fontSize: 11,
+                  outline: "none",
+                  resize: "vertical",
+                  minHeight: 72,
+                  lineHeight: 1.6,
+                }}
+              />
+            </div>
+          )}
         </>
       )}
 
@@ -550,13 +598,13 @@ function CopyBtn({ value }) {
         flexShrink: 0,
       }}
     >
-      {copied ? "COPIED" : "COPY"}
+      {copied ? "Copied" : "Copy"}
     </button>
   );
 }
 
 /* ── DeploymentCard ── */
-function DeploymentCard({ state, onDownload, keyMaterial }) {
+function DeploymentCard({ state, onDownload, keyMaterial, isRunning }) {
   const rows = [
     { label: "Scheduler", value: state.scheduler_address },
     { label: "Object storage", value: state.object_storage_address },
@@ -594,9 +642,8 @@ function DeploymentCard({ state, onDownload, keyMaterial }) {
         <div
           style={{
             fontSize: 11,
-            letterSpacing: "0.1em",
             color: "var(--text-success)",
-            textTransform: "uppercase",
+            fontWeight: 600,
           }}
         >
           Active Deployment
@@ -631,12 +678,10 @@ function DeploymentCard({ state, onDownload, keyMaterial }) {
           >
             <span
               style={{
-                fontSize: 10,
+                fontSize: 11,
                 color: "var(--text-dim)",
-                letterSpacing: "0.05em",
                 width: 120,
                 flexShrink: 0,
-                textTransform: "uppercase",
                 paddingTop: code ? 2 : 0,
               }}
             >
@@ -658,7 +703,7 @@ function DeploymentCard({ state, onDownload, keyMaterial }) {
                       style={{
                         fontSize: 11,
                         color: "var(--text-primary)",
-                        fontFamily: "inherit",
+                        fontFamily: "var(--font-mono)",
                         margin: 0,
                         whiteSpace: "pre",
                         overflowX: "auto",
@@ -679,7 +724,7 @@ function DeploymentCard({ state, onDownload, keyMaterial }) {
                         fontWeight: 500,
                         overflowWrap: "anywhere",
                         whiteSpace: "pre-wrap",
-                        fontFamily: "inherit",
+                        fontFamily: "var(--font-mono)",
                         textDecoration: "none",
                         borderBottom: "1px solid var(--border-accent)",
                       }}
@@ -694,6 +739,7 @@ function DeploymentCard({ state, onDownload, keyMaterial }) {
                         fontWeight: 500,
                         overflowWrap: "anywhere",
                         whiteSpace: "pre-wrap",
+                        fontFamily: "var(--font-mono)",
                       }}
                     >
                       {value}
@@ -718,12 +764,10 @@ function DeploymentCard({ state, onDownload, keyMaterial }) {
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span
             style={{
-              fontSize: 10,
+              fontSize: 11,
               color: "var(--text-dim)",
-              letterSpacing: "0.05em",
               width: 120,
               flexShrink: 0,
-              textTransform: "uppercase",
             }}
           >
             SSH Key
@@ -745,15 +789,15 @@ function DeploymentCard({ state, onDownload, keyMaterial }) {
             >
               ↓ {keyMaterial.name}.pem
             </button>
-          ) : (
-            <span
-              style={{
-                fontSize: 12,
-                color: "var(--text-dim)",
-                fontStyle: "italic",
-              }}
-            >
+          ) : isRunning ? (
+            <span style={{ fontSize: 12, color: "var(--text-dim)", fontStyle: "italic" }}>
               pending…
+            </span>
+          ) : (
+            <span style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5 }}>
+              not saved — download during provisioning
+              <br />
+              or retrieve from the AWS console
             </span>
           )}
         </div>
@@ -762,13 +806,120 @@ function DeploymentCard({ state, onDownload, keyMaterial }) {
   );
 }
 
+/* ── Python syntax highlighter (theme-aware, no external deps) ── */
+const PY_KEYWORDS = new Set([
+  "False", "None", "True", "and", "as", "assert", "async", "await",
+  "break", "class", "continue", "def", "del", "elif", "else", "except",
+  "finally", "for", "from", "global", "if", "import", "in", "is",
+  "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try",
+  "while", "with", "yield",
+]);
+
+function tokenizePython(code) {
+  const tokens = [];
+  const re = /(#[^\n]*)|("""[\s\S]*?"""|'''[\s\S]*?'''|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')|(\b\d+(?:\.\d+)?\b)|([A-Za-z_]\w*)(\s*\()?|(\s+|[^\w\s#"']+)/g;
+  let m;
+  while ((m = re.exec(code)) !== null) {
+    if (m[1])       tokens.push({ text: m[1], color: "var(--text-dim)" });
+    else if (m[2])  tokens.push({ text: m[2], color: "var(--text-warning)" });
+    else if (m[3])  tokens.push({ text: m[3], color: "var(--text-danger)" });
+    else if (m[4]) {
+      const word = m[4], call = m[5] || "";
+      const color = PY_KEYWORDS.has(word)
+        ? "var(--text-accent)"
+        : call ? "var(--text-success)" : "var(--text-primary)";
+      tokens.push({ text: word, color });
+      if (call) tokens.push({ text: call, color: "var(--text-primary)" });
+    } else {
+      tokens.push({ text: m[6], color: "var(--text-primary)" });
+    }
+  }
+  return tokens;
+}
+
+function PyCode({ code }) {
+  const tokens = tokenizePython(code);
+  return (
+    <pre
+      style={{
+        margin: 0,
+        padding: "14px 16px",
+        background: "var(--bg-surface)",
+        border: "1px solid var(--border-accent)",
+        borderRadius: 3,
+        fontSize: 11,
+        fontFamily: "var(--font-mono)",
+        whiteSpace: "pre",
+        overflowX: "auto",
+        lineHeight: 1.7,
+      }}
+    >
+      {tokens.map((t, i) => (
+        <span key={i} style={{ color: t.color }}>{t.text}</span>
+      ))}
+    </pre>
+  );
+}
+
+/* ── GettingStartedCard ── */
+function GettingStartedCard({ schedulerAddress, ready }) {
+  const addr = schedulerAddress || "tcp://<scheduler-address>:2345";
+  const snippet = `from scaler import Client
+
+with Client(address="${addr}") as client:
+    result = client.submit(pow, 2, 10).result()
+    print(result)  # 1024`;
+
+  return (
+    <div
+      style={{
+        background: "var(--bg-panel)",
+        border: "1px solid var(--border-accent)",
+        borderRadius: 4,
+        padding: "16px 20px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 11,
+          color: "var(--text-muted)",
+          fontWeight: 600,
+        }}
+      >
+        Getting Started
+      </div>
+      {ready ? (
+        <>
+          <div style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5 }}>
+            Connect a client to your deployment and submit tasks:
+          </div>
+          <div style={{ position: "relative" }}>
+            <PyCode code={snippet} />
+            <div style={{ position: "absolute", top: 8, right: 8 }}>
+              <CopyBtn value={snippet} />
+            </div>
+          </div>
+        </>
+      ) : (
+        <div style={{ fontSize: 11, color: "var(--text-dim)", fontStyle: "italic" }}>
+          Waiting for scheduler…
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── TopNav ── */
-function TopNav({ activeTab, setActiveTab, theme, setTheme, showPostLaunch, launchControl }) {
+function TopNav({ activeTab, setActiveTab, theme, setTheme, showPostLaunch, launchControl, guiAddress }) {
   const tabs = [
     { id: "config", label: "Config" },
     { id: "deployment", label: "Deployment", postLaunch: true },
     { id: "logs", label: "Scheduler Logs", postLaunch: true },
-    { id: "gui", label: "GUI", postLaunch: true },
+    // { id: "gui", label: "GUI", postLaunch: true },
+    { id: "gui", label: "GUI", postLaunch: true, isLink: true, href: guiAddress },
   ];
   return (
     <div
@@ -789,67 +940,65 @@ function TopNav({ activeTab, setActiveTab, theme, setTheme, showPostLaunch, laun
       <div style={{ display: "flex", flex: 1 }}>
         {tabs
           .filter((t) => !t.postLaunch || showPostLaunch)
-          .map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setActiveTab(t.id)}
-              style={{
-                padding: "14px 18px",
-                background: "transparent",
-                border: "none",
-                borderBottom: activeTab === t.id ? "2px solid var(--tab-active)" : "2px solid transparent",
-                color: activeTab === t.id ? "var(--text-accent)" : "var(--text-muted)",
-                fontFamily: "inherit",
-                fontSize: 11,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
-                cursor: "pointer",
-              }}
-            >
-              {t.label}
-            </button>
-          ))}
+          .map((t) =>
+            t.isLink ? (
+              <a
+                key={t.id}
+                href={t.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  padding: "14px 18px",
+                  background: "transparent",
+                  border: "none",
+                  borderBottom: "2px solid transparent",
+                  color: t.href ? "var(--text-muted)" : "var(--text-dim)",
+                  fontFamily: "inherit",
+                  fontSize: 12,
+                  cursor: t.href ? "pointer" : "default",
+                  textDecoration: "none",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  pointerEvents: t.href ? undefined : "none",
+                }}
+              >
+                {t.label} ↗
+              </a>
+            ) : (
+              <button
+                key={t.id}
+                onClick={() => setActiveTab(t.id)}
+                style={{
+                  padding: "14px 18px",
+                  background: "transparent",
+                  border: "none",
+                  borderBottom: activeTab === t.id ? "2px solid var(--tab-active)" : "2px solid transparent",
+                  color: activeTab === t.id ? "var(--text-accent)" : "var(--text-muted)",
+                  fontFamily: "inherit",
+                  fontSize: 12,
+                  cursor: "pointer",
+                }}
+              >
+                {t.label}
+              </button>
+            )
+          )}
       </div>
       {launchControl && <div style={{ marginRight: 16 }}>{launchControl}</div>}
-      <a
-        href="../index.html"
+      <label
         style={{
-          marginRight: 16,
-          padding: "5px 12px",
-          background: "transparent",
-          border: "1px solid var(--border-accent)",
-          borderRadius: 3,
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          fontSize: 11,
           color: "var(--text-muted)",
-          fontFamily: "inherit",
-          fontSize: 10,
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-          textDecoration: "none",
-          cursor: "pointer",
-          whiteSpace: "nowrap",
         }}
       >
-        <svg
-          width="12"
-          height="10"
-          viewBox="0 0 12 10"
-          fill="none"
-          style={{ marginRight: 6, verticalAlign: "middle", flexShrink: 0 }}
-        >
-          <path
-            d="M5 1L1 5L5 9M1 5H11"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-        Docs
-      </a>
-      <select
-        value={theme}
-        onChange={(e) => setTheme(e.target.value)}
-        style={{
+        Theme
+        <select
+          value={theme}
+          onChange={(e) => setTheme(e.target.value)}
+          style={{
           background: "var(--bg-surface)",
           border: "1px solid var(--border-accent)",
           borderRadius: 3,
@@ -861,10 +1010,11 @@ function TopNav({ activeTab, setActiveTab, theme, setTheme, showPostLaunch, laun
           outline: "none",
         }}
       >
-        <option value="dark">Scaler Dark</option>
-        <option value="light">Scaler Light</option>
-        <option value="zenburn">Zenburn</option>
-      </select>
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+          <option value="zenburn">Zenburn</option>
+        </select>
+      </label>
     </div>
   );
 }
@@ -874,22 +1024,18 @@ function App() {
   const [region, setRegion] = useState("us-east-1");
   const [accessKeyId, setAKI] = useState("");
   const [secretKey, setSK] = useState("");
-  const [transport, setTransport] = useState("tcp");
-  const [networkBackend, setNetBack] = useState("zmq");
+  const [transport, setTransport] = useState("ws");
+  const [networkBackend, setNetBack] = useState("ymq");
   const [pythonVersion, setPyVer] = useState("3.14");
-  const [scalerPackage, setScalerPkg] = useState("opengris-scaler[all]");
-  const [instanceProfileName, setIPN] = useState("");
-  const [nameSuffix, setSuffix] = useState("");
-  const [pollTimeout, setPollTO] = useState(600);
+  const [schedulerRequirements, setSchedulerReqs] = useState("opengris-scaler[all]");
   const [schedulerType, setSchedulerType] = useState("c5.xlarge");
   const [schedulerPort, setSchedPort] = useState(6788);
   const [objectStoragePort, setObjPort] = useState(6789);
-  const [requirements, setReqs] = useState("");
   const [showSchedAdv, setShowSchedAdv] = useState(false);
-  const [showGenAdv, setShowGenAdv] = useState(false);
   const [activeTab, setActiveTab] = useState("config");
   const [theme, setTheme] = useState(() =>
-    window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light",
+    localStorage.getItem("launchpad-theme") ||
+    (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"),
   );
 
   const wmCounterRef = useRef(1);
@@ -902,6 +1048,7 @@ function App() {
       capMode: "instances",
       instanceCap: 4,
       budgetCap: 10,
+      requirements: "opengris-scaler[all]",
     },
   ]);
   const [selectedWmId, setSelectedWmId] = useState("wm-1");
@@ -978,6 +1125,7 @@ function App() {
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("launchpad-theme", theme);
   }, [theme]);
 
   useEffect(() => {
@@ -1031,6 +1179,7 @@ function App() {
         capMode: "instances",
         instanceCap: 4,
         budgetCap: 10,
+        requirements: "opengris-scaler[all]",
       },
     ]);
     setSelectedWmId(newId);
@@ -1048,6 +1197,21 @@ function App() {
   );
 
   const hasCredentials = accessKeyId.trim().length > 0 && secretKey.trim().length > 0;
+
+  const monitorPort = schedulerPort + 2;
+  const GUI_PORT = 50001;
+  const portConflicts = [];
+  if (schedulerPort === objectStoragePort)
+    portConflicts.push("Scheduler port and object storage port must differ.");
+  if (objectStoragePort === monitorPort)
+    portConflicts.push(`Object storage port conflicts with the monitor port (scheduler + 2 = ${monitorPort}).`);
+  if (schedulerPort === GUI_PORT)
+    portConflicts.push(`Scheduler port conflicts with the GUI port (${GUI_PORT}).`);
+  if (objectStoragePort === GUI_PORT)
+    portConflicts.push(`Object storage port conflicts with the GUI port (${GUI_PORT}).`);
+  if (monitorPort === GUI_PORT)
+    portConflicts.push(`Monitor port (scheduler + 2 = ${monitorPort}) conflicts with the GUI port (${GUI_PORT}).`);
+
   const checks = [
     {
       key: "aki",
@@ -1064,6 +1228,11 @@ function App() {
       label: "At least one worker manager required",
       ok: workerManagers.length > 0,
     },
+    {
+      key: "ports",
+      label: portConflicts.join(" "),
+      ok: portConflicts.length === 0,
+    },
   ];
   const blocking = checks.filter((c) => !c.ok);
   const formReady = blocking.length === 0;
@@ -1076,10 +1245,9 @@ function App() {
       localStorage.removeItem("scaler_log");
     } catch (_) {}
     setPhase("provisioning");
-    const suffix = nameSuffix.trim() || randomSuffix();
     const cfg = {
       region,
-      nameSuffix: suffix,
+      nameSuffix: randomSuffix(),
       instanceType: schedulerType,
       amiId: null,
       transport,
@@ -1087,14 +1255,14 @@ function App() {
       schedulerPort,
       objectStoragePort,
       pythonVersion,
-      scalerPackage,
-      instanceProfileName: instanceProfileName.trim() || null,
-      pollTimeout,
+      scalerPackage: schedulerRequirements,
+      instanceProfileName: null,
+      pollTimeout: 600,
       pollInterval: 15,
       debugDumpPath: null,
       workerManagers: workerManagers.map((wm) => ({
         ...wm,
-        requirements: wm.type === "orb_aws_ec2" ? "opengris-scaler[all]\n" + requirements.trim() : requirements.trim(),
+        requirements: wm.requirements,
       })),
     };
     const controller = new AbortController();
@@ -1130,10 +1298,7 @@ function App() {
     schedulerPort,
     objectStoragePort,
     pythonVersion,
-    scalerPackage,
-    instanceProfileName,
-    nameSuffix,
-    pollTimeout,
+    schedulerRequirements,
     workerManagers,
     accessKeyId,
     secretKey,
@@ -1197,10 +1362,9 @@ function App() {
       schedulerPort,
       objectStoragePort,
       pythonVersion,
-      nameSuffix: nameSuffix.trim(),
       workerManagers: workerManagers.map((wm) => ({
         ...wm,
-        requirements: wm.type === "orb_aws_ec2" ? "opengris-scaler[all]\n" + requirements.trim() : requirements.trim(),
+        requirements: wm.requirements,
       })),
     };
     downloadText("config.toml", buildConfigToml(cfg));
@@ -1211,9 +1375,7 @@ function App() {
     schedulerPort,
     objectStoragePort,
     pythonVersion,
-    nameSuffix,
     workerManagers,
-    requirements,
   ]);
 
   const handleReset = useCallback(() => {
@@ -1254,11 +1416,9 @@ function App() {
   const Label = ({ children, help }) => (
     <div
       style={{
-        fontSize: 10,
-        letterSpacing: "0.1em",
+        fontSize: 11,
         color: "var(--text-label)",
         marginBottom: 5,
-        textTransform: "uppercase",
         display: "flex",
         alignItems: "center",
         gap: 6,
@@ -1297,9 +1457,7 @@ function App() {
             flex: 1,
             padding: "7px 0",
             fontFamily: "inherit",
-            fontSize: 10,
-            letterSpacing: "0.06em",
-            textTransform: "uppercase",
+            fontSize: 11,
             cursor: dis ? "not-allowed" : "pointer",
             border: "none",
             background: value === val ? "rgba(0,200,224,0.18)" : "transparent",
@@ -1323,9 +1481,7 @@ function App() {
         padding: "6px 10px",
         color: "var(--text-muted)",
         fontFamily: "inherit",
-        fontSize: 10,
-        letterSpacing: "0.06em",
-        textTransform: "uppercase",
+        fontSize: 11,
         cursor: "pointer",
         display: "flex",
         alignItems: "center",
@@ -1355,15 +1511,12 @@ function App() {
           fontFamily: "inherit",
           fontSize: 11,
           fontWeight: 700,
-          letterSpacing: "0.12em",
           cursor: !hasCredentials ? "default" : "pointer",
-          textTransform: "uppercase",
           transition: "all 0.2s",
-          animation: hasCredentials ? "destroyPulse 4s ease-in-out infinite" : "none",
           flexShrink: 0,
         }}
       >
-        ▼ Destroy Cluster{!hasCredentials ? " (missing credentials)" : ""}
+        Destroy Cluster{!hasCredentials ? " (missing credentials)" : ""}
       </button>
     );
   } else if (phase === "idle" || phase === "error") {
@@ -1382,15 +1535,12 @@ function App() {
           fontFamily: "inherit",
           fontSize: 11,
           fontWeight: 700,
-          letterSpacing: "0.12em",
           cursor: !formReady ? "default" : "pointer",
-          textTransform: "uppercase",
           transition: "all 0.2s",
-          animation: formReady ? "launchPulse 3s ease-in-out infinite" : "none",
           flexShrink: 0,
         }}
       >
-        ▶ Launch Cluster
+        Launch Cluster
       </button>
     );
   } else if (phase === "ready") {
@@ -1409,15 +1559,12 @@ function App() {
           fontFamily: "inherit",
           fontSize: 11,
           fontWeight: 700,
-          letterSpacing: "0.12em",
           cursor: !hasCredentials ? "default" : "pointer",
-          textTransform: "uppercase",
           transition: "all 0.2s",
-          animation: hasCredentials ? "destroyPulse 4s ease-in-out infinite" : "none",
           flexShrink: 0,
         }}
       >
-        ▼ Destroy Cluster{!hasCredentials ? " (missing credentials)" : ""}
+        Destroy Cluster{!hasCredentials ? " (missing credentials)" : ""}
       </button>
     );
   } else if (isRunning) {
@@ -1431,7 +1578,6 @@ function App() {
             borderRadius: 4,
             color: phase === "destroying" ? "var(--text-danger)" : "var(--text-muted)",
             fontSize: 11,
-            letterSpacing: "0.1em",
           }}
         >
           {phase === "destroying" ? "Tearing down…" : "Deploying…"}
@@ -1446,8 +1592,6 @@ function App() {
             color: "var(--text-warning)",
             fontFamily: "inherit",
             fontSize: 11,
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
             cursor: "pointer",
             transition: "border-color 0.15s, color 0.15s",
             flexShrink: 0,
@@ -1481,6 +1625,7 @@ function App() {
         setTheme={setTheme}
         showPostLaunch={phase !== "idle" || ["deployment", "logs", "gui"].includes(activeTab)}
         launchControl={launchControl}
+        guiAddress={phase === "ready" ? provState?.gui_address : undefined}
       />
 
       {/* ── Config Tab ── */}
@@ -1635,145 +1780,77 @@ function App() {
                   >
                     Generate access keys in AWS Console ↗
                   </a>
+                  <span
+                    style={{
+                      fontSize: 10,
+                      color: "var(--text-dim)",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    Your credentials are never stored anywhere and never leave your machine. All API calls are made
+                    directly from your browser.
+                  </span>
                 </div>
               </PanelBox>
 
               <PanelBox title="General Options">
-                {advBtn(showGenAdv, () => setShowGenAdv((v) => !v), "Advanced Options")}
-                {showGenAdv && (
-                  <>
-                    <div>
-                      <Label
-                        help={
-                          "WebSocket (ws://) — required when connecting from a browser; requires YMQ.\n---\nTCP (tcp://) — works with ZMQ or YMQ; readiness check skipped (browsers can't open raw TCP)."
-                        }
-                      >
-                        Transport Protocol
-                      </Label>
-                      <TogglePair
-                        options={[
-                          ["ws", "WebSocket"],
-                          ["tcp", "TCP"],
-                        ]}
-                        value={transport}
-                        onSelect={(v) => {
-                          setTransport(v);
-                          if (v === "ws") setNetBack("ymq");
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <Label
-                        help={
-                          "YMQ (default) — lower-latency C++ transport; required for WebSocket.\n---\nZMQ — battle-tested, TCP transport only."
-                        }
-                      >
-                        Network Backend
-                      </Label>
-                      <TogglePair
-                        options={[
-                          ["ymq", "YMQ"],
-                          ["zmq", "ZMQ", transport === "ws"],
-                        ]}
-                        value={networkBackend}
-                        onSelect={(v) => {
-                          setNetBack(v);
-                          if (v === "zmq") setTransport("tcp");
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <Label help="Python version installed via uv on the scheduler and all ORB workers.">
-                        Python Version
-                      </Label>
-                      <input
-                        value={pythonVersion}
-                        onChange={(e) => setPyVer(e.target.value)}
-                        style={inp}
-                        placeholder="3.14"
-                      />
-                    </div>
-                    <div>
-                      <Label help="pip spec for scaler on the scheduler. Use git+https:// to install from a branch.">
-                        Scaler Package
-                      </Label>
-                      <input
-                        value={scalerPackage}
-                        onChange={(e) => setScalerPkg(e.target.value)}
-                        style={inp}
-                        placeholder="opengris-scaler[all]"
-                      />
-                    </div>
-                    <div>
-                      <Label help="Existing IAM instance profile to attach to the scheduler. Blank = create new.">
-                        Instance Profile
-                      </Label>
-                      <input
-                        value={instanceProfileName}
-                        onChange={(e) => setIPN(e.target.value)}
-                        style={inp}
-                        placeholder="my-scaler-profile (optional)"
-                      />
-                    </div>
-                    <div>
-                      <Label help="Fixed suffix for all AWS resource names. Blank = random 8-char.">
-                        Resource Name Suffix
-                      </Label>
-                      <input
-                        value={nameSuffix}
-                        onChange={(e) => setSuffix(e.target.value)}
-                        style={inp}
-                        placeholder="random (optional)"
-                      />
-                    </div>
-                    <div>
-                      <Label help="Seconds to wait for the scheduler to become reachable after instance launch.">
-                        Poll Timeout (s)
-                      </Label>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 10,
-                        }}
-                      >
-                        <NumericStepper
-                          value={pollTimeout}
-                          onChange={setPollTO}
-                          min={60}
-                          max={1800}
-                          step={60}
-                          width={72}
-                        />
-                        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>seconds</span>
-                      </div>
-                    </div>
-                    <div>
-                      <Label help="Python requirements installed on all ORB / AWS EC2 workers. opengris-scaler[all] is always prepended.">
-                        Requirements (ORB workers)
-                      </Label>
-                      <textarea
-                        value={requirements}
-                        onChange={(e) => setReqs(e.target.value)}
-                        placeholder={"numpy\npandas"}
-                        style={{
-                          ...inp,
-                          resize: "vertical",
-                          minHeight: 72,
-                          fontFamily: "inherit",
-                          fontSize: 11,
-                          lineHeight: 1.6,
-                        }}
-                      />
-                    </div>
-                  </>
-                )}
+                <div>
+                  <Label
+                    help={
+                      "WebSocket — connect to your cluster from a browser or any WebSocket client. Requires YMQ.\n---\nTCP — direct socket connection; slightly lower overhead. Works with YMQ or ZMQ."
+                    }
+                  >
+                    Transport Protocol
+                  </Label>
+                  <TogglePair
+                    options={[
+                      ["ws", "WS"],
+                      ["tcp", "TCP"],
+                    ]}
+                    value={transport}
+                    onSelect={(v) => {
+                      setTransport(v);
+                      if (v === "ws") setNetBack("ymq");
+                    }}
+                  />
+                </div>
+                <div>
+                  <Label
+                    help={
+                      "YMQ — OpenGRIS's built-in high-performance networking layer. Required for WebSocket connections. Recommended.\n---\nZMQ — industry-standard messaging library. TCP only. Use if you need ZMQ compatibility."
+                    }
+                  >
+                    Network Backend
+                  </Label>
+                  <TogglePair
+                    options={[
+                      ["ymq", "YMQ"],
+                      ["zmq", "ZMQ", transport === "ws"],
+                    ]}
+                    value={networkBackend}
+                    onSelect={(v) => {
+                      setNetBack(v);
+                      if (v === "zmq") setTransport("tcp");
+                    }}
+                  />
+                </div>
+                <div>
+                  <Label help="Python version installed via uv on the scheduler and all workers.">
+                    Python Version
+                  </Label>
+                  <input
+                    value={pythonVersion}
+                    onChange={(e) => setPyVer(e.target.value)}
+                    style={inp}
+                    placeholder="3.14"
+                  />
+                </div>
               </PanelBox>
             </div>
 
             {/* Column 2: Scheduler EC2 + Policy */}
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <PanelBox title="Scheduler · EC2">
+              <PanelBox title="Scheduler">
                 <div>
                   <Label help="EC2 instance type for the scheduler. Compute-optimized (c5/c6i) works well for most deployments.">
                     Instance Type
@@ -1795,11 +1872,9 @@ function App() {
                     style={{
                       fontSize: 10,
                       color: "var(--text-muted)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.06em",
                     }}
                   >
-                    Scheduler cost
+                    Cost
                   </span>
                   <span
                     style={{
@@ -1832,6 +1907,36 @@ function App() {
                         min={1024}
                         max={65535}
                         width={80}
+                      />
+                    </div>
+                    {portConflicts.length > 0 && (
+                      <div style={{ color: "var(--text-danger)", fontSize: 11, lineHeight: 1.5 }}>
+                        {portConflicts.map((msg, i) => (
+                          <div key={i}>{msg}</div>
+                        ))}
+                      </div>
+                    )}
+                    <div>
+                      <Label help={"- Installed on the scheduler instance\n- Shared by native worker manager workers (same instance)\n- opengris-scaler must be included"}>
+                        requirements.txt
+                      </Label>
+                      <textarea
+                        value={schedulerRequirements}
+                        onChange={(e) => setSchedulerReqs(e.target.value)}
+                        style={{
+                          width: "100%",
+                          background: "var(--bg-surface)",
+                          border: "1px solid var(--border-accent)",
+                          borderRadius: 3,
+                          padding: "7px 10px",
+                          color: "var(--text-primary)",
+                          fontFamily: "inherit",
+                          fontSize: 11,
+                          outline: "none",
+                          resize: "vertical",
+                          minHeight: 72,
+                          lineHeight: 1.6,
+                        }}
                       />
                     </div>
                   </div>
@@ -2035,8 +2140,6 @@ function App() {
                           style={{
                             fontSize: 10,
                             color: "var(--text-muted)",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.05em",
                           }}
                         >
                           {label}
@@ -2070,8 +2173,6 @@ function App() {
                         style={{
                           fontSize: 10,
                           color: "var(--text-muted)",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.05em",
                         }}
                       >
                         {label} · {count}× {wm.instanceType}
@@ -2093,8 +2194,6 @@ function App() {
                     style={{
                       fontSize: 10,
                       color: "var(--text-muted)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.05em",
                     }}
                   >
                     Scheduler · {schedulerType}
@@ -2114,10 +2213,8 @@ function App() {
                 >
                   <span
                     style={{
-                      fontSize: 10,
+                      fontSize: 11,
                       color: "var(--text-accent)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.06em",
                       fontWeight: 600,
                     }}
                   >
@@ -2245,6 +2342,7 @@ function App() {
                   isRunning={isRunning}
                   keyMaterial={keyMaterial}
                 />
+                <GettingStartedCard schedulerAddress={provState.scheduler_address} ready={phase === "ready"} />
               </div>
             )}
             {phase === "error" && (
