@@ -120,6 +120,7 @@ function PanelBox({ title, children, style }) {
 /* ── WorkerManagerCard ── */
 function WorkerManagerCard({ wm, onChange, onRemove, allInstances, canRemove, fullWidth }) {
   const [localId, setLocalId] = useState(wm.id);
+  const [showAdv, setShowAdv] = useState(false);
   useEffect(() => {
     setLocalId(wm.id);
   }, [wm.id]);
@@ -337,6 +338,53 @@ function WorkerManagerCard({ wm, onChange, onRemove, allInstances, canRemove, fu
               USD {costPerHr.toFixed(2)}/h
             </span>
           </div>
+          <button
+            onClick={() => setShowAdv((v) => !v)}
+            style={{
+              background: "none",
+              border: "1px solid var(--border-accent)",
+              borderRadius: 3,
+              padding: "6px 10px",
+              color: "var(--text-muted)",
+              fontFamily: "inherit",
+              fontSize: 10,
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              width: "100%",
+            }}
+          >
+            <span>Advanced Options</span>
+            <span style={{ fontSize: 11 }}>{showAdv ? "▴" : "▾"}</span>
+          </button>
+          {showAdv && (
+            <div>
+              <Label help={"- Installed on each worker instance\n- opengris-scaler must be included"}>
+                requirements.txt
+              </Label>
+              <textarea
+                value={wm.requirements}
+                onChange={(e) => set("requirements", e.target.value)}
+                style={{
+                  width: "100%",
+                  background: "var(--bg-surface)",
+                  border: "1px solid var(--border-accent)",
+                  borderRadius: 3,
+                  padding: "7px 10px",
+                  color: "var(--text-primary)",
+                  fontFamily: "inherit",
+                  fontSize: 11,
+                  outline: "none",
+                  resize: "vertical",
+                  minHeight: 72,
+                  lineHeight: 1.6,
+                }}
+              />
+            </div>
+          )}
         </>
       )}
 
@@ -861,11 +909,10 @@ function App() {
   const [transport, setTransport] = useState("ws");
   const [networkBackend, setNetBack] = useState("ymq");
   const [pythonVersion, setPyVer] = useState("3.14");
-  const [scalerPackage, setScalerPkg] = useState("opengris-scaler[all]");
+  const [schedulerRequirements, setSchedulerReqs] = useState("opengris-scaler[all]");
   const [schedulerType, setSchedulerType] = useState("c5.xlarge");
   const [schedulerPort, setSchedPort] = useState(6788);
   const [objectStoragePort, setObjPort] = useState(6789);
-  const [requirements, setReqs] = useState("");
   const [showSchedAdv, setShowSchedAdv] = useState(false);
   const [showGenAdv, setShowGenAdv] = useState(false);
   const [activeTab, setActiveTab] = useState("config");
@@ -883,6 +930,7 @@ function App() {
       capMode: "instances",
       instanceCap: 4,
       budgetCap: 10,
+      requirements: "opengris-scaler[all]",
     },
   ]);
   const [selectedWmId, setSelectedWmId] = useState("wm-1");
@@ -1012,6 +1060,7 @@ function App() {
         capMode: "instances",
         instanceCap: 4,
         budgetCap: 10,
+        requirements: "opengris-scaler[all]",
       },
     ]);
     setSelectedWmId(newId);
@@ -1067,14 +1116,14 @@ function App() {
       schedulerPort,
       objectStoragePort,
       pythonVersion,
-      scalerPackage,
+      scalerPackage: schedulerRequirements,
       instanceProfileName: null,
       pollTimeout: 600,
       pollInterval: 15,
       debugDumpPath: null,
       workerManagers: workerManagers.map((wm) => ({
         ...wm,
-        requirements: wm.type === "orb_aws_ec2" ? "opengris-scaler[all]\n" + requirements.trim() : requirements.trim(),
+        requirements: wm.requirements,
       })),
     };
     const controller = new AbortController();
@@ -1110,7 +1159,7 @@ function App() {
     schedulerPort,
     objectStoragePort,
     pythonVersion,
-    scalerPackage,
+    schedulerRequirements,
     workerManagers,
     accessKeyId,
     secretKey,
@@ -1176,7 +1225,7 @@ function App() {
       pythonVersion,
       workerManagers: workerManagers.map((wm) => ({
         ...wm,
-        requirements: wm.type === "orb_aws_ec2" ? "opengris-scaler[all]\n" + requirements.trim() : requirements.trim(),
+        requirements: wm.requirements,
       })),
     };
     downloadText("config.toml", buildConfigToml(cfg));
@@ -1188,7 +1237,6 @@ function App() {
     objectStoragePort,
     pythonVersion,
     workerManagers,
-    requirements,
   ]);
 
   const handleReset = useCallback(() => {
@@ -1678,35 +1726,6 @@ function App() {
                         placeholder="3.14"
                       />
                     </div>
-                    <div>
-                      <Label help="pip spec for scaler on the scheduler. Use git+https:// to install from a branch.">
-                        Scaler Package
-                      </Label>
-                      <input
-                        value={scalerPackage}
-                        onChange={(e) => setScalerPkg(e.target.value)}
-                        style={inp}
-                        placeholder="opengris-scaler[all]"
-                      />
-                    </div>
-                    <div>
-                      <Label help="Python requirements installed on all ORB / AWS EC2 workers. opengris-scaler[all] is always prepended.">
-                        Requirements (ORB workers)
-                      </Label>
-                      <textarea
-                        value={requirements}
-                        onChange={(e) => setReqs(e.target.value)}
-                        placeholder={"numpy\npandas"}
-                        style={{
-                          ...inp,
-                          resize: "vertical",
-                          minHeight: 72,
-                          fontFamily: "inherit",
-                          fontSize: 11,
-                          lineHeight: 1.6,
-                        }}
-                      />
-                    </div>
                   </>
                 )}
               </PanelBox>
@@ -1714,7 +1733,7 @@ function App() {
 
             {/* Column 2: Scheduler EC2 + Policy */}
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <PanelBox title="Scheduler · EC2">
+              <PanelBox title="Scheduler">
                 <div>
                   <Label help="EC2 instance type for the scheduler. Compute-optimized (c5/c6i) works well for most deployments.">
                     Instance Type
@@ -1773,6 +1792,29 @@ function App() {
                         min={1024}
                         max={65535}
                         width={80}
+                      />
+                    </div>
+                    <div>
+                      <Label help={"- Installed on the scheduler instance\n- Shared by native worker manager workers (same instance)\n- opengris-scaler must be included"}>
+                        requirements.txt
+                      </Label>
+                      <textarea
+                        value={schedulerRequirements}
+                        onChange={(e) => setSchedulerReqs(e.target.value)}
+                        style={{
+                          width: "100%",
+                          background: "var(--bg-surface)",
+                          border: "1px solid var(--border-accent)",
+                          borderRadius: 3,
+                          padding: "7px 10px",
+                          color: "var(--text-primary)",
+                          fontFamily: "inherit",
+                          fontSize: 11,
+                          outline: "none",
+                          resize: "vertical",
+                          minHeight: 72,
+                          lineHeight: 1.6,
+                        }}
                       />
                     </div>
                   </div>

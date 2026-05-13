@@ -898,7 +898,7 @@ function HelpTip({ text }) {
   const [placement, setPlacement] = useState(null);
   const btnRef = useRef(null);
   const popupRef = useRef(null);
-  const POPUP_WIDTH = 220;
+  const POPUP_WIDTH = 260;
 
   const open = btnRect !== null;
 
@@ -923,6 +923,26 @@ function HelpTip({ text }) {
     setPlacement(null);
   };
 
+  const renderBlock = (block, key) => {
+    const lines = block.split("\n");
+    if (lines.every((l) => l.startsWith("- "))) {
+      return (
+        <ul key={key} style={{ margin: 0, paddingLeft: 14 }}>
+          {lines.map((l, i) => (
+            <li key={i} style={{ marginTop: i > 0 ? 3 : 0 }}>
+              {l.slice(2)}
+            </li>
+          ))}
+        </ul>
+      );
+    }
+    return (
+      <p key={key} style={{ margin: 0 }}>
+        {block}
+      </p>
+    );
+  };
+
   const sections = text.split(/\n?---\n?/);
   const content = sections.map((section, si) => (
     <React.Fragment key={si}>
@@ -935,11 +955,7 @@ function HelpTip({ text }) {
           }}
         />
       )}
-      {section.split(/\n\n+/).map((para, pi) => (
-        <p key={pi} style={{ margin: pi > 0 ? "6px 0 0" : 0 }}>
-          {para}
-        </p>
-      ))}
+      {section.split(/\n\n+/).map((block, pi) => renderBlock(block, pi))}
     </React.Fragment>
   ));
 
