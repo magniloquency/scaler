@@ -1635,6 +1635,16 @@ function App() {
                   >
                     Generate access keys in AWS Console ↗
                   </a>
+                  <span
+                    style={{
+                      fontSize: 10,
+                      color: "var(--text-dim)",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    Your credentials are never stored anywhere and never leave your machine. All API calls are made
+                    directly from your browser.
+                  </span>
                 </div>
               </PanelBox>
 
