@@ -775,21 +775,22 @@ async function provision(cfg, creds, addLog, onPartialState, onKeyReady, signal)
   };
   onPartialState(state);
 
-  // 8. Poll for scheduler readiness (WebSocket only — browsers cannot open raw TCP connections)
-  if (cfg.transport === "ws") {
-    addLog(
-      "Waiting up to " + cfg.pollTimeout + "s for scheduler at " + publicIp + ":" + cfg.schedulerPort + "...",
-      "cmd",
-    );
-    var ready = await waitForWs(publicIp, cfg.schedulerPort, cfg.pollTimeout * 1000, cfg.pollInterval * 1000, signal);
-    if (ready) {
-      addLog("  ✓ Scheduler is reachable", "ok");
-    } else {
-      addLog("  ✗ Could not verify readiness — check /var/log/scaler.log on the instance", "warn");
-    }
-  } else {
-    addLog("  ℹ Skipping scheduler connection check — browsers can't open TCP connections", "warn");
-  }
+  // 8. Poll for scheduler readiness — temporarily skipped: browsers block ws:// from https pages (mixed content).
+  addLog("  ℹ Skipping scheduler connection check (browser security restriction) — assuming ready", "warn");
+  // if (cfg.transport === "ws") {
+  //   addLog(
+  //     "Waiting up to " + cfg.pollTimeout + "s for scheduler at " + publicIp + ":" + cfg.schedulerPort + "...",
+  //     "cmd",
+  //   );
+  //   var ready = await waitForWs(publicIp, cfg.schedulerPort, cfg.pollTimeout * 1000, cfg.pollInterval * 1000, signal);
+  //   if (ready) {
+  //     addLog("  ✓ Scheduler is reachable", "ok");
+  //   } else {
+  //     addLog("  ✗ Could not verify readiness — check /var/log/scaler.log on the instance", "warn");
+  //   }
+  // } else {
+  //   addLog("  ℹ Skipping scheduler connection check — browsers can't open TCP connections", "warn");
+  // }
 
   addLog("─".repeat(52), "dim");
   addLog("  DEPLOYMENT COMPLETE", "done");
