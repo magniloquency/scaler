@@ -3,6 +3,7 @@ const { useState, useEffect, useCallback, useRef } = React;
 /* ── NumericStepper ── */
 function NumericStepper({ value, onChange, min = 0, max = Infinity, step = 1, width = 56 }) {
   const [hov, setHov] = useState(null);
+  const [localValue, setLocalValue] = useState(null);
   const btnStyle = (side) => ({
     width: 28,
     height: "100%",
@@ -48,10 +49,13 @@ function NumericStepper({ value, onChange, min = 0, max = Infinity, step = 1, wi
       </button>
       <input
         type="number"
-        value={value}
-        onChange={(e) => {
-          const v = parseFloat(e.target.value);
-          if (!isNaN(v)) onChange(Math.min(max, Math.max(min, v)));
+        value={localValue !== null ? localValue : value}
+        onFocus={() => setLocalValue(String(value))}
+        onChange={(e) => setLocalValue(e.target.value)}
+        onBlur={() => {
+          const v = parseFloat(localValue);
+          if (!isNaN(v)) onChange(Math.min(max, Math.max(min, Math.round(v))));
+          setLocalValue(null);
         }}
         style={{
           width,
@@ -1167,6 +1171,21 @@ function App() {
   );
 
   const hasCredentials = accessKeyId.trim().length > 0 && secretKey.trim().length > 0;
+
+  const monitorPort = schedulerPort + 2;
+  const GUI_PORT = 50001;
+  const portConflicts = [];
+  if (schedulerPort === objectStoragePort)
+    portConflicts.push("Scheduler port and object storage port must differ.");
+  if (objectStoragePort === monitorPort)
+    portConflicts.push(`Object storage port conflicts with the monitor port (scheduler + 2 = ${monitorPort}).`);
+  if (schedulerPort === GUI_PORT)
+    portConflicts.push(`Scheduler port conflicts with the GUI port (${GUI_PORT}).`);
+  if (objectStoragePort === GUI_PORT)
+    portConflicts.push(`Object storage port conflicts with the GUI port (${GUI_PORT}).`);
+  if (monitorPort === GUI_PORT)
+    portConflicts.push(`Monitor port (scheduler + 2 = ${monitorPort}) conflicts with the GUI port (${GUI_PORT}).`);
+
   const checks = [
     {
       key: "aki",
@@ -1182,6 +1201,11 @@ function App() {
       key: "wm",
       label: "At least one worker manager required",
       ok: workerManagers.length > 0,
+    },
+    {
+      key: "ports",
+      label: portConflicts.join(" "),
+      ok: portConflicts.length === 0,
     },
   ];
   const blocking = checks.filter((c) => !c.ok);
@@ -1861,6 +1885,13 @@ function App() {
                         width={80}
                       />
                     </div>
+                    {portConflicts.length > 0 && (
+                      <div style={{ color: "var(--text-danger)", fontSize: 11, lineHeight: 1.5 }}>
+                        {portConflicts.map((msg, i) => (
+                          <div key={i}>{msg}</div>
+                        ))}
+                      </div>
+                    )}
                     <div>
                       <Label help={"- Installed on the scheduler instance\n- Shared by native worker manager workers (same instance)\n- opengris-scaler must be included"}>
                         requirements.txt
