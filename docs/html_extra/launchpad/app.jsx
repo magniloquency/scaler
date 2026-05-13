@@ -984,8 +984,8 @@ function TopNav({ activeTab, setActiveTab, theme, setTheme, showPostLaunch, laun
           outline: "none",
         }}
       >
-          <option value="dark">Scaler Dark</option>
-          <option value="light">Scaler Light</option>
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
           <option value="zenburn">Zenburn</option>
         </select>
       </label>
