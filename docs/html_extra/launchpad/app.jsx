@@ -874,8 +874,8 @@ function App() {
   const [region, setRegion] = useState("us-east-1");
   const [accessKeyId, setAKI] = useState("");
   const [secretKey, setSK] = useState("");
-  const [transport, setTransport] = useState("tcp");
-  const [networkBackend, setNetBack] = useState("zmq");
+  const [transport, setTransport] = useState("ws");
+  const [networkBackend, setNetBack] = useState("ymq");
   const [pythonVersion, setPyVer] = useState("3.14");
   const [scalerPackage, setScalerPkg] = useState("opengris-scaler[all]");
   const [instanceProfileName, setIPN] = useState("");
