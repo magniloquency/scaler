@@ -1186,62 +1186,78 @@ function LiveTerminal({ lines, isRunning, title, style, bare }) {
 }
 
 /* ── SchedulerLogTerminal ── */
+const POLL_INTERVALS = [
+  { label: "15s", value: 15000 },
+  { label: "30s", value: 30000 },
+  { label: "1m",  value: 60000 },
+  { label: "5m",  value: 300000 },
+];
+
 function SchedulerLogTerminal({ instanceId, region, credentials, isActive }) {
   const [lines, setLines] = useState([]);
   const [status, setStatus] = useState("idle");
   const [errorMsg, setError] = useState(null);
+  const [intervalMs, setIntervalMs] = useState(15000);
+  const [nextFetchAt, setNextFetchAt] = useState(null);
+  const [countdown, setCountdown] = useState(null);
+  const [fetching, setFetching] = useState(false);
   const pollRef = useRef(null);
+  const triggerRef = useRef(null);
+  const intervalMsRef = useRef(intervalMs);
+  useEffect(() => { intervalMsRef.current = intervalMs; }, [intervalMs]);
 
   const fetchLogs = useCallback(async () => {
-    const ssm = new AWS.SSM({
-      region,
-      credentials: new AWS.Credentials(credentials.accessKeyId, credentials.secretKey),
-    });
-    let commandId;
     try {
-      const r = await ssm
-        .sendCommand({
-          InstanceIds: [instanceId],
-          DocumentName: "AWS-RunShellScript",
-          Parameters: {
-            commands: ["tail -n 150 /var/log/scaler.log 2>/dev/null || echo '(log not yet available)'"],
-          },
-          TimeoutSeconds: 30,
-        })
-        .promise();
-      commandId = r.Command.CommandId;
-    } catch (err) {
-      if (err.code === "InvalidInstanceId") {
-        setLines([{ text: "Instance not yet registered with SSM — retrying in 15s…", cls: "warn" }]);
-      } else if (err.code === "AccessDeniedException") {
-        setStatus("error");
-        setError("Permission denied. Your IAM user needs ssm:SendCommand and ssm:GetCommandInvocation.");
-      } else if (err.code === "InvalidClientTokenId" || err.code === "AuthFailure" || /invalid.*token/i.test(err.message)) {
-        setStatus("error");
-        setError("Invalid AWS credentials. Re-enter your Access Key ID and Secret Access Key in the Configuration tab.");
-      } else {
-        setStatus("error");
-        setError("SSM error: " + err.message);
-      }
-      return;
-    }
-    for (let i = 0; i < 12; i++) {
-      await new Promise((r) => setTimeout(r, 2500));
+      const ssm = new AWS.SSM({
+        region,
+        credentials: new AWS.Credentials(credentials.accessKeyId, credentials.secretKey),
+      });
+      let commandId;
       try {
-        const inv = await ssm
-          .getCommandInvocation({
-            CommandId: commandId,
-            InstanceId: instanceId,
+        const r = await ssm
+          .sendCommand({
+            InstanceIds: [instanceId],
+            DocumentName: "AWS-RunShellScript",
+            Parameters: {
+              commands: ["tail -n 150 /var/log/scaler.log 2>/dev/null || echo '(log not yet available)'"],
+            },
+            TimeoutSeconds: 30,
           })
           .promise();
-        if (inv.Status === "Success" || inv.Status === "Failed") {
-          setLines((inv.StandardOutputContent || "").split("\n").map((text) => ({ text, cls: "info" })));
+        commandId = r.Command.CommandId;
+      } catch (err) {
+        if (err.code === "InvalidInstanceId") {
+          setLines([{ text: "Instance not yet registered with SSM — retrying…", cls: "warn" }]);
+        } else if (err.code === "AccessDeniedException") {
+          setStatus("error");
+          setError("Permission denied. Your IAM user needs ssm:SendCommand and ssm:GetCommandInvocation.");
+        } else if (err.code === "InvalidClientTokenId" || err.code === "AuthFailure" || /invalid.*token/i.test(err.message)) {
+          setStatus("error");
+          setError("Invalid AWS credentials. Re-enter your Access Key ID and Secret Access Key in the Configuration tab.");
+        } else {
+          setStatus("error");
+          setError("SSM error: " + err.message);
+        }
+        return;
+      }
+      for (let i = 0; i < 12; i++) {
+        await new Promise((r) => setTimeout(r, 2500));
+        try {
+          const inv = await ssm
+            .getCommandInvocation({
+              CommandId: commandId,
+              InstanceId: instanceId,
+            })
+            .promise();
+          if (inv.Status === "Success" || inv.Status === "Failed") {
+            setLines((inv.StandardOutputContent || "").split("\n").map((text) => ({ text, cls: "info" })));
+            break;
+          }
+        } catch (_) {
           break;
         }
-      } catch (_) {
-        break;
       }
-    }
+    } catch (_) {}
   }, [instanceId, region, credentials]);
 
   const hasCredentials = credentials.accessKeyId && credentials.secretKey;
@@ -1249,10 +1265,42 @@ function SchedulerLogTerminal({ instanceId, region, credentials, isActive }) {
   useEffect(() => {
     if (!isActive || !instanceId || !hasCredentials) return;
     setStatus("polling");
-    fetchLogs();
-    pollRef.current = setInterval(fetchLogs, 15000);
-    return () => clearInterval(pollRef.current);
-  }, [isActive, instanceId, hasCredentials, fetchLogs]);
+    let cancelled = false;
+
+    const run = async () => {
+      if (cancelled) return;
+      setFetching(true);
+      setNextFetchAt(null);
+      await fetchLogs();
+      if (cancelled) return;
+      const ms = intervalMsRef.current;
+      const next = Date.now() + ms;
+      setFetching(false);
+      setNextFetchAt(next);
+      setCountdown(Math.round(ms / 1000));
+      pollRef.current = setTimeout(run, ms);
+    };
+
+    triggerRef.current = () => {
+      clearTimeout(pollRef.current);
+      run();
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+      clearTimeout(pollRef.current);
+      triggerRef.current = null;
+    };
+  }, [isActive, instanceId, hasCredentials, fetchLogs, intervalMs]);
+
+  useEffect(() => {
+    if (!nextFetchAt) { setCountdown(null); return; }
+    const tick = setInterval(() => {
+      setCountdown(Math.max(0, Math.round((nextFetchAt - Date.now()) / 1000)));
+    }, 1000);
+    return () => clearInterval(tick);
+  }, [nextFetchAt]);
 
   if (!hasCredentials)
     return (
@@ -1262,13 +1310,78 @@ function SchedulerLogTerminal({ instanceId, region, credentials, isActive }) {
     );
   if (status === "error")
     return <div style={{ padding: 24, color: "var(--text-danger)", fontSize: 12 }}>{errorMsg}</div>;
+
+  const labelMs = POLL_INTERVALS.find((o) => o.value === intervalMs)?.label ?? "15s";
+
   return (
-    <LiveTerminal
-      lines={lines}
-      isRunning={status === "polling"}
-      title="scheduler — /var/log/scaler.log (polling every 15s)"
-      style={{ flex: 1, minHeight: 0 }}
-    />
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          padding: "0 0 10px 0",
+          flexShrink: 0,
+        }}
+      >
+        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+          /var/log/scaler.log
+        </span>
+        <span style={{ fontSize: 11, color: "var(--text-dim)" }}>·</span>
+        <span style={{ fontSize: 11, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 6 }}>
+          refresh every
+          <select
+            value={intervalMs}
+            onChange={(e) => setIntervalMs(Number(e.target.value))}
+            style={{
+              background: "var(--bg-input, var(--term-bg))",
+              border: "1px solid var(--border-subtle, var(--term-border))",
+              borderRadius: 3,
+              color: "var(--text-secondary)",
+              fontSize: 11,
+              padding: "1px 4px",
+              cursor: "pointer",
+            }}
+          >
+            {POLL_INTERVALS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </span>
+        {(fetching || countdown !== null) && (
+          <>
+            <span style={{ fontSize: 11, color: "var(--text-dim)" }}>·</span>
+            <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
+              {fetching ? "refreshing…" : `next refresh in ${countdown}s`}
+            </span>
+          </>
+        )}
+        <button
+          onClick={() => triggerRef.current?.()}
+          disabled={fetching}
+          style={{
+            marginLeft: "auto",
+            background: "none",
+            border: "1px solid var(--border-accent)",
+            borderRadius: 3,
+            color: fetching ? "var(--text-dim)" : "var(--text-muted)",
+            fontFamily: "inherit",
+            fontSize: 11,
+            padding: "2px 8px",
+            cursor: fetching ? "default" : "pointer",
+            letterSpacing: "0.06em",
+          }}
+        >
+          Refresh
+        </button>
+      </div>
+      <LiveTerminal
+        lines={lines}
+        isRunning={status === "polling"}
+        bare
+        style={{ flex: 1, minHeight: 0 }}
+      />
+    </div>
   );
 }
 
