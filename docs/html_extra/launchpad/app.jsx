@@ -357,7 +357,7 @@ function WorkerManagerCard({ wm, onChange, onRemove, allInstances, canRemove, fu
               width: "100%",
             }}
           >
-            <span>Advanced Options</span>
+            <span>Advanced</span>
             <span style={{ fontSize: 11 }}>{showAdv ? "▴" : "▾"}</span>
           </button>
           {showAdv && (
