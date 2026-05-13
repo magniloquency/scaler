@@ -914,7 +914,6 @@ function App() {
   const [schedulerPort, setSchedPort] = useState(6788);
   const [objectStoragePort, setObjPort] = useState(6789);
   const [showSchedAdv, setShowSchedAdv] = useState(false);
-  const [showGenAdv, setShowGenAdv] = useState(false);
   const [activeTab, setActiveTab] = useState("config");
   const [theme, setTheme] = useState(() =>
     window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light",
@@ -1672,62 +1671,57 @@ function App() {
               </PanelBox>
 
               <PanelBox title="General Options">
-                {advBtn(showGenAdv, () => setShowGenAdv((v) => !v), "Advanced Options")}
-                {showGenAdv && (
-                  <>
-                    <div>
-                      <Label
-                        help={
-                          "WebSocket (ws://) — required when connecting from a browser; requires YMQ.\n---\nTCP (tcp://) — works with ZMQ or YMQ; readiness check skipped (browsers can't open raw TCP)."
-                        }
-                      >
-                        Transport Protocol
-                      </Label>
-                      <TogglePair
-                        options={[
-                          ["ws", "WebSocket"],
-                          ["tcp", "TCP"],
-                        ]}
-                        value={transport}
-                        onSelect={(v) => {
-                          setTransport(v);
-                          if (v === "ws") setNetBack("ymq");
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <Label
-                        help={
-                          "YMQ (default) — lower-latency C++ transport; required for WebSocket.\n---\nZMQ — battle-tested, TCP transport only."
-                        }
-                      >
-                        Network Backend
-                      </Label>
-                      <TogglePair
-                        options={[
-                          ["ymq", "YMQ"],
-                          ["zmq", "ZMQ", transport === "ws"],
-                        ]}
-                        value={networkBackend}
-                        onSelect={(v) => {
-                          setNetBack(v);
-                          if (v === "zmq") setTransport("tcp");
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <Label help="Python version installed via uv on the scheduler and all ORB workers.">
-                        Python Version
-                      </Label>
-                      <input
-                        value={pythonVersion}
-                        onChange={(e) => setPyVer(e.target.value)}
-                        style={inp}
-                        placeholder="3.14"
-                      />
-                    </div>
-                  </>
-                )}
+                <div>
+                  <Label
+                    help={
+                      "WebSocket (ws://) — required when connecting from a browser; requires YMQ.\n---\nTCP (tcp://) — works with ZMQ or YMQ; readiness check skipped (browsers can't open raw TCP)."
+                    }
+                  >
+                    Transport Protocol
+                  </Label>
+                  <TogglePair
+                    options={[
+                      ["ws", "WebSocket"],
+                      ["tcp", "TCP"],
+                    ]}
+                    value={transport}
+                    onSelect={(v) => {
+                      setTransport(v);
+                      if (v === "ws") setNetBack("ymq");
+                    }}
+                  />
+                </div>
+                <div>
+                  <Label
+                    help={
+                      "YMQ (default) — lower-latency C++ transport; required for WebSocket.\n---\nZMQ — battle-tested, TCP transport only."
+                    }
+                  >
+                    Network Backend
+                  </Label>
+                  <TogglePair
+                    options={[
+                      ["ymq", "YMQ"],
+                      ["zmq", "ZMQ", transport === "ws"],
+                    ]}
+                    value={networkBackend}
+                    onSelect={(v) => {
+                      setNetBack(v);
+                      if (v === "zmq") setTransport("tcp");
+                    }}
+                  />
+                </div>
+                <div>
+                  <Label help="Python version installed via uv on the scheduler and all workers.">
+                    Python Version
+                  </Label>
+                  <input
+                    value={pythonVersion}
+                    onChange={(e) => setPyVer(e.target.value)}
+                    style={inp}
+                    placeholder="3.14"
+                  />
+                </div>
               </PanelBox>
             </div>
 
