@@ -1059,7 +1059,10 @@ function LiveTerminal({ lines, isRunning, title, style, bare }) {
   const scrollRef = useRef(null);
 
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    const el = scrollRef.current;
+    if (!el) return;
+    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+    if (isNearBottom) el.scrollTop = el.scrollHeight;
   }, [lines]);
 
   const clsColor = {
