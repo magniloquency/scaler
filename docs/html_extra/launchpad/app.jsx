@@ -878,9 +878,6 @@ function App() {
   const [networkBackend, setNetBack] = useState("ymq");
   const [pythonVersion, setPyVer] = useState("3.14");
   const [scalerPackage, setScalerPkg] = useState("opengris-scaler[all]");
-  const [instanceProfileName, setIPN] = useState("");
-  const [nameSuffix, setSuffix] = useState("");
-  const [pollTimeout, setPollTO] = useState(600);
   const [schedulerType, setSchedulerType] = useState("c5.xlarge");
   const [schedulerPort, setSchedPort] = useState(6788);
   const [objectStoragePort, setObjPort] = useState(6789);
@@ -1076,10 +1073,9 @@ function App() {
       localStorage.removeItem("scaler_log");
     } catch (_) {}
     setPhase("provisioning");
-    const suffix = nameSuffix.trim() || randomSuffix();
     const cfg = {
       region,
-      nameSuffix: suffix,
+      nameSuffix: randomSuffix(),
       instanceType: schedulerType,
       amiId: null,
       transport,
@@ -1088,8 +1084,8 @@ function App() {
       objectStoragePort,
       pythonVersion,
       scalerPackage,
-      instanceProfileName: instanceProfileName.trim() || null,
-      pollTimeout,
+      instanceProfileName: null,
+      pollTimeout: 600,
       pollInterval: 15,
       debugDumpPath: null,
       workerManagers: workerManagers.map((wm) => ({
@@ -1131,9 +1127,6 @@ function App() {
     objectStoragePort,
     pythonVersion,
     scalerPackage,
-    instanceProfileName,
-    nameSuffix,
-    pollTimeout,
     workerManagers,
     accessKeyId,
     secretKey,
@@ -1197,7 +1190,6 @@ function App() {
       schedulerPort,
       objectStoragePort,
       pythonVersion,
-      nameSuffix: nameSuffix.trim(),
       workerManagers: workerManagers.map((wm) => ({
         ...wm,
         requirements: wm.type === "orb_aws_ec2" ? "opengris-scaler[all]\n" + requirements.trim() : requirements.trim(),
@@ -1211,7 +1203,6 @@ function App() {
     schedulerPort,
     objectStoragePort,
     pythonVersion,
-    nameSuffix,
     workerManagers,
     requirements,
   ]);
@@ -1713,50 +1704,6 @@ function App() {
                         style={inp}
                         placeholder="opengris-scaler[all]"
                       />
-                    </div>
-                    <div>
-                      <Label help="Existing IAM instance profile to attach to the scheduler. Blank = create new.">
-                        Instance Profile
-                      </Label>
-                      <input
-                        value={instanceProfileName}
-                        onChange={(e) => setIPN(e.target.value)}
-                        style={inp}
-                        placeholder="my-scaler-profile (optional)"
-                      />
-                    </div>
-                    <div>
-                      <Label help="Fixed suffix for all AWS resource names. Blank = random 8-char.">
-                        Resource Name Suffix
-                      </Label>
-                      <input
-                        value={nameSuffix}
-                        onChange={(e) => setSuffix(e.target.value)}
-                        style={inp}
-                        placeholder="random (optional)"
-                      />
-                    </div>
-                    <div>
-                      <Label help="Seconds to wait for the scheduler to become reachable after instance launch.">
-                        Poll Timeout (s)
-                      </Label>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 10,
-                        }}
-                      >
-                        <NumericStepper
-                          value={pollTimeout}
-                          onChange={setPollTO}
-                          min={60}
-                          max={1800}
-                          step={60}
-                          width={72}
-                        />
-                        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>seconds</span>
-                      </div>
                     </div>
                     <div>
                       <Label help="Python requirements installed on all ORB / AWS EC2 workers. opengris-scaler[all] is always prepended.">
