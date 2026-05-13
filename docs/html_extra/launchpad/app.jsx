@@ -816,6 +816,113 @@ function DeploymentCard({ state, onDownload, keyMaterial }) {
   );
 }
 
+/* ── Python syntax highlighter (theme-aware, no external deps) ── */
+const PY_KEYWORDS = new Set([
+  "False", "None", "True", "and", "as", "assert", "async", "await",
+  "break", "class", "continue", "def", "del", "elif", "else", "except",
+  "finally", "for", "from", "global", "if", "import", "in", "is",
+  "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try",
+  "while", "with", "yield",
+]);
+
+function tokenizePython(code) {
+  const tokens = [];
+  const re = /(#[^\n]*)|("""[\s\S]*?"""|'''[\s\S]*?'''|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')|(\b\d+(?:\.\d+)?\b)|([A-Za-z_]\w*)(\s*\()?|(\s+|[^\w\s#"']+)/g;
+  let m;
+  while ((m = re.exec(code)) !== null) {
+    if (m[1])       tokens.push({ text: m[1], color: "var(--text-dim)" });
+    else if (m[2])  tokens.push({ text: m[2], color: "var(--text-warning)" });
+    else if (m[3])  tokens.push({ text: m[3], color: "var(--text-danger)" });
+    else if (m[4]) {
+      const word = m[4], call = m[5] || "";
+      const color = PY_KEYWORDS.has(word)
+        ? "var(--text-accent)"
+        : call ? "var(--text-success)" : "var(--text-primary)";
+      tokens.push({ text: word, color });
+      if (call) tokens.push({ text: call, color: "var(--text-primary)" });
+    } else {
+      tokens.push({ text: m[6], color: "var(--text-primary)" });
+    }
+  }
+  return tokens;
+}
+
+function PyCode({ code }) {
+  const tokens = tokenizePython(code);
+  return (
+    <pre
+      style={{
+        margin: 0,
+        padding: "14px 16px",
+        background: "var(--bg-surface)",
+        border: "1px solid var(--border-accent)",
+        borderRadius: 3,
+        fontSize: 11,
+        fontFamily: "inherit",
+        whiteSpace: "pre",
+        overflowX: "auto",
+        lineHeight: 1.7,
+      }}
+    >
+      {tokens.map((t, i) => (
+        <span key={i} style={{ color: t.color }}>{t.text}</span>
+      ))}
+    </pre>
+  );
+}
+
+/* ── GettingStartedCard ── */
+function GettingStartedCard({ schedulerAddress, ready }) {
+  const addr = schedulerAddress || "tcp://<scheduler-address>:2345";
+  const snippet = `from scaler import Client
+
+with Client(address="${addr}") as client:
+    result = client.submit(pow, 2, 10).result()
+    print(result)  # 1024`;
+
+  return (
+    <div
+      style={{
+        background: "var(--bg-panel)",
+        border: "1px solid var(--border-accent)",
+        borderRadius: 4,
+        padding: "16px 20px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+      }}
+    >
+      <div
+        style={{
+          fontSize: 11,
+          letterSpacing: "0.1em",
+          color: "var(--text-muted)",
+          textTransform: "uppercase",
+        }}
+      >
+        Getting Started
+      </div>
+      {ready ? (
+        <>
+          <div style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5 }}>
+            Connect a client to your deployment and submit tasks:
+          </div>
+          <div style={{ position: "relative" }}>
+            <PyCode code={snippet} />
+            <div style={{ position: "absolute", top: 8, right: 8 }}>
+              <CopyBtn value={snippet} />
+            </div>
+          </div>
+        </>
+      ) : (
+        <div style={{ fontSize: 11, color: "var(--text-dim)", fontStyle: "italic" }}>
+          Waiting for scheduler…
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── TopNav ── */
 function TopNav({ activeTab, setActiveTab, theme, setTheme, showPostLaunch, launchControl }) {
   const tabs = [
@@ -2222,6 +2329,7 @@ function App() {
                   isRunning={isRunning}
                   keyMaterial={keyMaterial}
                 />
+                <GettingStartedCard schedulerAddress={provState.scheduler_address} ready={phase === "ready"} />
               </div>
             )}
             {phase === "error" && (
