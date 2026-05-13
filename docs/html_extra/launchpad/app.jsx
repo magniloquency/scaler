@@ -325,7 +325,7 @@ function WorkerManagerCard({ wm, onChange, onRemove, allInstances, canRemove, fu
                 letterSpacing: "0.06em",
               }}
             >
-              Workers cost
+              Cost
             </span>
             <span
               style={{
@@ -1740,7 +1740,7 @@ function App() {
                       letterSpacing: "0.06em",
                     }}
                   >
-                    Scheduler cost
+                    Cost
                   </span>
                   <span
                     style={{
