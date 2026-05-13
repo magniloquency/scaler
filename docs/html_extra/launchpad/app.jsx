@@ -208,29 +208,35 @@ function WorkerManagerCard({ wm, onChange, onRemove, allInstances, canRemove, fu
       }}
     >
       {/* header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <WorkerManagerTypeSelect value={wm.type} onChange={(v) => set("type", v)} />
-        <input
-          value={localId}
-          onChange={(e) => setLocalId(e.target.value)}
-          onBlur={() => {
-            const v = localId.trim();
-            if (!v) setLocalId(wm.id);
-            else if (v !== wm.id) set("id", v);
-          }}
-          placeholder="wm-id"
-          style={{
-            width: 315,
-            background: "var(--bg-surface)",
-            border: "1px solid var(--border-accent)",
-            borderRadius: 3,
-            padding: "5px 8px",
-            color: "var(--text-primary)",
-            fontFamily: "inherit",
-            fontSize: 11,
-            outline: "none",
-          }}
-        />
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <Label>Type</Label>
+          <WorkerManagerTypeSelect value={wm.type} onChange={(v) => set("type", v)} />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>
+          <Label help="Unique name for this worker manager.">Name</Label>
+          <input
+            value={localId}
+            onChange={(e) => setLocalId(e.target.value)}
+            onBlur={() => {
+              const v = localId.trim();
+              if (!v) setLocalId(wm.id);
+              else if (v !== wm.id) set("id", v);
+            }}
+            placeholder="wm-id"
+            style={{
+              width: "100%",
+              background: "var(--bg-surface)",
+              border: "1px solid var(--border-accent)",
+              borderRadius: 3,
+              padding: "5px 8px",
+              color: "var(--text-primary)",
+              fontFamily: "inherit",
+              fontSize: 11,
+              outline: "none",
+            }}
+          />
+        </div>
         {canRemove && (
           <button
             onClick={onRemove}
