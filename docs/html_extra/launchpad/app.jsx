@@ -817,10 +817,22 @@ function TopNav({ activeTab, setActiveTab, theme, setTheme, showPostLaunch, laun
           ))}
       </div>
       {launchControl && <div style={{ marginRight: 16 }}>{launchControl}</div>}
-      <select
-        value={theme}
-        onChange={(e) => setTheme(e.target.value)}
+      <label
         style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 6,
+          fontSize: 10,
+          color: "var(--text-muted)",
+          letterSpacing: "0.08em",
+          textTransform: "uppercase",
+        }}
+      >
+        Theme
+        <select
+          value={theme}
+          onChange={(e) => setTheme(e.target.value)}
+          style={{
           background: "var(--bg-surface)",
           border: "1px solid var(--border-accent)",
           borderRadius: 3,
@@ -832,10 +844,11 @@ function TopNav({ activeTab, setActiveTab, theme, setTheme, showPostLaunch, laun
           outline: "none",
         }}
       >
-        <option value="dark">Scaler Dark</option>
-        <option value="light">Scaler Light</option>
-        <option value="zenburn">Zenburn</option>
-      </select>
+          <option value="dark">Scaler Dark</option>
+          <option value="light">Scaler Light</option>
+          <option value="zenburn">Zenburn</option>
+        </select>
+      </label>
     </div>
   );
 }
