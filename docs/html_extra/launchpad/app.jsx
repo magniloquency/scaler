@@ -817,41 +817,6 @@ function TopNav({ activeTab, setActiveTab, theme, setTheme, showPostLaunch, laun
           ))}
       </div>
       {launchControl && <div style={{ marginRight: 16 }}>{launchControl}</div>}
-      <a
-        href="../index.html"
-        style={{
-          marginRight: 16,
-          padding: "5px 12px",
-          background: "transparent",
-          border: "1px solid var(--border-accent)",
-          borderRadius: 3,
-          color: "var(--text-muted)",
-          fontFamily: "inherit",
-          fontSize: 10,
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-          textDecoration: "none",
-          cursor: "pointer",
-          whiteSpace: "nowrap",
-        }}
-      >
-        <svg
-          width="12"
-          height="10"
-          viewBox="0 0 12 10"
-          fill="none"
-          style={{ marginRight: 6, verticalAlign: "middle", flexShrink: 0 }}
-        >
-          <path
-            d="M5 1L1 5L5 9M1 5H11"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-        Docs
-      </a>
       <select
         value={theme}
         onChange={(e) => setTheme(e.target.value)}
