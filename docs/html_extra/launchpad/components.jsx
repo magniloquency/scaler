@@ -49,7 +49,7 @@ function SecretInput({ value, onChange, placeholder, style }) {
           letterSpacing: "normal",
         }}
       >
-        {visible ? "HIDE" : "SHOW"}
+        {visible ? "Hide" : "Show"}
       </button>
     </div>
   );
@@ -443,8 +443,6 @@ function InstancePicker({ value, onChange, defaultCat = "gpu" }) {
               fontSize: "10px",
               padding: "7px 4px",
               cursor: "pointer",
-              letterSpacing: "0.05em",
-              textTransform: "uppercase",
             }}
           >
             {cat === "all" ? "All" : CAT_LABELS[cat]}
@@ -731,7 +729,6 @@ function TerminalWindow({ lines, config, style }) {
             marginLeft: 8,
             fontSize: 11,
             color: "var(--text-muted)",
-            letterSpacing: "0.08em",
           }}
         >
           openGRIS Scaler — deploy log
@@ -741,7 +738,7 @@ function TerminalWindow({ lines, config, style }) {
         ref={endRef}
         style={{
           padding: "14px 16px",
-          fontFamily: "inherit",
+          fontFamily: "var(--font-mono)",
           fontSize: "12px",
           lineHeight: "1.7",
           minHeight: 400,
@@ -832,10 +829,8 @@ function DeployDetails({ visible, style }) {
       <div
         style={{
           fontSize: 11,
-          letterSpacing: "0.1em",
           color: "var(--text-success)",
           marginBottom: 14,
-          textTransform: "uppercase",
         }}
       >
         Deployment Details
@@ -863,7 +858,7 @@ function DeployDetails({ visible, style }) {
                   fontSize: 13,
                   color: "var(--text-accent)",
                   fontWeight: 500,
-                  fontFamily: "inherit",
+                  fontFamily: "var(--font-mono)",
                   textDecoration: "none",
                   borderBottom: "1px solid var(--border-accent)",
                 }}
@@ -878,7 +873,7 @@ function DeployDetails({ visible, style }) {
                   fontSize: 13,
                   color: "var(--text-primary)",
                   fontWeight: 500,
-                  fontFamily: "inherit",
+                  fontFamily: "var(--font-mono)",
                 }}
               >
                 {value}
@@ -1081,7 +1076,7 @@ function LiveTerminal({ lines, isRunning, title, style, bare }) {
       ref={scrollRef}
       style={{
         padding: bare ? "0" : "14px 16px",
-        fontFamily: "inherit",
+        fontFamily: "var(--font-mono)",
         fontSize: "12px",
         lineHeight: "1.7",
         flex: 1,
@@ -1174,7 +1169,6 @@ function LiveTerminal({ lines, isRunning, title, style, bare }) {
             marginLeft: 8,
             fontSize: 11,
             color: "var(--text-muted)",
-            letterSpacing: "0.08em",
           }}
         >
           {title || "openGRIS Scaler — deploy log"}
@@ -1324,7 +1318,7 @@ function SchedulerLogTerminal({ instanceId, region, credentials, isActive }) {
           flexShrink: 0,
         }}
       >
-        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+        <span style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
           /var/log/scaler.log
         </span>
         <span style={{ fontSize: 11, color: "var(--text-dim)" }}>·</span>
@@ -1617,10 +1611,10 @@ function WorkerManagerTypeSelect({ value, onChange }) {
                       color: "var(--text-dim)",
                       fontSize: 9,
                       flexShrink: 0,
-                      letterSpacing: "0.06em",
+                      fontStyle: "italic",
                     }}
                   >
-                    SOON
+                    Soon
                   </span>
                 )}
               </div>

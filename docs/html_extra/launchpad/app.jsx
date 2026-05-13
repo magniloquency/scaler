@@ -99,9 +99,7 @@ function PanelBox({ title, children, style }) {
       {title && (
         <div
           style={{
-            fontSize: 10,
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
+            fontSize: 11,
             color: "var(--accent-cyan)",
             borderBottom: "1px solid var(--border-accent)",
             paddingBottom: 10,
@@ -128,11 +126,9 @@ function WorkerManagerCard({ wm, onChange, onRemove, allInstances, canRemove, fu
   const Label = ({ children, help }) => (
     <div
       style={{
-        fontSize: 10,
-        letterSpacing: "0.1em",
+        fontSize: 11,
         color: "var(--text-label)",
         marginBottom: 5,
-        textTransform: "uppercase",
         display: "flex",
         alignItems: "center",
         gap: 6,
@@ -173,9 +169,7 @@ function WorkerManagerCard({ wm, onChange, onRemove, allInstances, canRemove, fu
             flex: 1,
             padding: "6px 0",
             fontFamily: "inherit",
-            fontSize: 10,
-            letterSpacing: "0.06em",
-            textTransform: "uppercase",
+            fontSize: 11,
             cursor: disabled ? "not-allowed" : "pointer",
             border: "none",
             background: value === val ? "rgba(0,200,224,0.18)" : "transparent",
@@ -322,8 +316,6 @@ function WorkerManagerCard({ wm, onChange, onRemove, allInstances, canRemove, fu
               style={{
                 fontSize: 10,
                 color: "var(--text-muted)",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
               }}
             >
               Cost
@@ -347,9 +339,7 @@ function WorkerManagerCard({ wm, onChange, onRemove, allInstances, canRemove, fu
               padding: "6px 10px",
               color: "var(--text-muted)",
               fontFamily: "inherit",
-              fontSize: 10,
-              letterSpacing: "0.06em",
-              textTransform: "uppercase",
+              fontSize: 11,
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
@@ -604,7 +594,7 @@ function CopyBtn({ value }) {
         flexShrink: 0,
       }}
     >
-      {copied ? "COPIED" : "COPY"}
+      {copied ? "Copied" : "Copy"}
     </button>
   );
 }
@@ -648,9 +638,8 @@ function DeploymentCard({ state, onDownload, keyMaterial, isRunning }) {
         <div
           style={{
             fontSize: 11,
-            letterSpacing: "0.1em",
             color: "var(--text-success)",
-            textTransform: "uppercase",
+            fontWeight: 600,
           }}
         >
           Active Deployment
@@ -685,12 +674,10 @@ function DeploymentCard({ state, onDownload, keyMaterial, isRunning }) {
           >
             <span
               style={{
-                fontSize: 10,
+                fontSize: 11,
                 color: "var(--text-dim)",
-                letterSpacing: "0.05em",
                 width: 120,
                 flexShrink: 0,
-                textTransform: "uppercase",
                 paddingTop: code ? 2 : 0,
               }}
             >
@@ -712,7 +699,7 @@ function DeploymentCard({ state, onDownload, keyMaterial, isRunning }) {
                       style={{
                         fontSize: 11,
                         color: "var(--text-primary)",
-                        fontFamily: "inherit",
+                        fontFamily: "var(--font-mono)",
                         margin: 0,
                         whiteSpace: "pre",
                         overflowX: "auto",
@@ -733,7 +720,7 @@ function DeploymentCard({ state, onDownload, keyMaterial, isRunning }) {
                         fontWeight: 500,
                         overflowWrap: "anywhere",
                         whiteSpace: "pre-wrap",
-                        fontFamily: "inherit",
+                        fontFamily: "var(--font-mono)",
                         textDecoration: "none",
                         borderBottom: "1px solid var(--border-accent)",
                       }}
@@ -748,6 +735,7 @@ function DeploymentCard({ state, onDownload, keyMaterial, isRunning }) {
                         fontWeight: 500,
                         overflowWrap: "anywhere",
                         whiteSpace: "pre-wrap",
+                        fontFamily: "var(--font-mono)",
                       }}
                     >
                       {value}
@@ -772,12 +760,10 @@ function DeploymentCard({ state, onDownload, keyMaterial, isRunning }) {
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span
             style={{
-              fontSize: 10,
+              fontSize: 11,
               color: "var(--text-dim)",
-              letterSpacing: "0.05em",
               width: 120,
               flexShrink: 0,
-              textTransform: "uppercase",
             }}
           >
             SSH Key
@@ -858,7 +844,7 @@ function PyCode({ code }) {
         border: "1px solid var(--border-accent)",
         borderRadius: 3,
         fontSize: 11,
-        fontFamily: "inherit",
+        fontFamily: "var(--font-mono)",
         whiteSpace: "pre",
         overflowX: "auto",
         lineHeight: 1.7,
@@ -895,9 +881,8 @@ with Client(address="${addr}") as client:
       <div
         style={{
           fontSize: 11,
-          letterSpacing: "0.1em",
           color: "var(--text-muted)",
-          textTransform: "uppercase",
+          fontWeight: 600,
         }}
       >
         Getting Started
@@ -961,9 +946,7 @@ function TopNav({ activeTab, setActiveTab, theme, setTheme, showPostLaunch, laun
                 borderBottom: activeTab === t.id ? "2px solid var(--tab-active)" : "2px solid transparent",
                 color: activeTab === t.id ? "var(--text-accent)" : "var(--text-muted)",
                 fontFamily: "inherit",
-                fontSize: 11,
-                letterSpacing: "0.08em",
-                textTransform: "uppercase",
+                fontSize: 12,
                 cursor: "pointer",
               }}
             >
@@ -977,10 +960,8 @@ function TopNav({ activeTab, setActiveTab, theme, setTheme, showPostLaunch, laun
           display: "flex",
           alignItems: "center",
           gap: 6,
-          fontSize: 10,
+          fontSize: 11,
           color: "var(--text-muted)",
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
         }}
       >
         Theme
@@ -1385,11 +1366,9 @@ function App() {
   const Label = ({ children, help }) => (
     <div
       style={{
-        fontSize: 10,
-        letterSpacing: "0.1em",
+        fontSize: 11,
         color: "var(--text-label)",
         marginBottom: 5,
-        textTransform: "uppercase",
         display: "flex",
         alignItems: "center",
         gap: 6,
@@ -1428,9 +1407,7 @@ function App() {
             flex: 1,
             padding: "7px 0",
             fontFamily: "inherit",
-            fontSize: 10,
-            letterSpacing: "0.06em",
-            textTransform: "uppercase",
+            fontSize: 11,
             cursor: dis ? "not-allowed" : "pointer",
             border: "none",
             background: value === val ? "rgba(0,200,224,0.18)" : "transparent",
@@ -1454,9 +1431,7 @@ function App() {
         padding: "6px 10px",
         color: "var(--text-muted)",
         fontFamily: "inherit",
-        fontSize: 10,
-        letterSpacing: "0.06em",
-        textTransform: "uppercase",
+        fontSize: 11,
         cursor: "pointer",
         display: "flex",
         alignItems: "center",
@@ -1486,9 +1461,7 @@ function App() {
           fontFamily: "inherit",
           fontSize: 11,
           fontWeight: 700,
-          letterSpacing: "0.12em",
           cursor: !hasCredentials ? "default" : "pointer",
-          textTransform: "uppercase",
           transition: "all 0.2s",
           animation: hasCredentials ? "destroyPulse 4s ease-in-out infinite" : "none",
           flexShrink: 0,
@@ -1513,9 +1486,7 @@ function App() {
           fontFamily: "inherit",
           fontSize: 11,
           fontWeight: 700,
-          letterSpacing: "0.12em",
           cursor: !formReady ? "default" : "pointer",
-          textTransform: "uppercase",
           transition: "all 0.2s",
           animation: formReady ? "launchPulse 3s ease-in-out infinite" : "none",
           flexShrink: 0,
@@ -1540,9 +1511,7 @@ function App() {
           fontFamily: "inherit",
           fontSize: 11,
           fontWeight: 700,
-          letterSpacing: "0.12em",
           cursor: !hasCredentials ? "default" : "pointer",
-          textTransform: "uppercase",
           transition: "all 0.2s",
           animation: hasCredentials ? "destroyPulse 4s ease-in-out infinite" : "none",
           flexShrink: 0,
@@ -1562,7 +1531,6 @@ function App() {
             borderRadius: 4,
             color: phase === "destroying" ? "var(--text-danger)" : "var(--text-muted)",
             fontSize: 11,
-            letterSpacing: "0.1em",
           }}
         >
           {phase === "destroying" ? "Tearing down…" : "Deploying…"}
@@ -1577,8 +1545,6 @@ function App() {
             color: "var(--text-warning)",
             fontFamily: "inherit",
             fontSize: 11,
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
             cursor: "pointer",
             transition: "border-color 0.15s, color 0.15s",
             flexShrink: 0,
@@ -1790,7 +1756,7 @@ function App() {
                   </Label>
                   <TogglePair
                     options={[
-                      ["ws", "WebSocket"],
+                      ["ws", "WS"],
                       ["tcp", "TCP"],
                     ]}
                     value={transport}
@@ -1858,8 +1824,6 @@ function App() {
                     style={{
                       fontSize: 10,
                       color: "var(--text-muted)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.06em",
                     }}
                   >
                     Cost
@@ -2121,8 +2085,6 @@ function App() {
                           style={{
                             fontSize: 10,
                             color: "var(--text-muted)",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.05em",
                           }}
                         >
                           {label}
@@ -2156,8 +2118,6 @@ function App() {
                         style={{
                           fontSize: 10,
                           color: "var(--text-muted)",
-                          textTransform: "uppercase",
-                          letterSpacing: "0.05em",
                         }}
                       >
                         {label} · {count}× {wm.instanceType}
@@ -2179,8 +2139,6 @@ function App() {
                     style={{
                       fontSize: 10,
                       color: "var(--text-muted)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.05em",
                     }}
                   >
                     Scheduler · {schedulerType}
@@ -2200,10 +2158,8 @@ function App() {
                 >
                   <span
                     style={{
-                      fontSize: 10,
+                      fontSize: 11,
                       color: "var(--text-accent)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.06em",
                       fontWeight: 600,
                     }}
                   >
