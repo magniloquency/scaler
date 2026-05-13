@@ -913,12 +913,13 @@ with Client(address="${addr}") as client:
 }
 
 /* ── TopNav ── */
-function TopNav({ activeTab, setActiveTab, theme, setTheme, showPostLaunch, launchControl }) {
+function TopNav({ activeTab, setActiveTab, theme, setTheme, showPostLaunch, launchControl, guiAddress }) {
   const tabs = [
     { id: "config", label: "Config" },
     { id: "deployment", label: "Deployment", postLaunch: true },
     { id: "logs", label: "Scheduler Logs", postLaunch: true },
-    { id: "gui", label: "GUI", postLaunch: true },
+    // { id: "gui", label: "GUI", postLaunch: true },
+    { id: "gui", label: "GUI", postLaunch: true, isLink: true, href: guiAddress },
   ];
   return (
     <div
@@ -939,24 +940,49 @@ function TopNav({ activeTab, setActiveTab, theme, setTheme, showPostLaunch, laun
       <div style={{ display: "flex", flex: 1 }}>
         {tabs
           .filter((t) => !t.postLaunch || showPostLaunch)
-          .map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setActiveTab(t.id)}
-              style={{
-                padding: "14px 18px",
-                background: "transparent",
-                border: "none",
-                borderBottom: activeTab === t.id ? "2px solid var(--tab-active)" : "2px solid transparent",
-                color: activeTab === t.id ? "var(--text-accent)" : "var(--text-muted)",
-                fontFamily: "inherit",
-                fontSize: 12,
-                cursor: "pointer",
-              }}
-            >
-              {t.label}
-            </button>
-          ))}
+          .map((t) =>
+            t.isLink ? (
+              <a
+                key={t.id}
+                href={t.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  padding: "14px 18px",
+                  background: "transparent",
+                  border: "none",
+                  borderBottom: "2px solid transparent",
+                  color: t.href ? "var(--text-muted)" : "var(--text-dim)",
+                  fontFamily: "inherit",
+                  fontSize: 12,
+                  cursor: t.href ? "pointer" : "default",
+                  textDecoration: "none",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  pointerEvents: t.href ? undefined : "none",
+                }}
+              >
+                {t.label} ↗
+              </a>
+            ) : (
+              <button
+                key={t.id}
+                onClick={() => setActiveTab(t.id)}
+                style={{
+                  padding: "14px 18px",
+                  background: "transparent",
+                  border: "none",
+                  borderBottom: activeTab === t.id ? "2px solid var(--tab-active)" : "2px solid transparent",
+                  color: activeTab === t.id ? "var(--text-accent)" : "var(--text-muted)",
+                  fontFamily: "inherit",
+                  fontSize: 12,
+                  cursor: "pointer",
+                }}
+              >
+                {t.label}
+              </button>
+            )
+          )}
       </div>
       {launchControl && <div style={{ marginRight: 16 }}>{launchControl}</div>}
       <label
@@ -1599,6 +1625,7 @@ function App() {
         setTheme={setTheme}
         showPostLaunch={phase !== "idle" || ["deployment", "logs", "gui"].includes(activeTab)}
         launchControl={launchControl}
+        guiAddress={phase === "ready" ? provState?.gui_address : undefined}
       />
 
       {/* ── Config Tab ── */}
