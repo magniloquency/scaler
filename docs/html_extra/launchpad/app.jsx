@@ -610,7 +610,7 @@ function CopyBtn({ value }) {
 }
 
 /* ── DeploymentCard ── */
-function DeploymentCard({ state, onDownload, keyMaterial }) {
+function DeploymentCard({ state, onDownload, keyMaterial, isRunning }) {
   const rows = [
     { label: "Scheduler", value: state.scheduler_address },
     { label: "Object storage", value: state.object_storage_address },
@@ -799,15 +799,15 @@ function DeploymentCard({ state, onDownload, keyMaterial }) {
             >
               ↓ {keyMaterial.name}.pem
             </button>
-          ) : (
-            <span
-              style={{
-                fontSize: 12,
-                color: "var(--text-dim)",
-                fontStyle: "italic",
-              }}
-            >
+          ) : isRunning ? (
+            <span style={{ fontSize: 12, color: "var(--text-dim)", fontStyle: "italic" }}>
               pending…
+            </span>
+          ) : (
+            <span style={{ fontSize: 11, color: "var(--text-dim)", lineHeight: 1.5 }}>
+              not saved — download during provisioning
+              <br />
+              or retrieve from the AWS console
             </span>
           )}
         </div>
