@@ -629,15 +629,6 @@ OwnedPyObject<> capnp_union_get_attr(PyObject* self, PyObject* args)
     const char* name = nullptr;
     if (!PyArg_ParseTuple(args, "s", &name))
         return {};
-    OwnedPyObject<> variant_name {capnp_union_which(self)};
-    if (!variant_name)
-        return {};
-    int matches = PyUnicode_CompareWithASCIIString(variant_name.get(), name);
-    if (matches != 0) {
-        PyErr_SetString(PyExc_AttributeError, name);
-        return {};
-    }
-
     OwnedPyObject<> value {load_struct_field(self, name)};
     if (!value) {
         return {};
