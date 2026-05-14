@@ -1,7 +1,5 @@
-"""Verify that the capnp C extension deserializes without copying the input
-buffer.  Lazy structs returned by from_bytes must read live from the original
-bytes object, so mutations to a bytearray source are visible on first field
-access."""
+"""Tests for the capnp C extension: lazy deserialization, zero-copy buffer
+semantics, union variant resolution, and error paths."""
 
 import gc
 import unittest
@@ -9,7 +7,7 @@ import unittest
 from scaler.protocol.capnp import Message, StateTask, TaskState
 
 
-class TestZeroCopyDeserialization(unittest.TestCase):
+class TestCapnp(unittest.TestCase):
     def test_struct_from_bytes_reads_from_original_buffer(self):
         # Prove zero-copy: deserialize from a bytearray, mutate the buffer
         # before accessing any field, then verify the field reflects the
@@ -56,6 +54,30 @@ class TestZeroCopyDeserialization(unittest.TestCase):
         self.assertEqual(result.taskId, original.taskId)
         self.assertEqual(result.functionName, original.functionName)
         self.assertEqual(result.worker, original.worker)
+
+    def test_union_which_is_lazy(self):
+        # _variant_name must not be pre-set on the shell at from_bytes time.
+        # which() resolves from the live buffer on first call, consistent with
+        # how field values work.
+        from scaler.io.utility import serialize
+
+        original = StateTask(state=TaskState.success, taskId=b"t", functionName=b"f", worker=b"w")
+        msg = Message.from_bytes(serialize(original))
+        self.assertFalse(hasattr(msg, "_variant_name"))
+        self.assertEqual(msg.which(), "stateTask")
+        self.assertTrue(hasattr(msg, "_variant_name"))
+
+    def test_inactive_union_field_raises_attribute_error(self):
+        # Accessing a union field that is not the active variant must raise
+        # AttributeError.  This exercises the load_struct_field inner check
+        # that replaced the redundant outer check in capnp_union_get_attr.
+        from scaler.io.utility import serialize
+
+        original = StateTask(state=TaskState.success, taskId=b"t", functionName=b"f", worker=b"w")
+        msg = Message.from_bytes(serialize(original))
+        self.assertEqual(msg.which(), "stateTask")
+        with self.assertRaises(AttributeError):
+            _ = msg.task
 
 
 if __name__ == "__main__":
