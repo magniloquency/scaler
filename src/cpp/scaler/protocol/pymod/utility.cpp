@@ -287,7 +287,6 @@ OwnedPyObject<> with_lazy_struct_reader(PyObject* self, Handler&& handler)
         reinterpret_cast<const capnp::word*>(buffer.buf), static_cast<size_t>(buffer.len) / sizeof(capnp::word));
     capnp::FlatArrayMessageReader reader(words, options);
     auto current = capnp::DynamicValue::Reader(reader.getRoot<capnp::DynamicStruct>(root_schema));
-    capnp::Type current_type;
 
     Py_ssize_t path_size = PyTuple_Size(path.get());
     if (path_size < 0) {
@@ -321,12 +320,11 @@ OwnedPyObject<> with_lazy_struct_reader(PyObject* self, Handler&& handler)
                 PyErr_SetString(PyExc_AttributeError, "unknown Cap'n Proto field");
                 return {};
             }
-            current      = current_struct.get(field);
-            current_type = field.getType();
+            current = current_struct.get(field);
             continue;
         }
 
-        if (!PyLong_Check(item) || current_type.which() != capnp::schema::Type::LIST) {
+        if (!PyLong_Check(item) || current.getType() != capnp::DynamicValue::LIST) {
             PyBuffer_Release(&buffer);
             PyErr_SetString(PyExc_TypeError, "invalid lazy Cap'n Proto path");
             return {};
@@ -343,8 +341,7 @@ OwnedPyObject<> with_lazy_struct_reader(PyObject* self, Handler&& handler)
             PyErr_SetString(PyExc_IndexError, "Cap'n Proto list index out of range");
             return {};
         }
-        current      = list_reader[static_cast<DynamicListIndex>(item_index)];
-        current_type = current_type.asList().getElementType();
+        current = list_reader[static_cast<DynamicListIndex>(item_index)];
     }
 
     OwnedPyObject<> result;
