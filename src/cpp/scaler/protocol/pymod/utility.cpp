@@ -301,6 +301,11 @@ OwnedPyObject<> with_lazy_struct_reader(PyObject* self, Handler&& handler)
         }
 
         if (PyUnicode_Check(item)) {
+            if (current.getType() != capnp::DynamicValue::STRUCT) {
+                PyBuffer_Release(&buffer);
+                PyErr_SetString(PyExc_TypeError, "invalid lazy Cap'n Proto path");
+                return {};
+            }
             auto current_struct    = current.as<capnp::DynamicStruct>();
             const char* field_utf8 = PyUnicode_AsUTF8(item);
             if (!field_utf8) {
