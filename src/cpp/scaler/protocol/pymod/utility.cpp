@@ -154,11 +154,19 @@ constexpr const char* CAPNP_PATH_ATTR            = "_capnp_path";
 
 OwnedPyObject<> append_path_item(PyObject* path, PyObject* item)
 {
-    OwnedPyObject<> item_tuple {PyTuple_Pack(1, item)};
-    if (!item_tuple) {
+    Py_ssize_t n = PyTuple_GET_SIZE(path);
+    OwnedPyObject<> new_path {PyTuple_New(n + 1)};
+    if (!new_path) {
         return {};
     }
-    return OwnedPyObject<> {PySequence_Concat(path, item_tuple.get())};
+    for (Py_ssize_t i = 0; i < n; ++i) {
+        PyObject* existing = PyTuple_GET_ITEM(path, i);
+        Py_INCREF(existing);
+        PyTuple_SET_ITEM(new_path.get(), i, existing);
+    }
+    Py_INCREF(item);
+    PyTuple_SET_ITEM(new_path.get(), n, item);
+    return new_path;
 }
 
 OwnedPyObject<> append_path_field(PyObject* path, const char* field_name)
