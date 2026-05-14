@@ -202,15 +202,14 @@ OwnedPyObject<> create_lazy_struct_object(
         return {};
     }
 
+    OwnedPyObject<> traversal_limit_obj {PyLong_FromUnsignedLongLong(traversal_limit)};
+    OwnedPyObject<> root_schema_id_obj {PyLong_FromUnsignedLongLong(root_schema_id)};
+    if (!traversal_limit_obj || !root_schema_id_obj) {
+        return {};
+    }
     if (PyObject_SetAttrString(result.get(), CAPNP_SOURCE_ATTR, source) < 0 ||
-        PyObject_SetAttrString(
-            result.get(),
-            CAPNP_TRAVERSAL_LIMIT_ATTR,
-            OwnedPyObject<>(PyLong_FromUnsignedLongLong(traversal_limit)).get()) < 0 ||
-        PyObject_SetAttrString(
-            result.get(),
-            CAPNP_ROOT_SCHEMA_ID_ATTR,
-            OwnedPyObject<>(PyLong_FromUnsignedLongLong(root_schema_id)).get()) < 0 ||
+        PyObject_SetAttrString(result.get(), CAPNP_TRAVERSAL_LIMIT_ATTR, traversal_limit_obj.get()) < 0 ||
+        PyObject_SetAttrString(result.get(), CAPNP_ROOT_SCHEMA_ID_ATTR, root_schema_id_obj.get()) < 0 ||
         PyObject_SetAttrString(result.get(), CAPNP_PATH_ATTR, path) < 0) {
         return {};
     }
