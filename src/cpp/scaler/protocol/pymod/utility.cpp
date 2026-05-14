@@ -235,7 +235,7 @@ bool load_lazy_struct_metadata(
     source = get_attr(self, CAPNP_SOURCE_ATTR);
     if (!source) {
         PyErr_Clear();
-        PyErr_SetString(PyExc_AttributeError, "attribute not found");
+        PyErr_Format(PyExc_AttributeError, "%s not found — object is not a lazy Cap'n Proto struct", CAPNP_SOURCE_ATTR);
         return false;
     }
     OwnedPyObject<> traversal_limit_obj {get_attr(self, CAPNP_TRAVERSAL_LIMIT_ATTR)};
