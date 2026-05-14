@@ -184,8 +184,7 @@ OwnedPyObject<> create_lazy_struct_object(
     PyObject* source,
     unsigned long long traversal_limit,
     uint64_t root_schema_id,
-    PyObject* path,
-    const char* variant_name)
+    PyObject* path)
 {
     OwnedPyObject<> empty_args {PyTuple_New(0)};
     if (!empty_args) {
@@ -216,13 +215,6 @@ OwnedPyObject<> create_lazy_struct_object(
         return {};
     }
 
-    if (!variant_name) {
-        return result;
-    }
-    if (PyObject_SetAttrString(
-            result.get(), "_variant_name", OwnedPyObject<>(PyUnicode_FromString(variant_name)).get()) < 0) {
-        return {};
-    }
     return result;
 }
 
@@ -816,16 +808,7 @@ OwnedPyObject<> dynamic_value_to_py_object(
                 return nullptr;
             }
 
-            auto reader_struct      = value.as<capnp::DynamicStruct>();
-            auto active_union_field = reader_struct.which();
-
-            const char* variant_name = nullptr;
-            KJ_IF_MAYBE (active_union_field_ptr, active_union_field) {
-                variant_name = active_union_field_ptr->getProto().getName().cStr();
-            }
-
-            return create_lazy_struct_object(
-                type_object.get(), source, traversal_limit, root_schema_id, path, variant_name);
+            return create_lazy_struct_object(type_object.get(), source, traversal_limit, root_schema_id, path);
         }
         case capnp::schema::Type::LIST: {
             auto list_reader = value.as<capnp::DynamicList>();
