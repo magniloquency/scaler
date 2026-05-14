@@ -4,9 +4,10 @@
     <meta charset="UTF-8" />
     <title>openGRIS Scaler — Launchpad</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
     />
     <script
       src="https://unpkg.com/react@18.3.1/umd/react.development.js"
@@ -42,9 +43,12 @@
         background: var(--bg-page);
       }
       body {
-        font-family: "JetBrains Mono", monospace;
+        font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
       }
 
+      :root {
+        --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
       :root,
       [data-theme="dark"] {
         --bg-page: #111113;
@@ -140,26 +144,7 @@
           transform: translateY(0);
         }
       }
-      @keyframes launchPulse {
-        0%,
-        100% {
-          box-shadow: 0 0 0 0 rgba(110, 86, 207, 0.45);
-        }
-        50% {
-          box-shadow: 0 0 0 12px rgba(110, 86, 207, 0);
-        }
-      }
-      @keyframes destroyPulse {
-        0%,
-        100% {
-          box-shadow: 0 0 0 0 rgba(229, 72, 77, 0.4);
-        }
-        50% {
-          box-shadow: 0 0 0 10px rgba(229, 72, 77, 0);
-        }
-      }
-
-      input[type="number"] {
+input[type="number"] {
         -moz-appearance: textfield;
       }
       input[type="number"]::-webkit-inner-spin-button,

@@ -49,7 +49,7 @@ function SecretInput({ value, onChange, placeholder, style }) {
           letterSpacing: "normal",
         }}
       >
-        {visible ? "HIDE" : "SHOW"}
+        {visible ? "Hide" : "Show"}
       </button>
     </div>
   );
@@ -443,8 +443,6 @@ function InstancePicker({ value, onChange, defaultCat = "gpu" }) {
               fontSize: "10px",
               padding: "7px 4px",
               cursor: "pointer",
-              letterSpacing: "0.05em",
-              textTransform: "uppercase",
             }}
           >
             {cat === "all" ? "All" : CAT_LABELS[cat]}
@@ -731,7 +729,6 @@ function TerminalWindow({ lines, config, style }) {
             marginLeft: 8,
             fontSize: 11,
             color: "var(--text-muted)",
-            letterSpacing: "0.08em",
           }}
         >
           openGRIS Scaler — deploy log
@@ -741,7 +738,7 @@ function TerminalWindow({ lines, config, style }) {
         ref={endRef}
         style={{
           padding: "14px 16px",
-          fontFamily: "inherit",
+          fontFamily: "var(--font-mono)",
           fontSize: "12px",
           lineHeight: "1.7",
           minHeight: 400,
@@ -832,10 +829,8 @@ function DeployDetails({ visible, style }) {
       <div
         style={{
           fontSize: 11,
-          letterSpacing: "0.1em",
           color: "var(--text-success)",
           marginBottom: 14,
-          textTransform: "uppercase",
         }}
       >
         Deployment Details
@@ -863,7 +858,7 @@ function DeployDetails({ visible, style }) {
                   fontSize: 13,
                   color: "var(--text-accent)",
                   fontWeight: 500,
-                  fontFamily: "inherit",
+                  fontFamily: "var(--font-mono)",
                   textDecoration: "none",
                   borderBottom: "1px solid var(--border-accent)",
                 }}
@@ -878,7 +873,7 @@ function DeployDetails({ visible, style }) {
                   fontSize: 13,
                   color: "var(--text-primary)",
                   fontWeight: 500,
-                  fontFamily: "inherit",
+                  fontFamily: "var(--font-mono)",
                 }}
               >
                 {value}
@@ -898,7 +893,7 @@ function HelpTip({ text }) {
   const [placement, setPlacement] = useState(null);
   const btnRef = useRef(null);
   const popupRef = useRef(null);
-  const POPUP_WIDTH = 220;
+  const POPUP_WIDTH = 260;
 
   const open = btnRect !== null;
 
@@ -923,6 +918,26 @@ function HelpTip({ text }) {
     setPlacement(null);
   };
 
+  const renderBlock = (block, key) => {
+    const lines = block.split("\n");
+    if (lines.every((l) => l.startsWith("- "))) {
+      return (
+        <ul key={key} style={{ margin: 0, paddingLeft: 14 }}>
+          {lines.map((l, i) => (
+            <li key={i} style={{ marginTop: i > 0 ? 3 : 0 }}>
+              {l.slice(2)}
+            </li>
+          ))}
+        </ul>
+      );
+    }
+    return (
+      <p key={key} style={{ margin: 0 }}>
+        {block}
+      </p>
+    );
+  };
+
   const sections = text.split(/\n?---\n?/);
   const content = sections.map((section, si) => (
     <React.Fragment key={si}>
@@ -935,11 +950,7 @@ function HelpTip({ text }) {
           }}
         />
       )}
-      {section.split(/\n\n+/).map((para, pi) => (
-        <p key={pi} style={{ margin: pi > 0 ? "6px 0 0" : 0 }}>
-          {para}
-        </p>
-      ))}
+      {section.split(/\n\n+/).map((block, pi) => renderBlock(block, pi))}
     </React.Fragment>
   ));
 
@@ -1043,7 +1054,10 @@ function LiveTerminal({ lines, isRunning, title, style, bare }) {
   const scrollRef = useRef(null);
 
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    const el = scrollRef.current;
+    if (!el) return;
+    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+    if (isNearBottom) el.scrollTop = el.scrollHeight;
   }, [lines]);
 
   const clsColor = {
@@ -1062,7 +1076,7 @@ function LiveTerminal({ lines, isRunning, title, style, bare }) {
       ref={scrollRef}
       style={{
         padding: bare ? "0" : "14px 16px",
-        fontFamily: "inherit",
+        fontFamily: "var(--font-mono)",
         fontSize: "12px",
         lineHeight: "1.7",
         flex: 1,
@@ -1155,7 +1169,6 @@ function LiveTerminal({ lines, isRunning, title, style, bare }) {
             marginLeft: 8,
             fontSize: 11,
             color: "var(--text-muted)",
-            letterSpacing: "0.08em",
           }}
         >
           {title || "openGRIS Scaler — deploy log"}
@@ -1167,58 +1180,78 @@ function LiveTerminal({ lines, isRunning, title, style, bare }) {
 }
 
 /* ── SchedulerLogTerminal ── */
+const POLL_INTERVALS = [
+  { label: "15s", value: 15000 },
+  { label: "30s", value: 30000 },
+  { label: "1m",  value: 60000 },
+  { label: "5m",  value: 300000 },
+];
+
 function SchedulerLogTerminal({ instanceId, region, credentials, isActive }) {
   const [lines, setLines] = useState([]);
   const [status, setStatus] = useState("idle");
   const [errorMsg, setError] = useState(null);
+  const [intervalMs, setIntervalMs] = useState(15000);
+  const [nextFetchAt, setNextFetchAt] = useState(null);
+  const [countdown, setCountdown] = useState(null);
+  const [fetching, setFetching] = useState(false);
   const pollRef = useRef(null);
+  const triggerRef = useRef(null);
+  const intervalMsRef = useRef(intervalMs);
+  useEffect(() => { intervalMsRef.current = intervalMs; }, [intervalMs]);
 
   const fetchLogs = useCallback(async () => {
-    const ssm = new AWS.SSM({
-      region,
-      credentials: new AWS.Credentials(credentials.accessKeyId, credentials.secretKey),
-    });
-    let commandId;
     try {
-      const r = await ssm
-        .sendCommand({
-          InstanceIds: [instanceId],
-          DocumentName: "AWS-RunShellScript",
-          Parameters: {
-            commands: ["tail -n 150 /var/log/scaler.log 2>/dev/null || echo '(log not yet available)'"],
-          },
-          TimeoutSeconds: 30,
-        })
-        .promise();
-      commandId = r.Command.CommandId;
-    } catch (err) {
-      setStatus("error");
-      setError(
-        err.code === "AccessDeniedException"
-          ? "Permission denied. Your IAM user needs ssm:SendCommand and ssm:GetCommandInvocation."
-          : err.code === "InvalidClientTokenId" || err.code === "AuthFailure" || /invalid.*token/i.test(err.message)
-            ? "Invalid AWS credentials. Re-enter your Access Key ID and Secret Access Key in the Configuration tab."
-            : "SSM error: " + err.message,
-      );
-      return;
-    }
-    for (let i = 0; i < 12; i++) {
-      await new Promise((r) => setTimeout(r, 2500));
+      const ssm = new AWS.SSM({
+        region,
+        credentials: new AWS.Credentials(credentials.accessKeyId, credentials.secretKey),
+      });
+      let commandId;
       try {
-        const inv = await ssm
-          .getCommandInvocation({
-            CommandId: commandId,
-            InstanceId: instanceId,
+        const r = await ssm
+          .sendCommand({
+            InstanceIds: [instanceId],
+            DocumentName: "AWS-RunShellScript",
+            Parameters: {
+              commands: ["tail -n 150 /var/log/scaler.log 2>/dev/null || echo '(log not yet available)'"],
+            },
+            TimeoutSeconds: 30,
           })
           .promise();
-        if (inv.Status === "Success" || inv.Status === "Failed") {
-          setLines((inv.StandardOutputContent || "").split("\n").map((text) => ({ text, cls: "info" })));
+        commandId = r.Command.CommandId;
+      } catch (err) {
+        if (err.code === "InvalidInstanceId") {
+          setLines([{ text: "Instance not yet registered with SSM — retrying…", cls: "warn" }]);
+        } else if (err.code === "AccessDeniedException") {
+          setStatus("error");
+          setError("Permission denied. Your IAM user needs ssm:SendCommand and ssm:GetCommandInvocation.");
+        } else if (err.code === "InvalidClientTokenId" || err.code === "AuthFailure" || /invalid.*token/i.test(err.message)) {
+          setStatus("error");
+          setError("Invalid AWS credentials. Re-enter your Access Key ID and Secret Access Key in the Configuration tab.");
+        } else {
+          setStatus("error");
+          setError("SSM error: " + err.message);
+        }
+        return;
+      }
+      for (let i = 0; i < 12; i++) {
+        await new Promise((r) => setTimeout(r, 2500));
+        try {
+          const inv = await ssm
+            .getCommandInvocation({
+              CommandId: commandId,
+              InstanceId: instanceId,
+            })
+            .promise();
+          if (inv.Status === "Success" || inv.Status === "Failed") {
+            setLines((inv.StandardOutputContent || "").split("\n").map((text) => ({ text, cls: "info" })));
+            break;
+          }
+        } catch (_) {
           break;
         }
-      } catch (_) {
-        break;
       }
-    }
+    } catch (_) {}
   }, [instanceId, region, credentials]);
 
   const hasCredentials = credentials.accessKeyId && credentials.secretKey;
@@ -1226,10 +1259,42 @@ function SchedulerLogTerminal({ instanceId, region, credentials, isActive }) {
   useEffect(() => {
     if (!isActive || !instanceId || !hasCredentials) return;
     setStatus("polling");
-    fetchLogs();
-    pollRef.current = setInterval(fetchLogs, 15000);
-    return () => clearInterval(pollRef.current);
-  }, [isActive, instanceId, hasCredentials, fetchLogs]);
+    let cancelled = false;
+
+    const run = async () => {
+      if (cancelled) return;
+      setFetching(true);
+      setNextFetchAt(null);
+      await fetchLogs();
+      if (cancelled) return;
+      const ms = intervalMsRef.current;
+      const next = Date.now() + ms;
+      setFetching(false);
+      setNextFetchAt(next);
+      setCountdown(Math.round(ms / 1000));
+      pollRef.current = setTimeout(run, ms);
+    };
+
+    triggerRef.current = () => {
+      clearTimeout(pollRef.current);
+      run();
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+      clearTimeout(pollRef.current);
+      triggerRef.current = null;
+    };
+  }, [isActive, instanceId, hasCredentials, fetchLogs, intervalMs]);
+
+  useEffect(() => {
+    if (!nextFetchAt) { setCountdown(null); return; }
+    const tick = setInterval(() => {
+      setCountdown(Math.max(0, Math.round((nextFetchAt - Date.now()) / 1000)));
+    }, 1000);
+    return () => clearInterval(tick);
+  }, [nextFetchAt]);
 
   if (!hasCredentials)
     return (
@@ -1239,13 +1304,78 @@ function SchedulerLogTerminal({ instanceId, region, credentials, isActive }) {
     );
   if (status === "error")
     return <div style={{ padding: 24, color: "var(--text-danger)", fontSize: 12 }}>{errorMsg}</div>;
+
+  const labelMs = POLL_INTERVALS.find((o) => o.value === intervalMs)?.label ?? "15s";
+
   return (
-    <LiveTerminal
-      lines={lines}
-      isRunning={status === "polling"}
-      title="scheduler — /var/log/scaler.log (polling every 15s)"
-      style={{ flex: 1, minHeight: 0 }}
-    />
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          padding: "0 0 10px 0",
+          flexShrink: 0,
+        }}
+      >
+        <span style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
+          /var/log/scaler.log
+        </span>
+        <span style={{ fontSize: 11, color: "var(--text-dim)" }}>·</span>
+        <span style={{ fontSize: 11, color: "var(--text-muted)", display: "flex", alignItems: "center", gap: 6 }}>
+          refresh every
+          <select
+            value={intervalMs}
+            onChange={(e) => setIntervalMs(Number(e.target.value))}
+            style={{
+              background: "var(--bg-input, var(--term-bg))",
+              border: "1px solid var(--border-subtle, var(--term-border))",
+              borderRadius: 3,
+              color: "var(--text-secondary)",
+              fontSize: 11,
+              padding: "1px 4px",
+              cursor: "pointer",
+            }}
+          >
+            {POLL_INTERVALS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </span>
+        {(fetching || countdown !== null) && (
+          <>
+            <span style={{ fontSize: 11, color: "var(--text-dim)" }}>·</span>
+            <span style={{ fontSize: 11, color: "var(--text-dim)" }}>
+              {fetching ? "refreshing…" : `next refresh in ${countdown}s`}
+            </span>
+          </>
+        )}
+        <button
+          onClick={() => triggerRef.current?.()}
+          disabled={fetching}
+          style={{
+            marginLeft: "auto",
+            background: "none",
+            border: "1px solid var(--border-accent)",
+            borderRadius: 3,
+            color: fetching ? "var(--text-dim)" : "var(--text-muted)",
+            fontFamily: "inherit",
+            fontSize: 11,
+            padding: "2px 8px",
+            cursor: fetching ? "default" : "pointer",
+            letterSpacing: "0.06em",
+          }}
+        >
+          Refresh
+        </button>
+      </div>
+      <LiveTerminal
+        lines={lines}
+        isRunning={status === "polling"}
+        bare
+        style={{ flex: 1, minHeight: 0 }}
+      />
+    </div>
   );
 }
 
@@ -1481,10 +1611,10 @@ function WorkerManagerTypeSelect({ value, onChange }) {
                       color: "var(--text-dim)",
                       fontSize: 9,
                       flexShrink: 0,
-                      letterSpacing: "0.06em",
+                      fontStyle: "italic",
                     }}
                   >
-                    SOON
+                    Soon
                   </span>
                 )}
               </div>
