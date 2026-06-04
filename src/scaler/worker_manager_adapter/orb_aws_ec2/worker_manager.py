@@ -254,7 +254,9 @@ class ORBAWSEC2WorkerManager:
                 'execute "pip install opengris-scaler[orb]" to use ORB AWS EC2 worker Manager'
             ) from exc
 
-        async with orb(app_config=self._build_app_config()) as sdk:
+        app_config = self._build_app_config()
+        logging.debug("ORB app_config: %s", json.dumps(app_config))
+        async with orb(app_config=app_config) as sdk:
             # setup_logger is called after the ORB context is entered because ORB reconfigures
             # the root logger during __aenter__, which would otherwise suppress scaler log output.
             setup_logger(self._logging_paths, self._logging_config_file, self._logging_level)
