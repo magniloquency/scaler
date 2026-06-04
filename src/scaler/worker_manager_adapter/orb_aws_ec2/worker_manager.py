@@ -255,7 +255,7 @@ class ORBAWSEC2WorkerManager:
             ) from exc
 
         app_config = self._build_app_config()
-        logging.debug("ORB app_config: %s", json.dumps(app_config))
+        logging.info("ORB app_config: %s", json.dumps(app_config))
         async with orb(app_config=app_config) as sdk:
             # setup_logger is called after the ORB context is entered because ORB reconfigures
             # the root logger during __aenter__, which would otherwise suppress scaler log output.
