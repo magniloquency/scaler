@@ -152,6 +152,7 @@ class ORBAWSEC2WorkerManager:
 
     def _build_app_config(self) -> dict:
         region = self._config.aws_region
+        provider_config: dict = {"region": region, "profile": self._config.aws_profile} if self._config.aws_profile else {"region": region}
         return {
             "provider": {
                 "selection_policy": "FIRST_AVAILABLE",
@@ -161,11 +162,7 @@ class ORBAWSEC2WorkerManager:
                         "type": "aws",
                         "enabled": True,
                         "priority": 1,
-                        # profile must be set explicitly: ORB's config pipeline starts from
-                        # aws_defaults.json (which has profile="default") and deep-merges our dict
-                        # on top. Omitting profile here lets "default" leak through, which breaks
-                        # environments that rely on the EC2 instance role credential chain.
-                        "config": {"region": region, "profile": self._config.aws_profile},
+                        "config": provider_config,
                     }
                 ],
             },
