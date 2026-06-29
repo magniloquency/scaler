@@ -6,7 +6,9 @@ import json
 import logging
 import math
 import os
-from typing import Any, List, Optional
+import shlex
+from typing import Any, List, Optional, Tuple
+from urllib.parse import urlsplit, urlunsplit
 
 try:
     import boto3
@@ -24,8 +26,40 @@ from scaler.worker_manager_adapter.common import extract_desired_count, format_c
 from scaler.worker_manager_adapter.mixins import DeclarativeWorkerProvisioner
 from scaler.worker_manager_adapter.worker_manager_runner import WorkerManagerRunner
 
+logger = logging.getLogger(__name__)
+
 ORB_AWS_EC2_POLLING_INTERVAL_SECONDS = 5
 ORB_AWS_EC2_MAX_POLLING_ATTEMPTS = 60
+
+
+def _extract_git_url_and_branch(requirements_content: str) -> Optional[Tuple[str, str]]:
+    """Return (clone_url, branch) for the first git+ requirement, or None.
+
+    Only PEP 508 VCS form is supported: name @ git+<url>[@branch]
+      scaler @ git+https://github.com/org/repo.git@main      -> ("https://github.com/org/repo.git", "main")
+      scaler @ git+ssh://git@github.com/org/repo.git@main    -> ("ssh://git@github.com/org/repo.git", "main")
+      scaler @ git+https://TOKEN@github.com/org/repo.git     -> ("https://TOKEN@github.com/org/repo.git", "")
+    """
+    for line in requirements_content.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or line.startswith("-"):
+            continue
+        try:
+            # Strip env markers before parsing: Requirement chokes on @branch when a
+            # "; marker" follows (e.g. "pkg @ git+https://.../repo.git@main; python_version<'3.9'").
+            req = Requirement(line.partition(";")[0].rstrip())
+        except Exception:
+            continue
+        if not req.url or not req.url.startswith("git+"):
+            continue
+        parsed = urlsplit(req.url)
+        at_idx = parsed.path.find("@")
+        if at_idx >= 0:
+            branch = parsed.path[at_idx + 1 :]
+            url = urlunsplit(parsed._replace(scheme=parsed.scheme[4:], path=parsed.path[:at_idx], fragment=""))
+            return url, branch
+        return urlunsplit(parsed._replace(scheme=parsed.scheme[4:], fragment="")), ""
+    return None
 
 
 class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
@@ -66,14 +100,14 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
         )
 
     async def start_units(self, count: int) -> None:
-        logging.info(f"Submitting ORB batch machine request for template {self._template_id} (count={count})...")
+        logger.info(f"Submitting ORB batch machine request for template {self._template_id} (count={count})...")
         create_response = await self._sdk.create_request(template_id=self._template_id, count=count)
 
         request_id = create_response.get("created_request_id") if isinstance(create_response, dict) else None
         if not request_id:
             raise RuntimeError(f"ORB create_request returned no request ID. Response: {create_response}")
 
-        logging.info(f"ORB request {request_id} submitted, polling for {count} instance ID(s)...")
+        logger.info(f"ORB request {request_id} submitted, polling for {count} instance ID(s)...")
         timeout_seconds = ORB_AWS_EC2_MAX_POLLING_ATTEMPTS * ORB_AWS_EC2_POLLING_INTERVAL_SECONDS
         elapsed = 0
 
@@ -93,7 +127,7 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
 
             if len(machine_ids) >= count:
                 for instance_id in machine_ids:
-                    logging.info(f"ORB request {request_id}: instance {instance_id} ready")
+                    logger.info(f"ORB request {request_id}: instance {instance_id} ready")
                 self._units.extend(machine_ids)
                 return
 
@@ -110,24 +144,24 @@ class ORBWorkerProvisioner(DeclarativeWorkerProvisioner):
     async def stop_units(self, count: int) -> None:
         unit_ids = self._units[:count]
         if len(unit_ids) < count:
-            logging.warning(f"Requested to stop {count} unit(s) but only {len(unit_ids)} available.")
+            logger.warning(f"Requested to stop {count} unit(s) but only {len(unit_ids)} available.")
         if not unit_ids:
             return
-        logging.info(f"Stopping {len(unit_ids)} unit(s): instances {unit_ids}")
+        logger.info(f"Stopping {len(unit_ids)} unit(s): instances {unit_ids}")
         await self._sdk.create_return_request(machine_ids=unit_ids)
         del self._units[:count]
-        logging.info(f"Successfully stopped {count} unit(s): instances {unit_ids}")
+        logger.info(f"Successfully stopped {count} unit(s): instances {unit_ids}")
 
     async def terminate(self) -> None:
         self._capacity_coordinator.cancel()
         if not self._units:
             return
-        logging.info(f"Terminating {len(self._units)} unit(s)...")
+        logger.info(f"Terminating {len(self._units)} unit(s)...")
         try:
             await self._sdk.create_return_request(machine_ids=self._units)
-            logging.info(f"Successfully requested termination of instances: {self._units}")
+            logger.info(f"Successfully requested termination of instances: {self._units}")
         except Exception as e:
-            logging.warning(f"Failed to terminate instances during cleanup: {e}")
+            logger.warning(f"Failed to terminate instances during cleanup: {e}")
         self._units.clear()
 
 
@@ -183,7 +217,7 @@ class ORBAWSEC2WorkerManager:
         workers_per_instance = self._discover_vcpu_count(self._config.instance_type)
         mtc = self._config.worker_manager_config.max_task_concurrency
         max_instances = math.ceil(mtc / workers_per_instance) if mtc != -1 else -1
-        logging.info(
+        logger.info(
             f"ORB instance type {self._config.instance_type!r}: {workers_per_instance} vCPUs/instance, "
             f"max_task_concurrency={mtc} -> max_instances={max_instances}"
         )
@@ -241,10 +275,10 @@ class ORBAWSEC2WorkerManager:
             self._dump_debug_state(template_id, template_kwargs)
 
         create_result = await sdk.create_template(**template_kwargs)
-        logging.info(f"create_template result: {create_result}")
+        logger.info(f"create_template result: {create_result}")
 
         validate_result = await sdk.validate_template(template_id=template_id)
-        logging.info(f"validate_template result: {validate_result}")
+        logger.info(f"validate_template result: {validate_result}")
 
     def run(self) -> None:
         self._loop = asyncio.new_event_loop()
@@ -278,23 +312,23 @@ class ORBAWSEC2WorkerManager:
         if self._runner is not None:
             self._runner.cleanup()
 
-        logging.info("Starting cleanup of AWS resources...")
+        logger.info("Starting cleanup of AWS resources...")
 
         if self._created_security_group_id is not None:
             try:
-                logging.info(f"Deleting AWS security group: {self._created_security_group_id}")
+                logger.info(f"Deleting AWS security group: {self._created_security_group_id}")
                 self._ec2.delete_security_group(GroupId=self._created_security_group_id)
             except Exception as e:
-                logging.warning(f"Failed to delete security group {self._created_security_group_id}: {e}")
+                logger.warning(f"Failed to delete security group {self._created_security_group_id}: {e}")
 
         if self._created_key_name is not None:
             try:
-                logging.info(f"Deleting AWS key pair: {self._created_key_name}")
+                logger.info(f"Deleting AWS key pair: {self._created_key_name}")
                 self._ec2.delete_key_pair(KeyName=self._created_key_name)
             except Exception as e:
-                logging.warning(f"Failed to delete key pair {self._created_key_name}: {e}")
+                logger.warning(f"Failed to delete key pair {self._created_key_name}: {e}")
 
-        logging.info("Cleanup completed.")
+        logger.info("Cleanup completed.")
 
     def __del__(self) -> None:
         self._cleanup()
@@ -307,7 +341,7 @@ class ORBAWSEC2WorkerManager:
             json.dump(dataclasses.asdict(self._config), f, indent=2, default=str)
         with open(template_path, "w") as f:
             json.dump(template_kwargs, f, indent=2, default=str)
-        logging.info(f"[DEBUG] Dumped config to {config_path} and template to {template_path}")
+        logger.info(f"[DEBUG] Dumped config to {config_path} and template to {template_path}")
 
     def _create_user_data(self) -> str:
         worker_config = self._config.worker_config
@@ -321,15 +355,60 @@ class ORBAWSEC2WorkerManager:
 
             # User data runs as root so no sudo is needed.
             # set -e ensures any install failure aborts the script rather than launching a broken worker.
-            script += f"""set -e
+            git_info = _extract_git_url_and_branch(requirements_content)
+            if git_info is not None:
+                clone_url, clone_branch = git_info
+                clone_cmd = (
+                    f"git clone -b {shlex.quote(clone_branch)} --depth 1 {shlex.quote(clone_url)} /opt/scaler-src"
+                    if clone_branch
+                    else f"git clone --depth 1 {shlex.quote(clone_url)} /opt/scaler-src"
+                )
+                # AL2023 ships GCC 11 which lacks C++23 <expected>; gcc14 is required.
+                # Cap'n Proto is not in the AL2023 repos and must be built from source.
+                # Static libuv.a on AL2023 is not compiled with -fPIC, so we use the
+                # shared libuv from libuv-devel and disable CMake's find_package for it,
+                # letting pkg-config locate the shared library instead.
+                cmake_args = (
+                    "-DCMAKE_C_COMPILER=/usr/bin/gcc14-gcc"
+                    " -DCMAKE_CXX_COMPILER=/usr/bin/gcc14-g++"
+                    " -DCMAKE_DISABLE_FIND_PACKAGE_libuv=TRUE"
+                )
+                script += f"""set -e
 dnf update -y
-dnf install -y python{python_version} python{python_version}-pip openssl-devel
-python{python_version} -m venv /opt/opengris-scaler
-/opt/opengris-scaler/bin/python -m pip install --upgrade pip
+dnf install -y git gcc14 gcc14-c++ gcc14-libstdc++-devel autoconf automake libtool libuv-devel openssl-devel
+{clone_cmd}
+cd /opt/scaler-src
+CC=/usr/bin/gcc14-gcc CXX=/usr/bin/gcc14-g++ bash scripts/library_tool.sh capnp download
+CC=/usr/bin/gcc14-gcc CXX=/usr/bin/gcc14-g++ bash scripts/library_tool.sh capnp compile
+bash scripts/library_tool.sh capnp install
+cd /
+echo '/usr/local/lib' > /etc/ld.so.conf.d/local.conf
+ldconfig
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source /root/.local/bin/env
+uv venv --python {python_version} /opt/opengris-scaler
+source /opt/opengris-scaler/bin/activate
 cat > /tmp/requirements.txt << 'REQUIREMENTS_EOF'
 {requirements_content}
 REQUIREMENTS_EOF
-/opt/opengris-scaler/bin/pip install -r /tmp/requirements.txt
+PKG_CONFIG_PATH=/usr/local/lib/pkgconfig \\
+CMAKE_ARGS='{cmake_args}' \\
+  uv pip install -r /tmp/requirements.txt
+ln -sf /opt/opengris-scaler/bin/scaler_* /usr/local/bin/
+set +e
+
+"""
+            else:
+                script += f"""set -e
+dnf update -y
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source /root/.local/bin/env
+uv venv --python {python_version} /opt/opengris-scaler
+source /opt/opengris-scaler/bin/activate
+cat > /tmp/requirements.txt << 'REQUIREMENTS_EOF'
+{requirements_content}
+REQUIREMENTS_EOF
+uv pip install -r /tmp/requirements.txt
 ln -sf /opt/opengris-scaler/bin/scaler_* /usr/local/bin/
 set +e
 
@@ -389,7 +468,7 @@ set +e
             raise RuntimeError("No AL2023 AMI found in the current region.")
         images.sort(key=lambda img: img["CreationDate"], reverse=True)
         ami_id = images[0]["ImageId"]
-        logging.info(f"Auto-discovered latest AL2023 AMI: {ami_id}")
+        logger.info(f"Auto-discovered latest AL2023 AMI: {ami_id}")
         return ami_id
 
     def _discover_default_subnet(self) -> str:
@@ -403,7 +482,7 @@ set +e
             raise RuntimeError(f"No subnets found in default VPC {default_vpc_id}.")
 
         subnet_id = subnets["Subnets"][0]["SubnetId"]
-        logging.info(f"Auto-discovered subnet_id: {subnet_id}")
+        logger.info(f"Auto-discovered subnet_id: {subnet_id}")
         return subnet_id
 
     def _create_security_group(self, template_id: str) -> None:
@@ -417,13 +496,13 @@ set +e
             VpcId=vpc_id,
         )
         self._created_security_group_id = sg_response["GroupId"]
-        logging.info(f"Created security group with ID: {self._created_security_group_id}")
+        logger.info(f"Created security group with ID: {self._created_security_group_id}")
 
     def _create_key_pair(self, template_id: str) -> None:
         key_name = f"opengris-orb-key-{template_id}"
         self._ec2.create_key_pair(KeyName=key_name)
         self._created_key_name = key_name
-        logging.info(f"Created key pair: {key_name}")
+        logger.info(f"Created key pair: {key_name}")
 
     @staticmethod
     def _validate_requirements(requirements_content: str) -> None:
