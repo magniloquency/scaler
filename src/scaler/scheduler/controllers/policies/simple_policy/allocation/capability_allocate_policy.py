@@ -1,9 +1,11 @@
 import dataclasses
+import heapq
+import itertools
 import logging
 import typing
 from collections import OrderedDict, defaultdict
 from itertools import takewhile
-from typing import Dict, Iterable, List, Optional, Set
+from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from sortedcontainers import SortedList
 
@@ -52,6 +54,18 @@ class CapabilityAllocatePolicy(TaskAllocatePolicy):
         self._task_id_to_worker_id: Dict[TaskID, WorkerID] = {}
         self._capability_to_worker_ids: Dict[str, Set[WorkerID]] = {}
 
+        # Lazily-cleaned min-heaps of (n_tasks, insertion_seq, worker_id), keyed by capability (plus one
+        # heap covering every worker, for tasks that request no capability). These let assign_task() pick
+        # the least-loaded eligible worker in O(log n_workers) for the common single-capability/no-capability
+        # case, instead of scanning every worker on every single assignment. Entries go stale whenever a
+        # worker's load changes; on pop we discard any entry whose recorded count no longer matches the
+        # worker's current n_tasks() (a fresher entry was already pushed when that change happened), or whose
+        # worker has since been removed. This trades a bounded amount of heap bloat for avoiding the cost of
+        # in-place re-sorting on every mutation.
+        self._insertion_seq = itertools.count()
+        self._global_heap: List[Tuple[int, int, WorkerID]] = []
+        self._capability_heaps: Dict[str, List[Tuple[int, int, WorkerID]]] = {}
+
     def add_worker(self, worker: WorkerID, capabilities: Dict[str, int], queue_size: int) -> bool:
         if any(capability_value != -1 for capability_value in capabilities.values()):
             logger.warning(f"allocate policy ignores non-infinite worker capabilities: {capabilities!r}.")
@@ -67,6 +81,8 @@ class CapabilityAllocatePolicy(TaskAllocatePolicy):
                 self._capability_to_worker_ids[capability] = set()
 
             self._capability_to_worker_ids[capability].add(worker)
+
+        self.__push_worker_state(worker_holder)
 
         return True
 
@@ -235,20 +251,22 @@ class CapabilityAllocatePolicy(TaskAllocatePolicy):
         return None
 
     def assign_task(self, task: Task) -> WorkerID:
-        # Worst-case time complexity is O(n_workers * len(task.capabilities))
+        # O(log n_workers) for the common case of zero or one required capability (see
+        # __pick_worker_for_capabilities); O(n_workers * len(task.capabilities)) worst case when a task
+        # requires more than one capability.
 
-        available_workers = self.__get_available_workers_for_capabilities(task.capabilities)
+        min_loaded_worker = self.__pick_worker_for_capabilities(task.capabilities)
 
-        if len(available_workers) == 0:
+        if min_loaded_worker is None:
             return WorkerID.invalid_worker_id()
 
         # Selects the worker that has the least amount of queued tasks. We could select the worker that has the most
         # free queue task slots, but that might needlessly idle workers that have a smaller queue.
 
-        min_loaded_worker = min(available_workers, key=lambda worker: worker.n_tasks())
         min_loaded_worker.task_id_to_task[task.taskId] = _TaskHolder(task.taskId, set(task.capabilities.keys()))
 
         self._task_id_to_worker_id[task.taskId] = min_loaded_worker.worker_id
+        self.__push_worker_state(min_loaded_worker)
 
         return min_loaded_worker.worker_id
 
@@ -260,6 +278,7 @@ class CapabilityAllocatePolicy(TaskAllocatePolicy):
 
         worker = self._worker_id_to_worker[worker_id]
         worker.task_id_to_task.pop(task_id)
+        self.__push_worker_state(worker)
 
         return worker_id
 
@@ -286,3 +305,43 @@ class CapabilityAllocatePolicy(TaskAllocatePolicy):
         matching_workers = [self._worker_id_to_worker[worker_id] for worker_id in matching_worker_ids]
 
         return [worker for worker in matching_workers if worker.n_free() > 0]
+
+    def __push_worker_state(self, worker: _WorkerHolder) -> None:
+        """Record the worker's current load in every heap it participates in (see __init__ for why)."""
+
+        entry = (worker.n_tasks(), next(self._insertion_seq), worker.worker_id)
+        heapq.heappush(self._global_heap, entry)
+        for capability in worker.capabilities:
+            heapq.heappush(self._capability_heaps.setdefault(capability, []), entry)
+
+    def __pop_least_loaded(self, heap: List[Tuple[int, int, WorkerID]]) -> Optional[_WorkerHolder]:
+        while heap:
+            count, _, worker_id = heapq.heappop(heap)
+            worker = self._worker_id_to_worker.get(worker_id)
+            if worker is None or worker.n_tasks() != count:
+                continue  # worker gone, or a fresher entry for it has since been pushed -- discard
+
+            if worker.n_free() <= 0:
+                continue  # this entry is current but the worker has no free capacity right now
+
+            return worker
+
+        return None
+
+    def __pick_worker_for_capabilities(self, capabilities: Dict[str, int]) -> Optional[_WorkerHolder]:
+        if len(capabilities) > 1:
+            # Multiple required capabilities: fall back to the linear scan. Tasks requiring more than one
+            # capability are rare in practice, so this isn't worth a dedicated multi-way-intersection index.
+            available_workers = self.__get_available_workers_for_capabilities(capabilities)
+            if not available_workers:
+                return None
+            return min(available_workers, key=lambda worker: worker.n_tasks())
+
+        if not capabilities:
+            return self.__pop_least_loaded(self._global_heap)
+
+        (capability,) = capabilities.keys()
+        heap = self._capability_heaps.get(capability)
+        if heap is None:
+            return None
+        return self.__pop_least_loaded(heap)

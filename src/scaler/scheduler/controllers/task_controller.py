@@ -136,6 +136,15 @@ class VanillaTaskController(TaskController, Looper, Reporter):
         await self.__routing(task_cancel.taskId, TaskTransition.taskCancel, client=client_id, task_cancel=task_cancel)
 
     async def on_task_balance_cancel(self, task_id: TaskID):
+        if self._task_state_manager.get_state_machine(task_id) is None:
+            # Balance advice is computed from a snapshot and only applied after being stable for
+            # load_balance_trigger_times consecutive ticks; the task can legitimately run to completion
+            # (and have its state machine torn down) in that window. Routing this through __routing would
+            # log it as an ERROR ("unknown transition for non-existed state machine"), which is misleading
+            # for what is an expected, harmless race under load -- the task already finished successfully.
+            logger.info(f"{task_id!r}: balance-cancel advice is stale, task already finished; ignoring")
+            return
+
         await self.__routing(task_id, TaskTransition.balanceTaskCancel)
 
     async def on_task_cancel_confirm(self, task_cancel_confirm: TaskCancelConfirm):
