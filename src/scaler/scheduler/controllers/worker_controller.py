@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 from typing import Dict, List, Optional, Set, Tuple
@@ -199,7 +200,24 @@ class VanillaWorkerController(WorkerController, Looper, Reporter):
 
         logger.info(f"{len(task_ids)} task(s) failed due to worker {worker_id!r} disconnected")
         for task_id in task_ids:
-            await self._task_controller.on_worker_disconnect(task_id, worker_id)
+            # Reroute asynchronously rather than awaiting inline. If the replacement worker picked for
+            # task_id also turns out to be dead (routine after a burst of churn leaves many workers
+            # undetected-dead at once -- each is only discovered one at a time, on the next send attempt),
+            # __send_to_worker -> on_worker_departed re-enters this same method for the same task_id.
+            # Awaiting inline made that an unbounded synchronous recursive call chain (one stack frame per
+            # dead candidate worker), which could exceed Python's recursion limit and crash the whole
+            # scheduler. Scheduling each as its own task keeps the retry chain iterative across event-loop
+            # turns instead of recursive on the call stack.
+            reroute_task = asyncio.ensure_future(self._task_controller.on_worker_disconnect(task_id, worker_id))
+            reroute_task.add_done_callback(self.__log_reroute_task_exception)
+
+    @staticmethod
+    def __log_reroute_task_exception(task: "asyncio.Task") -> None:
+        if task.cancelled():
+            return
+        exception = task.exception()
+        if exception is not None:
+            logger.error("unhandled exception while rerouting a disconnected worker's task", exc_info=exception)
 
     async def __shutdown_worker(self, worker_id: WorkerID):
         await self._binder.send(worker_id, ClientDisconnect(disconnectType=ClientDisconnect.DisconnectType.shutdown))
