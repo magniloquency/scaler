@@ -287,17 +287,31 @@ class VanillaTaskController(TaskController, Looper, Reporter):
             await self.__routing(task_id, TaskTransition.schedulerHasTask, task=task)
 
     async def __state_canceled(
-        self, task_id: TaskID, state_machine: TaskStateMachine, task_cancel_confirm: TaskCancelConfirm
+        self,
+        task_id: TaskID,
+        state_machine: TaskStateMachine,
+        task_cancel_confirm: Optional[TaskCancelConfirm] = None,
+        worker_id: Optional[WorkerID] = None,
     ):
-        assert task_id == task_cancel_confirm.taskId
-        assert task_cancel_confirm.cancelConfirmType == TaskCancelConfirmType.canceled
         assert state_machine.current_state() == TaskState.canceled
 
-        if task_cancel_confirm.taskId in self._unassigned:
-            # if task is not assigned to any worker, we don't need to deal with worker manager
-            self._unassigned.remove(task_cancel_confirm.taskId)
+        if task_cancel_confirm is None:
+            # canceling -> canceled via workerDisconnect: the worker died before it could confirm the
+            # cancel, so on_worker_disconnect() routes here with worker_id instead of a real confirm.
+            # worker_controller already removed this task from its (now-departed) worker's bookkeeping as
+            # part of tearing down that worker, so there is nothing left to reconcile beyond notifying the
+            # client -- synthesize the confirm the normal path would have produced.
+            assert worker_id is not None
+            task_cancel_confirm = TaskCancelConfirm(taskId=task_id, cancelConfirmType=TaskCancelConfirmType.canceled)
         else:
-            await self._worker_controller.on_task_done(task_cancel_confirm.taskId)
+            assert task_id == task_cancel_confirm.taskId
+            assert task_cancel_confirm.cancelConfirmType == TaskCancelConfirmType.canceled
+
+            if task_cancel_confirm.taskId in self._unassigned:
+                # if task is not assigned to any worker, we don't need to deal with worker manager
+                self._unassigned.remove(task_cancel_confirm.taskId)
+            else:
+                await self._worker_controller.on_task_done(task_cancel_confirm.taskId)
 
         await self.__send_task_cancel_confirm_to_client(task_cancel_confirm)
 
