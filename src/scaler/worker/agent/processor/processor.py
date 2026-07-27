@@ -263,8 +263,10 @@ class Processor(multiprocessing.get_context("spawn").Process):  # type: ignore
 
         if self._interrupted:
             # __interrupt destroyed the connectors because the agent asked us to stop, so anything raised out
-            # of an in-flight call is expected teardown, not a fault worth an error and a traceback
-            logger.debug(f"Processor[{self.pid}]: {reason}{task_context}, stopped on agent request")
+            # of an in-flight call is expected teardown, not a fault worth an error and a traceback. Still name
+            # the exception, so a genuine fault that races with the teardown is not invisible at every level.
+            exception_context = f" ({exception!r})" if exception is not None else ""
+            logger.debug(f"Processor[{self.pid}]: stopped on agent request; {reason}{exception_context}{task_context}")
         elif exception is not None:
             logger.error(f"Processor[{self.pid}]: {reason}{task_context}, shutting down", exc_info=exception)
         elif task is not None:

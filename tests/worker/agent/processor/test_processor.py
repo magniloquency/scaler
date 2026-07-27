@@ -42,14 +42,6 @@ def _make_task() -> Task:
     )
 
 
-def _log_exit(processor: Processor, reason: str, exception: Optional[BaseException] = None) -> logging.LogRecord:
-    with unittest.TestCase().assertLogs(_LOGGER_NAME, level=logging.DEBUG) as captured:
-        processor._Processor__log_exit(reason, exception=exception)  # type: ignore[attr-defined]
-
-    assert len(captured.records) == 1
-    return captured.records[0]
-
-
 class ProcessorLogExitTest(unittest.TestCase):
     """__log_exit is the processor's only report of why its main loop stopped, so it must name the orphaned task,
     keep the traceback for genuine faults, and stay quiet for a teardown the agent itself requested."""
@@ -57,8 +49,15 @@ class ProcessorLogExitTest(unittest.TestCase):
     def setUp(self) -> None:
         self.processor = _make_processor()
 
+    def __log_exit(self, reason: str, exception: Optional[BaseException] = None) -> logging.LogRecord:
+        with self.assertLogs(_LOGGER_NAME, level=logging.DEBUG) as captured:
+            self.processor._Processor__log_exit(reason, exception=exception)  # type: ignore[attr-defined]
+
+        self.assertEqual(len(captured.records), 1)
+        return captured.records[0]
+
     def test_idle_exit_is_debug_without_traceback(self) -> None:
-        record = _log_exit(self.processor, "agent connector stop requested")
+        record = self.__log_exit("agent connector stop requested")
 
         self.assertEqual(record.levelno, logging.DEBUG)
         self.assertIsNone(record.exc_info)
@@ -67,7 +66,7 @@ class ProcessorLogExitTest(unittest.TestCase):
     def test_exception_is_error_with_traceback(self) -> None:
         exception = ObjectStorageException("storage went away")
 
-        record = _log_exit(self.processor, "object storage error", exception=exception)
+        record = self.__log_exit("object storage error", exception=exception)
 
         self.assertEqual(record.levelno, logging.ERROR)
         self.assertIsNotNone(record.exc_info)
@@ -79,7 +78,7 @@ class ProcessorLogExitTest(unittest.TestCase):
         task = _make_task()
         self.processor._current_task = task
 
-        record = _log_exit(self.processor, "object storage error", exception=ObjectStorageException("boom"))
+        record = self.__log_exit("object storage error", exception=ObjectStorageException("boom"))
 
         message = record.getMessage()
         self.assertEqual(record.levelno, logging.ERROR)
@@ -90,7 +89,7 @@ class ProcessorLogExitTest(unittest.TestCase):
         task = _make_task()
         self.processor._current_task = task
 
-        record = _log_exit(self.processor, "interrupted")
+        record = self.__log_exit("interrupted")
 
         message = record.getMessage()
         self.assertEqual(record.levelno, logging.WARNING)
@@ -105,7 +104,7 @@ class ProcessorLogExitTest(unittest.TestCase):
         self.processor._current_task = _make_task()
         self.processor._interrupted = True
 
-        record = _log_exit(self.processor, "object storage error", exception=ObjectStorageException("closed"))
+        record = self.__log_exit("object storage error", exception=ObjectStorageException("closed"))
 
         self.assertEqual(record.levelno, logging.DEBUG)
         self.assertIsNone(record.exc_info)
