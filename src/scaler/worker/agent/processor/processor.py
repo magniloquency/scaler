@@ -211,19 +211,27 @@ class Processor(multiprocessing.get_context("spawn").Process):  # type: ignore
                 self.__on_connector_receive(message)
 
         except ymq.SocketStopRequestedError:
-            pass
+            self.__log_exit("agent connector stop requested")
 
-        except ObjectStorageException:
-            pass
+        except ObjectStorageException as e:
+            # Never swallow this silently: a storage error mid-task orphans the task (no result is ever
+            # sent) and the process exits 0, which the agent can only observe later as a zombie.
+            self.__log_exit("object storage error", exception=e)
 
         except (KeyboardInterrupt, InterruptedError):
-            pass
+            self.__log_exit("interrupted")
+
+        except SystemExit as e:
+            # SystemExit is a BaseException, so none of the handlers above catch it; log it (with the
+            # originating traceback) rather than let the interpreter exit silently with the exit code.
+            self.__log_exit("received SystemExit", exception=e)
 
         except Exception as e:
             if self.__is_closed_zmq_socket_exception(e):
+                self.__log_exit("agent connector socket closed")
                 return
 
-            logger.exception(f"Processor[{self.pid}]: failed with unhandled exception:\n{e}")
+            self.__log_exit("unhandled exception", exception=e)
 
         finally:
             # Wake the suspend listener (if running on Windows) and let it exit before the connectors go away,
@@ -240,6 +248,18 @@ class Processor(multiprocessing.get_context("spawn").Process):  # type: ignore
 
             self._object_cache.join()
             self._connector_storage.destroy()
+
+    def __log_exit(self, reason: str, exception: Optional[BaseException] = None) -> None:
+        """Logs why the processor's main loop is exiting, escalating severity if a task was in flight."""
+        task = self._current_task
+        task_context = f" while task_id={task.taskId.hex()} was in flight" if task is not None else ""
+
+        if exception is not None:
+            logger.error(f"Processor[{self.pid}]: {reason}{task_context}, shutting down", exc_info=exception)
+        elif task is not None:
+            logger.warning(f"Processor[{self.pid}]: {reason}{task_context}; no task result will be sent, shutting down")
+        else:
+            logger.debug(f"Processor[{self.pid}]: {reason}, shutting down")
 
     def __on_connector_receive(self, message: BaseMessage):
         if isinstance(message, ObjectInstruction):
