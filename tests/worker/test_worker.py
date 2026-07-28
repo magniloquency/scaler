@@ -17,7 +17,9 @@ from unittest import mock
 import scaler.worker.worker as worker_module
 from scaler.config.types.address import AddressConfig
 from scaler.io import ymq
+from scaler.io.network_backends import ZMQNetworkBackend
 from scaler.io.ymq import ConnectorSocketClosedByRemoteEndError, SocketStopRequestedError, SysCallError
+from scaler.protocol.capnp import WorkerDisconnectNotification
 from scaler.worker.worker import Worker
 
 
@@ -31,6 +33,7 @@ class _StubCollaborator:
     def __init__(self, routine_behavior: Callable[[], Awaitable[None]] = _hang) -> None:
         self._routine_behavior = routine_behavior
         self.destroyed = False
+        self.sent_messages: list = []
 
     async def routine(self) -> None:
         await self._routine_behavior()
@@ -40,6 +43,9 @@ class _StubCollaborator:
 
     async def bind(self, *args: object, **kwargs: object) -> None:
         return None
+
+    async def send(self, message: object, *args: object, **kwargs: object) -> None:
+        self.sent_messages.append(message)
 
     async def initialize(self, *args: object, **kwargs: object) -> None:
         await _hang()
@@ -208,6 +214,22 @@ class WorkerTeardownYMQErrorTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(exit_code, 1, "the original nonzero exit code should be preserved")
         quit_logged = [c for c in mock_logger.info.call_args_list if "quit" in str(c)]
         self.assertTrue(quit_logged, "the 'quit' log line was lost when teardown failed")
+
+    async def test_worker_disconnect_notification_sent_during_teardown(self) -> None:
+        # A worker that stops tells the scheduler on the way out, so its tasks are re-dispatched
+        # immediately instead of waiting for the heartbeat timeout to expire. The notification is
+        # one-way: the scheduler never replies, so teardown does not wait for an acknowledgement.
+        error = SocketStopRequestedError(ymq.ErrorCode.SocketStopRequested, "binder socket shut down mid-send")
+        worker = self._build_worker(error)
+        worker._loop = asyncio.get_running_loop()
+        worker._backend = mock.Mock(spec=ZMQNetworkBackend)  # the backend that notifies from teardown
+
+        await worker._Worker__teardown()  # name-mangled private method
+
+        sent = worker._connector_external.sent_messages
+        self.assertEqual(len(sent), 1, "WorkerDisconnectNotification was not sent during teardown")
+        self.assertIsInstance(sent[0], WorkerDisconnectNotification)
+        self.assertEqual(sent[0].worker, worker.identity)
 
 
 if __name__ == "__main__":

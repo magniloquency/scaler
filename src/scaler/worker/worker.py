@@ -21,14 +21,13 @@ from scaler.io.network_backends import YMQNetworkBackend, ZMQNetworkBackend, get
 from scaler.protocol.capnp import (
     BaseMessage,
     ClientDisconnect,
-    DisconnectRequest,
-    DisconnectResponse,
     ObjectInstruction,
     ProcessorInitialized,
     Task,
     TaskCancel,
     TaskLog,
     TaskResult,
+    WorkerDisconnectNotification,
     WorkerHeartbeatEcho,
 )
 from scaler.utility.event_loop import create_async_loop_routine, register_event_loop, run_task_forever
@@ -273,11 +272,6 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
             logger.error(f"Worker received invalid ClientDisconnect type, ignoring {message=}")
             return
 
-        if isinstance(message, DisconnectResponse):
-            logger.error("Worker initiated DisconnectRequest got replied")
-            self._task.cancel()
-            return
-
         raise TypeError(f"Unknown {message=}")
 
     async def __on_receive_internal(self, processor_id_bytes: bytes, message: BaseMessage):
@@ -352,14 +346,22 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
             install_async_shutdown_handler(self._loop, self.__schedule_graceful_shutdown)
 
     def __schedule_graceful_shutdown(self) -> None:
-        asyncio.ensure_future(self.__graceful_shutdown())
+        asyncio.ensure_future(self.__notify_scheduler_and_stop())
+
+    async def __notify_scheduler_and_stop(self) -> None:
+        # Nothing replies to the notification, so stop ourselves once it has been sent.
+        # TODO: use a detached send once https://github.com/finos/opengris-scaler/pull/900 lands.
+        try:
+            await self.__graceful_shutdown()
+        finally:
+            self.__destroy()
 
     async def __graceful_shutdown(self):
         if self._connector_external is None:
             return
 
         try:
-            await self._connector_external.send(DisconnectRequest(worker=self.identity))
+            await self._connector_external.send(WorkerDisconnectNotification(worker=self.identity))
         except ymq.YMQException:
             pass
 
