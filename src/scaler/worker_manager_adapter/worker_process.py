@@ -36,6 +36,11 @@ _EXPECTED_TEARDOWN_ERROR_CODES = frozenset(
     {ymq.ErrorCode.ConnectorSocketClosedByRemoteEnd, ymq.ErrorCode.SocketStopRequested}
 )
 
+# How long teardown waits for the exit notification to be sent. The notification only saves the
+# scheduler from waiting out the heartbeat timeout, so it is never worth blocking our own exit on:
+# a connection that is wedged rather than closed would otherwise hang teardown indefinitely.
+_NOTIFY_SCHEDULER_TIMEOUT_SECONDS = 5
+
 _SpawnProcess = multiprocessing.get_context("spawn").Process
 
 
@@ -274,11 +279,18 @@ class WorkerProcess(_SpawnProcess):  # type: ignore[valid-type, misc]
             return
 
         try:
-            await self._connector_external.send(WorkerDisconnectNotification())
+            await asyncio.wait_for(
+                self._connector_external.send(WorkerDisconnectNotification()), _NOTIFY_SCHEDULER_TIMEOUT_SECONDS
+            )
         except ymq.YMQException as e:
             if e.code not in _EXPECTED_TEARDOWN_ERROR_CODES:
                 raise
             logger.info(f"{self.identity!r}: could not notify the scheduler of exit: {e}")
+        except asyncio.TimeoutError:
+            logger.warning(
+                f"{self.identity!r}: could not notify the scheduler of exit within "
+                f"{_NOTIFY_SCHEDULER_TIMEOUT_SECONDS}s, quitting anyway"
+            )
 
     def __destroy(self) -> None:
         self._task.cancel()

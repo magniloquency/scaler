@@ -229,6 +229,22 @@ class WorkerTeardownYMQErrorTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(sent), 1, "WorkerDisconnectNotification was not sent during teardown")
         self.assertIsInstance(sent[0], WorkerDisconnectNotification)
 
+    async def test_teardown_completes_when_the_notification_send_hangs(self) -> None:
+        # The notification only saves the scheduler from waiting out the heartbeat timeout, so a
+        # connection that is wedged rather than closed must not keep the worker alive forever.
+        error = SocketStopRequestedError(ymq.ErrorCode.SocketStopRequested, "binder socket shut down mid-send")
+        worker = self._build_worker(error)
+        worker._loop = asyncio.get_running_loop()
+        worker._connector_external.send = lambda *_args, **_kwargs: _hang()
+
+        with mock.patch.object(worker_module, "_NOTIFY_SCHEDULER_TIMEOUT_SECONDS", 0.05):
+            with mock.patch.object(worker_module, "logger") as mock_logger:
+                await asyncio.wait_for(worker._Worker__teardown(), timeout=5)
+
+        self.assertTrue(worker._binder_internal.destroyed, "teardown stopped at the hung notification")
+        timed_out = [c for c in mock_logger.warning.call_args_list if "quitting anyway" in str(c)]
+        self.assertTrue(timed_out, "a notification that never sent was not reported")
+
 
 if __name__ == "__main__":
     unittest.main()
