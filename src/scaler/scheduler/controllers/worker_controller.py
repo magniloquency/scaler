@@ -101,7 +101,9 @@ class VanillaWorkerController(WorkerController, Looper, Reporter):
             await self.__shutdown_worker(worker)
 
     async def on_disconnect_notification(self, worker_id: WorkerID, notification: WorkerDisconnectNotification):
-        await self.__disconnect_worker(notification.worker)
+        # The notification always refers to its sender, whose identity comes from the binder and
+        # cannot be spoofed by the payload.
+        await self.__disconnect_worker(worker_id)
 
     async def routine(self):
         await self.__clean_workers()

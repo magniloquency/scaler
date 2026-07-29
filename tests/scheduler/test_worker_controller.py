@@ -35,26 +35,33 @@ class TestVanillaWorkerControllerOnDisconnectNotification(unittest.IsolatedAsync
         self.controller._manager_to_workers[_MANAGER_ID] = {_WORKER_ID}
 
     async def test_on_disconnect_notification_removes_worker(self) -> None:
-        notification = WorkerDisconnectNotification(worker=_WORKER_ID)
-        await self.controller.on_disconnect_notification(_WORKER_ID, notification)
+        await self.controller.on_disconnect_notification(_WORKER_ID, WorkerDisconnectNotification())
         self.assertNotIn(_WORKER_ID, self.controller._worker_alive_since)
 
     async def test_on_disconnect_notification_sends_no_reply(self) -> None:
-        notification = WorkerDisconnectNotification(worker=_WORKER_ID)
-        await self.controller.on_disconnect_notification(_WORKER_ID, notification)
+        await self.controller.on_disconnect_notification(_WORKER_ID, WorkerDisconnectNotification())
         self.binder.send.assert_not_called()
 
     async def test_on_disconnect_notification_unknown_worker_is_safe(self) -> None:
-        # WDN for a worker not in the registry (e.g. already timed out) must not crash.
+        # WDN from a worker not in the registry (e.g. already timed out) must not crash, and must
+        # leave the registered workers alone.
         unknown_id = WorkerID(b"unknown_worker")
-        notification = WorkerDisconnectNotification(worker=unknown_id)
-        await self.controller.on_disconnect_notification(_WORKER_ID, notification)
+        await self.controller.on_disconnect_notification(unknown_id, WorkerDisconnectNotification())
         self.assertIn(_WORKER_ID, self.controller._worker_alive_since)
+
+    async def test_on_disconnect_notification_only_disconnects_the_sender(self) -> None:
+        # The notification carries no worker name, so a peer cannot disconnect anyone but itself.
+        other_id = WorkerID(b"worker_ccc")
+        self.controller._worker_alive_since[other_id] = (time.time(), MagicMock())
+
+        await self.controller.on_disconnect_notification(_WORKER_ID, WorkerDisconnectNotification())
+
+        self.assertNotIn(_WORKER_ID, self.controller._worker_alive_since)
+        self.assertIn(other_id, self.controller._worker_alive_since)
 
     async def test_on_disconnect_notification_re_dispatches_in_flight_tasks(self) -> None:
         self.policy_controller.remove_worker.return_value = [_TASK_ID]
 
-        notification = WorkerDisconnectNotification(worker=_WORKER_ID)
-        await self.controller.on_disconnect_notification(_WORKER_ID, notification)
+        await self.controller.on_disconnect_notification(_WORKER_ID, WorkerDisconnectNotification())
 
         self.task_controller.on_worker_disconnect.assert_awaited_once_with(_TASK_ID, _WORKER_ID)

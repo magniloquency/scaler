@@ -259,8 +259,7 @@ class ObjectInstruction(BaseMessage):
         delete = 1
         clear = 2
 
-class WorkerDisconnectNotification(BaseMessage):
-    worker: WorkerID
+class WorkerDisconnectNotification(BaseMessage): ...
 
 class ClientDisconnect(BaseMessage):
     disconnectType: "ClientDisconnect.DisconnectType"

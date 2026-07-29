@@ -120,8 +120,8 @@ struct ObjectInstruction {
     }
 }
 
+# Carries no payload: the worker it refers to is the sender, which the binder already identifies.
 struct WorkerDisconnectNotification {
-    worker @0 :Data;
 }
 
 struct ClientDisconnect {

@@ -229,7 +229,6 @@ class WorkerTeardownYMQErrorTest(unittest.IsolatedAsyncioTestCase):
         sent = worker._connector_external.sent_messages
         self.assertEqual(len(sent), 1, "WorkerDisconnectNotification was not sent during teardown")
         self.assertIsInstance(sent[0], WorkerDisconnectNotification)
-        self.assertEqual(sent[0].worker, worker.identity)
 
 
 if __name__ == "__main__":

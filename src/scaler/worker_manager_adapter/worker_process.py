@@ -282,7 +282,7 @@ class WorkerProcess(_SpawnProcess):  # type: ignore[valid-type, misc]
             return
 
         try:
-            await self._connector_external.send(WorkerDisconnectNotification(worker=self.identity))
+            await self._connector_external.send(WorkerDisconnectNotification())
         except ymq.YMQException:
             pass
 
