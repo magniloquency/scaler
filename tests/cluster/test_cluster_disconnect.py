@@ -18,7 +18,14 @@ from scaler.utility.logging.utility import setup_logger
 from scaler.worker_manager_adapter.baremetal.native import NativeWorkerManager
 from tests.utility.utility import logging_test_name
 
-_GRACEFUL_SHUTDOWN_MAX_SECONDS = 10
+# The task has to still be running when its worker is interrupted, so it must outlast the pause
+# that lets it reach worker A -- which in turn has to cover spawning manager A, its worker and its
+# processor. The budget then covers the re-dispatch plus that same three-process spawn for manager
+# B. It is deliberately generous: what it distinguishes is a sub-second notification from a
+# _HEARTBEAT_TIMEOUT_SECONDS wait, so there is no value in trimming it close.
+_TASK_DURATION_SECONDS = 5
+_TASK_REACHES_WORKER_SECONDS = 2
+_GRACEFUL_SHUTDOWN_MAX_SECONDS = 30
 _HEARTBEAT_TIMEOUT_SECONDS = 120
 
 
@@ -150,8 +157,8 @@ class TestGracefulWorkerShutdown(unittest.TestCase):
 
     def test_graceful_shutdown_re_dispatches_task_immediately(self) -> None:
         proc_a = self._start_manager("manager_a")
-        future = self.client.submit(noop_sleep, 5)
-        time.sleep(2)  # Let task reach worker A
+        future = self.client.submit(noop_sleep, _TASK_DURATION_SECONDS)
+        time.sleep(_TASK_REACHES_WORKER_SECONDS)  # Let task reach worker A
 
         # Graceful SIGINT: manager sends SIGTERM to worker -> worker sends WDN -> scheduler
         # re-queues the task immediately. Without WDN the task would stay assigned to the
@@ -162,7 +169,7 @@ class TestGracefulWorkerShutdown(unittest.TestCase):
 
         try:
             result = future.result(timeout=_GRACEFUL_SHUTDOWN_MAX_SECONDS)
-            self.assertEqual(result, 5)
+            self.assertEqual(result, _TASK_DURATION_SECONDS)
         except TimeoutError:
             self.fail(
                 f"Task was not re-dispatched within {_GRACEFUL_SHUTDOWN_MAX_SECONDS}s -- "
