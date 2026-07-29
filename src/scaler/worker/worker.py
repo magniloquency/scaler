@@ -17,7 +17,7 @@ from scaler.io.mixins import (
     ConnectorRemoteType,
     NetworkBackend,
 )
-from scaler.io.network_backends import YMQNetworkBackend, ZMQNetworkBackend, get_network_backend_from_env
+from scaler.io.network_backends import get_network_backend_from_env
 from scaler.protocol.capnp import (
     BaseMessage,
     ClientDisconnect,
@@ -42,6 +42,11 @@ from scaler.worker.agent.task_manager import VanillaTaskManager
 from scaler.worker.agent.timeout_manager import VanillaTimeoutManager
 
 logger = logging.getLogger(__name__)
+
+# YMQ errors that mean the scheduler connection is already gone.
+_EXPECTED_TEARDOWN_ERROR_CODES = frozenset(
+    {ymq.ErrorCode.ConnectorSocketClosedByRemoteEnd, ymq.ErrorCode.SocketStopRequested}
+)
 
 
 class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
@@ -319,8 +324,7 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
     async def __teardown(self) -> None:
         # Guarded with `is not None` throughout: this runs even when __initialize failed partway
         # through, so some of these may never have been created.
-        if isinstance(self._backend, ZMQNetworkBackend):
-            await self.__graceful_shutdown()
+        await self.__notify_scheduler_of_exit()
 
         if self._connector_external is not None:
             self._connector_external.destroy()
@@ -340,30 +344,21 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
             pathlib.Path(self._address_internal.host).unlink(missing_ok=True)
 
     def __register_signal(self):
-        if isinstance(self._backend, ZMQNetworkBackend):
-            install_async_shutdown_handler(self._loop, self.__destroy)
-        elif isinstance(self._backend, YMQNetworkBackend):
-            install_async_shutdown_handler(self._loop, self.__schedule_graceful_shutdown)
+        install_async_shutdown_handler(self._loop, self.__destroy)
 
-    def __schedule_graceful_shutdown(self) -> None:
-        asyncio.ensure_future(self.__notify_scheduler_and_stop())
-
-    async def __notify_scheduler_and_stop(self) -> None:
-        # Nothing replies to the notification, so stop ourselves once it has been sent.
-        # TODO: use a detached send once https://github.com/finos/opengris-scaler/pull/900 lands.
-        try:
-            await self.__graceful_shutdown()
-        finally:
-            self.__destroy()
-
-    async def __graceful_shutdown(self):
+    async def __notify_scheduler_of_exit(self) -> None:
+        """Tell the scheduler this worker is leaving, so it re-dispatches our tasks instead of
+        waiting out the heartbeat timeout. Runs on every exit path, not just on a signal.
+        """
         if self._connector_external is None:
             return
 
         try:
             await self._connector_external.send(WorkerDisconnectNotification())
-        except ymq.YMQException:
-            pass
+        except ymq.YMQException as e:
+            if e.code not in _EXPECTED_TEARDOWN_ERROR_CODES:
+                raise
+            logger.info(f"{self.identity!r}: could not notify the scheduler of exit: {e}")
 
     def __destroy(self):
         self._task.cancel()

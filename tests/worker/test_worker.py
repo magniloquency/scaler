@@ -17,7 +17,6 @@ from unittest import mock
 import scaler.worker.worker as worker_module
 from scaler.config.types.address import AddressConfig
 from scaler.io import ymq
-from scaler.io.network_backends import ZMQNetworkBackend
 from scaler.io.ymq import ConnectorSocketClosedByRemoteEndError, SocketStopRequestedError, SysCallError
 from scaler.protocol.capnp import WorkerDisconnectNotification
 from scaler.worker.worker import Worker
@@ -79,7 +78,7 @@ class WorkerTeardownYMQErrorTest(unittest.IsolatedAsyncioTestCase):
             worker_manager_id=b"wm",
         )
 
-        worker._backend = None  # not a ZMQ backend -> no graceful-shutdown handshake on teardown
+        worker._backend = None  # only used as a collaborator factory, which __initialize skips below
         worker._address_internal = AddressConfig.from_string("tcp://127.0.0.1:2346")  # tcp -> no ipc unlink
 
         # __initialize would overwrite the stubs below with real backend collaborators; skip it and
@@ -219,10 +218,10 @@ class WorkerTeardownYMQErrorTest(unittest.IsolatedAsyncioTestCase):
         # A worker that stops tells the scheduler on the way out, so its tasks are re-dispatched
         # immediately instead of waiting for the heartbeat timeout to expire. The notification is
         # one-way: the scheduler never replies, so teardown does not wait for an acknowledgement.
+        # Teardown runs on every exit path and for every backend, so this needs no backend set up.
         error = SocketStopRequestedError(ymq.ErrorCode.SocketStopRequested, "binder socket shut down mid-send")
         worker = self._build_worker(error)
         worker._loop = asyncio.get_running_loop()
-        worker._backend = mock.Mock(spec=ZMQNetworkBackend)  # the backend that notifies from teardown
 
         await worker._Worker__teardown()  # name-mangled private method
 
