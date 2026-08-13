@@ -50,18 +50,18 @@ logger = logging.getLogger(__name__)
 
 # The state that each action can produce. mypy checks every return against these, so the behavior of an action cannot
 # widen without its annotation widening too.
-DispatchTarget = Literal[TaskState.inactive, TaskState.running]
-HasCapacityTarget = Literal[TaskState.running]
-TaskCancelTarget = Literal[TaskState.canceled, TaskState.canceling, TaskState.canceledNotFound]
-BalanceCancelTarget = Literal[TaskState.balanceCanceling]
-TaskResultTarget = Literal[TaskState.success, TaskState.failed, TaskState.failedWorkerDied]
-CancelConfirmCanceledTarget = Literal[TaskState.canceled, TaskState.inactive, TaskState.running]
-CancelConfirmFailedTarget = Literal[TaskState.running]
-CancelConfirmNotFoundTarget = Literal[TaskState.canceledNotFound]
-DisconnectTarget = Literal[TaskState.inactive, TaskState.running, TaskState.canceled]
+DispatchTargetStates = Literal[TaskState.inactive, TaskState.running]
+HasCapacityTargetStates = Literal[TaskState.running]
+TaskCancelTargetStates = Literal[TaskState.canceled, TaskState.canceling, TaskState.canceledNotFound]
+BalanceCancelTargetStates = Literal[TaskState.balanceCanceling]
+TaskResultTargetStates = Literal[TaskState.success, TaskState.failed, TaskState.failedWorkerDied]
+CancelConfirmCanceledTargetStates = Literal[TaskState.canceled, TaskState.inactive, TaskState.running]
+CancelConfirmFailedTargetStates = Literal[TaskState.running]
+CancelConfirmNotFoundTargetStates = Literal[TaskState.canceledNotFound]
+DisconnectTargetStates = Literal[TaskState.inactive, TaskState.running, TaskState.canceled]
 
 
-def task_result_target(result_type: TaskResultType) -> TaskResultTarget:
+def task_result_target(result_type: TaskResultType) -> TaskResultTargetStates:
     match result_type:
         case TaskResultType.success:
             return TaskState.success
@@ -245,7 +245,7 @@ class VanillaTaskController(TaskController, Looper, Reporter):
             self._task_state_manager.remove_state_machine(event.task_id)
             self._task_id_to_task.pop(event.task_id, None)
 
-    async def __on_has_capacity(self, source: TaskState, event: HasCapacity) -> Optional[HasCapacityTarget]:
+    async def __on_has_capacity(self, source: TaskState, event: HasCapacity) -> Optional[HasCapacityTargetStates]:
         match source:
             case TaskState.inactive:
                 await self.__send_task_to_worker(event.worker_id, event.task_id)
@@ -265,7 +265,7 @@ class VanillaTaskController(TaskController, Looper, Reporter):
             case _:
                 assert_never(source)
 
-    async def __on_task_cancel(self, source: TaskState, event: TaskCancelRequested) -> Optional[TaskCancelTarget]:
+    async def __on_task_cancel(self, source: TaskState, event: TaskCancelRequested) -> Optional[TaskCancelTargetStates]:
         match source:
             case TaskState.inactive:
                 # the task sits in the queue, so the scheduler can confirm the cancel itself
@@ -310,7 +310,7 @@ class VanillaTaskController(TaskController, Looper, Reporter):
 
     async def __on_balance_task_cancel(
         self, source: TaskState, event: BalanceCancelRequested
-    ) -> Optional[BalanceCancelTarget]:
+    ) -> Optional[BalanceCancelTargetStates]:
         match source:
             case TaskState.running:
                 task_cancel = TaskCancel(taskId=event.task_id, flags=TaskCancel.TaskCancelFlags(force=False))
@@ -335,7 +335,7 @@ class VanillaTaskController(TaskController, Looper, Reporter):
             case _:
                 assert_never(source)
 
-    async def __on_task_result(self, source: TaskState, event: TaskResultReceived) -> Optional[TaskResultTarget]:
+    async def __on_task_result(self, source: TaskState, event: TaskResultReceived) -> Optional[TaskResultTargetStates]:
         match source:
             case TaskState.running | TaskState.balanceCanceling:
                 target = task_result_target(TaskResultType(event.task_result.resultType.value))
@@ -357,7 +357,7 @@ class VanillaTaskController(TaskController, Looper, Reporter):
 
     async def __on_cancel_confirm_canceled(
         self, source: TaskState, event: CancelConfirmCanceled
-    ) -> Optional[CancelConfirmCanceledTarget]:
+    ) -> Optional[CancelConfirmCanceledTargetStates]:
         match source:
             case TaskState.canceling:
                 await self._worker_controller.on_task_done(event.task_id)
@@ -383,7 +383,7 @@ class VanillaTaskController(TaskController, Looper, Reporter):
 
     async def __on_cancel_confirm_failed(
         self, source: TaskState, event: CancelConfirmFailed
-    ) -> Optional[CancelConfirmFailedTarget]:
+    ) -> Optional[CancelConfirmFailedTargetStates]:
         match source:
             case TaskState.canceling | TaskState.balanceCanceling:
                 # the worker refused the cancel because the task is already running, wait for the real result
@@ -404,7 +404,7 @@ class VanillaTaskController(TaskController, Looper, Reporter):
 
     async def __on_cancel_confirm_not_found(
         self, source: TaskState, event: CancelConfirmNotFound
-    ) -> Optional[CancelConfirmNotFoundTarget]:
+    ) -> Optional[CancelConfirmNotFoundTargetStates]:
         match source:
             case TaskState.canceling:
                 # the worker does not hold the task, but the scheduler still maps it to that worker
@@ -431,7 +431,9 @@ class VanillaTaskController(TaskController, Looper, Reporter):
             case _:
                 assert_never(source)
 
-    async def __on_worker_disconnect(self, source: TaskState, event: WorkerDisconnected) -> Optional[DisconnectTarget]:
+    async def __on_worker_disconnect(
+        self, source: TaskState, event: WorkerDisconnected
+    ) -> Optional[DisconnectTargetStates]:
         match source:
             case TaskState.running | TaskState.balanceCanceling:
                 return await self.__acquire_and_dispatch(event.task_id)
@@ -455,7 +457,7 @@ class VanillaTaskController(TaskController, Looper, Reporter):
             case _:
                 assert_never(source)
 
-    async def __acquire_and_dispatch(self, task_id: TaskID) -> DispatchTarget:
+    async def __acquire_and_dispatch(self, task_id: TaskID) -> DispatchTargetStates:
         """Look for a worker for a task that has none, and send the task to it if one is free."""
 
         task = self._task_id_to_task[task_id]
