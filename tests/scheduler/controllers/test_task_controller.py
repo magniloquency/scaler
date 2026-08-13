@@ -240,8 +240,12 @@ class TestTaskControllerBehavior(unittest.IsolatedAsyncioTestCase):
 
         self.harness.worker_controller.on_task_done.assert_not_awaited()
 
-    async def test_balance_cancel_confirm_not_found_terminates_the_task(self):
-        """Section 4.2: this pair used to be missing from the table, which stranded the task in balanceCanceling."""
+    async def test_balance_cancel_confirm_not_found_strands_the_task(self):
+        """The restructure preserves this hole, it does not fix it.
+
+        The recovery is a behavior change that needs its own review, so the arm returns None and the task keeps the
+        dead end it has on main. Replace this test when the follow-up decides between terminating and rescheduling.
+        """
 
         state_machine = await self.harness.enter_state(TaskState.balanceCanceling)
 
@@ -249,22 +253,22 @@ class TestTaskControllerBehavior(unittest.IsolatedAsyncioTestCase):
             make_task_cancel_confirm(TaskCancelConfirmType.cancelNotFound)
         )
 
-        self.assertEqual(state_machine.current_state(), TaskState.canceled)
-        self.assertIsNone(self.harness.get_state_machine())
-        self.harness.worker_controller.on_task_done.assert_awaited_once_with(TASK_ID)
-        self.assertEqual(len(self.harness.messages_sent_to(CLIENT_ID)), 1)
+        self.assertEqual(state_machine.current_state(), TaskState.balanceCanceling)
+        self.assertIsNotNone(self.harness.get_state_machine())
+        self.harness.worker_controller.on_task_done.assert_not_awaited()
+        self.assertEqual(len(self.harness.messages_sent_to(CLIENT_ID)), 0)
 
-    async def test_balance_cancel_without_a_worker_terminates_the_task(self):
-        """Section 4.2: the same hole, reached from the scheduler side instead of from a worker message."""
+    async def test_balance_cancel_without_a_worker_strands_the_task(self):
+        """The same preserved hole, reached from the scheduler side instead of from a worker message."""
 
         state_machine = await self.harness.enter_state(TaskState.running)
         self.harness.set_worker_holds_task(False)
 
         await self.harness.controller.on_task_balance_cancel(TASK_ID)
 
-        self.assertEqual(state_machine.current_state(), TaskState.canceled)
-        self.assertIsNone(self.harness.get_state_machine())
-        self.assertEqual(len(self.harness.messages_sent_to(CLIENT_ID)), 1)
+        self.assertEqual(state_machine.current_state(), TaskState.balanceCanceling)
+        self.assertIsNotNone(self.harness.get_state_machine())
+        self.assertEqual(len(self.harness.messages_sent_to(CLIENT_ID)), 0)
 
     async def test_balance_cancel_confirm_canceled_reschedules_the_task(self):
         state_machine = await self.harness.enter_state(TaskState.balanceCanceling)

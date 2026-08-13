@@ -21,7 +21,7 @@ running           HasCapacity                            -> (rejected)
 running           TaskCancelRequested                    -> canceling
 running           TaskCancelRequested (worker gone)      -> canceledNotFound
 running           BalanceCancelRequested                 -> balanceCanceling
-running           BalanceCancelRequested (worker gone)   -> canceled
+running           BalanceCancelRequested (worker gone)   -> balanceCanceling
 running           TaskResultReceived (success)           -> success
 running           TaskResultReceived (failed)            -> failed
 running           TaskResultReceived (worker died)       -> failedWorkerDied
@@ -56,6 +56,6 @@ balanceCanceling  TaskResultReceived (worker died)       -> failedWorkerDied
 balanceCanceling  CancelConfirmCanceled                  -> running
 balanceCanceling  CancelConfirmCanceled (no capacity)    -> inactive
 balanceCanceling  CancelConfirmFailed                    -> running
-balanceCanceling  CancelConfirmNotFound                  -> canceled
+balanceCanceling  CancelConfirmNotFound                  -> (rejected)
 balanceCanceling  WorkerDisconnected                     -> running
 balanceCanceling  WorkerDisconnected (no capacity)       -> inactive
