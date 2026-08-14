@@ -28,7 +28,20 @@ class TaskStateManager:
         return state_machine
 
     def remove_state_machine(self, task_id: TaskID) -> None:
-        self._task_id_to_state_machine.pop(task_id, None)
+        """Remove a machine. The caller must hold its lock.
+
+        The router re-checks that the machine it locked is still the registered one, which covers the window between
+        reading the mapping and taking the lock. That check says nothing about the window after it, so a machine must
+        not be removed unless its lock is held, or it could vanish under a transition that already checked for it.
+
+        This logs rather than asserts, because asserts are stripped under -O and this should stay live. ``locked()``
+        reports that the lock is held and not by whom, so it catches a removal path that forgot the lock, which is the
+        realistic mistake, rather than a mis-ordered one.
+        """
+
+        state_machine = self._task_id_to_state_machine.pop(task_id, None)
+        if state_machine is not None and not state_machine.lock.locked():
+            logger.error(f"{task_id!r}: state machine removed without its lock held")
 
     def get_state_machine(self, task_id: TaskID) -> Optional[TaskStateMachine]:
         return self._task_id_to_state_machine.get(task_id, None)
