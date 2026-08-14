@@ -1,16 +1,22 @@
 import ast
+import asyncio
 import inspect
 import os
 import textwrap
 import unittest
+import unittest.mock
 from pathlib import Path
 from typing import Dict, List, Set, Tuple, get_args
 
-from scaler.protocol.capnp import TaskCancelConfirmType, TaskResultType, TaskState
+from scaler.protocol.capnp import Task, TaskCancel, TaskCancelConfirmType, TaskResult, TaskResultType, TaskState
+from scaler.scheduler.controllers import task_controller
 from scaler.scheduler.controllers.task_controller import VanillaTaskController
 from scaler.scheduler.task.task_event import TaskEvent
 from scaler.scheduler.task.task_state_machine import TERMINAL_TASK_STATES
+from scaler.utility.exceptions import SchedulerError
+from scaler.utility.identifiers import TaskID
 from scaler.utility.logging.utility import setup_logger
+from scaler.utility.serialization import deserialize_failure
 from tests.scheduler.controllers.task_state_graph_harness import (
     CLIENT_ID,
     LIVE_TASK_STATES,
@@ -375,6 +381,181 @@ class TestTaskControllerBehavior(unittest.IsolatedAsyncioTestCase):
         await self.harness.controller.on_task_result(make_task_result(TaskResultType.success))
 
         self.harness.binder.send.assert_not_awaited()
+
+    async def test_an_action_that_raises_does_not_escape_the_router(self):
+        """The router logs and swallows, so one failed task cannot stop a timer loop or a message handler."""
+
+        await self.harness.enter_state(TaskState.canceling)
+        self.harness.worker_controller.on_task_done.side_effect = RuntimeError("the action failed")
+
+        await self.harness.controller.on_task_cancel_confirm(make_task_cancel_confirm(TaskCancelConfirmType.canceled))
+
+    async def test_an_action_that_raises_fails_the_task_to_its_client(self):
+        """Section 5.3: the transition is never committed, so the task is terminated rather than left mid-flight."""
+
+        await self.harness.enter_state(TaskState.canceling)
+        self.harness.worker_controller.on_task_done.side_effect = RuntimeError("the action failed")
+
+        await self.harness.controller.on_task_cancel_confirm(make_task_cancel_confirm(TaskCancelConfirmType.canceled))
+
+        self.assertIsNone(self.harness.get_state_machine(), "a faulted task must not stay live")
+
+        results = self.harness.task_results_sent_to(CLIENT_ID)
+        self.assertEqual(len(results), 1, "the client is told the task failed")
+        self.assertEqual(TaskResultType(results[0].resultType.value), TaskResultType.failed)
+
+        self.harness.connector_storage.set_object.assert_awaited_once()
+        payload = self.harness.connector_storage.set_object.await_args.args[1]
+        self.assertIsInstance(deserialize_failure(payload), SchedulerError)
+
+    async def test_a_faulted_teardown_still_does_not_escape_the_router(self):
+        """The teardown runs from the router's except, so its own failure must not propagate either."""
+
+        await self.harness.enter_state(TaskState.canceling)
+        self.harness.worker_controller.on_task_done.side_effect = RuntimeError("the action failed")
+        self.harness.connector_storage.set_object.side_effect = RuntimeError("object storage is down")
+
+        await self.harness.controller.on_task_cancel_confirm(make_task_cancel_confirm(TaskCancelConfirmType.canceled))
+
+        self.assertIsNone(self.harness.get_state_machine(), "the machine is dropped even when the teardown fails")
+
+
+class TestTaskStateExclusion(unittest.IsolatedAsyncioTestCase):
+    """Section 3.4 and 3.5: one task's transitions are serialized, so two events cannot both act on one machine."""
+
+    def setUp(self) -> None:
+        setup_logger()
+        logging_test_name(self)
+        self.harness = TaskControllerHarness()
+
+    async def test_two_events_for_one_task_do_not_both_transition_it(self):
+        """Without the lock this commits running -> running and running -> success on the same machine.
+
+        The client is told the task succeeded and the same task is handed to a second worker, which is the duplicate
+        execution of section 5.1 arriving through a different door.
+        """
+
+        state_machine = await self.harness.enter_state(TaskState.running)
+
+        in_send = asyncio.Event()
+        release = asyncio.Event()
+        committed: List[str] = []
+
+        async def blocking_send(peer, message, detached=False):
+            if isinstance(message, TaskResult):
+                committed.append("result delivered to client")
+                in_send.set()
+                await release.wait()
+            elif isinstance(message, Task):
+                committed.append("task rerouted to another worker")
+
+        self.harness.binder.send.side_effect = blocking_send
+
+        first = asyncio.create_task(self.harness.controller.on_task_result(make_task_result(TaskResultType.success)))
+        await in_send.wait()
+
+        # a heartbeat timeout fires for the same task while its result is still being sent
+        second = asyncio.create_task(self.harness.controller.on_worker_disconnect(TASK_ID, WORKER_ID))
+        await asyncio.sleep(0)
+        release.set()
+        await asyncio.gather(first, second)
+
+        self.assertEqual(committed, ["result delivered to client"], "the disconnect must not also act")
+        self.assertEqual(state_machine.current_state(), TaskState.success)
+        self.assertIsNone(self.harness.get_state_machine())
+
+    async def test_an_event_that_arrives_while_the_task_finishes_is_dropped(self):
+        """The second event waits on the lock, then finds that the machine it locked is no longer the registered one."""
+
+        await self.harness.enter_state(TaskState.running)
+
+        in_send = asyncio.Event()
+        release = asyncio.Event()
+
+        async def blocking_send(peer, message, detached=False):
+            if isinstance(message, TaskResult):
+                in_send.set()
+                await release.wait()
+
+        self.harness.binder.send.side_effect = blocking_send
+
+        first = asyncio.create_task(self.harness.controller.on_task_result(make_task_result(TaskResultType.success)))
+        await in_send.wait()
+
+        second = asyncio.create_task(self.harness.controller.on_task_cancel(CLIENT_ID, make_task_cancel()))
+        await asyncio.sleep(0)
+        release.set()
+        await asyncio.gather(first, second)
+
+        self.assertEqual(len(self.harness.cancel_confirms_sent_to(CLIENT_ID)), 0, "the cancel must not be answered")
+
+    async def test_a_cycle_in_the_lock_order_degrades_to_a_logged_drop(self):
+        """Section 3.5.2: the acquire timeout is what bounds a deadlock, so it must be reachable.
+
+        A terminal transition fans out to other tasks, so it takes a second task's lock while holding its own. That is
+        safe only because the acquisition graph has no cycle, which rests on two guards in
+        ``VanillaGraphTaskController.__cancel_whole_graph``. This builds the cycle those guards prevent, with both
+        tasks forced to hold their own lock before either reaches for the other, and asserts that the scheduler
+        reports it and continues instead of hanging forever.
+        """
+
+        first_task_id = TaskID(b"graph-sibling-one")
+        second_task_id = TaskID(b"graph-sibling-two")
+
+        await self.harness.controller.on_task_new(make_task(first_task_id))
+        await self.harness.controller.on_task_new(make_task(second_task_id))
+
+        sibling_of = {first_task_id: second_task_id, second_task_id: first_task_id}
+        both_are_inside_their_own_lock = asyncio.Event()
+        arrived = 0
+
+        async def cancel_the_sibling(task_result: TaskResult) -> None:
+            nonlocal arrived
+            arrived += 1
+            if arrived == 2:
+                both_are_inside_their_own_lock.set()
+            await both_are_inside_their_own_lock.wait()
+
+            sibling = sibling_of[TaskID(task_result.taskId)]
+            await self.harness.controller.on_task_cancel(
+                CLIENT_ID, TaskCancel(taskId=sibling, flags=TaskCancel.TaskCancelFlags(force=True))
+            )
+
+        self.harness.graph_controller.is_graph_subtask.return_value = True
+        self.harness.graph_controller.on_graph_sub_task_result.side_effect = cancel_the_sibling
+
+        with unittest.mock.patch.object(task_controller, "LOCK_ACQUIRE_TIMEOUT_SECONDS", 0.1):
+            with self.assertLogs("scaler.scheduler.controllers.task_controller", level="ERROR") as logs:
+                await asyncio.wait_for(
+                    asyncio.gather(
+                        self.harness.controller.on_task_result(
+                            TaskResult(
+                                taskId=first_task_id, resultType=TaskResultType.success, metadata=b"", results=[]
+                            )
+                        ),
+                        self.harness.controller.on_task_result(
+                            TaskResult(
+                                taskId=second_task_id, resultType=TaskResultType.success, metadata=b"", results=[]
+                            )
+                        ),
+                    ),
+                    timeout=5,
+                )
+
+        self.assertTrue(
+            any("lock not acquired" in line for line in logs.output),
+            "a lock that cannot be taken must name the task and its debug path",
+        )
+
+    async def test_the_lock_is_released_when_an_action_raises(self):
+        """A swallowed exception that also stranded the lock would deadlock every later event for that task."""
+
+        state_machine = await self.harness.enter_state(TaskState.canceling)
+        self.harness.worker_controller.on_task_done.side_effect = RuntimeError("the action failed")
+
+        await self.harness.controller.on_task_cancel_confirm(make_task_cancel_confirm(TaskCancelConfirmType.canceled))
+
+        self.assertFalse(state_machine.lock.locked(), "the lock must not survive a faulted transition")
 
 
 class TestTaskControllerStatistics(unittest.IsolatedAsyncioTestCase):
