@@ -254,6 +254,8 @@ class VanillaGraphTaskController(GraphTaskController, Looper, Reporter):
             # if graph is already in canceling or aborting, we don't need to proceed whole graph canceling again
             return
 
+        # must stay before the gather: the cancels below re-enter the task router, which locks per task, and the
+        # early return above is what keeps that lock acquisition graph acyclic
         graph_info.status = _GraphState.Canceling
 
         await asyncio.gather(
