@@ -388,7 +388,13 @@ class TestTaskControllerBehavior(unittest.IsolatedAsyncioTestCase):
         await self.harness.enter_state(TaskState.canceling)
         self.harness.worker_controller.on_task_done.side_effect = RuntimeError("the action failed")
 
-        await self.harness.controller.on_task_cancel_confirm(make_task_cancel_confirm(TaskCancelConfirmType.canceled))
+        with unittest.mock.patch.object(task_controller.logger, "exception") as logged:
+            await self.harness.controller.on_task_cancel_confirm(
+                make_task_cancel_confirm(TaskCancelConfirmType.canceled)
+            )
+
+        # swallowing without a trace is the failure mode this guards: the task dies and nothing says why
+        self.assertTrue(logged.called, "the fault must be logged")
 
     async def test_an_action_that_raises_fails_the_task_to_its_client(self):
         """Section 5.3: the transition is never committed, so the task is terminated rather than left mid-flight."""
