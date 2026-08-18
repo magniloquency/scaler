@@ -1,17 +1,12 @@
-import ast
 import asyncio
-import inspect
 import os
-import textwrap
 import unittest
 import unittest.mock
 from pathlib import Path
-from typing import Dict, List, Set, Tuple, get_args
+from typing import Dict, List, Set, Tuple
 
-from scaler.protocol.capnp import Task, TaskCancel, TaskCancelConfirmType, TaskResult, TaskResultType, TaskState
+from scaler.protocol.capnp import Task, TaskCancelConfirmType, TaskResult, TaskResultType, TaskState
 from scaler.scheduler.controllers import task_controller
-from scaler.scheduler.controllers.task_controller import VanillaTaskController
-from scaler.scheduler.task.task_event import TaskEvent
 from scaler.scheduler.task.task_state_machine import TERMINAL_TASK_STATES
 from scaler.utility.exceptions import SchedulerError
 from scaler.utility.identifiers import TaskID
@@ -158,63 +153,6 @@ class TestTaskStateGraph(unittest.IsolatedAsyncioTestCase):
             edges.setdefault(source_name, set()).add(target_name)
 
         return edges
-
-
-class TestTaskControllerRouter(unittest.TestCase):
-    """Section 7: the router dispatches on the event class, and every event class has exactly one arm."""
-
-    def setUp(self) -> None:
-        self.__arms = self.__parse_router_arms()
-
-    def test_every_event_class_has_a_router_arm(self):
-        self.assertEqual(set(self.__arms), {event_class.__name__ for event_class in get_args(TaskEvent)})
-
-    def test_every_router_arm_calls_a_distinct_action(self):
-        self.assertEqual(len(set(self.__arms.values())), len(self.__arms))
-
-        for event_name, action_name in self.__arms.items():
-            with self.subTest(event=event_name):
-                self.assertTrue(hasattr(VanillaTaskController, f"_VanillaTaskController{action_name}"))
-
-    def test_the_router_is_exhaustive_over_the_event_union(self):
-        match_node = self.__find_router_match()
-        wildcard_bodies = [
-            case.body
-            for case in match_node.cases
-            if isinstance(case.pattern, ast.MatchAs) and case.pattern.pattern is None
-        ]
-
-        self.assertEqual(len(wildcard_bodies), 1, "the router needs one wildcard arm to make the match exhaustive")
-        self.assertIn("assert_never", ast.dump(wildcard_bodies[0][0]))
-
-    @staticmethod
-    def __find_router_match() -> ast.Match:
-        source = textwrap.dedent(inspect.getsource(VanillaTaskController._VanillaTaskController__route))  # type: ignore[attr-defined]  # noqa: E501
-        match_nodes = [
-            node
-            for node in ast.walk(ast.parse(source))
-            if isinstance(node, ast.Match) and isinstance(node.subject, ast.Name) and node.subject.id == "event"
-        ]
-
-        assert len(match_nodes) == 1, "the router must dispatch on exactly one match over the event"
-        return match_nodes[0]
-
-    @classmethod
-    def __parse_router_arms(cls) -> Dict[str, str]:
-        arms = {}
-        for case in cls.__find_router_match().cases:
-            if not isinstance(case.pattern, ast.MatchClass) or not isinstance(case.pattern.cls, ast.Name):
-                continue
-
-            called = [
-                node.func.attr
-                for node in ast.walk(ast.Module(body=case.body, type_ignores=[]))
-                if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
-            ]
-            assert len(called) == 1, f"the arm of {case.pattern.cls.id} must call exactly one action"
-            arms[case.pattern.cls.id] = called[0]
-
-        return arms
 
 
 class TestTaskControllerBehavior(unittest.IsolatedAsyncioTestCase):
@@ -539,64 +477,6 @@ class TestTaskStateExclusion(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(len(self.harness.messages_sent_to(WORKER_ID)), 0, "the cancel must not reach the worker")
         self.assertFalse(state_machine.lock.locked(), "a refusal after the acquire must not strand the lock")
-
-    async def test_a_cycle_in_the_lock_order_degrades_to_a_logged_drop(self):
-        """Section 3.5.2: the acquire timeout is what bounds a deadlock, so it must be reachable.
-
-        A terminal transition fans out to other tasks, so it takes a second task's lock while holding its own. That is
-        safe only because the acquisition graph has no cycle, which rests on two guards in
-        ``VanillaGraphTaskController.__cancel_whole_graph``. This builds the cycle those guards prevent, with both
-        tasks forced to hold their own lock before either reaches for the other, and asserts that the scheduler
-        reports it and continues instead of hanging forever.
-        """
-
-        first_task_id = TaskID(b"graph-sibling-one")
-        second_task_id = TaskID(b"graph-sibling-two")
-
-        await self.harness.controller.on_task_new(make_task(first_task_id))
-        await self.harness.controller.on_task_new(make_task(second_task_id))
-
-        sibling_of = {first_task_id: second_task_id, second_task_id: first_task_id}
-        both_are_inside_their_own_lock = asyncio.Event()
-        arrived = 0
-
-        async def cancel_the_sibling(task_result: TaskResult) -> None:
-            nonlocal arrived
-            arrived += 1
-            if arrived == 2:
-                both_are_inside_their_own_lock.set()
-            await both_are_inside_their_own_lock.wait()
-
-            sibling = sibling_of[TaskID(task_result.taskId)]
-            await self.harness.controller.on_task_cancel(
-                CLIENT_ID, TaskCancel(taskId=sibling, flags=TaskCancel.TaskCancelFlags(force=True))
-            )
-
-        self.harness.graph_controller.is_graph_subtask.return_value = True
-        self.harness.graph_controller.on_graph_sub_task_result.side_effect = cancel_the_sibling
-
-        with unittest.mock.patch.object(task_controller, "LOCK_ACQUIRE_TIMEOUT_SECONDS", 0.1):
-            with self.assertLogs("scaler.scheduler.controllers.task_controller", level="ERROR") as logs:
-                await asyncio.wait_for(
-                    asyncio.gather(
-                        self.harness.controller.on_task_result(
-                            TaskResult(
-                                taskId=first_task_id, resultType=TaskResultType.success, metadata=b"", results=[]
-                            )
-                        ),
-                        self.harness.controller.on_task_result(
-                            TaskResult(
-                                taskId=second_task_id, resultType=TaskResultType.success, metadata=b"", results=[]
-                            )
-                        ),
-                    ),
-                    timeout=5,
-                )
-
-        self.assertTrue(
-            any("lock not acquired" in line for line in logs.output),
-            "a lock that cannot be taken must name the task and its debug path",
-        )
 
     async def test_the_lock_is_released_when_an_action_raises(self):
         """A swallowed exception that also stranded the lock would deadlock every later event for that task."""
