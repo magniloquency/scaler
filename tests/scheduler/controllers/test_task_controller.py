@@ -495,6 +495,51 @@ class TestTaskStateExclusion(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(len(self.harness.cancel_confirms_sent_to(CLIENT_ID)), 0, "the cancel must not be answered")
 
+    async def test_an_event_that_arrives_while_the_task_is_torn_down_is_dropped(self):
+        """A faulted action removes the machine without committing, so the source state alone cannot refuse the event.
+
+        The waiter locks a machine that is no longer registered but still reads ``running``, which every action
+        accepts. Only the identity re-check in the acquire stops it from acting on a task that no longer exists: it
+        would send a TaskCancel for a task the scheduler has already failed, and the write would then be dropped by
+        ``commit`` with the side effect already applied.
+        """
+
+        state_machine = await self.harness.enter_state(TaskState.running)
+
+        in_action = asyncio.Event()
+        release = asyncio.Event()
+        raised = False
+
+        async def fail_the_first_release(task_id: TaskID) -> None:
+            # the teardown releases the worker again, and only the action itself may raise
+            nonlocal raised
+            if raised:
+                return
+
+            raised = True
+            in_action.set()
+            await release.wait()
+            raise RuntimeError("the action failed")
+
+        self.harness.worker_controller.on_task_done.side_effect = fail_the_first_release
+
+        first = asyncio.create_task(self.harness.controller.on_task_result(make_task_result(TaskResultType.success)))
+        await in_action.wait()
+
+        second = asyncio.create_task(self.harness.controller.on_task_cancel(CLIENT_ID, make_task_cancel()))
+        await asyncio.sleep(0)
+
+        with self.assertLogs("scaler.scheduler.controllers.task_controller", level="INFO") as logs:
+            release.set()
+            await asyncio.gather(first, second)
+
+        self.assertTrue(
+            any("arrived after the task was removed" in line for line in logs.output),
+            "the cancel must be refused by the identity re-check, not by its source state or a missing machine",
+        )
+        self.assertEqual(len(self.harness.messages_sent_to(WORKER_ID)), 0, "the cancel must not reach the worker")
+        self.assertFalse(state_machine.lock.locked(), "a refusal after the acquire must not strand the lock")
+
     async def test_a_cycle_in_the_lock_order_degrades_to_a_logged_drop(self):
         """Section 3.5.2: the acquire timeout is what bounds a deadlock, so it must be reachable.
 

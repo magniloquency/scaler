@@ -3,7 +3,7 @@ import contextlib
 import logging
 import sys
 from collections import deque
-from typing import AsyncIterator, Deque, Dict, List, Literal, Optional, Tuple
+from typing import AsyncGenerator, Deque, Dict, List, Literal, Optional, Tuple
 
 from scaler.io.mixins import AsyncBinder, AsyncObjectStorageConnector, AsyncPublisher
 from scaler.protocol.capnp import (
@@ -209,8 +209,9 @@ class VanillaTaskController(TaskController, Looper, Reporter):
     async def __acquire_machine(self, event: TaskEvent) -> Optional[TaskStateMachine]:
         """Take the lock of the machine for an event, or return None with the reason logged.
 
-        Never releases: both refusals happen before the acquire, so the caller owns the lock if and only if this
-        returns a machine.
+        Returning None always means no lock is held, including for the refusal that can only be decided after the
+        acquire, which releases before it returns. The caller therefore owns the lock if and only if this returns a
+        machine.
         """
 
         state_machine = self._task_state_manager.get_state_machine(event.task_id)
@@ -227,26 +228,27 @@ class VanillaTaskController(TaskController, Looper, Reporter):
             )
             return None
 
+        # identity, not None: the property we depend on is that the machine we locked is still the registered one,
+        # and a removed entry is only the reachable way for that to stop being true. the holder ahead of us may have
+        # removed it, either by reaching a terminal state or by tearing the task down after its action raised, and the
+        # latter leaves a non-terminal state that would otherwise accept this event and run its side effects
+        if self._task_state_manager.get_state_machine(event.task_id) is not state_machine:
+            logger.info(f"{event.task_id!r}: {type(event).__name__} arrived after the task was removed")
+            state_machine.lock.release()
+            return None
+
         return state_machine
 
     @contextlib.asynccontextmanager
-    async def __locked_machine(self, event: TaskEvent) -> AsyncIterator[Optional[TaskStateMachine]]:
+    async def __locked_machine(self, event: TaskEvent) -> AsyncGenerator[Optional[TaskStateMachine], None]:
         """Yield the machine for an event with its lock held, or None if the event cannot be applied."""
 
-        # `acquired` tracks what must be released. the yielded value answers a different question, whether the router
-        # may proceed, and the two differ when the machine goes away while we are waiting for the lock
-        acquired = await self.__acquire_machine(event)
+        state_machine = await self.__acquire_machine(event)
         try:
-            # identity, not None: the property we depend on is that the machine we locked is still the registered one,
-            # and a removed entry is only the reachable way for that to stop being true
-            if acquired is not None and self._task_state_manager.get_state_machine(event.task_id) is not acquired:
-                logger.info(f"{event.task_id!r}: {type(event).__name__} arrived after the task finished")
-                yield None
-            else:
-                yield acquired
+            yield state_machine
         finally:
-            if acquired is not None:
-                acquired.lock.release()
+            if state_machine is not None:
+                state_machine.lock.release()
 
     async def __route(self, event: TaskEvent) -> None:
         """Run the action of an event and write the state that it returns.
