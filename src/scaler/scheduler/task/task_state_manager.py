@@ -55,7 +55,7 @@ class TaskStateManager:
 
         state_machine = self._task_id_to_state_machine.get(task_id, None)
         if state_machine is None:
-            logger.error(f"{task_id!r}: cannot commit {event_type.__name__} for non-existed state machine")
+            logger.error(f"{task_id!r}: cannot commit {event_type.__name__} for non-existent state machine")
             return
 
         source = state_machine.current_state()

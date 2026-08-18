@@ -216,7 +216,7 @@ class VanillaTaskController(TaskController, Looper, Reporter):
 
         state_machine = self._task_state_manager.get_state_machine(event.task_id)
         if state_machine is None:
-            logger.error(f"{event.task_id!r}: received {type(event).__name__} for non-existed state machine")
+            logger.error(f"{event.task_id!r}: received {type(event).__name__} for non-existent state machine")
             return None
 
         try:
