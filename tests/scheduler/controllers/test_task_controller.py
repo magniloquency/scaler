@@ -363,6 +363,36 @@ class TestTaskControllerBehavior(unittest.IsolatedAsyncioTestCase):
 
         self.assertIsNone(self.harness.get_state_machine(), "the machine is dropped even when the teardown fails")
 
+    async def test_a_faulted_task_is_not_left_in_the_unassigned_queue(self):
+        """The teardown drops the task payload, so an id left queued would raise on every later drain."""
+
+        await self.harness.enter_state(TaskState.balanceCanceling)
+
+        # no worker is free, so the reschedule queues the task and the monitor send then fails
+        self.harness.set_capacity_available(False)
+        self.harness.binder_monitor.send.side_effect = RuntimeError("the monitor is down")
+
+        await self.harness.controller.on_task_cancel_confirm(make_task_cancel_confirm(TaskCancelConfirmType.canceled))
+
+        self.assertEqual(list(self.harness.controller._unassigned), [], "a faulted task must leave no id queued")
+
+        # the drain reads the payload of whatever sits at the head of the queue, so a stale id raises here
+        self.harness.binder_monitor.send.side_effect = None
+        self.harness.set_capacity_available(True)
+        await self.harness.controller.on_worker_connect(REPLACEMENT_WORKER_ID)
+
+    async def test_a_faulted_task_gives_up_its_state_count(self):
+        """The teardown removes the machine, so the source state must not keep counting a task that is gone."""
+
+        await self.harness.enter_state(TaskState.canceling)
+        self.harness.worker_controller.on_task_done.side_effect = RuntimeError("the action failed")
+
+        await self.harness.controller.on_task_cancel_confirm(make_task_cancel_confirm(TaskCancelConfirmType.canceled))
+
+        statistics = self.harness.controller._task_state_manager.get_statistics()
+        self.assertEqual(statistics[TaskState.canceling], 0, "the source state must not leak a count")
+        self.assertEqual(statistics[TaskState.failed], 1, "the task is counted where the client was told it landed")
+
 
 class TestTaskStateExclusion(unittest.IsolatedAsyncioTestCase):
     """One task's transitions are serialized, so two events cannot both act on one machine."""
