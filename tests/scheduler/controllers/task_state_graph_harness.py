@@ -2,7 +2,7 @@
 
 The controller is the whole task state machine: legality and destination both live in the action that handles an
 event. There is no table to read, so the tests derive the graph by driving every (state, event) pair through the real
-router and recording the state that comes back. See ``TASK_STATE_MACHINE_PROPOSAL.md`` section 7.
+router and recording the state that comes back.
 """
 
 import dataclasses

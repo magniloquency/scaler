@@ -73,7 +73,7 @@ async def build_snapshot_rows() -> List[Tuple[str, str, str]]:
 
 
 class TestTaskStateGraph(unittest.IsolatedAsyncioTestCase):
-    """Section 7: the graph snapshot and the reachability checks that read it."""
+    """The graph snapshot, and the reachability checks that read it."""
 
     def setUp(self) -> None:
         setup_logger()
@@ -156,7 +156,7 @@ class TestTaskStateGraph(unittest.IsolatedAsyncioTestCase):
 
 
 class TestTaskControllerBehavior(unittest.IsolatedAsyncioTestCase):
-    """Section 4: the defects that moving the actions onto the transitions resolves."""
+    """The defects that moving the actions onto the transitions resolves."""
 
     def setUp(self) -> None:
         setup_logger()
@@ -164,7 +164,7 @@ class TestTaskControllerBehavior(unittest.IsolatedAsyncioTestCase):
         self.harness = TaskControllerHarness()
 
     async def test_worker_disconnect_while_canceling_confirms_the_cancel_to_the_client(self):
-        """Section 4.1: this pair used to bind the wrong payload and raise TypeError before the action ever ran."""
+        """This pair used to bind the wrong payload and raise TypeError before the action ever ran."""
 
         await self.harness.enter_state(TaskState.canceling)
 
@@ -176,7 +176,7 @@ class TestTaskControllerBehavior(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(self.harness.get_state_machine())
 
     async def test_worker_disconnect_while_canceling_releases_worker_capacity_once(self):
-        """Section 4.3: remove_worker already released the capacity, so the action must not release it again."""
+        """remove_worker already released the capacity, so the action must not release it again."""
 
         await self.harness.enter_state(TaskState.canceling)
 
@@ -335,7 +335,7 @@ class TestTaskControllerBehavior(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(logged.called, "the fault must be logged")
 
     async def test_an_action_that_raises_fails_the_task_to_its_client(self):
-        """Section 5.3: the transition is never committed, so the task is terminated rather than left mid-flight."""
+        """The transition is never committed, so the task is terminated rather than left mid-flight."""
 
         await self.harness.enter_state(TaskState.canceling)
         self.harness.worker_controller.on_task_done.side_effect = RuntimeError("the action failed")
@@ -365,7 +365,7 @@ class TestTaskControllerBehavior(unittest.IsolatedAsyncioTestCase):
 
 
 class TestTaskStateExclusion(unittest.IsolatedAsyncioTestCase):
-    """Section 3.4 and 3.5: one task's transitions are serialized, so two events cannot both act on one machine."""
+    """One task's transitions are serialized, so two events cannot both act on one machine."""
 
     def setUp(self) -> None:
         setup_logger()
@@ -375,8 +375,8 @@ class TestTaskStateExclusion(unittest.IsolatedAsyncioTestCase):
     async def test_two_events_for_one_task_do_not_both_transition_it(self):
         """Without the lock this commits running -> running and running -> success on the same machine.
 
-        The client is told the task succeeded and the same task is handed to a second worker, which is the duplicate
-        execution of section 5.1 arriving through a different door.
+        The client is told the task succeeded and the same task is handed to a second worker, so the task runs
+        twice.
         """
 
         state_machine = await self.harness.enter_state(TaskState.running)
