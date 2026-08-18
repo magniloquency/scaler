@@ -40,10 +40,11 @@ class TaskStateManager:
         return self._task_id_to_state_machine.get(task_id, None)
 
     def commit(self, task_id: TaskID, event_type: Type[TaskEvent], target: TaskState) -> None:
-        """Write the state that the action of ``event_type`` returned.
+        """Write the state that the action of ``event_type`` returned, or the state a faulted task is torn down into.
 
-        This is the only place that moves a task from one state to another. The action already ran, so this cannot
-        fail: an event that the source state does not accept never reaches this point.
+        This is the only place that moves a task from one state to another, so it is also the only place the state
+        counts stay balanced. The action already ran, so this cannot fail: an event that the source state does not
+        accept never reaches this point.
         """
 
         state_machine = self._task_id_to_state_machine.get(task_id, None)

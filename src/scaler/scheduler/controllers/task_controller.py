@@ -321,8 +321,15 @@ class VanillaTaskController(TaskController, Looper, Reporter):
         except Exception:
             logger.exception(f"{event.task_id!r}: could not release the worker of a faulted task")
 
+        # commit before removing: the machine is being dropped either way, and without a commit the source state keeps
+        # its count in _statistics forever. failed is what the client was just told
+        self._task_state_manager.commit(event.task_id, type(event), TaskState.failed)
         self._task_state_manager.remove_state_machine(event.task_id)
+
         self._task_id_to_task.pop(event.task_id, None)
+        if event.task_id in self._unassigned:
+            # the payload is gone, so an id left in the queue would raise in __acquire_workers on every later drain
+            self._unassigned.remove(event.task_id)
 
         try:
             await self.__retry_unassignable()
