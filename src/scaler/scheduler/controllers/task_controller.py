@@ -251,13 +251,8 @@ class VanillaTaskController(TaskController, Looper, Reporter):
                 state_machine.lock.release()
 
     async def __route(self, event: TaskEvent) -> None:
-        """Run the action of an event and write the state that it returns.
-
-        The action decides both the legality of the event and its destination, so no caller has to predict either one.
-        A ``None`` target means the source state does not accept the event, which is what a racing duplicate needs.
-
-        The machine's lock is held for the whole transition. Committing after the action is what keeps the state from
-        claiming work that has not happened, and the lock is what stops a second event for the same task from reading
+        """Run the action of an event and write the state that it returns, a ``None`` target meaning the source state
+        does not accept the event. The machine's lock is held for the whole transition, so a second event cannot read
         a source state that this one has already decided to leave.
         """
 
