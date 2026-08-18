@@ -1,6 +1,6 @@
 name: Fork wheels
 
-# Fork-only workflow: builds a wheel from the current branch without cutting a
+# Fork-only workflow: builds wheels from the current branch without cutting a
 # release. Runs the same composite actions as `publish-artifact.yml` but stops
 # at `upload-artifact`, so nothing reaches PyPI or GHCR.
 
@@ -15,13 +15,13 @@ permissions:
   contents: read
 
 env:
-  # Single interpreter/libc to keep the run short; the release matrix covers the
-  # rest. Overrides the `skip` selection in pyproject.toml.
-  CIBW_BUILD: cp312-manylinux_x86_64
+  # Narrowed to two interpreters on one libc to keep the run short; the release
+  # matrix covers the rest. Overrides the `skip` selection in pyproject.toml.
+  CIBW_BUILD: cp312-manylinux_x86_64 cp313-manylinux_x86_64
 
 jobs:
   build:
-    name: Build wheel (ubuntu-latest, x86_64)
+    name: Build wheels (ubuntu-latest, x86_64)
     runs-on: ubuntu-latest
     steps:
       - name: Harden the runner (Audit all outbound calls)
