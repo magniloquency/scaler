@@ -311,22 +311,13 @@ class VanillaTaskController(TaskController, Looper, Reporter):
     async def __fail_task_to_client(self, event: TaskEvent, source: TaskState) -> None:
         """Terminate a task whose action raised, and tell its client why.
 
-        The action left part of its work done and the state was never committed, so the machine would otherwise keep
-        its source state and accept the same event again. Leaving it live leaks the machine and the payload and hangs
-        the client until client_timeout_seconds, so the task dies either way: this gets there at once and names the
-        cause.
+        The state was never committed, so leaving the task live leaks the machine and hangs the client until
+        client_timeout_seconds. The fault is reported as an ordinary failed result carrying a SchedulerError, since a
+        new TaskResultType would raise in the client agent.
 
-        The failure is reported as an ordinary failed result carrying a serialized SchedulerError. A new
-        TaskResultType would reach the client's final ``else`` and raise after the future was already popped, which
-        stops the whole client agent.
-
-        Each step is guarded on its own rather than reusing ``__send_task_result_to_client``. That helper releases
-        the worker before it tells the client, so an action that failed inside ``on_task_done`` would fail the same
-        way here and the client would never hear anything. Telling the client is what stops the hang, so it goes
-        first and nothing else is allowed to prevent it.
-
-        This must not raise: it runs from the ``except`` of the router, and an exception here would escape into the
-        timer loop or message handler that the router is protecting.
+        Telling the client comes first and each step is guarded on its own: ``__send_task_result_to_client`` releases
+        the worker first, so a fault in ``on_task_done`` would leave the client uninformed. This must not raise, it
+        runs from the ``except`` of the router.
         """
 
         try:
