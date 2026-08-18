@@ -228,10 +228,8 @@ class VanillaTaskController(TaskController, Looper, Reporter):
             )
             return None
 
-        # identity, not None: the property we depend on is that the machine we locked is still the registered one,
-        # and a removed entry is only the reachable way for that to stop being true. the holder ahead of us may have
-        # removed it, either by reaching a terminal state or by tearing the task down after its action raised, and the
-        # latter leaves a non-terminal state that would otherwise accept this event and run its side effects
+        # it's possible that the state machine for this task was changed (or removed) by the last lock-holder
+        # we do one more check just to be sure
         if self._task_state_manager.get_state_machine(event.task_id) is not state_machine:
             logger.info(f"{event.task_id!r}: {type(event).__name__} arrived after the task was removed")
             state_machine.lock.release()
@@ -251,9 +249,8 @@ class VanillaTaskController(TaskController, Looper, Reporter):
                 state_machine.lock.release()
 
     async def __route(self, event: TaskEvent) -> None:
-        """Run the action of an event and write the state that it returns, a ``None`` target meaning the source state
-        does not accept the event. The machine's lock is held for the whole transition, so a second event cannot read
-        a source state that this one has already decided to leave.
+        """Run the action of an event and transition the state.
+        The machine's lock is held for the whole transition.
         """
 
         async with self.__locked_machine(event) as state_machine:
@@ -304,9 +301,9 @@ class VanillaTaskController(TaskController, Looper, Reporter):
                 self._task_id_to_task.pop(event.task_id, None)
 
     async def __fail_task_to_client(self, event: TaskEvent, source: TaskState) -> None:
-        """Terminate a task whose action raised, and tell its client why, as an ordinary failed result carrying a
-        SchedulerError. Telling the client comes first and each step is guarded on its own, so nothing can stop the
-        client hearing. This must not raise, it runs from the ``except`` of the router.
+        """Fail a task whose state machine action raised.
+        Sends the client a failed result carrying a SchedulerError.
+        This must not raise, it runs from the ``except`` of the router.
         """
 
         try:
