@@ -309,15 +309,9 @@ class VanillaTaskController(TaskController, Looper, Reporter):
                 self._task_id_to_task.pop(event.task_id, None)
 
     async def __fail_task_to_client(self, event: TaskEvent, source: TaskState) -> None:
-        """Terminate a task whose action raised, and tell its client why.
-
-        The state was never committed, so leaving the task live leaks the machine and hangs the client until
-        client_timeout_seconds. The fault is reported as an ordinary failed result carrying a SchedulerError, since a
-        new TaskResultType would raise in the client agent.
-
-        Telling the client comes first and each step is guarded on its own: ``__send_task_result_to_client`` releases
-        the worker first, so a fault in ``on_task_done`` would leave the client uninformed. This must not raise, it
-        runs from the ``except`` of the router.
+        """Terminate a task whose action raised, and tell its client why, as an ordinary failed result carrying a
+        SchedulerError. Telling the client comes first and each step is guarded on its own, so nothing can stop the
+        client hearing. This must not raise, it runs from the ``except`` of the router.
         """
 
         try:
