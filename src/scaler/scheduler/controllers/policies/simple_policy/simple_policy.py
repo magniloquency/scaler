@@ -6,11 +6,11 @@ from scaler.scheduler.controllers.policies.simple_policy.allocation.mixins impor
 from scaler.scheduler.controllers.policies.simple_policy.allocation.types import AllocatePolicyStrategy
 from scaler.scheduler.controllers.policies.simple_policy.allocation.utility import create_allocate_policy
 from scaler.scheduler.controllers.policies.simple_policy.scaling.mixins import ScalingPolicy
-from scaler.scheduler.controllers.policies.simple_policy.scaling.types import (
-    ScalingPolicyStrategy,
-    WorkerManagerSnapshot,
+from scaler.scheduler.controllers.policies.simple_policy.scaling.types import WorkerManagerSnapshot
+from scaler.scheduler.controllers.policies.simple_policy.scaling.utility import (
+    create_scaling_policy,
+    parse_scaling_policy_token,
 )
-from scaler.scheduler.controllers.policies.simple_policy.scaling.utility import create_scaling_policy
 from scaler.utility.identifiers import TaskID, WorkerID
 from scaler.utility.snapshot import InformationSnapshot
 
@@ -28,7 +28,8 @@ class SimplePolicy(ScalerPolicy):
         self._allocation_policy: TaskAllocatePolicy = create_allocate_policy(
             AllocatePolicyStrategy(policy_kv["allocate"])
         )
-        self._scaling_policy: ScalingPolicy = create_scaling_policy(ScalingPolicyStrategy(policy_kv["scaling"]))
+        scaling_strategy, scaling_argument = parse_scaling_policy_token(policy_kv["scaling"])
+        self._scaling_policy: ScalingPolicy = create_scaling_policy(scaling_strategy, scaling_argument)
 
     def add_worker(self, worker: WorkerID, capabilities: Dict[str, int], queue_size: int) -> bool:
         return self._allocation_policy.add_worker(worker, capabilities, queue_size)
