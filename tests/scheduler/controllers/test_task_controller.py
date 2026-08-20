@@ -214,6 +214,23 @@ class TestTaskControllerBehavior(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(self.harness.get_state_machine())
         self.assertEqual(len(self.harness.messages_sent_to(CLIENT_ID)), 0)
 
+    async def test_a_repeated_balance_cancel_is_refused_without_an_error(self):
+        """A saturated worker is slow to confirm, so the balancer can re-advise a move that is still in flight.
+
+        Re-issuing it must be a quiet refusal: no second cancel to the worker, and nothing logged at error level,
+        which would otherwise fire on every balance cycle.
+        """
+
+        state_machine = await self.harness.enter_state(TaskState.balanceCanceling)
+
+        with unittest.mock.patch.object(task_controller.logger, "error") as logged:
+            await self.harness.controller.on_task_balance_cancel(TASK_ID)
+
+        self.assertEqual(state_machine.current_state(), TaskState.balanceCanceling)
+        logged.assert_not_called()
+        self.harness.worker_controller.on_task_cancel.assert_not_awaited()
+        self.harness.binder.send.assert_not_awaited()
+
     async def test_balance_cancel_confirm_canceled_reschedules_the_task(self):
         state_machine = await self.harness.enter_state(TaskState.balanceCanceling)
         self.harness.set_capacity_available(True)

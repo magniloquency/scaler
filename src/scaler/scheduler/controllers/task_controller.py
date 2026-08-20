@@ -456,6 +456,8 @@ class VanillaTaskController(TaskController, Looper, Reporter):
         match source:
             case TaskState.running | TaskState.balanceCanceling:
                 target = task_result_target(TaskResultType(event.task_result.resultType.value))
+                if target == TaskState.failedWorkerDied:
+                    logger.warning(f"{event.task_id!r}: reporting failedWorkerDied to the client")
                 await self.__send_task_result_to_client(event.task_result, target)
                 return target
             case (
@@ -615,8 +617,8 @@ class VanillaTaskController(TaskController, Looper, Reporter):
         client = self._client_controller.on_task_finish(task_result.taskId)
         if client is None:
             logger.warning(
-                f"{task_result.taskId!r}: dropping task result, owning client is no longer registered "
-                f"(likely disconnected via client_timeout_seconds while the task was running)"
+                f"{task_result.taskId!r}: dropping {task_result.resultType} result, owning client is no longer "
+                f"registered (likely disconnected via client_timeout_seconds while the task was running)"
             )
         else:
             await self._binder.send(client, task_result, detached=True)
