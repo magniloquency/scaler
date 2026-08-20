@@ -25,6 +25,10 @@ class _FakeProvisioner(UnitProvisioner):
         self.targets: Dict[str, int] = {}
         self.create_error: Optional[Exception] = None
 
+    def register(self, binder, children_address) -> None:
+        self.binder = binder
+        self.children_address = children_address
+
     async def create_unit(self) -> str:
         if self.create_error is not None:
             raise self.create_error
@@ -306,3 +310,52 @@ class TestUnitControllerPromotion(unittest.IsolatedAsyncioTestCase):
         await self.controller.routine()  # poll returns nothing yet
 
         self.assertEqual(self.controller.get_status()[UnitState.gone.name], 0)
+
+
+class TestUnitControllerShutdownPaths(unittest.IsolatedAsyncioTestCase):
+    """The two ways a fleet ends, and why they are not the same call."""
+
+    async def asyncSetUp(self) -> None:
+        self.provisioner = _FakeProvisioner()
+        self.controller = UnitController(self.provisioner, DRAIN_TIMEOUT_SECONDS, BACKOFF_SECONDS)
+        self.controller.set_desired_task_concurrency(2)
+        await self.controller.routine()
+        await _settle()
+        await self.controller.routine()  # promote to active
+        await _settle()
+
+    async def test_destroy_all_does_not_wait_for_units_to_finish(self) -> None:
+        """The signal path. No loop is running to carry a drain command or bring a report back."""
+        await asyncio.wait_for(self.controller.destroy_all(), timeout=2)
+
+        self.assertEqual(len(self.provisioner.destroyed), 2)
+        self.assertEqual(self.provisioner.shutdown_called, [])
+        self.assertEqual(self.controller.get_status()[UnitState.gone.name], 2)
+
+    async def test_destroy_all_on_an_empty_fleet_is_safe(self) -> None:
+        controller = UnitController(_FakeProvisioner(), DRAIN_TIMEOUT_SECONDS, BACKOFF_SECONDS)
+        await asyncio.wait_for(controller.destroy_all(), timeout=2)
+
+    async def test_drain_all_asks_each_unit_to_finish_first(self) -> None:
+        for unit_id in list(self.provisioner.live):
+            self.provisioner.live.discard(unit_id)  # they exit promptly once told
+
+        await asyncio.wait_for(self.controller.drain_all(), timeout=5)
+
+        self.assertEqual(len(self.provisioner.shutdown_called), 2)
+
+    async def test_drain_all_gives_up_at_its_deadline(self) -> None:
+        """A unit that never leaves must not hold the manager open for ever."""
+        provisioner = _FakeProvisioner()
+        controller = UnitController(provisioner, drain_timeout_seconds=0.2, restart_backoff_seconds=1.0)
+        controller.set_desired_task_concurrency(2)
+        await controller.routine()
+        await _settle()
+        await controller.routine()
+        await _settle()
+
+        # provisioner.live keeps holding the units, so none of them ever reports gone.
+        await asyncio.wait_for(controller.drain_all(), timeout=5)
+
+        self.assertEqual(controller.get_status()[UnitState.gone.name], 2)
+        self.assertEqual(len(provisioner.destroyed), 2)

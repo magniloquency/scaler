@@ -29,9 +29,10 @@ from scaler.protocol.capnp import (
     TaskResult,
     WorkerDisconnectNotification,
     WorkerHeartbeatEcho,
+    WorkerShutdown,
 )
 from scaler.utility.event_loop import create_async_loop_routine, register_event_loop, run_task_forever
-from scaler.utility.exceptions import ClientShutdownException, ObjectStorageException
+from scaler.utility.exceptions import ClientQuitException, ClientShutdownException, ObjectStorageException
 from scaler.utility.identifiers import ProcessorID, WorkerID
 from scaler.utility.process_bootstrap import bootstrap_process
 from scaler.utility.signal_handler import install_async_shutdown_handler
@@ -42,6 +43,8 @@ from scaler.worker.agent.task_manager import VanillaTaskManager
 from scaler.worker.agent.timeout_manager import VanillaTimeoutManager
 
 logger = logging.getLogger(__name__)
+
+DRAIN_CHECK_INTERVAL_SECONDS = 0.1
 
 # YMQ errors that mean the scheduler connection is already gone.
 _EXPECTED_TEARDOWN_ERROR_CODES = frozenset(
@@ -74,6 +77,7 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
         logging_paths: Tuple[str, ...],
         logging_level: str,
         worker_manager_id: bytes,
+        worker_manager_address: Optional[AddressConfig] = None,
         deterministic_worker_ids: bool = False,
         security_config: Optional[SecurityConfig] = None,
     ):
@@ -107,6 +111,8 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
         self._logging_paths = logging_paths
         self._logging_level = logging_level
         self._worker_manager_id = worker_manager_id
+        self._worker_manager_address = worker_manager_address
+        self._connector_manager: Optional[AsyncConnector] = None
 
         self._backend: Optional[NetworkBackend] = None
         self._connector_external: Optional[AsyncConnector] = None
@@ -169,6 +175,11 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
                 exit_code = 1
         except ClientShutdownException as e:
             logger.info(f"{self.identity!r}: {str(e)}")
+        except ClientQuitException as e:
+            # A completed drain: we were asked to stop, we finished the work we held, and we are
+            # leaving of our own accord. Teardown still sends WorkerDisconnectNotification, which
+            # is what turns the scheduler's timeout into an event.
+            logger.info(f"{self.identity!r}: {str(e)}")
         except TimeoutError as e:
             # The worker decided on its own that it is orphaned (no heartbeat from the scheduler
             # within death_timeout_seconds), not that anyone asked it to stop: an anomaly worth a
@@ -215,6 +226,14 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
 
         self._connector_storage = self._backend.create_async_object_storage_connector(identity=self._ident)
 
+        # Children dial parents, so the worker opens this one. Its only inbound message is
+        # WorkerShutdown; liveness comes from the manager watching the process, which is better
+        # than a heartbeat timeout, so this link needs no echo.
+        if self._worker_manager_address is not None:
+            self._connector_manager = self._backend.create_async_connector(
+                identity=self._ident, callback=self.__on_receive_manager
+            )
+
         self._heartbeat_manager = VanillaHeartbeatManager(
             object_storage_address=self._object_storage_address,
             capabilities=self._capabilities,
@@ -248,6 +267,7 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
             worker_task_manager=self._task_manager,
             timeout_manager=self._timeout_manager,
             processor_manager=self._processor_manager,
+            connector_manager=self._connector_manager,
         )
         self._processor_manager.register(
             heartbeat_manager=self._heartbeat_manager,
@@ -284,6 +304,15 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
 
         raise TypeError(f"Unknown {message=}")
 
+    async def __on_receive_manager(self, message: BaseMessage):
+        if isinstance(message, WorkerShutdown):
+            if not self._heartbeat_manager.is_draining():
+                logger.info(f"{self.identity!r}: draining on request from the worker manager")
+                self._heartbeat_manager.set_draining()
+            return
+
+        logger.error(f"{self.identity!r}: unknown message from the worker manager: {message}")
+
     async def __on_receive_internal(self, processor_id_bytes: bytes, message: BaseMessage):
         processor_id = ProcessorID(processor_id_bytes)
 
@@ -305,11 +334,34 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
 
         raise TypeError(f"Unknown message from {processor_id!r}: {message}")
 
+    async def __drain_routine(self) -> None:
+        """Leave once the drain is done, which is when the last task this worker holds is finished.
+
+        Step 2 of the drain has already moved the queue away, so what is left here is the running
+        task. That is why a drain costs the runtime of one task and not the depth of the queue.
+        """
+        if self._connector_manager is None:
+            return  # nothing can send WorkerShutdown, so a drain cannot start
+
+        if not self._heartbeat_manager.is_draining():
+            return
+
+        if self._task_manager.get_queued_size() > 0 or not self._processor_manager.can_accept_task():
+            return
+
+        logger.info(f"{self.identity!r}: drained, quitting")
+        raise ClientQuitException("drained on request from the worker manager")
+
     async def __main_loop(self) -> None:
         await self._connector_external.connect(
             self._address, ConnectorRemoteType.Binder, security_config=self._security_config
         )
         await self._binder_internal.bind(self._address_internal)
+
+        if self._connector_manager is not None:
+            await self._connector_manager.connect(
+                self._worker_manager_address, ConnectorRemoteType.Binder, security_config=self._security_config
+            )
 
         if self._object_storage_address is not None:
             # With a manually set storage address, immediately connect to the object storage server.
@@ -321,6 +373,12 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
             create_async_loop_routine(self._connector_storage.routine, 0),
             create_async_loop_routine(self._binder_internal.routine, 0),
             create_async_loop_routine(self._heartbeat_manager.routine, self._heartbeat_interval_seconds),
+            *(
+                [create_async_loop_routine(self._connector_manager.routine, 0)]
+                if self._connector_manager is not None
+                else []
+            ),
+            create_async_loop_routine(self.__drain_routine, DRAIN_CHECK_INTERVAL_SECONDS),
             create_async_loop_routine(self._timeout_manager.routine, 1),
             create_async_loop_routine(self._task_manager.routine, 0),
             create_async_loop_routine(self._profiling_manager.routine, PROFILING_INTERVAL_SECONDS),

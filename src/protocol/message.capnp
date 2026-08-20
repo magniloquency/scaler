@@ -122,6 +122,18 @@ struct ObjectInstruction {
 }
 
 # Carries no payload: the worker it refers to is the sender, which the binder already identifies.
+struct WorkerShutdown {
+    # manager -> worker: finish the current task, take no new one, then exit
+}
+
+struct WorkerManagerShutdown {
+    # parent -> child manager: drain the whole fleet, then report and exit
+}
+
+struct WorkerManagerDisconnectNotification {
+    # child manager -> parent: the fleet is gone, the resource can be destroyed now
+}
+
 struct WorkerDisconnectNotification {
 }
 
@@ -237,5 +249,9 @@ struct Message {
         workerManagerCommand @25 :WorkerManagerCommand;
 
         workerDisconnectNotification @26 :WorkerDisconnectNotification;
+
+        workerShutdown @27 :WorkerShutdown;
+        workerManagerShutdown @28 :WorkerManagerShutdown;
+        workerManagerDisconnectNotification @29 :WorkerManagerDisconnectNotification;
     }
 }

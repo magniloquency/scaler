@@ -217,6 +217,10 @@ class WorkerHeartbeat(BaseMessage):
     memLimit: int
     draining: bool
 
+class WorkerShutdown(BaseMessage): ...
+class WorkerManagerShutdown(BaseMessage): ...
+class WorkerManagerDisconnectNotification(BaseMessage): ...
+
 class WorkerHeartbeatEcho(BaseMessage):
     objectStorageAddress: ObjectStorageAddress
 

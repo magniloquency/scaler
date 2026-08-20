@@ -73,7 +73,12 @@ class UnitController(Looper, Reporter):
             await self._reconcile()
 
     async def drain_all(self) -> None:
-        """Drain every unit and return once the last one is gone."""
+        """Drain every unit and return once the last one is gone, or once the deadline passes.
+
+        This needs the binder loop to still be running, because a drain is a message to each unit.
+        Use it for a shutdown asked for by a parent, not for one triggered by a signal: by the time
+        the loops have stopped, nothing can deliver the command and nothing will report back.
+        """
         self._draining_all = True
         self._desired_task_concurrency = 0
 
@@ -81,12 +86,41 @@ class UnitController(Looper, Reporter):
             if unit.is_supply():
                 await self._begin_drain(unit)
 
-        while any(unit.state is not UnitState.gone for unit in self._units.values()):
+        deadline = time.time() + self._drain_timeout_seconds
+        while not self._all_gone():
+            if time.time() > deadline:
+                logger.warning("fleet drain timed out, forcing the rest down")
+                await self.destroy_all()
+                return
+
             await self._reap()
             await self._sweep_drains()
-            if all(unit.state is UnitState.gone for unit in self._units.values()):
-                break
+            if self._all_gone():
+                return
             await asyncio.sleep(DRAIN_POLL_SECONDS)
+
+    async def destroy_all(self) -> None:
+        """Tear every unit down now, without waiting for it to finish what it holds.
+
+        This is the signal path. The manager is going away immediately, so there is no chance to
+        keep the work, and no working link over which to ask for one.
+        """
+        self._draining_all = True
+        self._desired_task_concurrency = 0
+
+        for unit in list(self._units.values()):
+            if unit.state is UnitState.gone:
+                continue
+            self._transition(unit, UnitState.stopping)
+            try:
+                await self._provisioner.destroy_unit(unit.unit_id)
+            except Exception:
+                logger.exception(f"unit {unit.unit_id!r} could not be destroyed")
+            finally:
+                self._transition(unit, UnitState.gone)
+
+    def _all_gone(self) -> bool:
+        return all(unit.state is UnitState.gone for unit in self._units.values())
 
     def get_status(self) -> Dict[str, int]:
         counts = {state.name: 0 for state in UnitState}
