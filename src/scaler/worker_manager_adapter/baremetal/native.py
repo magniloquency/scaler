@@ -5,11 +5,14 @@ import os
 import signal
 import sys
 import uuid
-from typing import Dict, Set
+from typing import Dict, Optional, Set
 
 import psutil
 
 from scaler.config.section.native_worker_manager import NativeWorkerManagerConfig
+from scaler.config.types.address import AddressConfig
+from scaler.io.mixins import AsyncBinder
+from scaler.protocol.capnp import WorkerShutdown
 from scaler.utility.exitcode import describe_exitcode
 from scaler.worker.worker import Worker
 from scaler.worker_manager_adapter.unit_provisioner import UNLIMITED_UNITS, UnitProvisioner
@@ -50,6 +53,12 @@ class NativeWorkerProvisioner(UnitProvisioner):
         self._worker_prefix = config.worker_type if config.worker_type is not None else "NAT"
 
         self._workers: Dict[str, Worker] = {}
+        self._binder: Optional[AsyncBinder] = None
+        self._children_address: Optional[AddressConfig] = None
+
+    def register(self, binder: AsyncBinder, children_address: AddressConfig) -> None:
+        self._binder = binder
+        self._children_address = children_address
 
     async def create_unit(self) -> str:
         # The id exists before the process does, which is what removes the need for a registration
@@ -75,12 +84,17 @@ class NativeWorkerProvisioner(UnitProvisioner):
 
     async def shutdown_unit(self, unit_id: str) -> None:
         worker = self._workers.get(unit_id)
-        if worker is None:
+        if worker is None or not worker.is_alive():
             return
 
-        # A signal is what this manager has until the drain protocol gives it a message to send.
-        if worker.is_alive():
-            self._signal_worker(worker)
+        if self._binder is not None:
+            # The worker keeps its running task, reports draining to the scheduler so its queue is
+            # reclaimed, and exits when that task is done.
+            await self._binder.send(unit_id.encode(), WorkerShutdown(), detached=True)
+            return
+
+        # No link to the worker: fall back to a signal, which loses whatever is running.
+        self._signal_worker(worker)
 
     async def set_unit_task_concurrency(self, unit_id: str, task_concurrency: int) -> None:
         """A worker process supplies one fixed task slot, so there is no smaller size to ask for."""
@@ -146,6 +160,7 @@ class NativeWorkerProvisioner(UnitProvisioner):
             logging_paths=self._logging_paths,
             logging_level=self._logging_level,
             worker_manager_id=self._worker_manager_id,
+            worker_manager_address=self._children_address,
             security_config=self._security_config,
         )
 
@@ -169,6 +184,7 @@ class NativeWorkerManager:
             max_provisioner_units=self._config.worker_manager_config.max_task_concurrency,
             worker_manager_id=self._config.worker_manager_config.worker_manager_id.encode(),
             worker_provisioner=provisioner,
+            children_bind_address=self._config.worker_manager_config.children_bind_address,
             io_threads=self._config.worker_config.io_threads,
             security_config=self._config.security,
         )

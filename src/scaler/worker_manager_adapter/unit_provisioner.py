@@ -1,6 +1,9 @@
 from abc import ABC, abstractmethod
 from typing import Set
 
+from scaler.config.types.address import AddressConfig
+from scaler.io.mixins import AsyncBinder
+
 UNLIMITED_UNITS = -1
 
 
@@ -11,6 +14,10 @@ class UnitProvisioner(ABC):
     many units to run, never sends a drain command and never waits for one to finish. UnitController
     does all of that, identically for every backend.
     """
+
+    @abstractmethod
+    def register(self, binder: AsyncBinder, children_address: AddressConfig) -> None:
+        """Receive the binder its units dial, and the address they should dial to reach it."""
 
     @abstractmethod
     async def create_unit(self) -> str:

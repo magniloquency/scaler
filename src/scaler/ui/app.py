@@ -1218,8 +1218,8 @@ class WebUIApp:
         """Full fleet size, for the "N of M" indicator next to a bounded worker list.
 
         Per-manager totals are authoritative when managers report in, but a deployment can run workers
-        without a registered worker manager (e.g. the native manager in fixed mode), leaving those totals
-        at zero -- in which case the workers this backend holds are the fleet it knows about.
+        that no registered worker manager claims, leaving those totals at zero -- in which case the
+        workers this backend holds are the fleet it knows about.
         """
         return max(self._total_workers, len(self._workers_data))
 
