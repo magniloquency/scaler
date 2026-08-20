@@ -532,10 +532,6 @@ Local-process worker manager (dynamic auto-scaling or fixed pre-spawned workers)
      - Required
      - Default
      - Description
-   * - ``--mode``
-     - No
-     - ``DYNAMIC``
-     - ``DYNAMIC`` or ``FIXED`` native worker manager mode.
    * - ``--worker-type``
      - No
      - Auto

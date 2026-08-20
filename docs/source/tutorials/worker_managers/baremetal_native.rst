@@ -178,8 +178,7 @@ Or use a TOML configuration file:
    [[worker_manager]]
    type = "baremetal_native"
    scheduler_address = "tcp://127.0.0.1:8516"
-   worker_manager_id = "NAT|fixed"
-   mode = "fixed"
+   worker_manager_id = "NAT|main"
    max_task_concurrency = 8
    logging_level = "INFO"
 

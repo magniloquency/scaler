@@ -29,7 +29,7 @@ from scaler.config.defaults import (
     DEFAULT_WORKER_DEATH_TIMEOUT,
     DEFAULT_WORKER_TIMEOUT_SECONDS,
 )
-from scaler.config.section.native_worker_manager import NativeWorkerManagerConfig, NativeWorkerManagerMode
+from scaler.config.section.native_worker_manager import NativeWorkerManagerConfig
 from scaler.config.section.scheduler import PolicyConfig
 from scaler.config.types.address import AddressConfig, SocketType
 from scaler.config.types.worker import WorkerCapabilities
@@ -125,7 +125,6 @@ class SchedulerClusterCombo:
                     # asks for in full, so the fleet settles at exactly n_workers.
                     max_task_concurrency=n_workers,
                 ),
-                mode=NativeWorkerManagerMode.DYNAMIC,
                 worker_config=WorkerConfig(
                     per_worker_capabilities=WorkerCapabilities(per_worker_capabilities or {}),
                     per_worker_task_queue_size=per_worker_task_queue_size,
