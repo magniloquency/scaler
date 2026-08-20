@@ -78,9 +78,10 @@ bool SchemaRegistry::init()
     REG_STRUCT(kModMessage, WorkerManagerHeartbeat);
     REG_STRUCT(kModMessage, WorkerManagerHeartbeatEcho);
     REG_STRUCT(kModMessage, WorkerManagerCommand);
+    REG_STRUCT(kModMessage, WorkerShutdown);
+    REG_STRUCT(kModMessage, WorkerManagerShutdown);
+    REG_STRUCT(kModMessage, WorkerManagerDisconnectNotification);
     REG_STRUCT(kModMessage, ObjectInstruction);
-    REG_STRUCT(kModMessage, DisconnectRequest);
-    REG_STRUCT(kModMessage, DisconnectResponse);
     REG_STRUCT(kModMessage, ClientDisconnect);
     REG_STRUCT(kModMessage, ClientShutdownResponse);
     REG_STRUCT(kModMessage, StateClient);
@@ -93,6 +94,7 @@ bool SchemaRegistry::init()
     REG_STRUCT(kModMessage, ProcessorInitialized);
     REG_STRUCT(kModMessage, InformationRequest);
     REG_STRUCT(kModMessage, InformationResponse);
+    REG_STRUCT(kModMessage, WorkerDisconnectNotification);
     REG_STRUCT(kModMessage, Message);
 
     REG_STRUCT(kModObjectStorage, ObjectRequestHeader);

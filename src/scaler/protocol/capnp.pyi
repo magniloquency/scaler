@@ -111,6 +111,7 @@ class WorkerStatus(CapnpStruct):
     lagUS: int
     lastS: int
     itl: str
+    draining: bool
     processorStatuses: Any
 
 class WorkerManagerStatus(CapnpStruct):
@@ -128,6 +129,10 @@ class ScalingManagerStatus(CapnpStruct):
         maxTaskConcurrency: int
         capabilities: str
         pendingWorkers: int
+        activeUnits: int
+        pendingUnits: int
+        drainingUnits: int
+        occupancy: int
 
     managedWorkers: Any
     workerManagerDetails: Any
@@ -215,6 +220,11 @@ class WorkerHeartbeat(BaseMessage):
     capabilities: Any
     workerManagerID: bytes
     memLimit: int
+    draining: bool
+
+class WorkerShutdown(BaseMessage): ...
+class WorkerManagerShutdown(BaseMessage): ...
+class WorkerManagerDisconnectNotification(BaseMessage): ...
 
 class WorkerHeartbeatEcho(BaseMessage):
     objectStorageAddress: ObjectStorageAddress
@@ -223,6 +233,11 @@ class WorkerManagerHeartbeat(BaseMessage):
     maxTaskConcurrency: int
     capabilities: Any
     workerManagerID: bytes
+    activeTaskConcurrency: int
+    occupancy: int
+    activeUnits: int
+    pendingUnits: int
+    drainingUnits: int
 
 class WorkerManagerHeartbeatEcho(BaseMessage): ...
 
@@ -243,11 +258,7 @@ class ObjectInstruction(BaseMessage):
         delete = 1
         clear = 2
 
-class DisconnectRequest(BaseMessage):
-    worker: WorkerID
-
-class DisconnectResponse(BaseMessage):
-    worker: WorkerID
+class WorkerDisconnectNotification(BaseMessage): ...
 
 class ClientDisconnect(BaseMessage):
     disconnectType: "ClientDisconnect.DisconnectType"
@@ -319,8 +330,6 @@ class Message(CapnpUnionStruct):
     clientHeartbeatEcho: ClientHeartbeatEcho
     workerHeartbeat: WorkerHeartbeat
     workerHeartbeatEcho: WorkerHeartbeatEcho
-    disconnectRequest: DisconnectRequest
-    disconnectResponse: DisconnectResponse
     stateClient: StateClient
     stateObject: StateObject
     stateBalanceAdvice: StateBalanceAdvice
@@ -336,6 +345,7 @@ class Message(CapnpUnionStruct):
     workerManagerHeartbeat: WorkerManagerHeartbeat
     workerManagerHeartbeatEcho: WorkerManagerHeartbeatEcho
     workerManagerCommand: WorkerManagerCommand
+    workerDisconnectNotification: WorkerDisconnectNotification
 
 class ObjectRequestHeader(CapnpStruct):
     MESSAGE_LENGTH: ClassVar[int]
