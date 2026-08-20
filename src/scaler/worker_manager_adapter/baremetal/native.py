@@ -60,6 +60,7 @@ class NativeWorkerProvisioner(DeclarativeWorkerProvisioner):
             stop_units=self.stop_units,
             active_unit_count=self.active_unit_count,
             max_unit_count=self._max_task_concurrency,
+            reconcile_interval_seconds=self._heartbeat_interval_seconds,
         )
 
     def _create_worker(self) -> Worker:
@@ -131,7 +132,34 @@ class NativeWorkerProvisioner(DeclarativeWorkerProvisioner):
         await self._capacity_coordinator.set_desired_unit_count(task_concurrency)
 
     def active_unit_count(self) -> int:
+        self._reap_dead_workers()
         return len(self._workers)
+
+    def _reap_dead_workers(self) -> None:
+        """Drop workers whose process has exited, whoever ended it.
+
+        Only stop_units used to remove an entry, so a worker that crashed, was killed, or was
+        asked to quit by the scheduler stayed in the list for ever. The count then read high,
+        and the coordinator provisioned that many workers too few from that moment on.
+        """
+        still_alive = []
+        for worker in self._workers:
+            if worker.is_alive():
+                still_alive.append(worker)
+                continue
+
+            worker.join()
+            if worker.exitcode == 0:
+                # A worker exits 0 only when it was told to stop, even though this manager was
+                # not the one that asked.
+                logger.info(f"native worker {worker.identity!r} shut down cleanly")
+            else:
+                logger.warning(
+                    f"native worker {worker.identity!r} exited unexpectedly "
+                    f"(exitcode={describe_exitcode(worker.exitcode)})"
+                )
+
+        self._workers = still_alive
 
     async def start_units(self, count: int) -> None:
         for _ in range(count):
@@ -153,8 +181,12 @@ class NativeWorkerProvisioner(DeclarativeWorkerProvisioner):
                 psutil.Process(worker.pid).terminate()
             else:
                 os.kill(worker.pid, signal.SIGINT)
-            self._workers.pop(0)
             logger.info(f"Stopped native worker {worker.identity!r}")
+
+        # Remove by identity. Indexed removal breaks as soon as _reap_dead_workers has rebuilt
+        # the list, because the entry at a given index is no longer the worker that was stopped.
+        stopped = {id(worker) for worker in to_stop}
+        self._workers = [worker for worker in self._workers if id(worker) not in stopped]
 
     async def terminate(self) -> None:
         self._capacity_coordinator.cancel()
