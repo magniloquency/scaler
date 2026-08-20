@@ -37,8 +37,15 @@ class VanillaHeartbeatManager(Looper, HeartbeatManager):
 
         self._start_timestamp_ns = 0
         self._latency_us = 0
+        self._draining = False
 
         self._object_storage_address: Optional[AddressConfig] = object_storage_address
+
+    def set_draining(self) -> None:
+        self._draining = True
+
+    def is_draining(self) -> bool:
+        return self._draining
 
     def register(
         self,
@@ -102,6 +109,7 @@ class VanillaHeartbeatManager(Looper, HeartbeatManager):
                 queuedTasks=self._worker_task_manager.get_queued_size() - num_suspended_processors,
                 latencyUS=self._latency_us,
                 taskLock=self._processor_manager.can_accept_task(),
+                draining=self._draining,
                 processors=[self.__get_processor_status_from_holder(processor) for processor in processors],
                 capabilities=dict_to_capabilities(self._capabilities),
                 workerManagerID=self._worker_manager_id,

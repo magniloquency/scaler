@@ -84,6 +84,7 @@ struct WorkerHeartbeat {
     capabilities @7 :List(CommonType.TaskCapability);
     workerManagerID @8 :Data;
     memLimit @9 :UInt64;  # memory limit in bytes the worker runs under (cgroup if set, else system total); 0 if unknown
+    draining @10 :Bool;  # worker is shutting down: it finishes its current task and takes no new one
 }
 
 struct WorkerHeartbeatEcho {

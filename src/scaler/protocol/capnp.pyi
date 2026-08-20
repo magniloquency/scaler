@@ -215,6 +215,7 @@ class WorkerHeartbeat(BaseMessage):
     capabilities: Any
     workerManagerID: bytes
     memLimit: int
+    draining: bool
 
 class WorkerHeartbeatEcho(BaseMessage):
     objectStorageAddress: ObjectStorageAddress

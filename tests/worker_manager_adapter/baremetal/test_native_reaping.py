@@ -1,7 +1,8 @@
 import unittest
-from typing import List, Optional
+from typing import List, Optional, cast
 from unittest.mock import patch
 
+from scaler.worker.worker import Worker
 from scaler.worker_manager_adapter.baremetal.native import NativeWorkerProvisioner
 
 
@@ -27,7 +28,7 @@ class _FakeWorker:
 
 def _make_provisioner(workers: List[_FakeWorker]) -> NativeWorkerProvisioner:
     provisioner = NativeWorkerProvisioner.__new__(NativeWorkerProvisioner)
-    provisioner._workers = list(workers)
+    provisioner._workers = cast(List[Worker], list(workers))
     return provisioner
 
 

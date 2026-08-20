@@ -2,7 +2,8 @@ import time
 import unittest
 from unittest.mock import AsyncMock, MagicMock
 
-from scaler.protocol.capnp import WorkerDisconnectNotification
+from scaler.config.types.address import AddressConfig
+from scaler.protocol.capnp import Resource, WorkerDisconnectNotification, WorkerHeartbeat
 from scaler.scheduler.controllers.mixins import ConfigController, PolicyController, TaskController
 from scaler.scheduler.controllers.worker_controller import VanillaWorkerController
 from scaler.utility.identifiers import TaskID, WorkerID
@@ -65,3 +66,68 @@ class TestVanillaWorkerControllerOnDisconnectNotification(unittest.IsolatedAsync
         await self.controller.on_disconnect_notification(_WORKER_ID, WorkerDisconnectNotification())
 
         self.task_controller.on_worker_disconnect.assert_awaited_once_with(_TASK_ID, _WORKER_ID)
+
+
+class TestVanillaWorkerControllerOnDrainingHeartbeat(unittest.IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        setup_logger()
+        logging_test_name(self)
+
+        config_controller = MagicMock(spec=ConfigController)
+        config_controller.get_config.return_value = AddressConfig.from_string("tcp://127.0.0.1:1234")
+
+        self.policy_controller = MagicMock(spec=PolicyController)
+        self.policy_controller.add_worker.return_value = False
+        self.policy_controller.mark_worker_draining.return_value = True
+        self.policy_controller.evacuate_worker.return_value = [_TASK_ID]
+
+        self.controller = VanillaWorkerController(config_controller, self.policy_controller)
+
+        self.binder = AsyncMock()
+        self.binder_monitor = AsyncMock()
+        self.task_controller = AsyncMock(spec=TaskController)
+        self.controller.register(self.binder, self.binder_monitor, self.task_controller)
+
+    @staticmethod
+    def _heartbeat(draining: bool) -> WorkerHeartbeat:
+        return WorkerHeartbeat(
+            agent=Resource(cpu=0, rss=0),
+            rssFree=0,
+            memLimit=0,
+            queueSize=10,
+            queuedTasks=0,
+            latencyUS=0,
+            taskLock=True,
+            draining=draining,
+            processors=[],
+            capabilities={},
+            workerManagerID=_MANAGER_ID,
+        )
+
+    async def test_a_draining_heartbeat_takes_the_worker_out_of_service(self) -> None:
+        await self.controller.on_heartbeat(_WORKER_ID, self._heartbeat(draining=True))
+        self.policy_controller.mark_worker_draining.assert_called_once_with(_WORKER_ID)
+
+    async def test_a_draining_heartbeat_reclaims_the_queued_tasks(self) -> None:
+        await self.controller.on_heartbeat(_WORKER_ID, self._heartbeat(draining=True))
+        self.task_controller.on_task_balance_cancel.assert_awaited_once_with(_TASK_ID)
+
+    async def test_an_ordinary_heartbeat_drains_nothing(self) -> None:
+        await self.controller.on_heartbeat(_WORKER_ID, self._heartbeat(draining=False))
+        self.policy_controller.mark_worker_draining.assert_not_called()
+        self.task_controller.on_task_balance_cancel.assert_not_awaited()
+
+    async def test_the_queue_is_reclaimed_only_once(self) -> None:
+        # A draining worker keeps reporting the flag in every later heartbeat. Only the first one
+        # does the work; mark_worker_draining returning False is what stops the repeat.
+        self.policy_controller.mark_worker_draining.side_effect = [True, False, False]
+
+        for _ in range(3):
+            await self.controller.on_heartbeat(_WORKER_ID, self._heartbeat(draining=True))
+
+        self.assertEqual(self.task_controller.on_task_balance_cancel.await_count, 1)
+
+    async def test_a_draining_worker_with_an_empty_queue_cancels_nothing(self) -> None:
+        self.policy_controller.evacuate_worker.return_value = []
+        await self.controller.on_heartbeat(_WORKER_ID, self._heartbeat(draining=True))
+        self.task_controller.on_task_balance_cancel.assert_not_awaited()
