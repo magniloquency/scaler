@@ -19,7 +19,6 @@ from scaler.protocol.capnp import (
 )
 from scaler.protocol.helpers import dict_to_capabilities
 from scaler.utility.event_loop import create_async_loop_routine, run_task_forever
-from scaler.utility.network_util import get_available_tcp_port
 from scaler.utility.signal_handler import install_async_shutdown_handler
 from scaler.worker_manager_adapter.common import extract_desired_count
 from scaler.worker_manager_adapter.unit import UnitState
@@ -81,12 +80,13 @@ class WorkerManagerRunner:
         # address is loopback TCP rather than a Unix socket, because this manager runs on
         # Windows too.
         self._binder_children = self._backend.create_async_binder(identity=self._ident, callback=self._on_receive_child)
-        # A local unit can dial a loopback port picked here. A remote unit cannot, so a manager
-        # whose units are remote resources must be told an address they can reach.
-        self._children_address = self._configured_children_address or AddressConfig(
-            SocketType.tcp, "127.0.0.1", get_available_tcp_port()
-        )
-        self._unit_provisioner.register(self._binder_children, self._children_address)
+
+        # A remote unit cannot reach a loopback port, so a manager whose units are remote resources
+        # must be told an address they can reach. A local unit dials whatever the bind settles on.
+        # Port 0 rather than a port chosen here: choosing one means probing for a free port and
+        # closing the probe socket, which leaves that port free for anyone else to take in the
+        # meantime, including a scheduler in the same process tree that has not bound yet.
+        self._children_address = self._configured_children_address or AddressConfig(SocketType.tcp, "127.0.0.1", 0)
 
     def run(self) -> None:
         self._loop = asyncio.new_event_loop()
@@ -141,6 +141,12 @@ class WorkerManagerRunner:
         self._register_signal()
 
         await self._binder_children.bind(self._children_address, security_config=self._security_config)
+
+        # The binder resolves port 0 to a real port, and that is the address units must dial.
+        bound_address = self._binder_children.address
+        if bound_address is not None:
+            self._children_address = bound_address
+        self._unit_provisioner.register(self._binder_children, self._children_address)
 
         loops = [
             create_async_loop_routine(self._connector_external.routine, 0),
