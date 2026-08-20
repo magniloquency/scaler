@@ -78,7 +78,7 @@ class VanillaWorkerController(WorkerController, Looper, Reporter):
             )
             await self._task_controller.on_worker_connect(worker_id)
 
-        if info.draining:
+        if getattr(info, "draining", False):
             await self.__drain_worker(worker_id)
 
         if worker_id not in self._worker_to_manager:
@@ -161,6 +161,7 @@ class VanillaWorkerController(WorkerController, Looper, Reporter):
             lagUS=info.latencyUS,
             lastS=last_s,
             itl=debug_info,
+            draining=getattr(info, "draining", False),
             processorStatuses=[
                 ProcessorStatus(
                     pid=p.pid,

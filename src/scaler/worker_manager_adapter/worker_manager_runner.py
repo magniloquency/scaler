@@ -22,6 +22,7 @@ from scaler.utility.event_loop import create_async_loop_routine, run_task_foreve
 from scaler.utility.network_util import get_available_tcp_port
 from scaler.utility.signal_handler import install_async_shutdown_handler
 from scaler.worker_manager_adapter.common import extract_desired_count
+from scaler.worker_manager_adapter.unit import UnitState
 from scaler.worker_manager_adapter.unit_controller import UnitController
 from scaler.worker_manager_adapter.unit_provisioner import UnitProvisioner
 
@@ -114,11 +115,20 @@ class WorkerManagerRunner:
         await self._task
 
     async def _send_heartbeat(self) -> None:
+        # One status call feeds both the heartbeat and the monitor, the way the scheduler's
+        # information controller collects its reporters.
+        status = self._unit_controller.get_status()
+
         await self._connector_external.send(
             WorkerManagerHeartbeat(
                 maxTaskConcurrency=self._max_provisioner_units * self._workers_per_provisioner_unit,
                 capabilities=dict_to_capabilities(self._capabilities),
                 workerManagerID=self._worker_manager_id,
+                activeTaskConcurrency=status["active_task_concurrency"],
+                occupancy=status["occupancy"],
+                activeUnits=status[UnitState.active.name],
+                pendingUnits=status[UnitState.pending.name],
+                drainingUnits=status[UnitState.draining.name] + status[UnitState.stopping.name],
             ),
             detached=True,
         )

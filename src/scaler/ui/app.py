@@ -894,6 +894,10 @@ class WebUIApp:
                 "max_task_concurrency": detail.maxTaskConcurrency,
                 "worker_count": manager_worker_counts.get(manager_id, 0),
                 "pending_workers": detail.pendingWorkers,
+                "active_units": detail.activeUnits,
+                "pending_units": detail.pendingUnits,
+                "draining_units": detail.drainingUnits,
+                "occupancy": detail.occupancy,
                 "capabilities": detail.capabilities,
             }
         # Mark newly-disappeared managers with a disconnect timestamp instead of
@@ -957,6 +961,7 @@ class WebUIApp:
                 "lag_us": worker_data.lagUS,
                 "last_s": worker_data.lastS,
                 "itl": worker_data.itl,
+                "draining": bool(worker_data.draining),
                 "last_seen": format_seconds(worker_data.lastS),
                 "capabilities": _display_capabilities(set(self._worker_capabilities.get(worker_name, {}).keys())),
             }

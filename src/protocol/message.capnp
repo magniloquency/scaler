@@ -95,6 +95,14 @@ struct WorkerManagerHeartbeat {
     maxTaskConcurrency @0 :UInt32;
     capabilities @1 :List(CommonType.TaskCapability);
     workerManagerID @2 :Data;
+
+    # State is level-triggered: the parent reads what this manager is actually running from every
+    # heartbeat, rather than tracking it through edges.
+    activeTaskConcurrency @3 :UInt32;
+    occupancy @4 :UInt32;
+    activeUnits @5 :UInt32;
+    pendingUnits @6 :UInt32;
+    drainingUnits @7 :UInt32;
 }
 
 struct WorkerManagerHeartbeatEcho {

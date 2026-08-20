@@ -111,6 +111,7 @@ class WorkerStatus(CapnpStruct):
     lagUS: int
     lastS: int
     itl: str
+    draining: bool
     processorStatuses: Any
 
 class WorkerManagerStatus(CapnpStruct):
@@ -128,6 +129,10 @@ class ScalingManagerStatus(CapnpStruct):
         maxTaskConcurrency: int
         capabilities: str
         pendingWorkers: int
+        activeUnits: int
+        pendingUnits: int
+        drainingUnits: int
+        occupancy: int
 
     managedWorkers: Any
     workerManagerDetails: Any
@@ -228,6 +233,11 @@ class WorkerManagerHeartbeat(BaseMessage):
     maxTaskConcurrency: int
     capabilities: Any
     workerManagerID: bytes
+    activeTaskConcurrency: int
+    occupancy: int
+    activeUnits: int
+    pendingUnits: int
+    drainingUnits: int
 
 class WorkerManagerHeartbeatEcho(BaseMessage): ...
 
