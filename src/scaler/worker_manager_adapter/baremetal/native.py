@@ -5,25 +5,28 @@ import os
 import signal
 import sys
 import uuid
-from typing import TYPE_CHECKING, List
+from typing import Dict, Set
 
 import psutil
 
 from scaler.config.section.native_worker_manager import NativeWorkerManagerConfig
 from scaler.utility.exitcode import describe_exitcode
 from scaler.worker.worker import Worker
-from scaler.worker_manager_adapter.capacity_coordinator import CapacityCoordinator
-from scaler.worker_manager_adapter.common import extract_desired_count
-from scaler.worker_manager_adapter.mixins import DeclarativeWorkerProvisioner
+from scaler.worker_manager_adapter.unit_provisioner import UNLIMITED_UNITS, UnitProvisioner
 from scaler.worker_manager_adapter.worker_manager_runner import WorkerManagerRunner
-
-if TYPE_CHECKING:
-    from scaler.protocol.capnp import WorkerManagerCommand
 
 logger = logging.getLogger(__name__)
 
+TASK_CONCURRENCY_PER_WORKER = 1
+SENTINEL_POLL_INTERVAL_SECONDS = 1.0
 
-class NativeWorkerProvisioner(DeclarativeWorkerProvisioner):
+
+class NativeWorkerProvisioner(UnitProvisioner):
+    """A unit is one worker process on this machine.
+
+    This is the only kind of manager that speaks to a worker, and it holds the only link to one.
+    """
+
     def __init__(self, config: NativeWorkerManagerConfig) -> None:
         self._worker_scheduler_address = config.worker_manager_config.effective_worker_scheduler_address
         self._object_storage_address = config.worker_manager_config.object_storage_address
@@ -46,18 +49,87 @@ class NativeWorkerProvisioner(DeclarativeWorkerProvisioner):
 
         self._worker_prefix = config.worker_type if config.worker_type is not None else "NAT"
 
-        self._workers: List[Worker] = []
-        self._capacity_coordinator = CapacityCoordinator(
-            start_units=self.start_units,
-            stop_units=self.stop_units,
-            active_unit_count=self.active_unit_count,
-            max_unit_count=self._max_task_concurrency,
-            reconcile_interval_seconds=self._heartbeat_interval_seconds,
-        )
+        self._workers: Dict[str, Worker] = {}
 
-    def _create_worker(self) -> Worker:
+    async def create_unit(self) -> str:
+        # The id exists before the process does, which is what removes the need for a registration
+        # handshake: the manager already knows which worker it is waiting for.
+        unit_id = f"{self._worker_prefix}|{uuid.uuid4().hex}"
+
+        worker = self._create_worker(unit_id)
+        worker.start()
+        self._workers[unit_id] = worker
+
+        logger.info(f"started native worker {unit_id!r}")
+        return unit_id
+
+    async def destroy_unit(self, unit_id: str) -> None:
+        worker = self._workers.pop(unit_id, None)
+        if worker is None:
+            return
+
+        if worker.is_alive():
+            self._signal_worker(worker)
+
+        logger.info(f"destroyed native worker {unit_id!r}")
+
+    async def shutdown_unit(self, unit_id: str) -> None:
+        worker = self._workers.get(unit_id)
+        if worker is None:
+            return
+
+        # A signal is what this manager has until the drain protocol gives it a message to send.
+        if worker.is_alive():
+            self._signal_worker(worker)
+
+    async def set_unit_task_concurrency(self, unit_id: str, task_concurrency: int) -> None:
+        """A worker process supplies one fixed task slot, so there is no smaller size to ask for."""
+
+    async def poll_units(self) -> Set[str]:
+        alive = set()
+        for unit_id, worker in list(self._workers.items()):
+            if worker.is_alive():
+                alive.add(unit_id)
+                continue
+
+            worker.join()
+            if worker.exitcode == 0:
+                # A worker exits 0 only when it was told to stop, even though this manager was not
+                # necessarily the one that asked.
+                logger.info(f"native worker {unit_id!r} shut down cleanly")
+            else:
+                logger.warning(
+                    f"native worker {unit_id!r} exited unexpectedly " f"(exitcode={describe_exitcode(worker.exitcode)})"
+                )
+            self._workers.pop(unit_id, None)
+
+        return alive
+
+    def max_units(self) -> int:
+        if self._max_task_concurrency == UNLIMITED_UNITS:
+            return UNLIMITED_UNITS
+        return self._max_task_concurrency
+
+    def task_concurrency_per_unit(self) -> int:
+        return TASK_CONCURRENCY_PER_WORKER
+
+    def poll_interval_seconds(self) -> float:
+        return SENTINEL_POLL_INTERVAL_SECONDS
+
+    @staticmethod
+    def _signal_worker(worker: Worker) -> None:
+        if sys.platform == "win32":
+            # Windows os.kill with SIGINT only works for processes attached to the same console.
+            # TerminateProcess is forceful: the worker's teardown (which sends
+            # WorkerDisconnectNotification before exiting) does not run, so the scheduler will
+            # time out the worker on its own.
+            psutil.Process(worker.pid).terminate()
+        else:
+            os.kill(worker.pid, signal.SIGINT)
+
+    def _create_worker(self, name: str) -> Worker:
         return Worker(
-            name=f"{self._worker_prefix}|{uuid.uuid4().hex}",
+            name=name,
             address=self._worker_scheduler_address,
             object_storage_address=self._object_storage_address,
             preload=self._preload,
@@ -76,73 +148,6 @@ class NativeWorkerProvisioner(DeclarativeWorkerProvisioner):
             worker_manager_id=self._worker_manager_id,
             security_config=self._security_config,
         )
-
-    async def set_desired_task_concurrency(
-        self, requests: List[WorkerManagerCommand.DesiredTaskConcurrencyRequest]
-    ) -> None:
-        task_concurrency = extract_desired_count(requests, self._capabilities)
-        await self._capacity_coordinator.set_desired_unit_count(task_concurrency)
-
-    def active_unit_count(self) -> int:
-        self._reap_dead_workers()
-        return len(self._workers)
-
-    def _reap_dead_workers(self) -> None:
-        """Drop workers whose process has exited, whoever ended it.
-
-        Only stop_units used to remove an entry, so a worker that crashed, was killed, or was
-        asked to quit by the scheduler stayed in the list for ever. The count then read high,
-        and the coordinator provisioned that many workers too few from that moment on.
-        """
-        still_alive = []
-        for worker in self._workers:
-            if worker.is_alive():
-                still_alive.append(worker)
-                continue
-
-            worker.join()
-            if worker.exitcode == 0:
-                # A worker exits 0 only when it was told to stop, even though this manager was
-                # not the one that asked.
-                logger.info(f"native worker {worker.identity!r} shut down cleanly")
-            else:
-                logger.warning(
-                    f"native worker {worker.identity!r} exited unexpectedly "
-                    f"(exitcode={describe_exitcode(worker.exitcode)})"
-                )
-
-        self._workers = still_alive
-
-    async def start_units(self, count: int) -> None:
-        for _ in range(count):
-            worker = self._create_worker()
-            worker.start()
-            self._workers.append(worker)
-            logger.info(f"Started native worker {worker.identity!r}")
-
-    async def stop_units(self, count: int) -> None:
-        to_stop = self._workers[:count]
-        if len(to_stop) < count:
-            logger.warning(f"Requested to stop {count} worker(s) but only {len(to_stop)} available.")
-        for worker in to_stop:
-            if sys.platform == "win32":
-                # Windows os.kill with SIGINT only works for processes attached to the same console.
-                # TerminateProcess is forceful: the worker's teardown (which sends
-                # WorkerDisconnectNotification before exiting) does not run, so the scheduler will
-                # time out the worker on its own.
-                psutil.Process(worker.pid).terminate()
-            else:
-                os.kill(worker.pid, signal.SIGINT)
-            logger.info(f"Stopped native worker {worker.identity!r}")
-
-        # Remove by identity. Indexed removal breaks as soon as _reap_dead_workers has rebuilt
-        # the list, because the entry at a given index is no longer the worker that was stopped.
-        stopped = {id(worker) for worker in to_stop}
-        self._workers = [worker for worker in self._workers if id(worker) not in stopped]
-
-    async def terminate(self) -> None:
-        self._capacity_coordinator.cancel()
-        await self.stop_units(len(self._workers))
 
 
 class NativeWorkerManager:

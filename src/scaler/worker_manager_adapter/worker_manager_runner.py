@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Dict, Optional
+from typing import Dict, Optional, Union
 
 from scaler.config.common.security import SecurityConfig
 from scaler.config.types.address import AddressConfig
@@ -12,9 +12,15 @@ from scaler.protocol.capnp import BaseMessage, WorkerManagerCommand, WorkerManag
 from scaler.protocol.helpers import dict_to_capabilities
 from scaler.utility.event_loop import create_async_loop_routine, run_task_forever
 from scaler.utility.signal_handler import install_async_shutdown_handler
+from scaler.worker_manager_adapter.common import extract_desired_count
 from scaler.worker_manager_adapter.mixins import DeclarativeWorkerProvisioner
+from scaler.worker_manager_adapter.unit_controller import UnitController
+from scaler.worker_manager_adapter.unit_provisioner import UnitProvisioner
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_DRAIN_TIMEOUT_SECONDS = 60.0
+DEFAULT_RESTART_BACKOFF_SECONDS = 1.0
 
 
 class WorkerManagerRunner:
@@ -26,10 +32,12 @@ class WorkerManagerRunner:
         capabilities: Dict[str, int],
         max_provisioner_units: int,
         worker_manager_id: bytes,
-        worker_provisioner: DeclarativeWorkerProvisioner,
+        worker_provisioner: Union[UnitProvisioner, DeclarativeWorkerProvisioner],
         io_threads: int = 1,
         workers_per_provisioner_unit: int = 1,
         security_config: Optional[SecurityConfig] = None,
+        drain_timeout_seconds: float = DEFAULT_DRAIN_TIMEOUT_SECONDS,
+        restart_backoff_seconds: float = DEFAULT_RESTART_BACKOFF_SECONDS,
     ) -> None:
         self._address = address
         self._name = name
@@ -37,10 +45,21 @@ class WorkerManagerRunner:
         self._capabilities = capabilities
         self._max_provisioner_units = max_provisioner_units
         self._worker_manager_id = worker_manager_id
-        self._worker_provisioner = worker_provisioner
         self._io_threads = io_threads
         self._workers_per_provisioner_unit = workers_per_provisioner_unit
         self._security_config = security_config
+
+        # UnitController owns the fleet for a converted provisioner. The others still drive
+        # themselves through set_desired_task_concurrency until they are converted too.
+        self._unit_provisioner: Optional[UnitProvisioner] = None
+        self._legacy_provisioner: Optional[DeclarativeWorkerProvisioner] = None
+        self._unit_controller: Optional[UnitController] = None
+
+        if isinstance(worker_provisioner, UnitProvisioner):
+            self._unit_provisioner = worker_provisioner
+            self._unit_controller = UnitController(worker_provisioner, drain_timeout_seconds, restart_backoff_seconds)
+        else:
+            self._legacy_provisioner = worker_provisioner
 
         self._backend: Optional[NetworkBackend] = None
         self._connector_external: Optional[AsyncConnector] = None
@@ -100,6 +119,15 @@ class WorkerManagerRunner:
             create_async_loop_routine(self._send_heartbeat, self._heartbeat_interval_seconds),
         ]
 
+        if self._unit_controller is not None and self._unit_provisioner is not None:
+            loops.append(
+                create_async_loop_routine(
+                    self._unit_controller.routine,
+                    self._unit_provisioner.poll_interval_seconds(),
+                    swallow_routine_errors=True,
+                )
+            )
+
         try:
             await asyncio.gather(*loops)
         except asyncio.CancelledError:
@@ -112,7 +140,10 @@ class WorkerManagerRunner:
         except Exception:
             logger.exception(f"{self._ident!r}: failed with unhandled exception")
 
-        await self._worker_provisioner.terminate()
+        if self._unit_controller is not None:
+            await self._unit_controller.drain_all()
+        elif self._legacy_provisioner is not None:
+            await self._legacy_provisioner.terminate()
 
     async def _on_receive_external(self, message: BaseMessage) -> None:
         try:
@@ -130,4 +161,11 @@ class WorkerManagerRunner:
         if requests is None:
             logger.warning("Unknown action: received WorkerManagerCommand with no recognized payload")
             return
-        await self._worker_provisioner.set_desired_task_concurrency(list(requests))
+
+        if self._unit_controller is None:
+            if self._legacy_provisioner is not None:
+                await self._legacy_provisioner.set_desired_task_concurrency(list(requests))
+            return
+
+        # The capability match happens once, here, rather than in every provisioner.
+        self._unit_controller.set_desired_task_concurrency(extract_desired_count(list(requests), self._capabilities))
