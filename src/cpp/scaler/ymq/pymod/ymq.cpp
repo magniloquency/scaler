@@ -210,12 +210,35 @@ static int YMQ_createType(
     return 0;
 }
 
-// Flips the "interpreter is shutting down" flag that AcquireGIL consults. Registered with atexit at import
-// time, so it runs after any atexit handler user code registers later (atexit is LIFO) but still before
-// CPython starts killing non-Python threads that ask for the GIL.
+// Flips the "interpreter is shutting down" flag that AcquireGIL consults, then waits for the threads that
+// were already past the check to finish with the GIL. Registered with atexit at import time, so it runs after
+// any atexit handler user code registers later (atexit is LIFO) but still before CPython starts killing
+// non-Python threads that ask for the GIL.
+//
+// The wait is what makes the flag reliable rather than merely likely. CPython arms the kill in
+// _PyRuntimeState_SetFinalizing(), immediately after _PyAtExit_Call() returns, so not returning from here is
+// exactly what keeps a thread sitting between the check and PyGILState_Ensure() from being killed.
 static PyObject* YMQ_onInterpreterShutdown(PyObject* Py_UNUSED(self), PyObject* Py_UNUSED(args))
 {
-    scaler::utility::pymod::interpreterIsShuttingDown().store(true, std::memory_order_release);
+    scaler::utility::pymod::interpreterIsShuttingDown().store(true, std::memory_order_seq_cst);
+
+    bool drained = false;
+
+    // The threads being waited on need the GIL to get out of the window, so it cannot be held here. Taking it
+    // back afterwards is safe: finalization has not been armed yet, and this is the finalizing thread anyway.
+    Py_BEGIN_ALLOW_THREADS;
+    drained = scaler::utility::pymod::awaitGILAcquirersDrained(scaler::utility::pymod::GIL_DRAIN_TIMEOUT);
+    Py_END_ALLOW_THREADS;
+
+    if (!drained) {
+        // Whoever is left is exposed to the race the drain exists to close, and there is nothing further to
+        // be done about it here. Report it rather than exiting quietly on a degraded path; the warnings
+        // machinery is still up at this point, and a raise from atexit would only be printed anyway.
+        PyErr_WarnEx(
+            PyExc_RuntimeWarning, "ymq: timed out waiting for io threads to release the GIL at interpreter exit", 1);
+        PyErr_Clear();
+    }
+
     Py_RETURN_NONE;
 }
 
