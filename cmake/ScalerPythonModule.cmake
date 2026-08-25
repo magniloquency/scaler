@@ -1,4 +1,4 @@
-# Directory holding this module, used to locate the linker version script below.
+# Directory holding this module, used to locate the linker symbol scripts below.
 set(SCALER_PYMOD_CMAKE_DIR "${CMAKE_CURRENT_LIST_DIR}")
 
 # Find Python3 development components for the active build interpreter.
@@ -80,18 +80,24 @@ function(scaler_add_python_module)
         VISIBILITY_INLINES_HIDDEN ON
     )
 
+    # CXX_VISIBILITY_PRESET misses the static archives and the OBJECT libraries linked into the module, so ymq
+    # and its OpenSSL stay exported and one module ends up driving another module's OpenSSL, corrupting its TLS
+    # state. The linker scripts apply to the final link and cover both.
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang"))
-        # Hide symbols from statically linked 3rd-party library (e.g. OpenSSL), avoiding conflicts when loading multiple
-        # modules from the same Python process.
         target_link_options(${PYMOD_TARGET} PRIVATE "LINKER:--exclude-libs,ALL")
-
-        # --exclude-libs and CXX_VISIBILITY_PRESET do not reach OBJECT libraries (ymq_objs, protocol_objs,
-        # object_storage_server_objs), whose objects are linked in directly rather than through an archive. The version
-        # script is applied to the final link, so it keeps every symbol but PyInit_<module> local.
         target_link_options(${PYMOD_TARGET} PRIVATE
             "LINKER:--version-script=${SCALER_PYMOD_CMAKE_DIR}/scaler_pymod_exports.map")
         set_property(TARGET ${PYMOD_TARGET} APPEND PROPERTY
             LINK_DEPENDS "${SCALER_PYMOD_CMAKE_DIR}/scaler_pymod_exports.map")
+    endif()
+
+    if(APPLE)
+        # A two-level namespace does not save us here: dyld coalesces weak definitions (inline functions and
+        # variables, templates, vtables) across images. Private externs are not coalesced.
+        target_link_options(${PYMOD_TARGET} PRIVATE
+            "LINKER:-exported_symbols_list,${SCALER_PYMOD_CMAKE_DIR}/scaler_pymod_exports.sym")
+        set_property(TARGET ${PYMOD_TARGET} APPEND PROPERTY
+            LINK_DEPENDS "${SCALER_PYMOD_CMAKE_DIR}/scaler_pymod_exports.sym")
     endif()
 
     if(WIN32)
