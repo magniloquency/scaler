@@ -4,37 +4,115 @@
 #include <Python.h>
 
 #include <atomic>
+#include <chrono>
+#include <semaphore>
+
+// If a non-Python thread tries to acquire the GIL while the interpreter is finalizing, Python kills it.
+// By making clever use of semaphores, atomics, and an atexit handler we can guard against this.
+//
+// The shutdown flag is set by the atexit handler to signal that the interpreter is shutting down.
+// The acquirersInFlight counter tracks how many threads are attempting to acquire the GIL,
+// the reason for this is to prevent a time-of-check-to-time-of-use bug.
+// Finally, there's a windowEmptySignal semaphore that is used to signal the atexit handler.
+// The atexit handler waits for the signal with a timeout, which prevents the interpreter from shutting
+// down until we know it is safe.
 
 namespace scaler {
 namespace utility {
 namespace pymod {
 
-// Set to true once the interpreter has begun shutting down.
-//
-// From that point on, CPython (up to and including 3.13) kills any non-Python thread that calls
-// PyGILState_Ensure(), by way of pthread_exit(). A forced unwind through our noexcept event loop frames aborts
-// the process; even where it does not, the thread disappears without completing whatever the Python side is
-// blocked on. The flag is set from an atexit callback, which runs before CPython arms that behaviour, so a
-// reader that sees `false` is guaranteed to be outside the dangerous window.
-inline std::atomic<bool>& interpreterIsShuttingDown() noexcept
+// Generous for the short callback and PyGILState_Release() a caught thread has left to run; anything slower is
+// a bug elsewhere and must not be allowed to wedge the exit.
+constexpr std::chrono::milliseconds GIL_DRAIN_TIMEOUT {1000};
+
+namespace detail {
+
+inline std::atomic<bool>& shutdownFlag() noexcept
 {
-    static std::atomic<bool> shuttingDown {false};
-    return shuttingDown;
+    static std::atomic<bool> flag {false};
+    return flag;
+}
+
+inline std::atomic<int>& acquirersInFlight() noexcept
+{
+    static std::atomic<int> inFlight {0};
+    return inFlight;
+}
+
+inline std::counting_semaphore<>& windowEmptySignal() noexcept
+{
+    static std::counting_semaphore<> signal {0};
+    return signal;
+}
+
+}  // namespace detail
+
+inline bool isInterpreterShuttingDown() noexcept
+{
+    return detail::shutdownFlag().load(std::memory_order_seq_cst);
+}
+
+inline void markInterpreterShuttingDown() noexcept
+{
+    detail::shutdownFlag().store(true, std::memory_order_seq_cst);
+}
+
+inline bool gilWindowIsEmpty() noexcept
+{
+    return detail::acquirersInFlight().load(std::memory_order_seq_cst) == 0;
+}
+
+inline void enterGILWindow() noexcept
+{
+    detail::acquirersInFlight().fetch_add(1, std::memory_order_seq_cst);
+}
+
+inline void leaveGILWindow() noexcept
+{
+    const bool wasLastOut = detail::acquirersInFlight().fetch_sub(1, std::memory_order_seq_cst) == 1;
+
+    if (wasLastOut && isInterpreterShuttingDown())
+        detail::windowEmptySignal().release();
+}
+
+// The caller must not hold the GIL: the threads being waited on need it to make progress. Returns false if
+// `timeout` elapsed before the window emptied.
+inline bool awaitGILWindowEmpty(std::chrono::milliseconds timeout) noexcept
+{
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+
+    while (!gilWindowIsEmpty()) {
+        if (!detail::windowEmptySignal().try_acquire_until(deadline))
+            return gilWindowIsEmpty();
+    }
+
+    return true;
 }
 
 // Acquires the GIL, unless the interpreter is shutting down, in which case acquiring it would kill the calling
 // thread. Callers must check `acquired()` before touching any Python state.
 class AcquireGIL {
 public:
-    AcquireGIL(): _acquired {!interpreterIsShuttingDown().load(std::memory_order_acquire)}
+    AcquireGIL()
     {
-        if (_acquired)
-            _state = PyGILState_Ensure();
+        enterGILWindow();
+
+        if (isInterpreterShuttingDown()) {
+            leaveGILWindow();
+            return;
+        }
+
+        _state    = PyGILState_Ensure();
+        _acquired = true;
     }
+
     ~AcquireGIL()
     {
-        if (_acquired)
-            PyGILState_Release(_state);
+        if (!_acquired)
+            return;
+
+        PyGILState_Release(_state);
+        leaveGILWindow();
     }
 
     AcquireGIL(const AcquireGIL&)            = delete;
@@ -48,7 +126,7 @@ public:
     }
 
 private:
-    bool _acquired;
+    bool _acquired {false};
     PyGILState_STATE _state {};
 };
 

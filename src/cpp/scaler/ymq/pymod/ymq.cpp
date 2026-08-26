@@ -1,6 +1,5 @@
 #include "scaler/ymq/pymod/ymq.h"
 
-#include <atomic>
 #include <initializer_list>
 #include <new>
 #include <string_view>
@@ -210,12 +209,28 @@ static int YMQ_createType(
     return 0;
 }
 
-// Flips the "interpreter is shutting down" flag that AcquireGIL consults. Registered with atexit at import
-// time, so it runs after any atexit handler user code registers later (atexit is LIFO) but still before
-// CPython starts killing non-Python threads that ask for the GIL.
+// Registered with atexit at import time, so it runs after any atexit handler user code registers later (atexit
+// is LIFO) but still before CPython starts killing non-Python threads that ask for the GIL. See gil.h for why
+// not returning from here is what protects them.
 static PyObject* YMQ_onInterpreterShutdown(PyObject* Py_UNUSED(self), PyObject* Py_UNUSED(args))
 {
-    scaler::utility::pymod::interpreterIsShuttingDown().store(true, std::memory_order_release);
+    scaler::utility::pymod::markInterpreterShuttingDown();
+
+    bool drained = false;
+
+    // The threads being waited on need the GIL to get out of the window, so it cannot be held here.
+    Py_BEGIN_ALLOW_THREADS;
+    drained = scaler::utility::pymod::awaitGILWindowEmpty(scaler::utility::pymod::GIL_DRAIN_TIMEOUT);
+    Py_END_ALLOW_THREADS;
+
+    if (!drained) {
+        // Report the degraded exit rather than passing over it in silence. PyErr_WarnEx can itself raise
+        // under -W error, hence the clear.
+        PyErr_WarnEx(
+            PyExc_RuntimeWarning, "ymq: timed out waiting for io threads to release the GIL at interpreter exit", 1);
+        PyErr_Clear();
+    }
+
     Py_RETURN_NONE;
 }
 
