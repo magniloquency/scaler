@@ -52,6 +52,10 @@ class TaskStateManager:
             logger.error(f"{task_id!r}: cannot commit {event_type.__name__} for non-existent state machine")
             return
 
+        if not state_machine.lock.locked():
+            logger.error(f"{task_id!r}: attempted to commit {event_type.__name__} for a state machine without holding its lock")
+            return
+
         source = state_machine.current_state()
         state_machine.commit(event_type.__name__, target)
 
