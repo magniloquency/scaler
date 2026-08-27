@@ -48,7 +48,7 @@ class VanillaTaskController(TaskController, Looper, Reporter):
         self._task_id_to_task: Dict[TaskID, Task] = dict()
         self._task_state_manager: TaskStateManager = TaskStateManager(debug=True)
 
-        self._unassigned: Deque[TaskID] = deque()  # type: ignore[misc]
+        self._unassigned: Deque[TaskID] = deque()
 
         self._state_functions: Dict[TaskState, Callable[[*Tuple[Any, ...]], Awaitable[None]]] = {
             TaskState.inactive: self.__state_inactive,
