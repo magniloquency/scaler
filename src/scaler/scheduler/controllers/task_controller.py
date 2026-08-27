@@ -118,7 +118,7 @@ class VanillaTaskController(TaskController, Looper, Reporter):
             if self._graph_controller.is_graph_subtask(task_cancel.taskId):
                 await self._graph_controller.on_graph_sub_task_cancel_confirm(task_cancel_confirm)
 
-            await self._binder.send(client_id, task_cancel_confirm)
+            await self._binder.send(client_id, task_cancel_confirm, detached=True)
             return
 
         if state_machine.current_state() == TaskState.inactive:
@@ -134,6 +134,12 @@ class VanillaTaskController(TaskController, Looper, Reporter):
         await self.__routing(task_cancel.taskId, TaskTransition.taskCancel, client=client_id, task_cancel=task_cancel)
 
     async def on_task_balance_cancel(self, task_id: TaskID):
+        state_machine = self._task_state_manager.get_state_machine(task_id)
+        if state_machine is None or state_machine.current_state() != TaskState.running:
+            # Only a running task can be balance-canceled. If a previous balance-cancel is still in flight
+            # (the task is already balanceCanceling because a saturated worker has not confirmed it) the
+            # balancer keeps re-advising the same move; skip it rather than re-issue an invalid transition.
+            return
         await self.__routing(task_id, TaskTransition.balanceTaskCancel)
 
     async def on_task_cancel_confirm(self, task_cancel_confirm: TaskCancelConfirm):
@@ -180,6 +186,17 @@ class VanillaTaskController(TaskController, Looper, Reporter):
         await self.__retry_unassignable()
 
     async def on_worker_disconnect(self, task_id: TaskID, worker_id: WorkerID):
+        state_machine = self._task_state_manager.get_state_machine(task_id)
+        if state_machine is not None and state_machine.current_state() == TaskState.canceling:
+            # canceling routes workerDisconnect to canceled, whose handler takes a TaskCancelConfirm, not
+            # the worker_id the workerDisconnecting targets take.
+            await self.__routing(
+                task_id,
+                TaskTransition.workerDisconnect,
+                task_cancel_confirm=TaskCancelConfirm(taskId=task_id, cancelConfirmType=TaskCancelConfirmType.canceled),
+            )
+            return
+
         await self.__routing(task_id, TaskTransition.workerDisconnect, worker_id=worker_id)
 
     def get_status(self) -> TaskManagerStatus:
@@ -220,7 +237,7 @@ class VanillaTaskController(TaskController, Looper, Reporter):
         assert state_machine.current_state() == TaskState.running
 
         task = self._task_id_to_task[task_id]
-        await self._binder.send(worker_id, task)
+        await self._binder.send(worker_id, task, detached=True)
         await self.__send_monitor(task_id, self._object_controller.get_object_name(task.funcObjectId))
 
     async def __state_canceling(
@@ -313,6 +330,7 @@ class VanillaTaskController(TaskController, Looper, Reporter):
     ):
         assert task_id == task_result.taskId
         assert state_machine.current_state() == TaskState.failedWorkerDied
+        logger.warning(f"{task_id!r}: reporting failedWorkerDied to the client")
         await self.__send_task_result_to_client(task_result)
 
     async def __send_task_cancel_to_worker(self, task_cancel: TaskCancel):
@@ -329,7 +347,7 @@ class VanillaTaskController(TaskController, Looper, Reporter):
             )
             return
 
-        await self._binder.send(worker, task_cancel)
+        await self._binder.send(worker, task_cancel, detached=True)
         await self.__send_monitor(task_cancel.taskId, b"")
 
     async def __send_task_result_to_client(self, task_result: TaskResult):
@@ -337,11 +355,11 @@ class VanillaTaskController(TaskController, Looper, Reporter):
         client = self._client_controller.on_task_finish(task_result.taskId)
         if client is None:
             logger.warning(
-                f"{task_result.taskId!r}: dropping task result, owning client is no longer registered "
-                f"(likely disconnected via client_timeout_seconds while the task was running)"
+                f"{task_result.taskId!r}: dropping {task_result.resultType} result, owning client is no longer "
+                f"registered (likely disconnected via client_timeout_seconds while the task was running)"
             )
         else:
-            await self._binder.send(client, task_result)
+            await self._binder.send(client, task_result, detached=True)
 
         func_name = b""
         task = self._task_id_to_task.get(task_result.taskId)
@@ -365,7 +383,7 @@ class VanillaTaskController(TaskController, Looper, Reporter):
                 f"longer registered"
             )
         else:
-            await self._binder.send(client, task_cancel_confirm)
+            await self._binder.send(client, task_cancel_confirm, detached=True)
         await self.__send_monitor(task_cancel_confirm.taskId, b"")
         self._task_state_manager.remove_state_machine(task_cancel_confirm.taskId)
         self._task_id_to_task.pop(task_cancel_confirm.taskId)
@@ -398,11 +416,11 @@ class VanillaTaskController(TaskController, Looper, Reporter):
 
         try:
             await self._state_functions[state_machine.current_state()](task_id, state_machine, **kwargs)  # noqa
-        except Exception as e:
-            logger.exception(
-                f"{task_id!r}: exception happened, transition: {transition} path: {state_machine.get_path()}"
-            )
-            raise e
+        except Exception:
+            # __routing runs from message handlers and from the balance and cleanup timer loops alike, so a
+            # bug in a state function would propagate through asyncio.gather and take the scheduler with it.
+            # Dropping the transition strands the task instead, which the client and worker timeouts surface.
+            logger.exception(f"{task_id!r}: transition {transition} failed, path: {state_machine.get_path()}")
 
     async def __retry_unassignable(self):
         futures = [

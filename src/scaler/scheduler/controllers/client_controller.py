@@ -57,6 +57,8 @@ class VanillaClientController(ClientController, Looper, Reporter):
         return client_id in self._client_last_seen
 
     def get_client_id(self, task_id: TaskID) -> Optional[ClientID]:
+        if not self._client_to_task_ids.has_value(task_id):
+            return None
         return self._client_to_task_ids.get_key(task_id)
 
     def on_task_begin(self, client_id: ClientID, task_id: TaskID):
@@ -86,6 +88,7 @@ class VanillaClientController(ClientController, Looper, Reporter):
                     scheme=object_storage_address.type.value,
                 )
             ),
+            detached=True,
         )
         if client_id not in self._client_last_seen:
             logger.info(f"{client_id!r} connected")
@@ -114,7 +117,7 @@ class VanillaClientController(ClientController, Looper, Reporter):
             logger.info(f"shutdown scheduler and all clusters as received signal from {client_id!r}")
             accepted = True
 
-        await self._binder.send(client_id, ClientShutdownResponse(accepted=accepted))
+        await self._binder.send(client_id, ClientShutdownResponse(accepted=accepted), detached=True)
 
         if self._config_controller.get_config("protected"):
             return

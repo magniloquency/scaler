@@ -280,7 +280,8 @@ class WorkerProcess(_SpawnProcess):  # type: ignore[valid-type, misc]
 
         try:
             await asyncio.wait_for(
-                self._connector_external.send(WorkerDisconnectNotification()), _NOTIFY_SCHEDULER_TIMEOUT_SECONDS
+                self._connector_external.send(WorkerDisconnectNotification(), detached=False),
+                _NOTIFY_SCHEDULER_TIMEOUT_SECONDS,
             )
         except ymq.YMQException as e:
             if e.code not in _EXPECTED_TEARDOWN_ERROR_CODES:

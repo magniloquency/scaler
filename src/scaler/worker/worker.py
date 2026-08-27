@@ -4,7 +4,7 @@ import multiprocessing
 import pathlib
 import sys
 import uuid
-from typing import Dict, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 from scaler.config.common.security import SecurityConfig
 from scaler.config.defaults import PROFILING_INTERVAL_SECONDS
@@ -296,7 +296,7 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
             return
 
         if isinstance(message, TaskLog):
-            await self._connector_external.send(message)
+            await self._connector_external.send(message, detached=True)
             return
 
         if isinstance(message, TaskResult):
@@ -331,14 +331,24 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
         # through, so some of these may never have been created.
         await self.__notify_scheduler_of_exit()
 
+        destroyables: List[Tuple[str, Callable[[], None]]] = []
         if self._connector_external is not None:
-            self._connector_external.destroy()
+            destroyables.append(("connector_external", self._connector_external.destroy))
         if self._processor_manager is not None:
-            self._processor_manager.destroy("quit")
+            destroyables.append(("processor_manager", lambda: self._processor_manager.destroy("quit")))
         if self._binder_internal is not None:
-            self._binder_internal.destroy()
+            destroyables.append(("binder_internal", self._binder_internal.destroy))
         if self._connector_storage is not None:
-            self._connector_storage.destroy()
+            destroyables.append(("connector_storage", self._connector_storage.destroy))
+
+        failed_to_destroy = []
+        for name, destroy in destroyables:
+            try:
+                destroy()
+            except Exception as e:
+                # One resource failing must not skip the ones after it, so keep going and report at the end.
+                logger.exception(f"{self.identity!r}: failed to destroy {name}: {e}")
+                failed_to_destroy.append(name)
 
         if (
             self._address_internal is not None
@@ -347,6 +357,9 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
         ):
             # Windows named pipes have no filesystem entry to remove; only unlink Unix-domain-socket paths.
             pathlib.Path(self._address_internal.host).unlink(missing_ok=True)
+
+        if failed_to_destroy:
+            raise RuntimeError(f"failed to destroy {', '.join(failed_to_destroy)}")
 
     def __register_signal(self):
         install_async_shutdown_handler(self._loop, self.__destroy)
@@ -360,7 +373,8 @@ class Worker(multiprocessing.get_context("spawn").Process):  # type: ignore
 
         try:
             await asyncio.wait_for(
-                self._connector_external.send(WorkerDisconnectNotification()), _NOTIFY_SCHEDULER_TIMEOUT_SECONDS
+                self._connector_external.send(WorkerDisconnectNotification(), detached=False),
+                _NOTIFY_SCHEDULER_TIMEOUT_SECONDS,
             )
         except ymq.YMQException as e:
             if e.code not in _EXPECTED_TEARDOWN_ERROR_CODES:
