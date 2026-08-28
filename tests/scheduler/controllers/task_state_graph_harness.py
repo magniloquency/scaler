@@ -2,14 +2,14 @@
 
 The controller is the whole task state machine: legality and destination both live in the action that handles an
 event. There is no table to read, so the tests derive the graph by driving every (state, event) pair through the real
-router and recording the state that comes back. See ``TASK_STATE_MACHINE_PROPOSAL.md`` section 7.
+router and recording the state that comes back.
 """
 
 import dataclasses
 from typing import List, Optional, Tuple
 from unittest.mock import create_autospec
 
-from scaler.io.mixins import AsyncBinder, AsyncPublisher
+from scaler.io.mixins import AsyncBinder, AsyncObjectStorageConnector, AsyncPublisher
 from scaler.protocol.capnp import (
     BaseMessage,
     StateTask,
@@ -58,9 +58,9 @@ LIVE_TASK_STATES = (TaskState.inactive, TaskState.running, TaskState.canceling, 
 REJECTED = "(rejected)"
 
 
-def make_task() -> Task:
+def make_task(task_id: TaskID = TASK_ID) -> Task:
     return Task(
-        taskId=TASK_ID,
+        taskId=task_id,
         source=CLIENT_ID,
         metadata=b"",
         funcObjectId=FUNCTION_OBJECT_ID,
@@ -155,12 +155,14 @@ class TaskControllerHarness:
     def __init__(self) -> None:
         self.binder = create_autospec(AsyncBinder, instance=True)
         self.binder_monitor = create_autospec(AsyncPublisher, instance=True)
+        self.connector_storage = create_autospec(AsyncObjectStorageConnector, instance=True)
         self.client_controller = create_autospec(ClientController, instance=True)
         self.object_controller = create_autospec(ObjectController, instance=True)
         self.worker_controller = create_autospec(WorkerController, instance=True)
         self.graph_controller = create_autospec(GraphTaskController, instance=True)
 
         self.client_controller.on_task_finish.return_value = CLIENT_ID
+        self.client_controller.get_client_id.return_value = CLIENT_ID
         self.object_controller.get_object_name.return_value = FUNCTION_NAME
         self.graph_controller.is_graph_subtask.return_value = False
 
@@ -172,6 +174,7 @@ class TaskControllerHarness:
         self.controller.register(
             binder=self.binder,
             binder_monitor=self.binder_monitor,
+            connector_storage=self.connector_storage,
             client_controller=self.client_controller,
             object_controller=self.object_controller,
             worker_controller=self.worker_controller,

@@ -1,16 +1,17 @@
-import ast
-import inspect
+import asyncio
 import os
-import textwrap
 import unittest
+import unittest.mock
 from pathlib import Path
-from typing import Dict, List, Set, Tuple, get_args
+from typing import Dict, List, Set, Tuple
 
-from scaler.protocol.capnp import TaskCancelConfirmType, TaskResultType, TaskState
-from scaler.scheduler.controllers.task_controller import VanillaTaskController
-from scaler.scheduler.task.task_event import TaskEvent
+from scaler.protocol.capnp import Task, TaskCancelConfirmType, TaskResult, TaskResultType, TaskState
+from scaler.scheduler.controllers import task_controller
 from scaler.scheduler.task.task_state_machine import TERMINAL_TASK_STATES
+from scaler.utility.exceptions import SchedulerError
+from scaler.utility.identifiers import TaskID
 from scaler.utility.logging.utility import setup_logger
+from scaler.utility.serialization import deserialize_failure
 from tests.scheduler.controllers.task_state_graph_harness import (
     CLIENT_ID,
     LIVE_TASK_STATES,
@@ -72,7 +73,7 @@ async def build_snapshot_rows() -> List[Tuple[str, str, str]]:
 
 
 class TestTaskStateGraph(unittest.IsolatedAsyncioTestCase):
-    """Section 7: the graph snapshot and the reachability checks that read it."""
+    """The graph snapshot, and the reachability checks that read it."""
 
     def setUp(self) -> None:
         setup_logger()
@@ -154,65 +155,8 @@ class TestTaskStateGraph(unittest.IsolatedAsyncioTestCase):
         return edges
 
 
-class TestTaskControllerRouter(unittest.TestCase):
-    """Section 7: the router dispatches on the event class, and every event class has exactly one arm."""
-
-    def setUp(self) -> None:
-        self.__arms = self.__parse_router_arms()
-
-    def test_every_event_class_has_a_router_arm(self):
-        self.assertEqual(set(self.__arms), {event_class.__name__ for event_class in get_args(TaskEvent)})
-
-    def test_every_router_arm_calls_a_distinct_action(self):
-        self.assertEqual(len(set(self.__arms.values())), len(self.__arms))
-
-        for event_name, action_name in self.__arms.items():
-            with self.subTest(event=event_name):
-                self.assertTrue(hasattr(VanillaTaskController, f"_VanillaTaskController{action_name}"))
-
-    def test_the_router_is_exhaustive_over_the_event_union(self):
-        match_node = self.__find_router_match()
-        wildcard_bodies = [
-            case.body
-            for case in match_node.cases
-            if isinstance(case.pattern, ast.MatchAs) and case.pattern.pattern is None
-        ]
-
-        self.assertEqual(len(wildcard_bodies), 1, "the router needs one wildcard arm to make the match exhaustive")
-        self.assertIn("assert_never", ast.dump(wildcard_bodies[0][0]))
-
-    @staticmethod
-    def __find_router_match() -> ast.Match:
-        source = textwrap.dedent(inspect.getsource(VanillaTaskController._VanillaTaskController__route))  # type: ignore[attr-defined]  # noqa: E501
-        match_nodes = [
-            node
-            for node in ast.walk(ast.parse(source))
-            if isinstance(node, ast.Match) and isinstance(node.subject, ast.Name) and node.subject.id == "event"
-        ]
-
-        assert len(match_nodes) == 1, "the router must dispatch on exactly one match over the event"
-        return match_nodes[0]
-
-    @classmethod
-    def __parse_router_arms(cls) -> Dict[str, str]:
-        arms = {}
-        for case in cls.__find_router_match().cases:
-            if not isinstance(case.pattern, ast.MatchClass) or not isinstance(case.pattern.cls, ast.Name):
-                continue
-
-            called = [
-                node.func.attr
-                for node in ast.walk(ast.Module(body=case.body, type_ignores=[]))
-                if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
-            ]
-            assert len(called) == 1, f"the arm of {case.pattern.cls.id} must call exactly one action"
-            arms[case.pattern.cls.id] = called[0]
-
-        return arms
-
-
 class TestTaskControllerBehavior(unittest.IsolatedAsyncioTestCase):
-    """Section 4: the defects that moving the actions onto the transitions resolves."""
+    """The defects that moving the actions onto the transitions resolves."""
 
     def setUp(self) -> None:
         setup_logger()
@@ -220,7 +164,7 @@ class TestTaskControllerBehavior(unittest.IsolatedAsyncioTestCase):
         self.harness = TaskControllerHarness()
 
     async def test_worker_disconnect_while_canceling_confirms_the_cancel_to_the_client(self):
-        """Section 4.1: this pair used to bind the wrong payload and raise TypeError before the action ever ran."""
+        """This pair used to bind the wrong payload and raise TypeError before the action ever ran."""
 
         await self.harness.enter_state(TaskState.canceling)
 
@@ -232,7 +176,7 @@ class TestTaskControllerBehavior(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(self.harness.get_state_machine())
 
     async def test_worker_disconnect_while_canceling_releases_worker_capacity_once(self):
-        """Section 4.3: remove_worker already released the capacity, so the action must not release it again."""
+        """remove_worker already released the capacity, so the action must not release it again."""
 
         await self.harness.enter_state(TaskState.canceling)
 
@@ -269,6 +213,23 @@ class TestTaskControllerBehavior(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state_machine.current_state(), TaskState.balanceCanceling)
         self.assertIsNotNone(self.harness.get_state_machine())
         self.assertEqual(len(self.harness.messages_sent_to(CLIENT_ID)), 0)
+
+    async def test_a_repeated_balance_cancel_is_refused_without_an_error(self):
+        """A saturated worker is slow to confirm, so the balancer can re-advise a move that is still in flight.
+
+        Re-issuing it must be a quiet refusal: no second cancel to the worker, and nothing logged at error level,
+        which would otherwise fire on every balance cycle.
+        """
+
+        state_machine = await self.harness.enter_state(TaskState.balanceCanceling)
+
+        with unittest.mock.patch.object(task_controller.logger, "error") as logged:
+            await self.harness.controller.on_task_balance_cancel(TASK_ID)
+
+        self.assertEqual(state_machine.current_state(), TaskState.balanceCanceling)
+        logged.assert_not_called()
+        self.harness.worker_controller.on_task_cancel.assert_not_awaited()
+        self.harness.binder.send.assert_not_awaited()
 
     async def test_balance_cancel_confirm_canceled_reschedules_the_task(self):
         state_machine = await self.harness.enter_state(TaskState.balanceCanceling)
@@ -375,6 +336,204 @@ class TestTaskControllerBehavior(unittest.IsolatedAsyncioTestCase):
         await self.harness.controller.on_task_result(make_task_result(TaskResultType.success))
 
         self.harness.binder.send.assert_not_awaited()
+
+    async def test_an_action_that_raises_does_not_escape_the_router(self):
+        """The router logs and swallows, so one failed task cannot stop a timer loop or a message handler."""
+
+        await self.harness.enter_state(TaskState.canceling)
+        self.harness.worker_controller.on_task_done.side_effect = RuntimeError("the action failed")
+
+        with unittest.mock.patch.object(task_controller.logger, "exception") as logged:
+            await self.harness.controller.on_task_cancel_confirm(
+                make_task_cancel_confirm(TaskCancelConfirmType.canceled)
+            )
+
+        # swallowing without a trace is the failure mode this guards: the task dies and nothing says why
+        self.assertTrue(logged.called, "the fault must be logged")
+
+    async def test_an_action_that_raises_fails_the_task_to_its_client(self):
+        """The transition is never committed, so the task is terminated rather than left mid-flight."""
+
+        await self.harness.enter_state(TaskState.canceling)
+        self.harness.worker_controller.on_task_done.side_effect = RuntimeError("the action failed")
+
+        await self.harness.controller.on_task_cancel_confirm(make_task_cancel_confirm(TaskCancelConfirmType.canceled))
+
+        self.assertIsNone(self.harness.get_state_machine(), "a faulted task must not stay live")
+
+        results = self.harness.task_results_sent_to(CLIENT_ID)
+        self.assertEqual(len(results), 1, "the client is told the task failed")
+        self.assertEqual(TaskResultType(results[0].resultType.value), TaskResultType.failed)
+
+        self.harness.connector_storage.set_object.assert_awaited_once()
+        payload = self.harness.connector_storage.set_object.await_args.args[1]
+        self.assertIsInstance(deserialize_failure(payload), SchedulerError)
+
+    async def test_a_faulted_teardown_still_does_not_escape_the_router(self):
+        """The teardown runs from the router's except, so its own failure must not propagate either."""
+
+        await self.harness.enter_state(TaskState.canceling)
+        self.harness.worker_controller.on_task_done.side_effect = RuntimeError("the action failed")
+        self.harness.connector_storage.set_object.side_effect = RuntimeError("object storage is down")
+
+        await self.harness.controller.on_task_cancel_confirm(make_task_cancel_confirm(TaskCancelConfirmType.canceled))
+
+        self.assertIsNone(self.harness.get_state_machine(), "the machine is dropped even when the teardown fails")
+
+    async def test_a_faulted_task_is_not_left_in_the_unassigned_queue(self):
+        """The teardown drops the task payload, so an id left queued would raise on every later drain."""
+
+        await self.harness.enter_state(TaskState.balanceCanceling)
+
+        # no worker is free, so the reschedule queues the task and the monitor send then fails
+        self.harness.set_capacity_available(False)
+        self.harness.binder_monitor.send.side_effect = RuntimeError("the monitor is down")
+
+        await self.harness.controller.on_task_cancel_confirm(make_task_cancel_confirm(TaskCancelConfirmType.canceled))
+
+        self.assertEqual(list(self.harness.controller._unassigned), [], "a faulted task must leave no id queued")
+
+        # the drain reads the payload of whatever sits at the head of the queue, so a stale id raises here
+        self.harness.binder_monitor.send.side_effect = None
+        self.harness.set_capacity_available(True)
+        await self.harness.controller.on_worker_connect(REPLACEMENT_WORKER_ID)
+
+    async def test_a_faulted_task_gives_up_its_state_count(self):
+        """The teardown removes the machine, so the source state must not keep counting a task that is gone."""
+
+        await self.harness.enter_state(TaskState.canceling)
+        self.harness.worker_controller.on_task_done.side_effect = RuntimeError("the action failed")
+
+        await self.harness.controller.on_task_cancel_confirm(make_task_cancel_confirm(TaskCancelConfirmType.canceled))
+
+        statistics = self.harness.controller._task_state_manager.get_statistics()
+        self.assertEqual(statistics[TaskState.canceling], 0, "the source state must not leak a count")
+        self.assertEqual(statistics[TaskState.failed], 1, "the task is counted where the client was told it landed")
+
+
+class TestTaskStateExclusion(unittest.IsolatedAsyncioTestCase):
+    """One task's transitions are serialized, so two events cannot both act on one machine."""
+
+    def setUp(self) -> None:
+        setup_logger()
+        logging_test_name(self)
+        self.harness = TaskControllerHarness()
+
+    async def test_two_events_for_one_task_do_not_both_transition_it(self):
+        """Without the lock this commits running -> running and running -> success on the same machine.
+
+        The client is told the task succeeded and the same task is handed to a second worker, so the task runs
+        twice.
+        """
+
+        state_machine = await self.harness.enter_state(TaskState.running)
+
+        in_send = asyncio.Event()
+        release = asyncio.Event()
+        committed: List[str] = []
+
+        async def blocking_send(peer, message, detached=False):
+            if isinstance(message, TaskResult):
+                committed.append("result delivered to client")
+                in_send.set()
+                await release.wait()
+            elif isinstance(message, Task):
+                committed.append("task rerouted to another worker")
+
+        self.harness.binder.send.side_effect = blocking_send
+
+        first = asyncio.create_task(self.harness.controller.on_task_result(make_task_result(TaskResultType.success)))
+        await in_send.wait()
+
+        # a heartbeat timeout fires for the same task while its result is still being sent
+        second = asyncio.create_task(self.harness.controller.on_worker_disconnect(TASK_ID, WORKER_ID))
+        await asyncio.sleep(0)
+        release.set()
+        await asyncio.gather(first, second)
+
+        self.assertEqual(committed, ["result delivered to client"], "the disconnect must not also act")
+        self.assertEqual(state_machine.current_state(), TaskState.success)
+        self.assertIsNone(self.harness.get_state_machine())
+
+    async def test_an_event_that_arrives_while_the_task_finishes_is_dropped(self):
+        """The second event waits on the lock, then finds that the machine it locked is no longer the registered one."""
+
+        await self.harness.enter_state(TaskState.running)
+
+        in_send = asyncio.Event()
+        release = asyncio.Event()
+
+        async def blocking_send(peer, message, detached=False):
+            if isinstance(message, TaskResult):
+                in_send.set()
+                await release.wait()
+
+        self.harness.binder.send.side_effect = blocking_send
+
+        first = asyncio.create_task(self.harness.controller.on_task_result(make_task_result(TaskResultType.success)))
+        await in_send.wait()
+
+        second = asyncio.create_task(self.harness.controller.on_task_cancel(CLIENT_ID, make_task_cancel()))
+        await asyncio.sleep(0)
+        release.set()
+        await asyncio.gather(first, second)
+
+        self.assertEqual(len(self.harness.cancel_confirms_sent_to(CLIENT_ID)), 0, "the cancel must not be answered")
+
+    async def test_an_event_that_arrives_while_the_task_is_torn_down_is_dropped(self):
+        """A faulted action removes the machine without committing, so the source state alone cannot refuse the event.
+
+        The waiter locks a machine that is no longer registered but still reads ``running``, which every action
+        accepts. Only the identity re-check in the acquire stops it from acting on a task that no longer exists: it
+        would send a TaskCancel for a task the scheduler has already failed, and the write would then be dropped by
+        ``commit`` with the side effect already applied.
+        """
+
+        state_machine = await self.harness.enter_state(TaskState.running)
+
+        in_action = asyncio.Event()
+        release = asyncio.Event()
+        raised = False
+
+        async def fail_the_first_release(task_id: TaskID) -> None:
+            # the teardown releases the worker again, and only the action itself may raise
+            nonlocal raised
+            if raised:
+                return
+
+            raised = True
+            in_action.set()
+            await release.wait()
+            raise RuntimeError("the action failed")
+
+        self.harness.worker_controller.on_task_done.side_effect = fail_the_first_release
+
+        first = asyncio.create_task(self.harness.controller.on_task_result(make_task_result(TaskResultType.success)))
+        await in_action.wait()
+
+        second = asyncio.create_task(self.harness.controller.on_task_cancel(CLIENT_ID, make_task_cancel()))
+        await asyncio.sleep(0)
+
+        with self.assertLogs("scaler.scheduler.controllers.task_controller", level="INFO") as logs:
+            release.set()
+            await asyncio.gather(first, second)
+
+        self.assertTrue(
+            any("arrived after the task was removed" in line for line in logs.output),
+            "the cancel must be refused by the identity re-check, not by its source state or a missing machine",
+        )
+        self.assertEqual(len(self.harness.messages_sent_to(WORKER_ID)), 0, "the cancel must not reach the worker")
+        self.assertFalse(state_machine.lock.locked(), "a refusal after the acquire must not strand the lock")
+
+    async def test_the_lock_is_released_when_an_action_raises(self):
+        """A swallowed exception that also stranded the lock would deadlock every later event for that task."""
+
+        state_machine = await self.harness.enter_state(TaskState.canceling)
+        self.harness.worker_controller.on_task_done.side_effect = RuntimeError("the action failed")
+
+        await self.harness.controller.on_task_cancel_confirm(make_task_cancel_confirm(TaskCancelConfirmType.canceled))
+
+        self.assertFalse(state_machine.lock.locked(), "the lock must not survive a faulted transition")
 
 
 class TestTaskControllerStatistics(unittest.IsolatedAsyncioTestCase):

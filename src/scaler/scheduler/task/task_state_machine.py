@@ -1,3 +1,4 @@
+import asyncio
 from typing import List, Tuple
 
 from scaler.protocol.capnp import TaskState
@@ -25,8 +26,17 @@ class TaskStateMachine:
 
         self._state: TaskState = TaskState.inactive
 
+        # serializes the transitions of this task. the router holds it for the whole transition, so that a second event
+        # cannot read a source state that the first has already decided to leave. it lives here rather than in a table
+        # owned by the manager so that it is created and destroyed with the machine and cannot leak
+        self._lock = asyncio.Lock()
+
     def __repr__(self) -> str:
         return f"TaskStateMachine(state={self._state.name})"
+
+    @property
+    def lock(self) -> asyncio.Lock:
+        return self._lock
 
     def get_path(self) -> str:
         return (

@@ -28,21 +28,34 @@ class TaskStateManager:
         return state_machine
 
     def remove_state_machine(self, task_id: TaskID) -> None:
-        self._task_id_to_state_machine.pop(task_id, None)
+        """Remove a machine. The caller must hold its lock, or the machine could vanish under a transition that
+        already checked for it. This logs rather than asserts, since asserts are stripped under -O.
+        """
+
+        state_machine = self._task_id_to_state_machine.pop(task_id, None)
+        if state_machine is not None and not state_machine.lock.locked():
+            logger.error(f"{task_id!r}: state machine removed without its lock held")
 
     def get_state_machine(self, task_id: TaskID) -> Optional[TaskStateMachine]:
         return self._task_id_to_state_machine.get(task_id, None)
 
     def commit(self, task_id: TaskID, event_type: Type[TaskEvent], target: TaskState) -> None:
-        """Write the state that the action of ``event_type`` returned.
+        """Write the state that the action of ``event_type`` returned, or the state a faulted task is torn down into.
 
-        This is the only place that moves a task from one state to another. The action already ran, so this cannot
-        fail: an event that the source state does not accept never reaches this point.
+        This is the only place that moves a task from one state to another, so it is also the only place the state
+        counts stay balanced. The action already ran, so this cannot fail: an event that the source state does not
+        accept never reaches this point.
         """
 
         state_machine = self._task_id_to_state_machine.get(task_id, None)
         if state_machine is None:
-            logger.error(f"{task_id!r}: cannot commit {event_type.__name__} for non-existed state machine")
+            logger.error(f"{task_id!r}: cannot commit {event_type.__name__} for non-existent state machine")
+            return
+
+        if not state_machine.lock.locked():
+            logger.error(
+                f"{task_id!r}: attempted to commit {event_type.__name__} for a state machine without holding its lock"
+            )
             return
 
         source = state_machine.current_state()

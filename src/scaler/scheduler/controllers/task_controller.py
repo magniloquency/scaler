@@ -1,11 +1,13 @@
 import asyncio
+import contextlib
 import logging
 import sys
 from collections import deque
-from typing import Deque, Dict, List, Literal, Optional, Tuple
+from typing import AsyncGenerator, Deque, Dict, List, Literal, Optional, Tuple
 
-from scaler.io.mixins import AsyncBinder, AsyncPublisher
+from scaler.io.mixins import AsyncBinder, AsyncObjectStorageConnector, AsyncPublisher
 from scaler.protocol.capnp import (
+    ObjectMetadata,
     StateTask,
     Task,
     TaskCancel,
@@ -36,10 +38,12 @@ from scaler.scheduler.task.task_event import (
     TaskResultReceived,
     WorkerDisconnected,
 )
-from scaler.scheduler.task.task_state_machine import TERMINAL_TASK_STATES
+from scaler.scheduler.task.task_state_machine import TERMINAL_TASK_STATES, TaskStateMachine
 from scaler.scheduler.task.task_state_manager import TaskStateManager
-from scaler.utility.identifiers import ClientID, TaskID, WorkerID
+from scaler.utility.exceptions import SchedulerError
+from scaler.utility.identifiers import ClientID, ObjectID, TaskID, WorkerID
 from scaler.utility.mixins import Looper, Reporter
+from scaler.utility.serialization import serialize_failure
 
 if sys.version_info >= (3, 11):
     from typing import assert_never
@@ -47,6 +51,12 @@ else:
     from typing_extensions import assert_never
 
 logger = logging.getLogger(__name__)
+
+# A transition holds its machine's lock for a few sends and no I/O waits, so this is not a tuning knob balancing
+# throughput against latency: it is the point past which the only remaining explanation is a deadlock. It sits well
+# below the 60 second worker and client timeouts, so a stuck lock reports itself as a specific error naming the task
+# rather than resurfacing later as a worker or client being declared dead. If it ever fires, fix the cycle.
+LOCK_ACQUIRE_TIMEOUT_SECONDS = 10
 
 # The state that each action can produce. mypy checks every return against these, so the behavior of an action cannot
 # widen without its annotation widening too.
@@ -78,6 +88,7 @@ class VanillaTaskController(TaskController, Looper, Reporter):
         self._config_controller = config_controller
         self._binder: Optional[AsyncBinder] = None
         self._binder_monitor: Optional[AsyncPublisher] = None
+        self._connector_storage: Optional[AsyncObjectStorageConnector] = None
 
         self._client_controller: Optional[ClientController] = None
         self._object_controller: Optional[ObjectController] = None
@@ -94,6 +105,7 @@ class VanillaTaskController(TaskController, Looper, Reporter):
         self,
         binder: AsyncBinder,
         binder_monitor: AsyncPublisher,
+        connector_storage: AsyncObjectStorageConnector,
         client_controller: ClientController,
         object_controller: ObjectController,
         worker_controller: WorkerController,
@@ -101,6 +113,7 @@ class VanillaTaskController(TaskController, Looper, Reporter):
     ):
         self._binder = binder
         self._binder_monitor = binder_monitor
+        self._connector_storage = connector_storage
 
         self._client_controller = client_controller
         self._object_controller = object_controller
@@ -193,57 +206,161 @@ class VanillaTaskController(TaskController, Looper, Reporter):
             ]
         )
 
-    async def __route(self, event: TaskEvent) -> None:
-        """Run the action of an event and write the state that it returns.
+    async def __acquire_machine(self, event: TaskEvent) -> Optional[TaskStateMachine]:
+        """Take the lock of the machine for an event, or return None with the reason logged.
 
-        The action decides both the legality of the event and its destination, so no caller has to predict either one.
-        A ``None`` target means the source state does not accept the event, which is what a racing duplicate needs.
+        Returning None always means no lock is held, including for the refusal that can only be decided after the
+        acquire, which releases before it returns. The caller therefore owns the lock if and only if this returns a
+        machine.
         """
 
         state_machine = self._task_state_manager.get_state_machine(event.task_id)
         if state_machine is None:
-            logger.error(f"{event.task_id!r}: received {type(event).__name__} for non-existed state machine")
-            return
+            logger.error(f"{event.task_id!r}: received {type(event).__name__} for non-existent state machine")
+            return None
 
-        source = state_machine.current_state()
-
-        target: Optional[TaskState]
         try:
-            match event:
-                case HasCapacity():
-                    target = await self.__on_has_capacity(source, event)
-                case TaskCancelRequested():
-                    target = await self.__on_task_cancel(source, event)
-                case BalanceCancelRequested():
-                    target = await self.__on_balance_task_cancel(source, event)
-                case TaskResultReceived():
-                    target = await self.__on_task_result(source, event)
-                case CancelConfirmCanceled():
-                    target = await self.__on_cancel_confirm_canceled(source, event)
-                case CancelConfirmFailed():
-                    target = await self.__on_cancel_confirm_failed(source, event)
-                case CancelConfirmNotFound():
-                    target = await self.__on_cancel_confirm_not_found(source, event)
-                case WorkerDisconnected():
-                    target = await self.__on_worker_disconnect(source, event)
-                case _:
-                    assert_never(event)
-        except Exception as e:
-            logger.exception(
-                f"{event.task_id!r}: exception happened, event: {type(event).__name__} from {source.name}, "
-                f"path: {state_machine.get_path()}"
+            await asyncio.wait_for(state_machine.lock.acquire(), timeout=LOCK_ACQUIRE_TIMEOUT_SECONDS)
+        except asyncio.TimeoutError:
+            logger.error(
+                f"{event.task_id!r}: lock not acquired in {LOCK_ACQUIRE_TIMEOUT_SECONDS}s, dropping "
+                f"{type(event).__name__}, path: {state_machine.get_path()}"
             )
-            raise e
+            return None
 
-        if target is None:
-            logger.info(f"{event.task_id!r}: {type(event).__name__} is not permitted from {source.name}")
+        # it's possible that the state machine for this task was changed (or removed) by the last lock-holder
+        # we do one more check just to be sure
+        if self._task_state_manager.get_state_machine(event.task_id) is not state_machine:
+            logger.info(f"{event.task_id!r}: {type(event).__name__} arrived after the task was removed")
+            state_machine.lock.release()
+            return None
+
+        return state_machine
+
+    @contextlib.asynccontextmanager
+    async def __locked_machine(self, event: TaskEvent) -> AsyncGenerator[Optional[TaskStateMachine], None]:
+        """Yield the machine for an event with its lock held, or None if the event cannot be applied."""
+
+        state_machine = await self.__acquire_machine(event)
+        try:
+            yield state_machine
+        finally:
+            if state_machine is not None:
+                state_machine.lock.release()
+
+    async def __route(self, event: TaskEvent) -> None:
+        """Run the action of an event and transition the state.
+        The machine's lock is held for the whole transition.
+        """
+
+        async with self.__locked_machine(event) as state_machine:
+            if state_machine is None:
+                return
+
+            source = state_machine.current_state()  # read inside the lock, never before it
+
+            target: Optional[TaskState]
+            try:
+                match event:
+                    case HasCapacity():
+                        target = await self.__on_has_capacity(source, event)
+                    case TaskCancelRequested():
+                        target = await self.__on_task_cancel(source, event)
+                    case BalanceCancelRequested():
+                        target = await self.__on_balance_task_cancel(source, event)
+                    case TaskResultReceived():
+                        target = await self.__on_task_result(source, event)
+                    case CancelConfirmCanceled():
+                        target = await self.__on_cancel_confirm_canceled(source, event)
+                    case CancelConfirmFailed():
+                        target = await self.__on_cancel_confirm_failed(source, event)
+                    case CancelConfirmNotFound():
+                        target = await self.__on_cancel_confirm_not_found(source, event)
+                    case WorkerDisconnected():
+                        target = await self.__on_worker_disconnect(source, event)
+                    case _:
+                        assert_never(event)
+            except Exception:
+                # the exception is not re-raised: __route runs from both timer loops and message handlers, and an
+                # exception that escapes either one propagates through asyncio.gather and stops the scheduler
+                logger.exception(
+                    f"{event.task_id!r}: exception happened, event: {type(event).__name__} from {source.name}, "
+                    f"path: {state_machine.get_path()}"
+                )
+                await self.__fail_task_to_client(event, source)
+                return
+
+            if target is None:
+                logger.info(f"{event.task_id!r}: {type(event).__name__} is not permitted from {source.name}")
+                return
+
+            self._task_state_manager.commit(event.task_id, type(event), target)
+
+            if target in TERMINAL_TASK_STATES:
+                self._task_state_manager.remove_state_machine(event.task_id)
+                self._task_id_to_task.pop(event.task_id, None)
+
+    async def __fail_task_to_client(self, event: TaskEvent, source: TaskState) -> None:
+        """Fail a task whose state machine action raised.
+        Sends the client a failed result carrying a SchedulerError.
+        This must not raise, it runs from the ``except`` of the router.
+        """
+
+        try:
+            await self.__report_fault_to_client(event, source)
+        except Exception:
+            logger.exception(f"{event.task_id!r}: could not report the scheduler fault to the client")
+
+        try:
+            # the action may or may not have released the worker before it raised. a second release logs that the
+            # task is not in the worker queue, which is noise on a path that is already an error
+            await self._worker_controller.on_task_done(event.task_id)
+        except Exception:
+            logger.exception(f"{event.task_id!r}: could not release the worker of a faulted task")
+
+        # commit before removing: the machine is being dropped either way, and without a commit the source state keeps
+        # its count in _statistics forever. failed is what the client was just told
+        self._task_state_manager.commit(event.task_id, type(event), TaskState.failed)
+        self._task_state_manager.remove_state_machine(event.task_id)
+
+        self._task_id_to_task.pop(event.task_id, None)
+        if event.task_id in self._unassigned:
+            # the payload is gone, so an id left in the queue would raise in __acquire_workers on every later drain
+            self._unassigned.remove(event.task_id)
+
+        try:
+            await self.__retry_unassignable()
+        except Exception:
+            logger.exception(f"{event.task_id!r}: could not redistribute capacity after a faulted task")
+
+    async def __report_fault_to_client(self, event: TaskEvent, source: TaskState) -> None:
+        client = self._client_controller.on_task_finish(event.task_id)
+        if client is None:
+            logger.warning(
+                f"{event.task_id!r}: dropping scheduler fault report, the action already replied or the owning "
+                f"client is no longer registered"
+            )
             return
 
-        self._task_state_manager.commit(event.task_id, type(event), target)
+        object_id = ObjectID.generate_object_id(client)
+        payload = serialize_failure(
+            SchedulerError(
+                f"scheduler failed to apply {type(event).__name__} from {source.name} for task {event.task_id.hex()}"
+            )
+        )
+        await self._connector_storage.set_object(object_id, payload)
+        self._object_controller.on_add_object(
+            client, object_id, ObjectMetadata.ObjectContentType.object, b"<scheduler error>"
+        )
 
-        if target in TERMINAL_TASK_STATES:
-            self._task_state_manager.remove_state_machine(event.task_id)
-            self._task_id_to_task.pop(event.task_id, None)
+        task_result = TaskResult(
+            taskId=event.task_id, resultType=TaskResultType.failed, metadata=b"", results=[object_id]
+        )
+        await self._binder.send(client, task_result, detached=True)
+        await self.__send_monitor(event.task_id, TaskState.failed, b"")
+
+        if self._graph_controller.is_graph_subtask(event.task_id):
+            await self._graph_controller.on_graph_sub_task_result(task_result)
 
     async def __on_has_capacity(self, source: TaskState, event: HasCapacity) -> Optional[HasCapacityTargetStates]:
         match source:
@@ -339,6 +456,8 @@ class VanillaTaskController(TaskController, Looper, Reporter):
         match source:
             case TaskState.running | TaskState.balanceCanceling:
                 target = task_result_target(TaskResultType(event.task_result.resultType.value))
+                if target == TaskState.failedWorkerDied:
+                    logger.warning(f"{event.task_id!r}: reporting failedWorkerDied to the client")
                 await self.__send_task_result_to_client(event.task_result, target)
                 return target
             case (
@@ -498,8 +617,8 @@ class VanillaTaskController(TaskController, Looper, Reporter):
         client = self._client_controller.on_task_finish(task_result.taskId)
         if client is None:
             logger.warning(
-                f"{task_result.taskId!r}: dropping task result, owning client is no longer registered "
-                f"(likely disconnected via client_timeout_seconds while the task was running)"
+                f"{task_result.taskId!r}: dropping {task_result.resultType} result, owning client is no longer "
+                f"registered (likely disconnected via client_timeout_seconds while the task was running)"
             )
         else:
             await self._binder.send(client, task_result, detached=True)
