@@ -22,9 +22,8 @@ Which will show an interface similar to the standard Linux `top` command:
          rss 130.1m |      running      0 |     ObjectResponse     233 |      ObjectRequest     215
                     |      success 53,704 |           TaskEcho  53,780 |               Task  53,764
                     |       failed     14 |               Task  54,660 |         TaskResult  53,794
-                    |     canceled     48 |         TaskResult  53,766 |  DisconnectRequest      21
-                    |    not_found     14 |      ObjectRequest     366 |         TaskCancel      60
-                                          | DisconnectResponse      21 |    BalanceResponse      15
+                    |     canceled     48 |         TaskResult  53,766 |         TaskCancel      60
+                    |    not_found     14 |      ObjectRequest     366 |    BalanceResponse      15
                                           |         TaskCancel      62 |          GraphTask       6
                                           |     BalanceRequest      15 |
                                           |    GraphTaskResult       6 |
@@ -83,11 +82,16 @@ Open ``http://127.0.0.1:50001`` in your browser.
 
 What the Web GUI shows:
 
-* **Live**: scheduler metrics, worker manager summary, and worker-level metrics (CPU/RSS/free/sent/queued/lag/ITL).
+* **Live**: scheduler metrics, worker manager summary, and worker-level metrics (CPU/PSS/free/sent/queued/lag/ITL).
 * **Task Log**: recent task lifecycle updates (running/success/failure/canceled), duration, peak memory, and capabilities.
 * **Worker Task Stream**: a timeline by worker with capability colors and status overlays (failed and canceled patterns).
 * **Memory Usage**: rolling cluster memory chart derived from task profiling metadata.
-* **Worker Processors**: manager-grouped view of processor-level CPU/RSS and state flags (initialized, has task, suspended).
+* **Worker Processors**: manager-grouped view of processor-level CPU/PSS and state flags (initialized, has task, suspended).
+
+.. note::
+   Worker memory is reported as PSS (proportional set size) on Linux, so the shared copy-on-write pages a
+   worker and its forked processors map are not double-counted; where PSS is unavailable (macOS/Windows) it
+   falls back to RSS.
 
 Interactive behavior:
 

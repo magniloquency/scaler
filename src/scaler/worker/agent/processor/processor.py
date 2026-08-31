@@ -5,10 +5,11 @@ import os
 import signal
 import sys
 import threading
+import time
 from contextlib import redirect_stderr, redirect_stdout
 from contextvars import ContextVar, Token
 from multiprocessing.synchronize import Event as EventType
-from typing import IO, Callable, List, Optional, Tuple, cast
+from typing import IO, Callable, List, Optional, Tuple, TypeVar, cast
 
 import tblib.pickling_support
 
@@ -42,7 +43,14 @@ logger = logging.getLogger(__name__)
 
 SUSPEND_SIGNAL = "SIGUSR1"  # use str instead of a signal.Signal to not trigger an import error on unsupported systems.
 
+# Attempts at handing a finished task's result off, and the wait before the second one, doubling from
+# there. The connectors reconnect on their own, so the delays only have to outlast a reconnect.
+RESULT_HAND_OFF_MAX_ATTEMPTS = 4
+RESULT_HAND_OFF_RETRY_DELAY_SECONDS = 1.0
+
 _current_processor: ContextVar[Optional["Processor"]] = ContextVar("_current_processor", default=None)
+
+_T = TypeVar("_T")
 
 
 class Processor(multiprocessing.get_context("spawn").Process):  # type: ignore
@@ -91,6 +99,9 @@ class Processor(multiprocessing.get_context("spawn").Process):  # type: ignore
         self._object_cache: Optional[ObjectCache] = None
 
         self._current_task: Optional[Task] = None
+
+        # set by __interrupt so __log_exit can tell an agent-requested teardown apart from a real fault
+        self._interrupted = False
 
     def run(self) -> None:
         self.__initialize()
@@ -168,6 +179,7 @@ class Processor(multiprocessing.get_context("spawn").Process):  # type: ignore
             self.__register_signal(SUSPEND_SIGNAL, self.__suspend)
 
     def __interrupt(self, *args):
+        self._interrupted = True
         self._connector_agent.destroy()  # interrupts any blocking socket.
         self._connector_storage.destroy()
 
@@ -210,20 +222,29 @@ class Processor(multiprocessing.get_context("spawn").Process):  # type: ignore
 
                 self.__on_connector_receive(message)
 
-        except ymq.SocketStopRequestedError:
-            pass
+        except ymq.SocketStopRequestedError as e:
+            self.__log_exit("agent connector stop requested", exception=e)
 
-        except ObjectStorageException:
-            pass
+        except ObjectStorageException as e:
+            # Never swallow this silently: a storage error mid-task orphans the task (no result is ever
+            # sent) and the process exits 0, which the agent can only observe later as a zombie.
+            self.__log_exit("object storage error", exception=e)
 
         except (KeyboardInterrupt, InterruptedError):
-            pass
+            self.__log_exit("interrupted")
+
+        except SystemExit as e:
+            # SystemExit is a BaseException, so none of the handlers above catch it; log it (with the
+            # originating traceback), then re-raise so multiprocessing still reports the requested exit code.
+            self.__log_exit("received SystemExit", exception=e)
+            raise
 
         except Exception as e:
             if self.__is_closed_zmq_socket_exception(e):
+                self.__log_exit("agent connector socket closed")
                 return
 
-            logger.exception(f"Processor[{self.pid}]: failed with unhandled exception:\n{e}")
+            self.__log_exit("unhandled exception", exception=e)
 
         finally:
             # Wake the suspend listener (if running on Windows) and let it exit before the connectors go away,
@@ -240,6 +261,26 @@ class Processor(multiprocessing.get_context("spawn").Process):  # type: ignore
 
             self._object_cache.join()
             self._connector_storage.destroy()
+
+    def __log_exit(self, reason: str, exception: Optional[BaseException] = None) -> None:
+        """Logs why the processor's main loop is exiting, escalating severity if a task was in flight."""
+        task = self._current_task
+        task_context = (
+            f" while task_id={task.taskId.hex()} was in flight; no task result will be sent" if task is not None else ""
+        )
+
+        if self._interrupted:
+            # __interrupt destroyed the connectors because the agent asked us to stop, so anything raised out
+            # of an in-flight call is expected teardown, not a fault worth an error and a traceback. Still name
+            # the exception, so a genuine fault that races with the teardown is not invisible at every level.
+            exception_context = f" ({exception!r})" if exception is not None else ""
+            logger.debug(f"Processor[{self.pid}]: stopped on agent request; {reason}{exception_context}{task_context}")
+        elif exception is not None:
+            logger.error(f"Processor[{self.pid}]: {reason}{task_context}, shutting down", exc_info=exception)
+        elif task is not None:
+            logger.warning(f"Processor[{self.pid}]: {reason}{task_context}, shutting down")
+        else:
+            logger.debug(f"Processor[{self.pid}]: {reason}, shutting down")
 
     def __on_connector_receive(self, message: BaseMessage):
         if isinstance(message, ObjectInstruction):
@@ -319,12 +360,9 @@ class Processor(multiprocessing.get_context("spawn").Process):  # type: ignore
         self.__send_result(task.source, task.taskId, task_result_type, result_bytes)
 
     def __send_result(self, source: ClientID, task_id: TaskID, task_result_type: TaskResultType, result_bytes: bytes):
-        self._current_task = None
+        result_object_id = self.__store_result(source, task_id, result_bytes)
 
-        result_object_id = ObjectID.generate_object_id(source)
-
-        self._connector_storage.set_object(result_object_id, result_bytes)
-        self._connector_agent.send(
+        self.__send_to_agent(
             ObjectInstruction(
                 instructionType=ObjectInstruction.ObjectInstructionType.create,
                 objectUser=source,
@@ -333,11 +371,67 @@ class Processor(multiprocessing.get_context("spawn").Process):  # type: ignore
                     objectTypes=(ObjectMetadata.ObjectContentType.object,),
                     objectNames=(f"<res {repr(result_object_id)}>".encode(),),
                 ),
-            )
+            ),
+            task_id,
+            "announce the result object",
         )
-        self._connector_agent.send(
-            TaskResult(taskId=task_id, resultType=task_result_type, metadata=b"", results=[bytes(result_object_id)])
+        self.__send_to_agent(
+            TaskResult(taskId=task_id, resultType=task_result_type, metadata=b"", results=[bytes(result_object_id)]),
+            task_id,
+            "send the task result",
         )
+
+        # only once the result is fully handed off is the task no longer in flight, so a failure above still
+        # reports which task got orphaned
+        self._current_task = None
+
+    def __store_result(self, source: ClientID, task_id: TaskID, result_bytes: bytes) -> ObjectID:
+        """Writes a finished task's result to the object storage, returning the object ID it landed under.
+
+        Every attempt uses a fresh ID, so a retry that follows a partially received request cannot announce
+        one the server holds a half-written object under.
+        """
+
+        def store() -> ObjectID:
+            result_object_id = ObjectID.generate_object_id(source)
+            self._connector_storage.set_object(result_object_id, result_bytes)
+            return result_object_id
+
+        return self.__hand_off(store, task_id, "store the result")
+
+    def __send_to_agent(self, message: BaseMessage, task_id: TaskID, description: str) -> None:
+        self.__hand_off(lambda: self._connector_agent.send(message), task_id, description)
+
+    def __hand_off(self, step: Callable[[], _T], task_id: TaskID, description: str) -> _T:
+        """Runs one step of a finished task's result hand-off, retrying it if the transport drops under us.
+
+        The work behind the result is already paid for, possibly hours of it, and cannot be redone, whereas
+        letting the failure unwind the main loop exits the processor and loses it. Repeating a step is safe:
+        the agent has not been told about the result yet. A teardown the agent asked for is never retried.
+
+        Replaying is the sender's job. A socket reconnects on its own, but a write that was in flight when
+        the connection dropped is failed rather than resent, and a storage request is a header and a payload
+        the server frames in order, so a replay has to start at the header.
+        """
+
+        attempt = 1
+        delay = RESULT_HAND_OFF_RETRY_DELAY_SECONDS
+
+        while True:
+            try:
+                return step()
+            except (ymq.SocketStopRequestedError, ObjectStorageException) as e:
+                if self._interrupted or attempt >= RESULT_HAND_OFF_MAX_ATTEMPTS:
+                    raise
+
+                logger.warning(
+                    f"Processor[{self.pid}]: failed to {description} of task_id={task_id.hex()} on attempt "
+                    f"{attempt}/{RESULT_HAND_OFF_MAX_ATTEMPTS} ({e!r}), retrying in {delay} seconds"
+                )
+
+            time.sleep(delay)
+            delay *= 2
+            attempt += 1
 
     @staticmethod
     def __set_current_processor(context: Optional["Processor"]) -> Token:

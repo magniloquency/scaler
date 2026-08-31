@@ -8,7 +8,9 @@ from scaler.config.types.network_backend import NetworkBackendType
 # object clean up time interval
 CLEANUP_INTERVAL_SECONDS = 1
 
-# status report interval, used by poke or scaled monitor
+# how often the scheduler publishes full status (every worker and processor) to monitors and the web GUI.
+# It is built on the scheduler's event loop whether or not a monitor is attached, so very large fleets
+# should raise it via -sri.
 STATUS_REPORT_INTERVAL_SECONDS = 1
 
 # number of seconds for profiling
@@ -87,6 +89,11 @@ DEFAULT_WORKER_DEATH_TIMEOUT = 5 * 60
 # event will be used.
 DEFAULT_HARD_PROCESSOR_SUSPEND = False
 
+# how long worker teardown waits for the exit notification to be sent. The notification only saves the
+# scheduler from waiting out the heartbeat timeout, so it is never worth blocking our own exit on: a
+# connection that is wedged rather than closed would otherwise hang teardown indefinitely.
+WORKER_EXIT_NOTIFICATION_TIMEOUT_SECONDS = 5
+
 # =======================
 # LOGGING SPECIFIC OPTIONS
 
@@ -95,6 +102,16 @@ DEFAULT_LOGGING_LEVEL = "INFO"
 
 # default logging paths
 DEFAULT_LOGGING_PATHS = ("/dev/stdout",)
+
+# =======================
+# WEB GUI (scaler_gui) SPECIFIC OPTIONS
+
+# how often the web GUI backend pushes an update to connected browsers; drives the streaming chart cadence.
+# Pushing faster mostly redraws the same picture: one tick is about a pixel over the stream's 5 minute window.
+DEFAULT_GUI_BROADCAST_INTERVAL_SECONDS = 0.5
+
+# maximum number of completed tasks the web GUI retains and shows in the task log
+DEFAULT_GUI_TASK_LOG_MAX_SIZE = 500
 
 # =======================
 # SCALER NETWORK BACKEND SPECIFIC OPTIONS

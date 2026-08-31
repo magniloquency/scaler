@@ -48,14 +48,16 @@ class VanillaTaskManager(Looper, TaskManager):
         )
         if task_not_found:
             await self._connector_external.send(
-                TaskCancelConfirm(taskId=task_cancel.taskId, cancelConfirmType=TaskCancelConfirmType.cancelNotFound)
+                TaskCancelConfirm(taskId=task_cancel.taskId, cancelConfirmType=TaskCancelConfirmType.cancelNotFound),
+                detached=True,
             )
             return
 
         if task_cancel.taskId in self._processing_task_ids and not task_cancel.flags.force:
             # ignore cancel task while in processing if is not force cancel
             await self._connector_external.send(
-                TaskCancelConfirm(taskId=task_cancel.taskId, cancelConfirmType=TaskCancelConfirmType.cancelFailed)
+                TaskCancelConfirm(taskId=task_cancel.taskId, cancelConfirmType=TaskCancelConfirmType.cancelFailed),
+                detached=True,
             )
             return
 
@@ -72,7 +74,8 @@ class VanillaTaskManager(Looper, TaskManager):
             _ = self._queued_task_id_to_task.pop(task_cancel.taskId)
 
         await self._connector_external.send(
-            TaskCancelConfirm(taskId=task_cancel.taskId, cancelConfirmType=TaskCancelConfirmType.canceled)
+            TaskCancelConfirm(taskId=task_cancel.taskId, cancelConfirmType=TaskCancelConfirmType.canceled),
+            detached=True,
         )
 
     async def on_task_result(self, result: TaskResult):
@@ -83,7 +86,7 @@ class VanillaTaskManager(Looper, TaskManager):
 
         self._processing_task_ids.remove(result.taskId)
 
-        await self._connector_external.send(result)
+        await self._connector_external.send(result, detached=True)
 
     async def routine(self):
         await self.__processing_task()
@@ -101,7 +104,7 @@ class VanillaTaskManager(Looper, TaskManager):
             self._processing_task_ids.add(task_id)
             await self._processor_manager.on_task(task)
         else:
-            self._processor_manager.on_resume_task(task_id)
+            await self._processor_manager.on_resume_task(task_id)
 
     async def __suspend_if_priority_is_higher(self, new_task: Task):
         current_task = self._processor_manager.current_task()

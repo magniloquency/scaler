@@ -43,7 +43,7 @@ class ClientHeartbeatManager(Looper, HeartbeatManager):
             cpu = 0
             rss = 0
         await self._connector_external.send(
-            ClientHeartbeat(resource=Resource(cpu=cpu, rss=rss), latencyUS=self._latency_us)
+            ClientHeartbeat(resource=Resource(cpu=cpu, rss=rss), latencyUS=self._latency_us), detached=True
         )
 
     async def on_heartbeat_echo(self, heartbeat: ClientHeartbeatEcho):
@@ -90,7 +90,3 @@ class ClientHeartbeatManager(Looper, HeartbeatManager):
 
         await self.send_heartbeat()
         self._start_timestamp_ns = time.time_ns()
-
-    def get_object_storage_address(self) -> AddressConfig:
-        """Returns the object storage configuration, or block until it receives it."""
-        return self._object_storage_address.result()
