@@ -192,7 +192,7 @@ class VanillaTaskController(TaskController, Looper, Reporter):
                     task_id=task_id, worker_id=worker_id, task_cancel_confirm=task_cancel_confirm
                 )
             case _:
-                raise ValueError(f"unknown TaskCancelConfirmType: {task_cancel_confirm.cancelConfirmType}")
+                assert_never(cancel_confirm_type)
 
         await self.__route(event)
 
