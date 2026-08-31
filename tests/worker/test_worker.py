@@ -237,7 +237,7 @@ class WorkerTeardownYMQErrorTest(unittest.IsolatedAsyncioTestCase):
         worker._loop = asyncio.get_running_loop()
         worker._connector_external.send = lambda *_args, **_kwargs: _hang()
 
-        with mock.patch.object(worker_module, "_NOTIFY_SCHEDULER_TIMEOUT_SECONDS", 0.05):
+        with mock.patch.object(worker_module, "WORKER_EXIT_NOTIFICATION_TIMEOUT_SECONDS", 0.05):
             with mock.patch.object(worker_module, "logger") as mock_logger:
                 await asyncio.wait_for(worker._Worker__teardown(), timeout=5)
 
