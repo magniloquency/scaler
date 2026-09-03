@@ -8,9 +8,10 @@ import cloudpickle
 from scaler.protocol.capnp import Task, TaskCancel
 from scaler.utility.identifiers import TaskID
 from scaler.worker_manager.proxy.mixins import ExecutionBackend, TaskDeserializer, TaskInputLoader
-from scaler.worker_manager.proxy.symphony.callback import TaskResponseRouter, create_session_callback_class
+from scaler.worker_manager.proxy.symphony.callback import create_session_callback_class
 from scaler.worker_manager.proxy.symphony.message import create_soam_message_class
-from scaler.worker_manager.proxy.symphony.soam_api import load_soam_api
+from scaler.worker_manager.proxy.symphony.response_router import TaskResponseRouter
+from scaler.worker_manager.proxy.symphony.soamapi import load_soamapi
 
 logger = logging.getLogger(__name__)
 
@@ -18,25 +19,25 @@ logger = logging.getLogger(__name__)
 class SymphonyExecutionBackend(TaskInputLoader, ExecutionBackend):
     _loader: TaskDeserializer
 
-    def __init__(self, service_name: str):
+    def __init__(self, service_name: str) -> None:
         self._service_name = service_name
 
-        self._soam_api = load_soam_api()
-        self._soam_api.initialize()
+        self._soamapi = load_soamapi()
+        self._soamapi.initialize()
 
         self._message_class = create_soam_message_class()
         self._response_router = TaskResponseRouter(self._message_class)
         self._session_callback = create_session_callback_class()(self._response_router)
 
-        self._ibm_soam_connection = self._soam_api.connect(
-            self._service_name, self._soam_api.DefaultSecurityCallback("Guest", "Guest")
+        self._ibm_soam_connection = self._soamapi.connect(
+            self._service_name, self._soamapi.DefaultSecurityCallback("Guest", "Guest")
         )
         logger.info(f"established IBM Spectrum Symphony connection {self._ibm_soam_connection.get_id()}")
 
-        ibm_soam_session_attr = self._soam_api.SessionCreationAttributes()
+        ibm_soam_session_attr = self._soamapi.SessionCreationAttributes()
         ibm_soam_session_attr.set_session_type("RecoverableAllHistoricalData")
         ibm_soam_session_attr.set_session_name("ScalerSession")
-        ibm_soam_session_attr.set_session_flags(self._soam_api.SessionFlags.PARTIAL_ASYNC)
+        ibm_soam_session_attr.set_session_flags(self._soamapi.SessionFlags.PARTIAL_ASYNC)
         ibm_soam_session_attr.set_session_callback(self._session_callback)
         self._ibm_soam_session = self._ibm_soam_connection.create_session(ibm_soam_session_attr)
         logger.info(f"established IBM Spectrum Symphony session {self._ibm_soam_session.get_id()}")
@@ -62,7 +63,7 @@ class SymphonyExecutionBackend(TaskInputLoader, ExecutionBackend):
         input_message = self._message_class()
         input_message.set_payload(cloudpickle.dumps((function, *arg_objects)))
 
-        task_attr = self._soam_api.TaskSubmissionAttributes()
+        task_attr = self._soamapi.TaskSubmissionAttributes()
         task_attr.set_task_input(input_message)
 
         with self._response_router.get_callback_lock():
