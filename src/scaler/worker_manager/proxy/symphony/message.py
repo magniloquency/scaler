@@ -1,34 +1,21 @@
-import array
-import functools
-from typing import Any, Type
+from __future__ import annotations
 
-from scaler.worker_manager.proxy.symphony.soam_api import load_soam_api
+from typing import TYPE_CHECKING, Type
+
+from scaler.worker_manager.proxy.symphony.soamapi import SOAMAPI_MISSING_MESSAGE
+
+if TYPE_CHECKING:
+    from scaler.worker_manager.proxy.symphony._soam.message import SoamMessage
 
 
-@functools.lru_cache(maxsize=1)
-def create_soam_message_class() -> Type[Any]:
-    """Build the ``soamapi.Message`` subclass that carries task payloads.
+def create_soam_message_class() -> Type[SoamMessage]:
+    """Return the ``soamapi.Message`` subclass that carries task payloads.
 
-    The class is built on demand because its base class only exists once ``soamapi`` is importable.
+    The import is deferred to call time because ``_soam.message`` needs ``soamapi`` at its own import.
     """
-    soam_api = load_soam_api()
-
-    # mypy cannot resolve a base class that is only available at run time
-    class SoamMessage(soam_api.Message):  # type: ignore[name-defined]
-        def __init__(self, payload: bytes = b""):
-            self.__payload = payload
-
-        def set_payload(self, payload: bytes):
-            self.__payload = payload
-
-        def get_payload(self) -> bytes:
-            return self.__payload
-
-        def on_serialize(self, stream):
-            payload_array = array.array("b", self.get_payload())
-            stream.write_byte_array(payload_array, 0, len(payload_array))
-
-        def on_deserialize(self, stream):
-            self.set_payload(stream.read_byte_array("b"))
+    try:
+        from scaler.worker_manager.proxy.symphony._soam.message import SoamMessage
+    except ImportError as error:
+        raise ImportError(SOAMAPI_MISSING_MESSAGE) from error
 
     return SoamMessage
