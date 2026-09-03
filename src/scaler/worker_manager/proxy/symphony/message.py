@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Type
 
-from scaler.worker_manager.proxy.symphony.soamapi import SOAMAPI_MISSING_MESSAGE
+from scaler.worker_manager.proxy.symphony.soamapi import soamapi_import_error
 
 if TYPE_CHECKING:
     from scaler.worker_manager.proxy.symphony._soam.message import SoamMessage
@@ -16,6 +16,6 @@ def create_soam_message_class() -> Type[SoamMessage]:
     try:
         from scaler.worker_manager.proxy.symphony._soam.message import SoamMessage
     except ImportError as error:
-        raise ImportError(SOAMAPI_MISSING_MESSAGE) from error
+        raise soamapi_import_error(error) from error
 
     return SoamMessage

@@ -1,13 +1,15 @@
 """Type stubs for the parts of the IBM Spectrum Symphony Python API that this package annotates.
 
-``soamapi`` ships with the Symphony product as Python 3.6 bytecode with no source and no stubs, so it cannot be
-introspected or imported on a development or CI host, and nothing here can be checked against the real library.
+``soamapi`` ships with the Symphony product as bytecode with no source and no stubs, one
+``pythonapi_<python-version>`` directory per interpreter Symphony supports, so it cannot be introspected or
+imported on a development or CI host, and nothing here can be checked against the real library by CI.
 It therefore declares only the four types that appear in annotations, and only the members the code calls: those
 are assumptions the code already makes, so a drift shows up as a bug in our own call sites. The rest of the API
 is reached through ``load_soamapi()``, which returns an untyped module, and would gain nothing from being
 declared here.
 
-Transcribed from the Symphony 7.3.2 Python API reference.
+Transcribed from the Symphony 7.3.2 Python API reference, and checked by introspection against the
+``soamapi`` of Symphony 7.3.2 build 603035: every type, method and signature below matches.
 """
 
 import array
