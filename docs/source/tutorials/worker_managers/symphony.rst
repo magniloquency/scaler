@@ -9,7 +9,8 @@ Quick Start
 Prerequisites
 ~~~~~~~~~~~~~
 
-* An IBM Spectrum Symphony cluster with a configured service
+* An IBM Spectrum Symphony cluster with a registered application and deployed service, which
+  ``scripts/symphony/setup_application.py`` creates (see Step 2)
 * A Symphony installation on the machine running the worker manager, which is where the ``soamapi`` Python API comes from
 * Python 3.10 or 3.12, the versions both Scaler and Symphony 7.3.2 support (see the note in Step 1)
 * Python packages: ``pip install opengris-scaler``
@@ -58,7 +59,25 @@ matching the running interpreter, and the worker manager imports it for you. Che
 
       ls -d $SOAM_HOME/$SOAM_VERSION/$BINARY_TYPE/lib64/pythonapi_*
 
-Step 2: Start the Scheduler
+Step 2: Create the Symphony Application
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The worker manager submits tasks to a Symphony application whose service runs cloudpickled callables. Create
+both with the setup utility, on a host with the Symphony installation, passing the interpreter that will run
+the service:
+
+.. code-block:: bash
+
+   python3 scripts/symphony/setup_application.py --python /path/to/python3.12
+
+It packages and deploys the service, generates an application profile with the paths resolved, registers it,
+and prints the registered applications. Add ``--dry-run`` to see the profile without changing the cluster, and
+``--application``/``--service`` to use names other than ``PickleRunner``/``PickleRunnerService``.
+
+The interpreter you name needs ``cloudpickle`` and a matching ``soamapi``; the utility checks both by running
+it, and refuses rather than leaving the failure to appear later as unexplained task failures.
+
+Step 3: Start the Scheduler
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: bash
@@ -68,14 +87,19 @@ Step 2: Start the Scheduler
        --policy-content "allocate=even_load; scaling=vanilla"
 
 
-Step 3: Start the Symphony Worker Manager
+Step 4: Start the Symphony Worker Manager
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: bash
 
    scaler_worker_manager symphony tcp://<SCHEDULER_IP>:8516 \
-       --service-name MyScalerService \
+       --worker-manager-id wm-symphony \
+       --service-name PickleRunner \
        --max-task-concurrency 8
+
+``--service-name`` takes the Symphony **application** name, not the service name. The worker manager passes it
+to ``soamapi.connect()``, which connects to an application. With the application created by
+``scripts/symphony/setup_application.py`` this is ``PickleRunner``, whose service is ``PickleRunnerService``.
 
 Or use a TOML configuration file:
 
@@ -101,7 +125,7 @@ Or use a TOML configuration file:
    max_task_concurrency = 8
    logging_level = "INFO"
 
-Step 4: Submit Tasks
+Step 5: Submit Tasks
 ~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: python
@@ -112,9 +136,15 @@ Step 4: Submit Tasks
        return x ** 2
 
    with Client(address="tcp://<SCHEDULER_IP>:8516") as client:
-       futures = client.map(compute, range(50))
-       results = [f.result() for f in futures]
+       results = client.map(compute, range(50))
        print(results)
+
+``Client.map`` returns the results themselves. ``Client.submit`` is the one that returns a future:
+
+.. code-block:: python
+
+   future = client.submit(compute, 7)
+   print(future.result())
 
 How It Works
 ------------
@@ -134,7 +164,8 @@ Symphony-Specific Parameters
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 * ``scheduler_address`` (positional, required): Address of the Scaler scheduler.
-* ``--service-name`` (``-sn``, required): The name of the Symphony service to connect to.
+* ``--service-name`` (``-sn``, required): The name of the Symphony **application** to connect to. Despite the
+  option name, this value reaches ``soamapi.connect()``, which takes an application rather than a service.
 * ``--max-task-concurrency`` (``-mtc``): Maximum number of concurrent Symphony workers (default: number of CPUs − 1).
 
 Common Parameters
