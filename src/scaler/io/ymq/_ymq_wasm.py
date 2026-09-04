@@ -131,7 +131,7 @@ def _make_exception(code: ErrorCode, message: str) -> YMQException:
 
 
 def _run_sync_jspi(coro: Any) -> Any:
-    from pyodide.ffi import run_sync  # type: ignore[import-not-found]
+    from pyodide.ffi import run_sync
 
     return run_sync(coro)
 
@@ -512,8 +512,8 @@ class ConnectorSocket:
     def _open_websocket(self, ws_url: str) -> None:
         # Imported lazily so that this module can be imported (and unit-tested
         # at the surface level) outside of Pyodide.
-        import js  # type: ignore[import-not-found]
-        from pyodide.ffi import create_proxy  # type: ignore[import-not-found]
+        import js
+        from pyodide.ffi import create_proxy
 
         ws = js.WebSocket.new(ws_url)
         ws.binaryType = "arraybuffer"
@@ -541,7 +541,7 @@ class ConnectorSocket:
 
     def _raw_send(self, data: bytes, callback: Optional[SendCallback]) -> None:
         try:
-            import js  # type: ignore[import-not-found]
+            import js
 
             # Allocate a JS Uint8Array of the right size and copy our bytes
             # into it via Pyodide's ``JsProxy.assign``, which expects a
@@ -693,7 +693,7 @@ class ConnectorSocket:
         try:
             callback(arg)
         except Exception:  # noqa: BLE001 -- never let a user callback abort the IO loop
-            sys.excepthook(*sys.exc_info())  # type: ignore[misc]
+            sys.excepthook(*sys.exc_info())
 
 
 # ---------------------------------------------------------------------------
