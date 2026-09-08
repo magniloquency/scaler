@@ -267,9 +267,8 @@ class VanillaTaskController(TaskController, Looper, Reporter):
 
             source = state_machine.current_state()  # read inside the lock, never before it
 
-            if isinstance(event, WORKER_REPORTED_TASK_EVENTS):
-                if not self.__is_from_the_worker_that_holds_the_task(event):
-                    return
+            if isinstance(event, WORKER_REPORTED_TASK_EVENTS) and self.__is_from_a_superseded_worker(event):
+                return
 
             target: Optional[TaskState]
             try:
@@ -312,26 +311,29 @@ class VanillaTaskController(TaskController, Looper, Reporter):
                 self._task_state_manager.remove_state_machine(event.task_id)
                 self._task_id_to_task.pop(event.task_id, None)
 
-    def __is_from_the_worker_that_holds_the_task(self, event: WorkerReportedTaskEvent) -> bool:
-        """Answer whether an event a worker reported came from the worker the task is currently assigned to.
+    def __is_from_a_superseded_worker(self, event: WorkerReportedTaskEvent) -> bool:
+        """Answer whether a worker reported on a task that a different worker now holds.
 
         A worker the scheduler declared dead is not necessarily dead: it can keep running the task and report on it
         long after the task was rerouted. Acting on such a report tells the client an outcome for a task that is
         still running elsewhere, and releases the capacity of the worker that now holds it.
 
-        This reads the assignment inside the machine's lock, which is the only place it can change.
+        Only a different, valid holder proves that. An assignment can also be cleared without this machine's lock:
+        ``remove_worker`` drops the assignments of every task a dead worker held, and it runs from the heartbeat
+        timer, before the ``WorkerDisconnected`` it raises reaches the router. An unheld task therefore proves
+        nothing about the sender, and the state machine settles it instead: it refuses every worker-reported event
+        from ``inactive``, and wherever it accepts one the sender is the only worker that claims the task at all.
         """
 
         holder = self._worker_controller.get_worker_by_task_id(event.task_id)
-        if holder == event.worker_id:
-            return True
+        if not holder.is_valid() or holder == event.worker_id:
+            return False
 
-        holder_description = repr(holder) if holder.is_valid() else "no worker"
         logger.warning(
             f"{event.task_id!r}: dropping {type(event).__name__} from {event.worker_id!r}, the task is held by "
-            f"{holder_description}"
+            f"{holder!r}"
         )
-        return False
+        return True
 
     async def __fail_task_to_client(self, event: TaskEvent, source: TaskState) -> None:
         """Fail a task whose state machine action raised.

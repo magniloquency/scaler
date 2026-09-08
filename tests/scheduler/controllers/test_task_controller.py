@@ -372,8 +372,12 @@ class TestTaskControllerBehavior(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.harness.cancel_confirms_sent_to(CLIENT_ID), [])
         self.harness.worker_controller.on_task_done.assert_not_awaited()
 
-    async def test_a_result_for_a_task_that_holds_no_worker_is_dropped(self):
-        """A reroute that finds no free worker queues the task, so the previous holder owns nothing to report on."""
+    async def test_a_result_for_a_task_that_is_back_in_the_queue_is_dropped(self):
+        """A reroute that finds no free worker queues the task, so the previous holder owns nothing to report on.
+
+        The guard passes this on, because an unheld task does not prove the sender is stale. It is the state
+        machine that refuses it: inactive accepts no worker-reported event.
+        """
 
         state_machine = await self.harness.enter_state(TaskState.running)
 
@@ -388,6 +392,36 @@ class TestTaskControllerBehavior(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(state_machine.current_state(), TaskState.inactive)
         self.assertEqual(self.harness.task_results_sent_to(CLIENT_ID), [])
+
+    async def test_a_result_from_the_holder_survives_an_assignment_cleared_by_a_worker_timeout(self):
+        """An unheld task must not be read as proof that the sender is stale.
+
+        ``remove_worker`` drops the assignments of every task a dead worker held, and it runs from the heartbeat
+        timer without this machine's lock, before the ``WorkerDisconnected`` it raises reaches the router. A
+        result that arrives in that window is from the rightful holder, and dropping it would discard a finished
+        task and re-run it on the worker the reroute picks next.
+        """
+
+        state_machine = await self.harness.enter_state(TaskState.running)
+        self.harness.worker_controller.get_worker_by_task_id.return_value = NO_WORKER
+
+        await self.harness.controller.on_task_result(WORKER_ID, make_task_result(TaskResultType.success))
+
+        self.assertEqual(state_machine.current_state(), TaskState.success)
+        self.assertEqual(len(self.harness.task_results_sent_to(CLIENT_ID)), 1)
+
+    async def test_a_cancel_confirm_from_the_holder_survives_an_assignment_cleared_by_a_worker_timeout(self):
+        """The same window closes a cancel: the worker did cancel the task before the scheduler gave up on it."""
+
+        state_machine = await self.harness.enter_state(TaskState.canceling)
+        self.harness.worker_controller.get_worker_by_task_id.return_value = NO_WORKER
+
+        await self.harness.controller.on_task_cancel_confirm(
+            WORKER_ID, make_task_cancel_confirm(TaskCancelConfirmType.canceled)
+        )
+
+        self.assertEqual(state_machine.current_state(), TaskState.canceled)
+        self.assertEqual(len(self.harness.cancel_confirms_sent_to(CLIENT_ID)), 1)
 
     async def test_a_duplicate_worker_disconnect_is_ignored(self):
         """Racing duplicates are normal, the second one must not reroute the task a second time."""
