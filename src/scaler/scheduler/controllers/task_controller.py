@@ -437,6 +437,7 @@ class VanillaTaskController(TaskController, Looper, Reporter):
                 # no worker holds the task, so no cancel is in flight and no confirm can ever arrive. the balance
                 # move is moot, so place the task again instead of waiting in balanceCanceling forever. there is no
                 # on_task_done here, the send failed because the worker controller already has no mapping to release
+                logger.warning(f"{event.task_id!r}: balance cancel found no worker holding the task, placing it again")
                 return await self.__acquire_and_dispatch(event.task_id)
             case (
                 TaskState.inactive
@@ -535,6 +536,11 @@ class VanillaTaskController(TaskController, Looper, Reporter):
                 # the worker does not hold the task, but the scheduler still maps it there. nobody asked the client
                 # for this cancel, so the task must not be terminated: release the stale mapping and place it again,
                 # which is what a balance cancel confirmed as canceled already does
+                worker = self._worker_controller.get_worker_by_task_id(event.task_id)
+                logger.error(
+                    f"{event.task_id!r}: {worker!r} answered a balance cancel with cancelNotFound, the scheduler "
+                    f"mapping is stale, releasing it and placing the task again"
+                )
                 await self._worker_controller.on_task_done(event.task_id)
                 return await self.__acquire_and_dispatch(event.task_id)
             case (
