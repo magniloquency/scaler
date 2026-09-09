@@ -3,7 +3,8 @@
 
 Run this on a host with an IBM Spectrum Symphony installation, once, before starting
 ``scaler_worker_manager symphony``. It packages ``scaler_service.py``, deploys it with ``soamdeploy``,
-generates an application profile with every path resolved, and registers it with ``soamreg``.
+fills in ``application_profile.xml`` with every path resolved, and registers it with ``soamreg``. Both of
+those files ship next to this script.
 
 Paths are resolved and written into the profile rather than left as ``${VERSION_NUM}`` and
 ``${EGO_MACHINE_TYPE}``: Developer Edition leaves both of those empty, which silently produces broken
@@ -29,111 +30,7 @@ SERVICE_MODULE = "scaler_service.py"
 DEFAULT_APPLICATION_NAME = "Scaler"
 DEFAULT_SERVICE_NAME = "ScalerService"
 
-APPLICATION_PROFILE_TEMPLATE = """<?xml version="1.0" encoding="UTF-8" standalone="no" ?><Profile \
-xmlns="http://www.platform.com/Symphony/Profile/Application" version="@SOAM_VERSION@" \
-xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-    <Consumer applicationName="@APPLICATION@" consumerId="@CONSUMER@" numOfSlotsForPreloadedServices="1" \
-preStartApplication="false" resReq="" resourceGroupName="ComputeHosts" taskHighWaterMark="1.0" \
-taskLowWaterMark="1.0"/>
-
-    <SOAM version="@SOAM_VERSION@">
-        <SSM resReq="" shutDownTimeout="300" startUpTimeout="60" workDir="${EGO_SHARED_TOP}/soam/work">
-            <boundaryManagerConfig>
-                <boundaries>
-                    <boundary elementName="AvailableMemory">
-                        <event name="BEV_PROACTIVE" value="50"/>
-                        <event name="BEV_SEVERE" value="40"/>
-                        <event name="BEV_CRITICAL" value="0"/>
-                        <event name="BEV_HALT" value="0"/>
-                    </boundary>
-                    <boundary elementName="AvailableVirtualAddressSpace">
-                        <event name="BEV_PROACTIVE" value="50"/>
-                        <event name="BEV_SEVERE" value="40"/>
-                        <event name="BEV_CRITICAL" value="25"/>
-                        <event name="BEV_HALT" value="15"/>
-                    </boundary>
-                </boundaries>
-            </boundaryManagerConfig>
-        </SSM>
-        <SIM blockHostOnTimeout="true" blockHostOnVersionMismatch="true" startUpTimeout="120"/>
-        <DataHistory fileSwitchSize="100" lastingPeriod="96"/>
-        <PagingTasksInput blockSize="4096" diskSpace="4294967296"/>
-        <PagingTasksOutput blockSize="4096" diskSpace="4294967296"/>
-        <PagingCommonData blockSize="102400" diskSpace="8589934592"/>
-        <PagingCommonDataUpdates blockSize="102400" diskSpace="8589934592"/>
-    </SOAM>
-
-    <SessionTypes>
-        <Type abortSessionIfClientDisconnect="true" abortSessionIfTaskFail="false" \
-name="RecoverableAllHistoricalData" persistTaskHistory="all" priority="1" recoverable="true" \
-sessionRetryLimit="3" suspendGracePeriod="100" taskCleanupPeriod="100" taskRetryLimit="1"/>
-        <Type abortSessionIfClientDisconnect="true" abortSessionIfTaskFail="false" \
-name="RecoverableNoHistoricalData" persistTaskHistory="none" priority="1" recoverable="true" \
-sessionRetryLimit="3" suspendGracePeriod="100" taskCleanupPeriod="100" taskRetryLimit="1"/>
-        <Type abortSessionIfClientDisconnect="true" abortSessionIfTaskFail="false" \
-name="UnrecoverableAllHistoricalData" persistTaskHistory="all" priority="1" recoverable="false" \
-sessionRetryLimit="3" suspendGracePeriod="100" taskCleanupPeriod="100" taskRetryLimit="1"/>
-        <Type abortSessionIfClientDisconnect="true" abortSessionIfTaskFail="false" \
-name="UnrecoverableNoHistoricalData" persistTaskHistory="none" priority="1" recoverable="false" \
-sessionRetryLimit="3" suspendGracePeriod="100" taskCleanupPeriod="100" taskRetryLimit="1"/>
-    </SessionTypes>
-
-    <Service description="Scaler worker manager service" name="@SERVICE@" packageName="@SERVICE@">
-        <osTypes>
-            <osType name="all" startCmd="@PYTHON@ ${SOAM_DEPLOY_DIR}/@SERVICE_MODULE@" \
-workDir="${SOAM_HOME}/work">
-                <env name="LD_LIBRARY_PATH">@LIBRARY_DIRECTORY@</env>
-                <env name="PYTHONPATH">${SOAM_DEPLOY_DIR}:@LIBRARY_DIRECTORY@:@BYTECODE_DIRECTORY@</env>
-            </osType>
-        </osTypes>
-        <Control>
-            <Method name="Register">
-                <Timeout actionOnSI="blockHost" duration="60"/>
-                <Exit actionOnSI="blockHost"/>
-            </Method>
-            <Method name="CreateService">
-                <Timeout actionOnSI="blockHost" duration="0"/>
-                <Exit actionOnSI="blockHost"/>
-                <Return actionOnSI="keepAlive" controlCode="0"/>
-                <Exception actionOnSI="blockHost" controlCode="0" type="failure"/>
-                <Exception actionOnSI="blockHost" controlCode="0" type="fatal"/>
-            </Method>
-            <Method name="SessionEnter">
-                <Timeout actionOnSI="blockHost" actionOnWorkload="retry" duration="0"/>
-                <Exit actionOnSI="blockHost" actionOnWorkload="retry"/>
-                <Return actionOnSI="keepAlive" actionOnWorkload="succeed" controlCode="0"/>
-                <Exception actionOnSI="keepAlive" actionOnWorkload="retry" controlCode="0" type="failure"/>
-                <Exception actionOnSI="keepAlive" actionOnWorkload="fail" controlCode="0" type="fatal"/>
-            </Method>
-            <Method name="SessionUpdate">
-                <Timeout actionOnSI="blockHost" actionOnWorkload="retry" duration="0"/>
-                <Exit actionOnSI="blockHost" actionOnWorkload="retry"/>
-                <Return actionOnSI="keepAlive" actionOnWorkload="succeed" controlCode="0"/>
-                <Exception actionOnSI="keepAlive" actionOnWorkload="retry" controlCode="0" type="failure"/>
-                <Exception actionOnSI="keepAlive" actionOnWorkload="fail" controlCode="0" type="fatal"/>
-            </Method>
-            <Method name="Invoke">
-                <Timeout actionOnSI="restartService" actionOnWorkload="retry" duration="0"/>
-                <Exit actionOnSI="restartService" actionOnWorkload="retry"/>
-                <Return actionOnSI="keepAlive" actionOnWorkload="succeed" controlCode="0"/>
-                <Return actionOnSI="keepAlive" actionOnWorkload="fail" controlCode="5"/>
-                <Exception actionOnSI="keepAlive" actionOnWorkload="retry" controlCode="0" type="failure"/>
-                <Exception actionOnSI="keepAlive" actionOnWorkload="fail" controlCode="0" type="fatal"/>
-            </Method>
-            <Method name="SessionLeave">
-                <Timeout actionOnSI="restartService" duration="0"/>
-                <Exit actionOnSI="restartService"/>
-                <Return actionOnSI="keepAlive" controlCode="0"/>
-                <Exception actionOnSI="keepAlive" controlCode="0" type="failure"/>
-                <Exception actionOnSI="keepAlive" controlCode="0" type="fatal"/>
-            </Method>
-            <Method name="DestroyService">
-                <Timeout duration="15"/>
-            </Method>
-        </Control>
-    </Service>
-</Profile>
-"""
+APPLICATION_PROFILE_TEMPLATE = "application_profile.xml"
 
 
 class SetupError(Exception):
@@ -308,6 +205,8 @@ def _version_sort_key(directory_name: str) -> Tuple[int, ...]:
 def _render_application_profile(
     arguments: argparse.Namespace, installation: Installation, interpreter: Path, bytecode_directory: Path
 ) -> str:
+    profile = _script_directory_file(APPLICATION_PROFILE_TEMPLATE).read_text()
+
     replacements = {
         "@APPLICATION@": arguments.application,
         "@CONSUMER@": arguments.consumer,
@@ -319,17 +218,23 @@ def _render_application_profile(
         "@BYTECODE_DIRECTORY@": str(bytecode_directory),
     }
 
-    profile = APPLICATION_PROFILE_TEMPLATE
     for placeholder, value in replacements.items():
         profile = profile.replace(placeholder, value)
 
     return profile
 
 
+def _script_directory_file(name: str) -> Path:
+    """Return a file that ships next to this script, refusing rather than failing later on a partial copy."""
+    path = Path(__file__).resolve().parent / name
+    if not path.is_file():
+        raise SetupError(f"{path} is missing, it ships next to this script")
+
+    return path
+
+
 def _deploy_service(arguments: argparse.Namespace, installation: Installation) -> None:
-    service_module = Path(__file__).resolve().parent / SERVICE_MODULE
-    if not service_module.is_file():
-        raise SetupError(f"{service_module} is missing, it ships next to this script")
+    service_module = _script_directory_file(SERVICE_MODULE)
 
     with tempfile.TemporaryDirectory() as working_directory:
         package = Path(working_directory) / f"{arguments.service}.tar.gz"
