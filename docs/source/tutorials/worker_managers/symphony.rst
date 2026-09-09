@@ -27,19 +27,29 @@ Scaler comes from PyPI:
 
 ``soamapi`` does not. It is not published on PyPI: it ships with the Symphony product as bytecode, under
 ``$SOAM_HOME/$SOAM_VERSION/$BINARY_TYPE/lib64/pythonapi_<python-version>``. Put it on the path by sourcing the
-Symphony environment, which sets both ``PYTHONPATH`` and ``LD_LIBRARY_PATH``:
+Symphony environment in the shell that will run the worker manager:
 
 .. code-block:: bash
 
    . $SOAM_HOME/conf/profile.soam
 
-``LD_LIBRARY_PATH`` matters as much as ``PYTHONPATH``. The API is backed by shared libraries in the same ``lib64``
-directory, so importing ``soamapi`` with only ``PYTHONPATH`` set fails with
+That sets both variables the import needs, ``PYTHONPATH`` and ``LD_LIBRARY_PATH``, each naming the ``lib64``
+directory. If your installation has no profile to source, set them yourself, before starting Python:
+
+.. code-block:: bash
+
+   export SYMPHONY_LIBRARY_DIRECTORY="$SOAM_HOME/$SOAM_VERSION/$BINARY_TYPE/lib64"
+   export PYTHONPATH="$SYMPHONY_LIBRARY_DIRECTORY:$PYTHONPATH"
+   export LD_LIBRARY_PATH="$SYMPHONY_LIBRARY_DIRECTORY:$LD_LIBRARY_PATH"
+
+``LD_LIBRARY_PATH`` matters as much as ``PYTHONPATH``, and the dynamic linker reads it at process start, so
+exporting it afterwards from inside Python is too late. The API is backed by shared libraries in that same
+``lib64`` directory, so importing ``soamapi`` with only ``PYTHONPATH`` set fails with
 ``ImportError: libcom_platform_log4cxx_097_4.so.9: cannot open shared object file``.
 
-``lib64`` holds one bytecode directory per interpreter rather than ``soamapi`` itself, so sourcing the profile
-does not by itself make ``import soamapi`` work. Symphony's ``soamapiversion`` module selects the directory
-matching the running interpreter, and the worker manager imports it for you. Check the setup the same way:
+Neither variable makes ``import soamapi`` work on its own, because ``lib64`` holds one bytecode directory per
+interpreter rather than ``soamapi`` itself. Symphony's ``soamapiversion`` module appends the directory matching
+the running interpreter, and the worker manager imports it for you. Check the setup the same way:
 
 .. code-block:: bash
 
