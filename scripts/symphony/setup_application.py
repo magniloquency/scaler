@@ -16,6 +16,7 @@ because Symphony's own ``soamapiversion`` decides which bytecode a given interpr
 """
 
 import argparse
+import dataclasses
 import os
 import shutil
 import subprocess
@@ -23,7 +24,7 @@ import sys
 import tarfile
 import tempfile
 from pathlib import Path
-from typing import List, NamedTuple, Optional, Tuple
+from typing import List, Optional, Tuple
 
 SERVICE_MODULE = "scaler_service.py"
 
@@ -37,7 +38,8 @@ class SetupError(Exception):
     """A condition the operator has to fix, reported without a traceback."""
 
 
-class Installation(NamedTuple):
+@dataclasses.dataclass(frozen=True)
+class Installation:
     """The resolved locations inside one Symphony installation."""
 
     home: Path
