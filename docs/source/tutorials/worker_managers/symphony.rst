@@ -33,37 +33,15 @@ Symphony environment in the shell that will run the worker manager:
 
    . $SOAM_HOME/conf/profile.soam
 
-That sets both variables the import needs, ``PYTHONPATH`` and ``LD_LIBRARY_PATH``, each naming the ``lib64``
-directory. If your installation has no profile to source, set them yourself, before starting Python:
-
-.. code-block:: bash
-
-   export SYMPHONY_LIBRARY_DIRECTORY="$SOAM_HOME/$SOAM_VERSION/$BINARY_TYPE/lib64"
-   export PYTHONPATH="$SYMPHONY_LIBRARY_DIRECTORY:$PYTHONPATH"
-   export LD_LIBRARY_PATH="$SYMPHONY_LIBRARY_DIRECTORY:$LD_LIBRARY_PATH"
-
-``LD_LIBRARY_PATH`` matters as much as ``PYTHONPATH``, and the dynamic linker reads it at process start, so
-exporting it afterwards from inside Python is too late. The API is backed by shared libraries in that same
-``lib64`` directory, so importing ``soamapi`` with only ``PYTHONPATH`` set fails with
-``ImportError: libcom_platform_log4cxx_097_4.so.9: cannot open shared object file``.
-
-Neither variable makes ``import soamapi`` work on its own, because ``lib64`` holds one bytecode directory per
-interpreter rather than ``soamapi`` itself. Symphony's ``soamapiversion`` module appends the directory matching
-the running interpreter, and the worker manager imports it for you. Check the setup the same way:
-
-.. code-block:: bash
-
-   python -c "import soamapiversion, soamapi"
+That sets all of the variables you need.
 
 .. note::
 
    **Supported Python versions.** Symphony compiles ``soamapi`` for specific interpreters, one
-   ``pythonapi_<python-version>`` directory per version, and selects one by the running interpreter's minor version.
-   Symphony 7.3.2 build 603035 ships Python 2.7, 3.4, 3.6, 3.8, 3.9, 3.10 and 3.12; earlier builds ship fewer. Scaler
-   requires Python 3.10 or later, so the Symphony worker manager runs on **Python 3.10 or 3.12**.
+   ``pythonapi_<python-version>`` directory per version. Only 3.10 and 3.12 are compatible with both
+   scaler and symphony.
 
-   On any other version, including 3.11, 3.13 and 3.14, Symphony falls back to its Python 3.4 bytecode and the import
-   fails with ``ImportError: bad magic number in 'soamapi'``. List what your own installation supports with:
+   You can check which versions of Python your symphony import supports with the following command:
 
    .. code-block:: bash
 
@@ -78,7 +56,7 @@ the service:
 
 .. code-block:: bash
 
-   python3 scripts/symphony/setup_application.py --python /path/to/python3.12
+   python3 scripts/symphony/setup_application.py --python /path/to/python
 
 It packages and deploys the service, generates an application profile with the paths resolved, registers it,
 and prints the registered applications. Add ``--dry-run`` to see the profile without changing the cluster, and
@@ -87,31 +65,12 @@ and prints the registered applications. Add ``--dry-run`` to see the profile wit
 The interpreter you name needs ``cloudpickle`` and a matching ``soamapi``; the utility checks both by running
 it, and refuses rather than leaving the failure to appear later as unexplained task failures.
 
-Step 3: Start the Scheduler
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Step 3: Start Scaler
+~~~~~~~~~~~~~~~~~~~~
 
-.. code-block:: bash
-
-   scaler_object_storage_server tcp://127.0.0.1:8517
-   scaler_scheduler tcp://0.0.0.0:8516 --object-storage-address tcp://127.0.0.1:8517 \
-       --policy-content "allocate=even_load; scaling=vanilla"
-
-
-Step 4: Start the Symphony Worker Manager
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: bash
-
-   scaler_worker_manager symphony tcp://<SCHEDULER_IP>:8516 \
-       --worker-manager-id wm-symphony \
-       --service-name PickleRunner \
-       --max-task-concurrency 8
-
-``--service-name`` takes the Symphony **application** name, not the service name. The worker manager passes it
-to ``soamapi.connect()``, which connects to an application. With the application created by
-``scripts/symphony/setup_application.py`` this is ``PickleRunner``, whose service is ``PickleRunnerService``.
-
-Or use a TOML configuration file:
+The ``scaler`` launcher starts the object storage server, the scheduler and the worker manager from one
+configuration file. Run it on the host with the Symphony installation, in the shell where you sourced the
+Symphony environment in Step 1:
 
 .. code-block:: bash
 
@@ -126,16 +85,37 @@ Or use a TOML configuration file:
    [scheduler]
    bind_address = "tcp://0.0.0.0:8516"
    object_storage_address = "tcp://127.0.0.1:8517"
+   policy_engine_type = "simple"
+   policy_content = "allocate=even_load; scaling=vanilla"
 
    [[worker_manager]]
    type = "symphony"
-   scheduler_address = "tcp://<SCHEDULER_IP>:8516"
+   scheduler_address = "tcp://127.0.0.1:8516"
    worker_manager_id = "wm-symphony"
-   service_name = "MyScalerService"
+   service_name = "PickleRunner"
    max_task_concurrency = 8
    logging_level = "INFO"
 
-Step 5: Submit Tasks
+The scheduler binds ``0.0.0.0`` so clients on other machines can reach it, while the worker manager connects
+over the loopback address alongside it.
+
+``service_name`` takes the Symphony **application** name, not the service name. The worker manager passes it
+to ``soamapi.connect()``, which connects to an application. With the application created by
+``scripts/symphony/setup_application.py`` this is ``PickleRunner``, whose service is ``PickleRunnerService``.
+
+To run the parts separately instead, each one takes the same settings on the command line:
+
+.. code-block:: bash
+
+   scaler_object_storage_server tcp://127.0.0.1:8517
+   scaler_scheduler tcp://0.0.0.0:8516 --object-storage-address tcp://127.0.0.1:8517 \
+       --policy-content "allocate=even_load; scaling=vanilla"
+   scaler_worker_manager symphony tcp://<SCHEDULER_IP>:8516 \
+       --worker-manager-id wm-symphony \
+       --service-name PickleRunner \
+       --max-task-concurrency 8
+
+Step 4: Submit Tasks
 ~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: python
