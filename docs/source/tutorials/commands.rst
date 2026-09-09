@@ -564,7 +564,7 @@ IBM Spectrum Symphony worker manager.
             type = "symphony"
             scheduler_address = "tcp://127.0.0.1:6378"
             worker_manager_id = "wm-symphony"
-            service_name = "PickleRunner"
+            service_name = "Scaler"
 
         Run command:
 
@@ -578,7 +578,7 @@ IBM Spectrum Symphony worker manager.
 
             scaler_worker_manager symphony tcp://127.0.0.1:6378 \
                 --worker-manager-id wm-symphony \
-                --service-name PickleRunner
+                --service-name Scaler
 
 .. list-table::
    :header-rows: 1
