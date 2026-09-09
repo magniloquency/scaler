@@ -104,12 +104,6 @@ SCENARIOS: Tuple[Scenario, ...] = (
     Scenario("BalanceCancelRequested", BalanceCancelRequested(task_id=TASK_ID)),
     Scenario("BalanceCancelRequested (worker gone)", BalanceCancelRequested(task_id=TASK_ID), worker_holds_task=False),
     Scenario(
-        "BalanceCancelRequested (worker gone, no capacity)",
-        BalanceCancelRequested(task_id=TASK_ID),
-        worker_holds_task=False,
-        capacity_available=False,
-    ),
-    Scenario(
         "TaskResultReceived (success)",
         TaskResultReceived(task_id=TASK_ID, task_result=make_task_result(TaskResultType.success)),
     ),

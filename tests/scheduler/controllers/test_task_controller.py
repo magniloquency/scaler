@@ -42,7 +42,7 @@ SNAPSHOT_HEADER = (
 )
 
 SOURCE_COLUMN_WIDTH = 17
-SCENARIO_COLUMN_WIDTH = 50
+SCENARIO_COLUMN_WIDTH = 38
 
 
 def format_snapshot_line(source_name: str, scenario_name: str, target_name: str) -> str:
@@ -216,12 +216,13 @@ class TestTaskControllerBehavior(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(list(self.harness.controller._unassigned), [TASK_ID])
         self.assertEqual(self.harness.messages_sent_to(REPLACEMENT_WORKER_ID), [])
 
-    async def test_balance_cancel_without_a_worker_reschedules_the_task(self):
-        """The same recovery, reached from the scheduler side instead of from a worker message.
+    async def test_balance_cancel_without_a_worker_is_dropped(self):
+        """The same staleness, reached from the scheduler side instead of from a worker message.
 
-        No worker holds the task, so no cancel leaves the scheduler and no confirm can ever arrive. Entering
-        balanceCanceling would park the task with nothing left to wait for, so the balance move is abandoned and the
-        task is placed again instead.
+        No worker holds the task, so no cancel leaves the scheduler and no confirm can ever arrive. The task must not
+        be placed again here: the mapping is gone because the worker departed, and that worker's WorkerDisconnected
+        event is already queued for this task, so a dispatch here would be followed by a second one. The balance move
+        is dropped and the task stays running until the queued event reroutes it.
         """
 
         state_machine = await self.harness.enter_state(TaskState.running)
@@ -231,22 +232,25 @@ class TestTaskControllerBehavior(unittest.IsolatedAsyncioTestCase):
         await self.harness.controller.on_task_balance_cancel(TASK_ID)
 
         self.assertEqual(state_machine.current_state(), TaskState.running)
-        self.assertEqual(len(self.harness.messages_sent_to(REPLACEMENT_WORKER_ID)), 1)
+        self.assertIsNotNone(self.harness.get_state_machine())
+        self.assertEqual(self.harness.messages_sent_to(REPLACEMENT_WORKER_ID), [], "the task must not be placed twice")
         self.assertEqual(self.harness.messages_sent_to(CLIENT_ID), [])
 
         # the cancel was never sent because the worker controller has no mapping, so there is nothing to release
         self.harness.worker_controller.on_task_done.assert_not_awaited()
 
-    async def test_balance_cancel_without_a_worker_queues_the_task_when_no_worker_is_free(self):
+    async def test_a_disconnect_after_a_dropped_balance_cancel_reroutes_the_task(self):
+        """The queued event the dropped balance cancel defers to, placing the task exactly once."""
+
         state_machine = await self.harness.enter_state(TaskState.running)
         self.harness.set_worker_holds_task(False)
-        self.harness.set_capacity_available(False)
+        self.harness.set_capacity_available(True)
 
         await self.harness.controller.on_task_balance_cancel(TASK_ID)
+        await self.harness.controller.on_worker_disconnect(TASK_ID, WORKER_ID)
 
-        self.assertEqual(state_machine.current_state(), TaskState.inactive)
-        self.assertEqual(list(self.harness.controller._unassigned), [TASK_ID])
-        self.assertEqual(self.harness.messages_sent_to(REPLACEMENT_WORKER_ID), [])
+        self.assertEqual(state_machine.current_state(), TaskState.running)
+        self.assertEqual(len(self.harness.messages_sent_to(REPLACEMENT_WORKER_ID)), 1)
 
     async def test_a_repeated_balance_cancel_is_refused_without_an_error(self):
         """A saturated worker is slow to confirm, so the balancer can re-advise a move that is still in flight.

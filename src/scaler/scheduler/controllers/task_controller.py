@@ -63,7 +63,7 @@ LOCK_ACQUIRE_TIMEOUT_SECONDS = 10
 DispatchTargetStates = Literal[TaskState.inactive, TaskState.running]
 HasCapacityTargetStates = Literal[TaskState.running]
 TaskCancelTargetStates = Literal[TaskState.canceled, TaskState.canceling, TaskState.canceledNotFound]
-BalanceCancelTargetStates = Literal[TaskState.balanceCanceling, TaskState.inactive, TaskState.running]
+BalanceCancelTargetStates = Literal[TaskState.balanceCanceling]
 TaskResultTargetStates = Literal[TaskState.success, TaskState.failed, TaskState.failedWorkerDied]
 CancelConfirmCanceledTargetStates = Literal[TaskState.canceled, TaskState.inactive, TaskState.running]
 CancelConfirmFailedTargetStates = Literal[TaskState.running]
@@ -434,11 +434,14 @@ class VanillaTaskController(TaskController, Looper, Reporter):
                 if await self.__send_task_cancel_to_worker(task_cancel, TaskState.balanceCanceling):
                     return TaskState.balanceCanceling
 
-                # no worker holds the task, so no cancel is in flight and no confirm can ever arrive. the balance
-                # move is moot, so place the task again instead of waiting in balanceCanceling forever. there is no
-                # on_task_done here, the send failed because the worker controller already has no mapping to release
-                logger.warning(f"{event.task_id!r}: balance cancel found no worker holding the task, placing it again")
-                return await self.__acquire_and_dispatch(event.task_id)
+                # no worker holds the task, so no cancel is in flight and no confirm can ever arrive. this is the
+                # same stale advice as the arms below, reached from the scheduler side: remove_worker drops every
+                # task mapping of a departing worker at once and only then drains the tasks one await at a time, so
+                # a task can still read running here with its WorkerDisconnected event already queued behind us.
+                # placing it again would race that event into a second dispatch, running the task on two workers and
+                # leaking the queue slot of the first. leave the task running and let the queued event reroute it
+                logger.warning(f"{event.task_id!r}: balance cancel found no worker holding the task, dropping it")
+                return None
             case (
                 TaskState.inactive
                 | TaskState.canceling
