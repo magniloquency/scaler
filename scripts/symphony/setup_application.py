@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Deploy the pickle runner service and register a Symphony application for the Scaler worker manager.
+"""Deploy the Scaler service and register a Symphony application for the Scaler worker manager.
 
 Run this on a host with an IBM Spectrum Symphony installation, once, before starting
-``scaler_worker_manager symphony``. It packages ``pickle_runner.py``, deploys it with ``soamdeploy``,
+``scaler_worker_manager symphony``. It packages ``scaler_service.py``, deploys it with ``soamdeploy``,
 generates an application profile with every path resolved, and registers it with ``soamreg``.
 
 Paths are resolved and written into the profile rather than left as ``${VERSION_NUM}`` and
@@ -24,10 +24,10 @@ import tempfile
 from pathlib import Path
 from typing import List, NamedTuple, Optional, Tuple
 
-SERVICE_MODULE = "pickle_runner.py"
+SERVICE_MODULE = "scaler_service.py"
 
-DEFAULT_APPLICATION_NAME = "PickleRunner"
-DEFAULT_SERVICE_NAME = "PickleRunnerService"
+DEFAULT_APPLICATION_NAME = "Scaler"
+DEFAULT_SERVICE_NAME = "ScalerService"
 
 APPLICATION_PROFILE_TEMPLATE = """<?xml version="1.0" encoding="UTF-8" standalone="no" ?><Profile \
 xmlns="http://www.platform.com/Symphony/Profile/Application" version="@SOAM_VERSION@" \
@@ -78,7 +78,7 @@ name="UnrecoverableNoHistoricalData" persistTaskHistory="none" priority="1" reco
 sessionRetryLimit="3" suspendGracePeriod="100" taskCleanupPeriod="100" taskRetryLimit="1"/>
     </SessionTypes>
 
-    <Service description="Scaler pickle runner service" name="@SERVICE@" packageName="@SERVICE@">
+    <Service description="Scaler worker manager service" name="@SERVICE@" packageName="@SERVICE@">
         <osTypes>
             <osType name="all" startCmd="@PYTHON@ ${SOAM_DEPLOY_DIR}/@SERVICE_MODULE@" \
 workDir="${SOAM_HOME}/work">
