@@ -60,7 +60,7 @@ the service:
 
 It packages and deploys the service, generates an application profile with the paths resolved, registers it,
 and prints the registered applications. Add ``--dry-run`` to see the profile without changing the cluster, and
-``--application``/``--service`` to use names other than ``PickleRunner``/``PickleRunnerService``.
+``--application``/``--service`` to use names other than ``Scaler``/``ScalerService``.
 
 The interpreter you name needs ``cloudpickle`` and a matching ``soamapi``; the utility checks both by running
 it, and refuses rather than leaving the failure to appear later as unexplained task failures.
@@ -92,7 +92,7 @@ Symphony environment in Step 1:
    type = "symphony"
    scheduler_address = "tcp://127.0.0.1:8516"
    worker_manager_id = "wm-symphony"
-   service_name = "PickleRunner"
+   service_name = "Scaler"
    max_task_concurrency = 8
    logging_level = "INFO"
 
@@ -101,7 +101,7 @@ over the loopback address alongside it.
 
 ``service_name`` takes the Symphony **application** name, not the service name. The worker manager passes it
 to ``soamapi.connect()``, which connects to an application. With the application created by
-``scripts/symphony/setup_application.py`` this is ``PickleRunner``, whose service is ``PickleRunnerService``.
+``scripts/symphony/setup_application.py`` this is ``Scaler``, whose service is ``ScalerService``.
 
 To run the parts separately instead, each one takes the same settings on the command line:
 
@@ -112,7 +112,7 @@ To run the parts separately instead, each one takes the same settings on the com
        --policy-content "allocate=even_load; scaling=vanilla"
    scaler_worker_manager symphony tcp://<SCHEDULER_IP>:8516 \
        --worker-manager-id wm-symphony \
-       --service-name PickleRunner \
+       --service-name Scaler \
        --max-task-concurrency 8
 
 Step 4: Submit Tasks

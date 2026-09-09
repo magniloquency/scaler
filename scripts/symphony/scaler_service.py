@@ -44,7 +44,7 @@ class PickledPayloadMessage(soamapi.Message):
         self.set_payload(stream.read_byte_array("b").tobytes())
 
 
-class PickleRunnerServiceContainer(soamapi.ServiceContainer):
+class ScalerServiceContainer(soamapi.ServiceContainer):
     """Calls the function in each task payload and returns its result."""
 
     def on_create_service(self, service_context) -> None:
@@ -69,4 +69,4 @@ class PickleRunnerServiceContainer(soamapi.ServiceContainer):
 
 
 if __name__ == "__main__":
-    PickleRunnerServiceContainer().run()
+    ScalerServiceContainer().run()
