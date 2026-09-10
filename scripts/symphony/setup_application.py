@@ -168,8 +168,8 @@ def _verify_interpreter(interpreter: Path, installation: Installation) -> Path:
     """Return the soamapi bytecode directory this interpreter resolves to, by running it.
 
     Symphony decides which bytecode an interpreter gets, so asking it is the only answer that cannot drift
-    from a table written here. This also catches a service interpreter that has no cloudpickle, which would
-    otherwise fail later as an unexplained task failure.
+    from a table written here. This also catches a service interpreter missing cloudpickle or tblib, which
+    would otherwise fail later as an unexplained task failure.
     """
     library_directory = installation.library_directory
     if not library_directory.is_dir():
@@ -179,7 +179,7 @@ def _verify_interpreter(interpreter: Path, installation: Installation) -> Path:
     environment["PYTHONPATH"] = str(library_directory)
     environment["LD_LIBRARY_PATH"] = os.pathsep.join([str(library_directory), environment.get("LD_LIBRARY_PATH", "")])
 
-    program = "import soamapiversion, soamapi, cloudpickle; print(soamapi.__file__)"
+    program = "import soamapiversion, soamapi, cloudpickle, tblib.pickling_support; print(soamapi.__file__)"
     completed = subprocess.run(
         [str(interpreter), "-c", program], env=environment, capture_output=True, text=True, check=False
     )
@@ -187,7 +187,7 @@ def _verify_interpreter(interpreter: Path, installation: Installation) -> Path:
         raise SetupError(
             f"{interpreter} cannot run the service: {completed.stderr.strip()}\n"
             f"  soamapi bytecode present: {', '.join(_installed_bytecode_versions(library_directory)) or 'none'}\n"
-            f"  the interpreter also needs cloudpickle (pip install cloudpickle)"
+            f"  the interpreter also needs cloudpickle and tblib (pip install opengris-scaler)"
         )
 
     return Path(completed.stdout.strip()).parent
