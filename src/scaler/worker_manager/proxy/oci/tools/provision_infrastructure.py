@@ -7,13 +7,13 @@ Simple provisioning for OCI resources required by the Scaler OCI proxy worker ma
     - OCI IAM Policies           (analogous to AWS IAM role policies)
     - OCI Container Registry     (analogous to AWS ECR)
 
-Service Mapping (AWS → OCI):
-    - S3 bucket              → OCI Object Storage bucket
-    - IAM role (Batch jobs)  → OCI Dynamic Group + IAM Policy
-    - ECR repository         → OCI Container Registry (OCIR) repository
-    - CloudWatch Log Group   → OCI Logging (log group managed automatically)
-    - Compute Environment    → N/A (OCI Container Instances are fully on-demand)
-    - Job Queue              → N/A (concurrency is managed by the adapter semaphore)
+Service Mapping (AWS -> OCI):
+    - S3 bucket              -> OCI Object Storage bucket
+    - IAM role (Batch jobs)  -> OCI Dynamic Group + IAM Policy
+    - ECR repository         -> OCI Container Registry (OCIR) repository
+    - CloudWatch Log Group   -> OCI Logging (log group managed automatically)
+    - Compute Environment    -> N/A (OCI Container Instances are fully on-demand)
+    - Job Queue              -> N/A (concurrency is managed by the adapter semaphore)
 
 OCI Authentication:
     The provisioner uses the OCI Python SDK and reads credentials from the
@@ -62,7 +62,7 @@ class OCIInfrastructureProvisioner:
         - OCI Container Registry   (for the container image used by instances)
 
     Unlike the AWS Batch adapter, there is no equivalent of a Compute Environment
-    or Job Queue — OCI Container Instances are created on-demand per task, and
+    or Job Queue - OCI Container Instances are created on-demand per task, and
     concurrency is governed by the adapter's semaphore (``base_concurrency``).
     """
 
@@ -334,7 +334,7 @@ class OCIInfrastructureProvisioner:
         # Push image to OCIR
         # NOTE: Docker must be logged in to the OCIR registry before pushing.
         # Use: docker login <region>.ocir.io -u <namespace>/<username> -p <auth_token>
-        # Auth tokens are created in OCI Console → Identity → Users → Auth Tokens.
+        # Auth tokens are created in OCI Console -> Identity -> Users -> Auth Tokens.
         logger.info(f"Pushing image to OCIR: {image_uri}")
         subprocess.run(["docker", "push", image_uri], check=True)
 

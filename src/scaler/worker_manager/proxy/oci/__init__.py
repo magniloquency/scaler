@@ -5,18 +5,20 @@ Submits each Scaler task as an on-demand OCI Container Instance and reports
 results back to the scheduler via the WorkerProcess pattern.
 
 Architecture:
-    Scheduler → WorkerManagerRunner → OCIJobsWorkerProvisioner → WorkerProcess
-                                                                      ↓
-                                                          OCIExecutionBackend
-                                                                      ↓
-                                                          OCI Container Instances
+    Scheduler -> WorkerManagerRunner -> OCIJobsWorkerProvisioner -> WorkerProcess
+                                                                        |
+                                                                        v
+                                                              OCIExecutionBackend
+                                                                        |
+                                                                        v
+                                                           OCI Container Instances
 
-Service Mapping (AWS → OCI):
-    - AWS Batch          → OCI Container Instances
-    - Amazon S3          → OCI Object Storage
-    - Amazon ECR         → OCI Container Registry (OCIR)
-    - Amazon CloudWatch  → OCI Logging
-    - AWS IAM Role       → OCI Dynamic Group + IAM Policies
+Service Mapping (AWS -> OCI):
+    - AWS Batch          -> OCI Container Instances
+    - Amazon S3          -> OCI Object Storage
+    - Amazon ECR         -> OCI Container Registry (OCIR)
+    - Amazon CloudWatch  -> OCI Logging
+    - AWS IAM Role       -> OCI Dynamic Group + IAM Policies
 """
 
 from scaler.worker_manager.proxy.oci.execution_backend import OCIExecutionBackend

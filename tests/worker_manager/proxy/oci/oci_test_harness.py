@@ -6,10 +6,10 @@ Validates the OCI Container Instance worker adapter by running a series of
 checks against a live OCI tenancy and (optionally) a running Scaler scheduler.
 
 Phases:
-    1. OCI connectivity    — verify auth, compartment, subnet, ADs
-    2. Object Storage      — write / read / delete a test object
-    3. Container Instance  — launch a minimal container, poll to completion, clean up
-    4. Scheduler tasks     — submit Scaler tasks through a running scheduler (requires --scheduler)
+    1. OCI connectivity    - verify auth, compartment, subnet, ADs
+    2. Object Storage      - write / read / delete a test object
+    3. Container Instance  - launch a minimal container, poll to completion, clean up
+    4. Scheduler tasks     - submit Scaler tasks through a running scheduler (requires --scheduler)
 
 Usage:
     # Full infrastructure validation (no scheduler required):
@@ -62,7 +62,7 @@ _CI_TIMEOUT_SECONDS = 300  # 5 min for container instance lifecycle
 _SCHEDULER_TASK_TIMEOUT = 600
 
 # ---------------------------------------------------------------------------
-# Test functions (must be picklable — top-level module functions)
+# Test functions (must be picklable - top-level module functions)
 # ---------------------------------------------------------------------------
 
 
@@ -109,12 +109,12 @@ def _print_header(title: str) -> None:
 
 def _print_result(name: str, passed: bool, detail: str = "") -> None:
     status = "PASSED" if passed else "FAILED"
-    suffix = f" — {detail}" if detail else ""
+    suffix = f" - {detail}" if detail else ""
     print(f"  [{status}] {name}{suffix}")
 
 
 # ---------------------------------------------------------------------------
-# Phase 1 — OCI Connectivity
+# Phase 1 - OCI Connectivity
 # ---------------------------------------------------------------------------
 
 
@@ -190,7 +190,7 @@ def check_availability_domain(profile: str, compartment_id: str, ad_name: str) -
 
 
 # ---------------------------------------------------------------------------
-# Phase 2 — Object Storage
+# Phase 2 - Object Storage
 # ---------------------------------------------------------------------------
 
 
@@ -241,7 +241,7 @@ def check_object_storage(profile: str, compartment_id: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Phase 3 — Container Instance Lifecycle
+# Phase 3 - Container Instance Lifecycle
 # ---------------------------------------------------------------------------
 
 
@@ -357,7 +357,7 @@ def check_container_instance_lifecycle(
 
 
 # ---------------------------------------------------------------------------
-# Phase 4 — Scheduler Task Tests
+# Phase 4 - Scheduler Task Tests
 # ---------------------------------------------------------------------------
 
 
