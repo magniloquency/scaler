@@ -19,7 +19,7 @@ def _make_request(task_concurrency: int, capabilities: dict) -> MagicMock:
     return request
 
 
-class TestBatchWorkerProvisionerConcurrencyConversion(unittest.IsolatedAsyncioTestCase):
+class TestAWSBatchWorkerProvisionerConcurrencyConversion(unittest.IsolatedAsyncioTestCase):
     async def test_converts_task_concurrency_to_process_count(self) -> None:
         provisioner = _make_provisioner(max_concurrent_jobs=100)
         request = _make_request(task_concurrency=150, capabilities={})

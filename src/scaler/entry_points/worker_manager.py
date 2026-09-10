@@ -119,13 +119,13 @@ def main() -> None:
 
         ORBAWSEC2WorkerManager(wm_config).run()
     elif isinstance(wm_config, OCIRawWorkerManagerConfig):
-        from scaler.worker_manager.nested.oci.worker_manager import OCIWorkerManager as NestedOCIWorkerManager
+        from scaler.worker_manager.nested.oci.worker_manager import OCIInstancesWorkerManager
 
-        NestedOCIWorkerManager(wm_config).run()
+        OCIInstancesWorkerManager(wm_config).run()
     elif isinstance(wm_config, OCIHPCWorkerManagerConfig):
-        from scaler.worker_manager.proxy.oci.worker_manager import OCIWorkerManager as ProxyOCIWorkerManager
+        from scaler.worker_manager.proxy.oci.worker_manager import OCIJobsWorkerManager
 
-        ProxyOCIWorkerManager(wm_config).run()
+        OCIJobsWorkerManager(wm_config).run()
 
 
 if __name__ == "__main__":

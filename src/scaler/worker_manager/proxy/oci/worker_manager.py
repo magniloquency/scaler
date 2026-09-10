@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class OCIWorkerProvisioner(DeclarativeWorkerProvisioner):
+class OCIJobsWorkerProvisioner(DeclarativeWorkerProvisioner):
     def __init__(self, config: OCIHPCWorkerManagerConfig) -> None:
         self._config = config
         self._base_concurrency = config.base_concurrency
@@ -96,7 +96,7 @@ class OCIWorkerProvisioner(DeclarativeWorkerProvisioner):
         logger.info(f"Started OCI worker process {worker.name!r}")
 
 
-class OCIWorkerManager:
+class OCIJobsWorkerManager:
     def __init__(self, config: OCIHPCWorkerManagerConfig) -> None:
         self._config = config
 
@@ -112,7 +112,7 @@ class OCIWorkerManager:
             f"  Max Concurrent Jobs: {config.base_concurrency}\n"
             f"  Job Timeout: {config.job_timeout_seconds}s"
         )
-        provisioner = OCIWorkerProvisioner(config)
+        provisioner = OCIJobsWorkerProvisioner(config)
         runner = WorkerManagerRunner(
             address=config.worker_manager_config.scheduler_address,
             name="worker_manager_oci_hpc",

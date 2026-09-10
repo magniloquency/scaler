@@ -175,7 +175,7 @@ class AWSBatchInfrastructureProvisioner:
         print(f"export SCALER_JOB_DEFINITION=\"{config['job_definition_name']}\"")
 
     @staticmethod
-    def save_env_file(config: Dict[str, object], env_file: str = ".scaler_aws_hpc.env") -> None:
+    def save_env_file(config: Dict[str, object], env_file: str = ".scaler_aws_batch.env") -> None:
         """Save config as sourceable shell env file."""
         path = Path(env_file)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -783,7 +783,7 @@ def main() -> None:
         help="Config file path",
     )
     parser.add_argument(
-        "--env-file", default="tests/worker_manager/proxy/aws_batch/.scaler_aws_hpc.env", help="Env file path"
+        "--env-file", default="tests/worker_manager/proxy/aws_batch/.scaler_aws_batch.env", help="Env file path"
     )
 
     args = parser.parse_args()

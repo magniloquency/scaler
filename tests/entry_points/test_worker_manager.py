@@ -742,7 +742,7 @@ class TestOCIRawWorkerManagerConfig(unittest.TestCase):
             patch("sys.argv", ["scaler_worker_manager", "oci_raw", *_OCI_RAW_BASE_ARGV]),
             patch("scaler.entry_points.worker_manager.bootstrap_process"),
             patch("scaler.entry_points.worker_manager.register_event_loop"),
-            patch("scaler.worker_manager.nested.oci.worker_manager.OCIWorkerManager") as mock_mgr,
+            patch("scaler.worker_manager.nested.oci.worker_manager.OCIInstancesWorkerManager") as mock_mgr,
         ):
             mock_mgr.return_value.run.return_value = None
             from scaler.entry_points.worker_manager import main
@@ -1069,7 +1069,7 @@ worker_manager_id = "wm-2"
             patch("sys.argv", ["scaler_worker_manager", "oci_hpc", *_OCI_HPC_BASE_ARGV]),
             patch("scaler.entry_points.worker_manager.bootstrap_process"),
             patch("scaler.entry_points.worker_manager.register_event_loop"),
-            patch("scaler.worker_manager.proxy.oci.worker_manager.OCIWorkerManager") as mock_mgr,
+            patch("scaler.worker_manager.proxy.oci.worker_manager.OCIJobsWorkerManager") as mock_mgr,
         ):
             mock_mgr.return_value.run.return_value = None
             from scaler.entry_points.worker_manager import main

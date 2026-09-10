@@ -78,13 +78,13 @@ def _run_worker_manager(config: WorkerManagerUnion) -> None:
 
         ORBAWSEC2WorkerManager(config).run()
     elif isinstance(config, OCIRawWorkerManagerConfig):
-        from scaler.worker_manager.nested.oci.worker_manager import OCIWorkerManager as NestedOCIWorkerManager
+        from scaler.worker_manager.nested.oci.worker_manager import OCIInstancesWorkerManager
 
-        NestedOCIWorkerManager(config).run()
+        OCIInstancesWorkerManager(config).run()
     elif isinstance(config, OCIHPCWorkerManagerConfig):
-        from scaler.worker_manager.proxy.oci.worker_manager import OCIWorkerManager as ProxyOCIWorkerManager
+        from scaler.worker_manager.proxy.oci.worker_manager import OCIJobsWorkerManager
 
-        ProxyOCIWorkerManager(config).run()
+        OCIJobsWorkerManager(config).run()
 
 
 def _run_gui(config: WebGUIConfig) -> None:

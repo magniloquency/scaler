@@ -44,7 +44,7 @@ orb/metrics/
 
 # AWS HPC test-generated files
 .scaler_aws_batch_config.json
-.scaler_aws_hpc.env
+.scaler_aws_batch.env
 .scaler_oci_config.json
 .scaler_oci_hpc.env
 tests/worker_manager/proxy/oci/.scaler_oci_config.json
