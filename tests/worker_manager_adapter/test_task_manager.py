@@ -510,6 +510,56 @@ class TestTaskManagerTaskRelease(unittest.IsolatedAsyncioTestCase):
 
         await self.tm.on_task_new(_make_task())
 
+    async def test_a_cancel_that_beats_the_future_being_recorded_is_still_accepted(self) -> None:
+        """execute() is awaited, so a force cancel can arrive while a task has no future yet."""
+        task = _make_task()
+        await self.tm.on_task_new(task)
+        started = asyncio.Event()
+        release = asyncio.Event()
+
+        async def slow_execute(_: Task) -> asyncio.Future:
+            started.set()
+            await release.wait()
+            return asyncio.get_running_loop().create_future()
+
+        self.backend.execute = AsyncMock(side_effect=slow_execute)
+        processing = asyncio.get_running_loop().create_task(self.tm.process_task())
+        await started.wait()
+
+        await self.tm.on_cancel_task(_make_task_cancel(task.taskId, force=True))
+
+        self.assertIn(task.taskId, self.tm._canceled_task_ids)
+        self.assertNotIn(task.taskId, self.tm._processing_task_ids)
+        release.set()
+        await processing
+
+    async def test_the_future_of_a_task_cancelled_that_early_is_still_resolved_away(self) -> None:
+        task = _make_task()
+        await self.tm.on_task_new(task)
+        started = asyncio.Event()
+        release = asyncio.Event()
+        future: asyncio.Future = asyncio.get_running_loop().create_future()
+
+        async def slow_execute(_: Task) -> asyncio.Future:
+            started.set()
+            await release.wait()
+            return future
+
+        self.backend.execute = AsyncMock(side_effect=slow_execute)
+        processing = asyncio.get_running_loop().create_task(self.tm.process_task())
+        await started.wait()
+        await self.tm.on_cancel_task(_make_task_cancel(task.taskId, force=True))
+        release.set()
+        await processing
+
+        future.set_result(None)
+        await self.tm.resolve_tasks()
+
+        self.assertNotIn(task.taskId, self.tm._canceled_task_ids)
+        self.assertNotIn(task.taskId, self.tm._acquiring_task_ids)
+        self.assertNotIn(task.taskId, self.tm._task_id_to_task)
+        self.connector_external.send.assert_called()
+
     async def test_a_task_whose_task_is_already_gone_still_gives_back_its_permit(self) -> None:
         task = _make_task()
 
