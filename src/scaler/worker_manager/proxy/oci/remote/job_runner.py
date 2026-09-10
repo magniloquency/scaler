@@ -140,7 +140,7 @@ def store_result(
     if len(result_bytes) > COMPRESSION_THRESHOLD_BYTES:
         result_bytes = gzip.compress(result_bytes)
 
-    # Use task_id as the result key — both the adapter and runner know it upfront
+    # Use task_id as the result key - both the adapter and runner know it upfront
     result_key = f"{prefix}/results/{task_id}.pkl"
 
     object_storage_client.put_object(
@@ -181,7 +181,7 @@ def main() -> None:
         logger.info(f"Task data loaded, keys: {list(task_data.keys())}")
 
         if "function" not in task_data or "arguments" not in task_data:
-            raise ValueError("Task data missing 'function' and 'arguments' — reference mode not yet supported")
+            raise ValueError("Task data missing 'function' and 'arguments' - reference mode not yet supported")
 
         func = task_data["function"]
         arguments = task_data["arguments"]
