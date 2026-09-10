@@ -614,6 +614,9 @@ class TestExecutionBackendSentinel(unittest.IsolatedAsyncioTestCase):
             async def routine(self) -> None:
                 pass
 
+            def close(self) -> None:
+                pass
+
         backend = _ConcreteBackend()
         backend.register(_loader)
         func, args = await backend.load_task_inputs(_make_task())
