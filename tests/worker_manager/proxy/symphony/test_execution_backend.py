@@ -59,7 +59,9 @@ class CloseTest(unittest.TestCase):
         backend = _backend_with_recording_handles([])
         backend._ibm_soam_connection.close.side_effect = RuntimeError("connection is gone")
 
-        with self.assertLogs(level="WARNING") as captured:
+        # "scaler" rather than the root logger: setup_logger sets propagate=False on it, so a test that
+        # watches root passes alone and fails once anything in the run has configured logging.
+        with self.assertLogs("scaler", level="WARNING") as captured:
             backend.close()
 
         self.assertTrue(any("connection is gone" in message for message in captured.output))
