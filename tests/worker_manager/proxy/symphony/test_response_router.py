@@ -17,11 +17,8 @@ from typing import Any, Optional, Tuple
 import cloudpickle
 
 from scaler.utility.exceptions import SymphonyTaskError, TaskExceptionNotSerializableError
-from scaler.worker_manager.proxy.symphony.response_router import (
-    TaskOutputTag,
-    TaskResponseRouter,
-    describe_soam_exception,
-)
+from scaler.worker_manager.proxy.symphony.response_router import TaskResponseRouter, describe_soam_exception
+from scaler.worker_manager.proxy.symphony.task_output import TaskOutputTag
 
 TASK_ID = "task-1"
 

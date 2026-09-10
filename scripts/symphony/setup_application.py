@@ -17,6 +17,7 @@ because Symphony's own ``soamapiversion`` decides which bytecode a given interpr
 
 import argparse
 import dataclasses
+import importlib.util
 import os
 import shutil
 import subprocess
@@ -27,6 +28,10 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 SERVICE_MODULE = "scaler_service.py"
+# The service half of the output contract, deployed next to SERVICE_MODULE so that both halves read the
+# tags from one definition. It lives in the scaler package because the worker manager imports it too.
+TASK_OUTPUT_MODULE = "task_output.py"
+TASK_OUTPUT_PACKAGE = "scaler.worker_manager.proxy.symphony"
 
 DEFAULT_APPLICATION_NAME = "Scaler"
 DEFAULT_SERVICE_NAME = "ScalerService"
@@ -235,15 +240,32 @@ def _script_directory_file(name: str) -> Path:
     return path
 
 
+def _installed_package_file(package: str, name: str) -> Path:
+    """Return a file that ships inside the installed scaler package."""
+    specification = importlib.util.find_spec(package)
+    if specification is None or not specification.submodule_search_locations:
+        raise SetupError(f"cannot find {package}, install scaler with 'pip install opengris-scaler'")
+
+    path = Path(list(specification.submodule_search_locations)[0]) / name
+    if not path.is_file():
+        raise SetupError(f"{path} is missing from the installed {package}")
+
+    return path
+
+
 def _deploy_service(arguments: argparse.Namespace, installation: Installation) -> None:
     service_module = _script_directory_file(SERVICE_MODULE)
+    task_output_module = _installed_package_file(TASK_OUTPUT_PACKAGE, TASK_OUTPUT_MODULE)
 
     with tempfile.TemporaryDirectory() as working_directory:
         package = Path(working_directory) / f"{arguments.service}.tar.gz"
         with tarfile.open(package, "w:gz") as archive:
             archive.add(service_module, arcname=SERVICE_MODULE)
+            # Symphony puts the deployment directory first on the service's PYTHONPATH, so the service
+            # imports this flat, as `task_output`, with no scaler package around it.
+            archive.add(task_output_module, arcname=TASK_OUTPUT_MODULE)
 
-        _report("packaged", f"{SERVICE_MODULE} into {package.name}")
+        _report("packaged", f"{SERVICE_MODULE} and {TASK_OUTPUT_MODULE} into {package.name}")
         _run_symphony_command(
             installation,
             ["soamdeploy", "add", arguments.service, "-p", str(package), "-c", arguments.consumer, "-f"],
