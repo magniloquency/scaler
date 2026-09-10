@@ -6,6 +6,8 @@ import sys
 from collections import deque
 from typing import Callable, Dict, Optional
 
+import tblib.pickling_support
+
 from scaler.config.common.security import SecurityConfig
 from scaler.config.defaults import WORKER_EXIT_NOTIFICATION_TIMEOUT_SECONDS
 from scaler.config.types.address import AddressConfig
@@ -167,6 +169,11 @@ class WorkerProcess(_SpawnProcess):  # type: ignore[valid-type, misc]
 
     def __initialize(self) -> None:
         bootstrap_process()
+
+        # A task's exception is pickled on to the client from this process, and a traceback only
+        # survives pickling where tblib is installed, so a failure arrives without one otherwise.
+        tblib.pickling_support.install()
+
         register_event_loop(self._event_loop)
 
         self._backend = get_network_backend_from_env(io_threads=self._io_threads)
