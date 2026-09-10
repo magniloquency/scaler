@@ -127,8 +127,13 @@ class TaskManager(Looper, TaskManagerMixin):
             self._task_id_to_task.pop(task_cancel.taskId)
 
         if task_processing:
-            future = self._task_id_to_future[task_cancel.taskId]
-            future.cancel()
+            # A task counts as processing from before execute() returns, so its future may not be
+            # recorded yet. Marking it cancelled is enough either way: resolve_tasks drops a cancelled
+            # task when its future arrives, whether or not the cancel got to reach into it.
+            future = self._task_id_to_future.get(task_cancel.taskId)
+            if future is not None:
+                future.cancel()
+
             await self._execution_backend.on_cancel(task_cancel)
             self._processing_task_ids.remove(task_cancel.taskId)
             self._canceled_task_ids.add(task_cancel.taskId)
