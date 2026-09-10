@@ -18,9 +18,7 @@ import cloudpickle
 
 from scaler.utility.exceptions import SymphonyTaskError, TaskExceptionNotSerializableError
 from scaler.worker_manager.proxy.symphony.response_router import (
-    TASK_OUTPUT_EXCEPTION,
-    TASK_OUTPUT_RESULT,
-    TASK_OUTPUT_UNSERIALIZABLE_EXCEPTION,
+    TaskOutputTag,
     TaskResponseRouter,
     describe_soam_exception,
 )
@@ -95,7 +93,7 @@ class OnResponseTest(unittest.TestCase):
     def test_a_returned_value_completes_the_future(self) -> None:
         router, future = router_with_pending_task()
 
-        router.on_response(completed_task(cloudpickle.dumps((TASK_OUTPUT_RESULT, 49))))
+        router.on_response(completed_task(cloudpickle.dumps((TaskOutputTag.RESULT.value, 49))))
 
         self.assertEqual(future.result(), 49)
 
@@ -103,7 +101,7 @@ class OnResponseTest(unittest.TestCase):
         """The client wants the exception its task raised, not a report that Symphony saw a failure."""
         router, future = router_with_pending_task()
 
-        router.on_response(completed_task(cloudpickle.dumps((TASK_OUTPUT_EXCEPTION, ValueError("deliberate")))))
+        router.on_response(completed_task(cloudpickle.dumps((TaskOutputTag.EXCEPTION.value, ValueError("deliberate")))))
 
         with self.assertRaises(ValueError) as caught:
             future.result()
@@ -113,7 +111,7 @@ class OnResponseTest(unittest.TestCase):
         router, future = router_with_pending_task()
         detail = "RuntimeError: holds a lock"
 
-        router.on_response(completed_task(cloudpickle.dumps((TASK_OUTPUT_UNSERIALIZABLE_EXCEPTION, detail))))
+        router.on_response(completed_task(cloudpickle.dumps((TaskOutputTag.UNSERIALIZABLE_EXCEPTION.value, detail))))
 
         with self.assertRaises(TaskExceptionNotSerializableError) as caught:
             future.result()
