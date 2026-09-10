@@ -84,10 +84,13 @@ class TaskManager(Looper, TaskManagerMixin):
             for acquired_task_id in self._acquiring_task_ids:
                 acquired_task = self._task_id_to_task.get(acquired_task_id)
                 if acquired_task is None:
-                    # Only a bookkeeping bug puts an id here without its task. Skipping it costs one
-                    # priority comparison, where raising would take down the worker and every task on it.
+                    # Only a bookkeeping bug puts an id here without its task, and this loop is the
+                    # wrong place to pay for it: raising takes down the worker and every task on it,
+                    # and skipping the id lets the loop finish without a break, which bypasses the
+                    # concurrency limit. Stop instead, so the task queues the way it would have if the
+                    # id had belonged to a task of at least its priority.
                     logger.error(f"Acquired task is not in the worker queue: task_id={acquired_task_id.hex()}")
-                    continue
+                    break
 
                 acquired_task_priority = self._get_task_priority(acquired_task)
                 if task_priority <= acquired_task_priority:
