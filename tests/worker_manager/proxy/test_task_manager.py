@@ -572,8 +572,12 @@ class TestTaskManagerTaskRelease(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(task.taskId, self.tm._acquiring_task_ids)
         self.assertFalse(self.tm._executor_semaphore.locked())
 
-    async def test_an_id_without_its_task_is_skipped_rather_than_raising(self) -> None:
-        """A stranded id has no priority to compare against, so the task goes on rather than the worker down."""
+    async def test_an_id_without_its_task_queues_the_next_task_rather_than_raising(self) -> None:
+        """A stranded id has no priority to compare against, so the task queues rather than the worker dying.
+
+        Queuing is the conservative reading: an id that cannot be resolved is no evidence that the
+        arriving task outranks what is in flight, and treating it as such would run the task outside
+        base_concurrency."""
         stranded = _make_task()
         self.tm._acquiring_task_ids.add(stranded.taskId)
         await self.tm._executor_semaphore.acquire()
@@ -581,7 +585,8 @@ class TestTaskManagerTaskRelease(unittest.IsolatedAsyncioTestCase):
 
         await self.tm.on_task_new(task)
 
-        self.assertIn(task.taskId, self.tm._task_id_to_task)
+        self.assertIn(task.taskId, self.tm._queued_task_ids)
+        self.assertNotIn(task.taskId, self.tm._processing_task_ids)
 
 
 class TestExecutionBackendSentinel(unittest.IsolatedAsyncioTestCase):
