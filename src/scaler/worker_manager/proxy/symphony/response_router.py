@@ -12,6 +12,8 @@ named 'soamapi'`` in place of the real failure, so Symphony's own errors are ren
 from __future__ import annotations
 
 import concurrent.futures
+import enum
+import sys
 import threading
 from typing import TYPE_CHECKING, Callable, Dict, Optional
 
@@ -19,18 +21,31 @@ import cloudpickle
 
 from scaler.utility.exceptions import SymphonyTaskError, TaskExceptionNotSerializableError
 
+if sys.version_info >= (3, 11):
+    from typing import assert_never
+else:
+    from typing_extensions import assert_never
+
 if TYPE_CHECKING:
     import soamapi
 
     from scaler.worker_manager.proxy.symphony._soam.message import Payload, SoamMessage
 
-# Tags of the output payload, written by scripts/symphony/scaler_service.py. They travel between two
-# interpreters that share no code, so both sides spell them out.
-TASK_OUTPUT_RESULT = "result"
-TASK_OUTPUT_EXCEPTION = "exception"
-TASK_OUTPUT_UNSERIALIZABLE_EXCEPTION = "unserializable-exception"
-
 _REDEPLOY_HINT = "redeploy the service with scripts/symphony/setup_application.py"
+
+
+class TaskOutputTag(str, enum.Enum):
+    """How the service tagged the outcome it sent back.
+
+    The values are written by scripts/symphony/scaler_service.py, which cannot import this module: it
+    runs under Symphony on a compute host, from a deployed copy that has no scaler installed. Both
+    sides therefore spell the strings out, and a tag that does not parse here means the deployed
+    service and this worker manager disagree.
+    """
+
+    RESULT = "result"
+    EXCEPTION = "exception"
+    UNSERIALIZABLE_EXCEPTION = "unserializable-exception"
 
 
 class TaskResponseRouter:
@@ -94,18 +109,31 @@ class TaskResponseRouter:
             )
             return
 
-        tag, value = output
+        raw_tag, value = output
 
-        if tag == TASK_OUTPUT_RESULT:
-            future.set_result(value)
-        elif tag == TASK_OUTPUT_EXCEPTION and isinstance(value, BaseException):
-            future.set_exception(value)
-        elif tag == TASK_OUTPUT_UNSERIALIZABLE_EXCEPTION:
-            future.set_exception(TaskExceptionNotSerializableError(value))
-        else:
+        try:
+            tag = TaskOutputTag(raw_tag)
+        except ValueError:
+            # Reachable, unlike the match below: the tag comes from a separately deployed service, which
+            # can be older or newer than this worker manager.
             future.set_exception(
-                SymphonyTaskError(f"task {task_id} returned an output tagged {tag!r}, {_REDEPLOY_HINT}")
+                SymphonyTaskError(f"task {task_id} returned an output tagged {raw_tag!r}, {_REDEPLOY_HINT}")
             )
+            return
+
+        match tag:
+            case TaskOutputTag.RESULT:
+                future.set_result(value)
+            case TaskOutputTag.EXCEPTION if isinstance(value, BaseException):
+                future.set_exception(value)
+            case TaskOutputTag.EXCEPTION:
+                future.set_exception(
+                    SymphonyTaskError(f"task {task_id} tagged a {type(value).__name__} as an exception")
+                )
+            case TaskOutputTag.UNSERIALIZABLE_EXCEPTION:
+                future.set_exception(TaskExceptionNotSerializableError(value))
+            case _:
+                assert_never(tag)
 
 
 def describe_soam_exception(exception: Optional[soamapi.SoamException]) -> str:
