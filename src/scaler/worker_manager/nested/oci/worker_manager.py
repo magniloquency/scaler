@@ -33,7 +33,7 @@ class _InstanceInfo:
     instance_id: str
 
 
-class OCIWorkerProvisioner(DeclarativeWorkerProvisioner):
+class OCIInstancesWorkerProvisioner(DeclarativeWorkerProvisioner):
     def __init__(self, config: OCIRawWorkerManagerConfig, max_instances: int) -> None:
         self._config = config
         self._capabilities = config.worker_config.per_worker_capabilities.capabilities
@@ -237,12 +237,12 @@ class OCIWorkerProvisioner(DeclarativeWorkerProvisioner):
             logger.error(f"Failed to stop OCI Container Instance {instance_id[-20:]}")
 
 
-class OCIWorkerManager:
+class OCIInstancesWorkerManager:
     def __init__(self, config: OCIRawWorkerManagerConfig) -> None:
         workers_per_instance = max(1, int(config.instance_ocpus))
         mtc = config.worker_manager_config.max_task_concurrency
         max_instances = math.ceil(mtc / workers_per_instance) if mtc != -1 else -1
-        provisioner = OCIWorkerProvisioner(config, max_instances)
+        provisioner = OCIInstancesWorkerProvisioner(config, max_instances)
         self._runner = WorkerManagerRunner(
             address=config.worker_manager_config.scheduler_address,
             name="worker_manager_oci_raw",

@@ -5,7 +5,7 @@ Submits each Scaler task as an on-demand OCI Container Instance and reports
 results back to the scheduler via the WorkerProcess pattern.
 
 Architecture:
-    Scheduler → WorkerManagerRunner → OCIWorkerProvisioner → WorkerProcess
+    Scheduler → WorkerManagerRunner → OCIJobsWorkerProvisioner → WorkerProcess
                                                                       ↓
                                                           OCIExecutionBackend
                                                                       ↓
@@ -22,12 +22,12 @@ Service Mapping (AWS → OCI):
 from scaler.worker_manager.proxy.oci.execution_backend import OCIExecutionBackend
 from scaler.worker_manager.proxy.oci.processor_status import OCIProcessorStatusProvider
 from scaler.worker_manager.proxy.oci.worker import create_oci_worker
-from scaler.worker_manager.proxy.oci.worker_manager import OCIWorkerManager, OCIWorkerProvisioner
+from scaler.worker_manager.proxy.oci.worker_manager import OCIJobsWorkerManager, OCIJobsWorkerProvisioner
 
 __all__ = [
     "OCIExecutionBackend",
-    "OCIWorkerManager",
-    "OCIWorkerProvisioner",
+    "OCIJobsWorkerManager",
+    "OCIJobsWorkerProvisioner",
     "OCIProcessorStatusProvider",
     "create_oci_worker",
 ]

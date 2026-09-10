@@ -138,7 +138,7 @@ Build and push to your OCIR repository from the repository root:
    # Build and push
    docker build \
        -f src/scaler/worker_manager/nested/oci/remote/Dockerfile \
-       -t us-ashburn-1.ocir.io/<namespace>/<repo>:latest .
+       -t us-ashburn-1.ocir.io/<namespace>/<repo>:latest src
    docker push us-ashburn-1.ocir.io/<namespace>/<repo>:latest
 
 .. note::
