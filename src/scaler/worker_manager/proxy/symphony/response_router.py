@@ -3,20 +3,34 @@
 Holds no ``soamapi`` values, only annotations, so it is importable and unit testable without a Symphony
 installation. Keeping it out of ``callback`` lets ``_soam.session_callback`` depend on it without the two
 modules importing each other.
+
+Nothing ``soamapi``-typed may reach a future set here. The failure travels on to a client that has no
+Symphony installation, where unpickling a ``soamapi`` exception raises ``ModuleNotFoundError: No module
+named 'soamapi'`` in place of the real failure, so Symphony's own errors are rendered as text.
 """
 
 from __future__ import annotations
 
 import concurrent.futures
 import threading
-from typing import TYPE_CHECKING, Callable, Dict
+from typing import TYPE_CHECKING, Callable, Dict, Optional
 
 import cloudpickle
+
+from scaler.utility.exceptions import SymphonyTaskError, TaskExceptionNotSerializableError
 
 if TYPE_CHECKING:
     import soamapi
 
-    from scaler.worker_manager.proxy.symphony._soam.message import SoamMessage
+    from scaler.worker_manager.proxy.symphony._soam.message import Payload, SoamMessage
+
+# Tags of the output payload, written by scripts/symphony/scaler_service.py. They travel between two
+# interpreters that share no code, so both sides spell them out.
+TASK_OUTPUT_RESULT = "result"
+TASK_OUTPUT_EXCEPTION = "exception"
+TASK_OUTPUT_UNSERIALIZABLE_EXCEPTION = "unserializable-exception"
+
+_REDEPLOY_HINT = "redeploy the service with scripts/symphony/setup_application.py"
 
 
 class TaskResponseRouter:
@@ -37,21 +51,20 @@ class TaskResponseRouter:
 
             future = self._task_id_to_future.pop(task_id)
 
-            if task_output_handle.is_successful():
-                output_message = self._message_factory()
-                task_output_handle.populate_task_output(output_message)
-                result = cloudpickle.loads(output_message.get_payload())
-                future.set_result(result)
-            else:
-                # get_embedded_exception() returns None when Symphony itself failed the task rather
-                # than the service raising, which makes set_exception() raise. Fixed separately.
-                embedded_exception = task_output_handle.get_exception().get_embedded_exception()
-                future.set_exception(embedded_exception)
+            if not task_output_handle.is_successful():
+                future.set_exception(SymphonyTaskError(describe_soam_exception(task_output_handle.get_exception())))
+                return
+
+            output_message = self._message_factory()
+            task_output_handle.populate_task_output(output_message)
+            self._complete(future, task_id, output_message.get_payload())
 
     def on_exception(self, exception: soamapi.SoamException) -> None:
         with self._callback_lock:
+            failure = SymphonyTaskError(describe_soam_exception(exception))
+
             for future in self._task_id_to_future.values():
-                future.set_exception(exception)
+                future.set_exception(failure)
 
             self._task_id_to_future.clear()
 
@@ -60,3 +73,54 @@ class TaskResponseRouter:
 
     def get_callback_lock(self) -> threading.Lock:
         return self._callback_lock
+
+    @staticmethod
+    def _complete(future: concurrent.futures.Future, task_id: str, payload: Payload) -> None:
+        """Complete ``future`` from the output payload of a Symphony task that ran to completion.
+
+        A task that ran is not necessarily a task that succeeded: the service reports a raising function
+        as a tagged exception rather than as a Symphony failure, so that the original type, message and
+        traceback survive the trip.
+        """
+        try:
+            output = cloudpickle.loads(payload)
+        except Exception as error:
+            future.set_exception(SymphonyTaskError(f"cannot deserialize the output of task {task_id}: {error}"))
+            return
+
+        if not isinstance(output, tuple) or len(output) != 2:
+            future.set_exception(
+                SymphonyTaskError(f"task {task_id} returned an output this version cannot read, {_REDEPLOY_HINT}")
+            )
+            return
+
+        tag, value = output
+
+        if tag == TASK_OUTPUT_RESULT:
+            future.set_result(value)
+        elif tag == TASK_OUTPUT_EXCEPTION and isinstance(value, BaseException):
+            future.set_exception(value)
+        elif tag == TASK_OUTPUT_UNSERIALIZABLE_EXCEPTION:
+            future.set_exception(TaskExceptionNotSerializableError(value))
+        else:
+            future.set_exception(
+                SymphonyTaskError(f"task {task_id} returned an output tagged {tag!r}, {_REDEPLOY_HINT}")
+            )
+
+
+def describe_soam_exception(exception: Optional[soamapi.SoamException]) -> str:
+    """Render a Symphony failure as text, keeping whatever the service embedded in it.
+
+    ``get_embedded_exception`` returns ``None`` when Symphony failed the task itself rather than the
+    service raising, so the description carries the failure on its own in that case.
+    """
+    if exception is None:
+        return "IBM Spectrum Symphony reported a failure without a description"
+
+    description = str(exception).strip() or type(exception).__name__
+
+    embedded = exception.get_embedded_exception()
+    if embedded is None:
+        return description
+
+    return f"{description}: {type(embedded).__name__}: {embedded}"
