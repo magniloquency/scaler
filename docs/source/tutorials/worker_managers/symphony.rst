@@ -62,8 +62,9 @@ It packages and deploys the service, generates an application profile with the p
 and prints the registered applications. Add ``--dry-run`` to see the profile without changing the cluster, and
 ``--application``/``--service`` to use names other than ``Scaler``/``ScalerService``.
 
-The interpreter you name needs ``cloudpickle`` and a matching ``soamapi``; the utility checks both by running
-it, and refuses rather than leaving the failure to appear later as unexplained task failures.
+The interpreter you name needs ``cloudpickle``, ``tblib`` and a matching ``soamapi``; the utility checks all
+three by running it, and refuses rather than leaving the failure to appear later as unexplained task
+failures. ``pip install opengris-scaler`` provides the first two.
 
 Step 3: Start Scaler
 ~~~~~~~~~~~~~~~~~~~~
@@ -142,8 +143,8 @@ How It Works
 1. The Symphony worker manager connects to the Scaler scheduler as a worker.
 2. It establishes a SOAM connection and session to the configured Symphony service.
 3. When the worker manager receives a task from the scheduler, it serializes the function and arguments with ``cloudpickle`` and submits them as a Symphony task via the SOAM API.
-4. Symphony schedules the task on its compute hosts. On completion, the SOAM callback delivers the result back to the worker manager.
-5. The worker manager deserializes the result and returns it to the Scaler scheduler.
+4. Symphony schedules the task on its compute hosts. The service calls the function and sends back either its return value or the exception it raised, so a raising function is a completed Symphony task rather than a failed one, and its type, message and traceback reach the client intact.
+5. The worker manager deserializes that outcome and returns it to the Scaler scheduler.
 
 The worker manager uses a concurrency semaphore to limit the number of tasks in flight.
 

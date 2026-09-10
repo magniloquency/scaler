@@ -2,12 +2,13 @@
 
 This is the service side of the Symphony worker manager. The worker manager sends
 ``cloudpickle.dumps((function, *arguments))`` as the task payload, so this container deserializes that
-tuple, calls the function, and sends back the cloudpickled return value.
-``scaler.worker_manager.proxy.symphony.execution_backend`` is the client side of the same contract.
+tuple, calls the function, and sends back the cloudpickled outcome tagged as a result or an exception.
+``scaler.worker_manager.proxy.symphony.response_router`` is the client side of the same contract and
+reads those tags back.
 
 ``setup_application.py`` packages and deploys this file. Symphony runs it under the interpreter named by
-the ``startCmd`` of the generated application profile, so that interpreter needs ``cloudpickle`` and a
-matching ``soamapi``.
+the ``startCmd`` of the generated application profile, so that interpreter needs ``cloudpickle``,
+``tblib`` and a matching ``soamapi``.
 """
 
 import array
@@ -22,6 +23,13 @@ except ImportError:
 
 import cloudpickle
 import soamapi
+import tblib.pickling_support
+
+# Tags of the output payload, read back by scaler/worker_manager/proxy/symphony/response_router.py.
+# They travel between two interpreters that share no code, so both sides spell them out.
+TASK_OUTPUT_RESULT = "result"
+TASK_OUTPUT_EXCEPTION = "exception"
+TASK_OUTPUT_UNSERIALIZABLE_EXCEPTION = "unserializable-exception"
 
 
 class PickledPayloadMessage(soamapi.Message):
@@ -44,11 +52,44 @@ class PickledPayloadMessage(soamapi.Message):
         self.set_payload(stream.read_byte_array("b").tobytes())
 
 
+def pickle_task_output(function, arguments) -> bytes:
+    """Return the output payload for one call, carrying either its result or the exception it raised.
+
+    A raising function is a completed task with a failure to report, not a failed task: the exception is
+    pickled here, in the process that raised it, so the client sees the original type, message and
+    traceback. Letting it escape to Symphony instead would report the failure as a Symphony task error,
+    which loses the exception and makes Symphony retry a call that will fail the same way again.
+    """
+    try:
+        return cloudpickle.dumps((TASK_OUTPUT_RESULT, function(*arguments)))
+    except Exception as exception:
+        return pickle_exception(exception)
+
+
+def pickle_exception(exception: BaseException) -> bytes:
+    """Return the output payload carrying ``exception``, degrading when it cannot be pickled.
+
+    An exception that holds a lock, a socket or a file handle, or whose class is defined locally, cannot
+    be pickled. Sending its type name and message keeps the failure meaningful, where letting the pickling
+    error escape would replace it with one that says nothing about what the task did.
+    """
+    try:
+        return cloudpickle.dumps((TASK_OUTPUT_EXCEPTION, exception))
+    except Exception:
+        try:
+            detail = f"{type(exception).__name__}: {exception}"
+        except Exception:
+            detail = type(exception).__name__
+        return cloudpickle.dumps((TASK_OUTPUT_UNSERIALIZABLE_EXCEPTION, detail))
+
+
 class ScalerServiceContainer(soamapi.ServiceContainer):
-    """Calls the function in each task payload and returns its result."""
+    """Calls the function in each task payload and returns its outcome."""
 
     def on_create_service(self, service_context) -> None:
-        return
+        # Pickling a traceback needs tblib, and it has to be installed in the process that raises, which
+        # is this one. Without it the client gets the exception with its traceback stripped.
+        tblib.pickling_support.install()
 
     def on_session_enter(self, session_context) -> None:
         return
@@ -59,7 +100,7 @@ class ScalerServiceContainer(soamapi.ServiceContainer):
 
         function, *arguments = cloudpickle.loads(input_message.get_payload())
 
-        task_context.set_task_output(PickledPayloadMessage(cloudpickle.dumps(function(*arguments))))
+        task_context.set_task_output(PickledPayloadMessage(pickle_task_output(function, arguments)))
 
     def on_session_leave(self) -> None:
         return
