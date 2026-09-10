@@ -3,8 +3,8 @@
 This is the service side of the Symphony worker manager. The worker manager sends
 ``cloudpickle.dumps((function, *arguments))`` as the task payload, so this container deserializes that
 tuple, calls the function, and sends back the cloudpickled outcome tagged as a result or an exception.
-``scaler.worker_manager.proxy.symphony.response_router`` is the client side of the same contract and
-reads those tags back.
+``scaler.worker_manager.proxy.symphony.response_router`` is the client side of the same contract, and
+both halves read the tags from ``task_output.py``, which is deployed alongside this file.
 
 ``setup_application.py`` packages and deploys this file. Symphony runs it under the interpreter named by
 the ``startCmd`` of the generated application profile, so that interpreter needs ``cloudpickle``,
@@ -25,11 +25,11 @@ import cloudpickle
 import soamapi
 import tblib.pickling_support
 
-# Tags of the output payload, read back by scaler/worker_manager/proxy/symphony/response_router.py.
-# They travel between two interpreters that share no code, so both sides spell them out.
-TASK_OUTPUT_RESULT = "result"
-TASK_OUTPUT_EXCEPTION = "exception"
-TASK_OUTPUT_UNSERIALIZABLE_EXCEPTION = "unserializable-exception"
+# task_output.py is scaler/worker_manager/proxy/symphony/task_output.py, which setup_application.py
+# packages next to this file. It is imported flat, without the scaler package around it, because
+# Symphony puts the deployment directory first on the service's PYTHONPATH and there is no scaler
+# installed on a compute host to import it from.
+from task_output import TaskOutputTag
 
 
 class PickledPayloadMessage(soamapi.Message):
@@ -61,7 +61,7 @@ def pickle_task_output(function, arguments) -> bytes:
     which loses the exception and makes Symphony retry a call that will fail the same way again.
     """
     try:
-        return cloudpickle.dumps((TASK_OUTPUT_RESULT, function(*arguments)))
+        return cloudpickle.dumps((TaskOutputTag.RESULT.value, function(*arguments)))
     except Exception as exception:
         return pickle_exception(exception)
 
@@ -74,13 +74,13 @@ def pickle_exception(exception: BaseException) -> bytes:
     error escape would replace it with one that says nothing about what the task did.
     """
     try:
-        return cloudpickle.dumps((TASK_OUTPUT_EXCEPTION, exception))
+        return cloudpickle.dumps((TaskOutputTag.EXCEPTION.value, exception))
     except Exception:
         try:
             detail = f"{type(exception).__name__}: {exception}"
         except Exception:
             detail = type(exception).__name__
-        return cloudpickle.dumps((TASK_OUTPUT_UNSERIALIZABLE_EXCEPTION, detail))
+        return cloudpickle.dumps((TaskOutputTag.UNSERIALIZABLE_EXCEPTION.value, detail))
 
 
 class ScalerServiceContainer(soamapi.ServiceContainer):

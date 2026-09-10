@@ -12,7 +12,6 @@ named 'soamapi'`` in place of the real failure, so Symphony's own errors are ren
 from __future__ import annotations
 
 import concurrent.futures
-import enum
 import sys
 import threading
 from typing import TYPE_CHECKING, Callable, Dict, Optional
@@ -20,6 +19,7 @@ from typing import TYPE_CHECKING, Callable, Dict, Optional
 import cloudpickle
 
 from scaler.utility.exceptions import SymphonyTaskError, TaskExceptionNotSerializableError
+from scaler.worker_manager.proxy.symphony.task_output import TaskOutputTag
 
 if sys.version_info >= (3, 11):
     from typing import assert_never
@@ -32,20 +32,6 @@ if TYPE_CHECKING:
     from scaler.worker_manager.proxy.symphony._soam.message import Payload, SoamMessage
 
 _REDEPLOY_HINT = "redeploy the service with scripts/symphony/setup_application.py"
-
-
-class TaskOutputTag(str, enum.Enum):
-    """How the service tagged the outcome it sent back.
-
-    The values are written by scripts/symphony/scaler_service.py, which cannot import this module: it
-    runs under Symphony on a compute host, from a deployed copy that has no scaler installed. Both
-    sides therefore spell the strings out, and a tag that does not parse here means the deployed
-    service and this worker manager disagree.
-    """
-
-    RESULT = "result"
-    EXCEPTION = "exception"
-    UNSERIALIZABLE_EXCEPTION = "unserializable-exception"
 
 
 class TaskResponseRouter:
