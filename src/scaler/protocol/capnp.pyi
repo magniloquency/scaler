@@ -61,6 +61,7 @@ class ObjectMetadata(CapnpStruct):
     objectIds: Any
     objectTypes: Any
     objectNames: Any
+    objectSizes: Any
 
     @staticmethod
     def new_msg(object_ids: Any, object_types: Any = ..., object_names: Any = ...) -> "ObjectMetadata": ...
@@ -77,14 +78,28 @@ class Resource(CapnpStruct):
     rss: int
 
 class ObjectManagerStatus(CapnpStruct):
+    class ObjectStorageStatus(CapnpStruct):
+        objectCount: int
+        uniqueCount: int
+        totalBytes: int
+        pendingRequests: int
+        pendingObjects: int
+        oldestPendingSeconds: int
+
     numberOfObjects: int
+    storage: ObjectStorageStatus
 
 class ClientManagerStatus(CapnpStruct):
-    class Pair(CapnpStruct):
-        client: ClientID
+    class ClientStatus(CapnpStruct):
+        clientId: ClientID
         numTask: int
+        resource: Resource
+        latencyMicroseconds: int
+        lastSeenSeconds: int
+        connectedSeconds: int
+        hostname: str
 
-    clientToNumOfTask: Any
+    clients: Any
 
 class TaskManagerStatus(CapnpStruct):
     class Pair(CapnpStruct):
@@ -99,6 +114,8 @@ class ProcessorStatus(CapnpStruct):
     hasTask: bool
     suspended: bool
     resource: Resource
+    currentTaskId: bytes
+    taskAgeSeconds: int
 
 class WorkerStatus(CapnpStruct):
     workerId: WorkerID
@@ -109,10 +126,13 @@ class WorkerStatus(CapnpStruct):
     sent: int
     queued: int
     suspended: int
-    lagUS: int
-    lastS: int
+    lagMicroseconds: int
+    lastSeenSeconds: int
     itl: str
     processorStatuses: Any
+    hostname: str
+    netSentBytes: int
+    netRecvBytes: int
 
 class WorkerManagerStatus(CapnpStruct):
     workers: Any
@@ -125,7 +145,7 @@ class ScalingManagerStatus(CapnpStruct):
     class WorkerManagerDetail(CapnpStruct):
         workerManagerID: bytes
         identity: str
-        lastSeenS: int
+        lastSeenSeconds: int
         maxTaskConcurrency: int
         capabilities: str
         pendingWorkers: int
@@ -200,7 +220,8 @@ class GraphTask(BaseMessage):
 
 class ClientHeartbeat(BaseMessage):
     resource: Resource
-    latencyUS: int
+    latencyMicroseconds: int
+    hostname: str
 
 class ClientHeartbeatEcho(BaseMessage):
     objectStorageAddress: ObjectStorageAddress
@@ -210,12 +231,15 @@ class WorkerHeartbeat(BaseMessage):
     rssFree: int
     queueSize: int
     queuedTasks: int
-    latencyUS: int
+    latencyMicroseconds: int
     taskLock: bool
     processors: Any
     capabilities: Any
     workerManagerID: bytes
     memLimit: int
+    hostname: str
+    netSentBytes: int
+    netRecvBytes: int
 
 class WorkerHeartbeatEcho(BaseMessage):
     objectStorageAddress: ObjectStorageAddress
@@ -257,7 +281,18 @@ class ClientShutdownResponse(BaseMessage):
     accepted: bool
 
 class StateClient(BaseMessage): ...
-class StateObject(BaseMessage): ...
+
+class StateObject(BaseMessage):
+    class ObjectDetail(CapnpStruct):
+        objectId: ObjectID
+        name: bytes
+        objectType: ObjectMetadata.ObjectContentType
+        size: int
+        creator: ClientID
+        taskCount: int
+
+    objects: Any
+    totalObjects: int
 
 class StateBalanceAdvice(BaseMessage):
     workerId: WorkerID
@@ -285,6 +320,9 @@ class StateTask(BaseMessage):
     worker: WorkerID
     capabilities: Any
     metadata: bytes
+    objectBytes: int
+    client: ClientID
+    event: str
 
 class StateGraphTask(BaseMessage):
     graphTaskId: TaskID
