@@ -1,6 +1,6 @@
 import asyncio
 import unittest
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Tuple
 from unittest.mock import AsyncMock, MagicMock
 
 from scaler.io.mixins import AsyncConnector, AsyncObjectStorageConnector
@@ -16,42 +16,13 @@ from scaler.protocol.capnp import (
 )
 from scaler.utility.identifiers import ClientID, ObjectID, TaskID
 from scaler.utility.logging.utility import setup_logger
-from scaler.utility.metadata.task_flags import TaskFlags
 from scaler.worker.agent.mixins import HeartbeatManager
 from scaler.worker_manager.proxy.mixins import ExecutionBackend, TaskDeserializer, TaskInputLoader
 from scaler.worker_manager.proxy.task_manager import TaskManager
 from tests.utility.utility import logging_test_name
+from tests.worker_manager.proxy.test_task_actor import SETTLE_IDLE_YIELDS, _make_backend, _make_task, _make_task_cancel
 
-
-def _make_task(priority: int = 0, source: Optional[ClientID] = None, task_id: Optional[TaskID] = None) -> Task:
-    source = source or ClientID.generate_client_id()
-    task_id = task_id or TaskID.generate_task_id()
-    return Task(
-        taskId=task_id,
-        source=source,
-        metadata=TaskFlags(priority=priority).serialize(),
-        funcObjectId=ObjectID.generate_object_id(source),
-        functionArgs=[],
-        capabilities={},
-    )
-
-
-def _make_task_cancel(task_id: TaskID, force: bool = False) -> TaskCancel:
-    return TaskCancel(taskId=task_id, flags=TaskCancel.TaskCancelFlags(force=force))
-
-
-# Yields with nothing to handle before _settle stops: a background execute() or on_cancel() posts within two.
-SETTLE_IDLE_YIELDS = 3
 UPLOAD_TIMEOUT_SECONDS = 1.0
-
-
-def _make_backend() -> MagicMock:
-    backend = MagicMock(spec=ExecutionBackend)
-    backend.execute = AsyncMock(side_effect=lambda _: asyncio.get_running_loop().create_future())
-    backend.on_cancel = AsyncMock()
-    backend.register = MagicMock()
-    backend.on_cleanup = MagicMock()
-    return backend
 
 
 class _TaskManagerTestCase(unittest.IsolatedAsyncioTestCase):
@@ -71,7 +42,7 @@ class _TaskManagerTestCase(unittest.IsolatedAsyncioTestCase):
         """Runs both routines, as WorkerProcess does, until no event or result is left to handle."""
         idle_yields = 0
         while idle_yields < SETTLE_IDLE_YIELDS:
-            if not self.tm._events.empty():
+            if not self.tm._actor._events.empty():
                 await self.tm.routine()
                 idle_yields = 0
             elif not self.tm._results.empty():
@@ -88,19 +59,6 @@ class _TaskManagerTestCase(unittest.IsolatedAsyncioTestCase):
         await self._settle()
         return future
 
-    async def _start_task_with_slow_execute(self, task: Task) -> Tuple[asyncio.Event, asyncio.Future]:
-        release = asyncio.Event()
-        future: asyncio.Future = asyncio.get_running_loop().create_future()
-
-        async def slow_execute(_: Task) -> asyncio.Future:
-            await release.wait()
-            return future
-
-        self.backend.execute = AsyncMock(side_effect=slow_execute)
-        await self.tm.on_task_new(task)
-        await self._settle()
-        return release, future
-
     async def _cancel(self, task_id: TaskID, force: bool) -> None:
         await self.tm.on_cancel_task(_make_task_cancel(task_id, force=force))
         await self._settle()
@@ -108,32 +66,15 @@ class _TaskManagerTestCase(unittest.IsolatedAsyncioTestCase):
     def _sent(self) -> List[Any]:
         return [call.args[0] for call in self.connector_external.send.call_args_list]
 
-    def _cancel_confirm_types(self) -> List[TaskCancelConfirmType]:
-        return [msg.cancelConfirmType for msg in self._sent() if isinstance(msg, TaskCancelConfirm)]
-
     def _task_results(self) -> List[TaskResult]:
         return [msg for msg in self._sent() if isinstance(msg, TaskResult)]
 
 
-class TestTaskManagerInit(unittest.TestCase):
+class TestTaskManagerRegister(unittest.TestCase):
     def setUp(self) -> None:
         setup_logger()
         logging_test_name(self)
         self.backend = _make_backend()
-
-    def test_negative_concurrency_raises(self) -> None:
-        with self.assertRaises(ValueError):
-            TaskManager(0, self.backend)
-        with self.assertRaises(ValueError):
-            TaskManager(-1, self.backend)
-
-    def test_valid_concurrency_empty_state(self) -> None:
-        tm = TaskManager(2, self.backend)
-        self.assertEqual(len(tm._task_id_to_entry), 0)
-        self.assertEqual(len(tm._serializers), 0)
-        self.assertEqual(tm.processing_task_count, 0)
-        self.assertEqual(tm.get_queued_size(), 0)
-        self.assertTrue(tm.can_accept_task())
 
     def test_register_calls_backend_register_with_callable(self) -> None:
         tm = TaskManager(1, self.backend)
@@ -144,69 +85,6 @@ class TestTaskManagerInit(unittest.TestCase):
         self.backend.register.assert_called_once()
         registered_callable = self.backend.register.call_args[0][0]
         self.assertTrue(callable(registered_callable))
-
-
-class TestTaskManagerConcurrency(_TaskManagerTestCase):
-    async def test_a_task_starts_when_a_permit_is_free(self) -> None:
-        task = _make_task()
-        await self._start_task(task)
-
-        self.backend.execute.assert_called_once_with(task)
-        self.assertEqual(self.tm.processing_task_count, 1)
-        self.assertEqual(self.tm.get_queued_size(), 0)
-        self.assertFalse(self.tm.can_accept_task())
-
-    async def test_base_concurrency_limits_tasks_of_equal_priority(self) -> None:
-        for _ in range(5):
-            await self.tm.on_task_new(_make_task())
-        await self._settle()
-
-        self.assertEqual(self.backend.execute.await_count, 1)
-        self.assertEqual(self.tm.get_queued_size(), 4)
-
-    async def test_a_queued_task_starts_when_a_task_finishes(self) -> None:
-        first = await self._start_task(_make_task())
-        queued = _make_task()
-        await self.tm.on_task_new(queued)
-        await self._settle()
-
-        first.set_exception(RuntimeError("done"))
-        await self._settle()
-
-        self.backend.execute.assert_called_with(queued)
-        self.assertEqual(self.tm.get_queued_size(), 0)
-
-    async def test_priority_bypass_strictly_higher(self) -> None:
-        await self._start_task(_make_task(priority=1))
-
-        new_task = _make_task(priority=5)
-        self.backend.execute = AsyncMock(return_value=asyncio.get_running_loop().create_future())
-        await self.tm.on_task_new(new_task)
-        await self._settle()
-
-        self.backend.execute.assert_called_with(new_task)
-        self.assertEqual(self.tm.processing_task_count, 2)
-        self.assertEqual(self.tm.get_queued_size(), 0)
-
-    async def test_equal_priority_does_not_bypass(self) -> None:
-        await self._start_task(_make_task(priority=3))
-
-        await self.tm.on_task_new(_make_task(priority=3))
-        await self._settle()
-
-        self.backend.execute.assert_called_once()
-        self.assertEqual(self.tm.processing_task_count, 1)
-        self.assertEqual(self.tm.get_queued_size(), 1)
-
-    async def test_lower_priority_does_not_bypass(self) -> None:
-        await self._start_task(_make_task(priority=5))
-
-        await self.tm.on_task_new(_make_task(priority=2))
-        await self._settle()
-
-        self.backend.execute.assert_called_once()
-        self.assertEqual(self.tm.processing_task_count, 1)
-        self.assertEqual(self.tm.get_queued_size(), 1)
 
 
 class TestTaskManagerResults(_TaskManagerTestCase):
@@ -265,141 +143,26 @@ class TestTaskManagerResults(_TaskManagerTestCase):
 
         self.backend.execute.assert_called_once_with(task)
 
-    async def test_a_task_whose_execute_raises_fails_and_gives_back_its_permit(self) -> None:
-        task = _make_task()
-        self.backend.execute = AsyncMock(side_effect=RuntimeError("cannot submit"))
 
-        with self.assertLogs("scaler", level="ERROR"):
-            await self.tm.on_task_new(task)
-            await self._settle()
+class TestTaskManagerWiring(_TaskManagerTestCase):
+    async def test_a_cancel_confirm_reaches_the_scheduler(self) -> None:
+        task_id = TaskID.generate_task_id()
 
-        (task_result,) = self._task_results()
-        self.assertEqual(task_result.resultType, TaskResultType.failed)
-        self.assertTrue(self.tm.can_accept_task())
+        await self._cancel(task_id, force=False)
 
+        (confirm,) = self._sent()
+        self.assertIsInstance(confirm, TaskCancelConfirm)
+        self.assertEqual(confirm.taskId, task_id)
+        self.assertEqual(confirm.cancelConfirmType, TaskCancelConfirmType.cancelNotFound)
 
-class TestTaskManagerCancel(_TaskManagerTestCase):
-    async def test_cancel_nonexistent_sends_cancel_not_found(self) -> None:
-        await self._cancel(TaskID.generate_task_id(), force=False)
-
-        self.assertEqual(self._cancel_confirm_types(), [TaskCancelConfirmType.cancelNotFound])
-
-    async def test_cancel_queued_task_clears_queue_and_sends_canceled(self) -> None:
+    async def test_the_heartbeat_reads_the_actor(self) -> None:
         await self._start_task(_make_task())
-        queued = _make_task()
-        await self.tm.on_task_new(queued)
+        await self.tm.on_task_new(_make_task())
         await self._settle()
 
-        await self._cancel(queued.taskId, force=False)
-
-        self.assertEqual(self._cancel_confirm_types(), [TaskCancelConfirmType.canceled])
-        self.assertEqual(self.tm.get_queued_size(), 0)
-        self.assertNotIn(queued.taskId, self.tm._task_id_to_entry)
-
-    async def test_cancel_processing_without_force_sends_cancel_failed(self) -> None:
-        task = _make_task()
-        future = await self._start_task(task)
-
-        await self._cancel(task.taskId, force=False)
-
-        self.assertEqual(self._cancel_confirm_types(), [TaskCancelConfirmType.cancelFailed])
+        self.assertEqual(self.tm.get_queued_size(), 1)
         self.assertEqual(self.tm.processing_task_count, 1)
-        self.assertFalse(future.cancelled())
-
-    async def test_cancel_processing_with_force_cancels_future_and_sends_canceled(self) -> None:
-        task = _make_task()
-        future = await self._start_task(task)
-
-        await self._cancel(task.taskId, force=True)
-
-        self.assertTrue(future.cancelled())
-        self.backend.on_cancel.assert_called_once()
-        self.assertEqual(self.backend.on_cancel.call_args.args[0].taskId, task.taskId)
-        self.assertEqual(self._cancel_confirm_types(), [TaskCancelConfirmType.canceled])
-        self.assertEqual(self._task_results(), [])
-        self.backend.on_cleanup.assert_called_once_with(task.taskId)
-        self.assertTrue(self.tm.can_accept_task())
-
-    async def test_the_next_task_runs_after_a_force_cancel(self) -> None:
-        cancelled = _make_task()
-        await self._start_task(cancelled)
-        await self._cancel(cancelled.taskId, force=True)
-
-        task = _make_task()
-        await self._start_task(task)
-
-        self.backend.execute.assert_called_once_with(task)
-
-    async def test_a_force_cancel_survives_a_slow_backend_cancel(self) -> None:
-        task = _make_task()
-        await self._start_task(task)
-        backend_release = asyncio.Event()
-
-        async def slow_on_cancel(_: TaskCancel) -> None:
-            await backend_release.wait()
-
-        self.backend.on_cancel = AsyncMock(side_effect=slow_on_cancel)
-        await self._cancel(task.taskId, force=True)
-        backend_release.set()
-        await self._settle()
-
-        self.assertEqual(self._cancel_confirm_types(), [TaskCancelConfirmType.canceled])
-        self.assertEqual(self._task_results(), [])
-        self.assertTrue(self.tm.can_accept_task())
-
-    async def test_a_task_that_finishes_during_the_backend_cancel_reports_nothing(self) -> None:
-        task = _make_task()
-        future = await self._start_task(task)
-
-        async def on_cancel_while_job_finishes(_: TaskCancel) -> None:
-            future.set_result("done remotely")
-
-        self.backend.on_cancel = AsyncMock(side_effect=on_cancel_while_job_finishes)
-        await self._cancel(task.taskId, force=True)
-
-        self.assertEqual(self._cancel_confirm_types(), [TaskCancelConfirmType.canceled])
-        self.assertEqual(self._task_results(), [])
-        self.assertTrue(self.tm.can_accept_task())
-
-    async def test_a_cancel_before_execute_returns_is_confirmed_and_reaches_the_backend(self) -> None:
-        task = _make_task()
-        release, future = await self._start_task_with_slow_execute(task)
-
-        await self._cancel(task.taskId, force=True)
-        release.set()
-        await self._settle()
-
-        self.assertEqual(self._cancel_confirm_types(), [TaskCancelConfirmType.canceled])
-        self.backend.on_cancel.assert_called_once()
-        self.assertEqual(self.backend.on_cancel.call_args.args[0].taskId, task.taskId)
-        self.assertTrue(future.cancelled())
-        self.assertEqual(self._task_results(), [])
-        self.assertTrue(self.tm.can_accept_task())
-
-    async def test_a_non_force_cancel_before_execute_returns_fails(self) -> None:
-        task = _make_task()
-        release, _ = await self._start_task_with_slow_execute(task)
-
-        await self._cancel(task.taskId, force=False)
-        release.set()
-        await self._settle()
-
-        self.assertEqual(self._cancel_confirm_types(), [TaskCancelConfirmType.cancelFailed])
-        self.backend.on_cancel.assert_not_called()
-        self.assertEqual(self.tm.processing_task_count, 1)
-
-    async def test_a_second_force_cancel_is_not_found(self) -> None:
-        task = _make_task()
-        release, _ = await self._start_task_with_slow_execute(task)
-
-        await self._cancel(task.taskId, force=True)
-        await self._cancel(task.taskId, force=True)
-        release.set()
-        await self._settle()
-
-        expected = [TaskCancelConfirmType.canceled, TaskCancelConfirmType.cancelNotFound]
-        self.assertEqual(self._cancel_confirm_types(), expected)
-        self.backend.on_cancel.assert_called_once()
+        self.assertFalse(self.tm.can_accept_task())
 
 
 class TestTaskManagerOnObjectInstruction(_TaskManagerTestCase):
@@ -438,35 +201,6 @@ class TestTaskManagerOnObjectInstruction(_TaskManagerTestCase):
         )
         with self.assertLogs("scaler", level="ERROR"):
             await self.tm.on_object_instruction(instruction)
-
-
-class TestTaskManagerGetTaskPriority(unittest.TestCase):
-    def setUp(self) -> None:
-        setup_logger()
-        logging_test_name(self)
-
-    def test_negative_priority_raises(self) -> None:
-        task = _make_task(priority=-1)
-        with self.assertRaises(ValueError):
-            TaskManager._get_task_priority(task)
-
-    def test_zero_priority_returns_zero(self) -> None:
-        self.assertEqual(TaskManager._get_task_priority(_make_task(priority=0)), 0)
-
-    def test_positive_priority_returns_value(self) -> None:
-        self.assertEqual(TaskManager._get_task_priority(_make_task(priority=7)), 7)
-
-    def test_empty_metadata_returns_zero(self) -> None:
-        source = ClientID.generate_client_id()
-        task = Task(
-            taskId=TaskID.generate_task_id(),
-            source=source,
-            metadata=b"",
-            funcObjectId=ObjectID.generate_object_id(source),
-            functionArgs=[],
-            capabilities={},
-        )
-        self.assertEqual(TaskManager._get_task_priority(task), 0)
 
 
 class TestExecutionBackendSentinel(unittest.IsolatedAsyncioTestCase):
