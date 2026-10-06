@@ -9,6 +9,7 @@ from scaler.protocol.capnp import (
     ObjectMetadata,
     Task,
     TaskCancel,
+    TaskCancelConfirm,
     TaskCancelConfirmType,
     TaskResult,
     TaskResultType,
@@ -37,6 +38,17 @@ def _make_task(priority: int = 0, source: Optional[ClientID] = None, task_id: Op
 
 def _make_task_cancel(task_id: TaskID, force: bool = False) -> TaskCancel:
     return TaskCancel(taskId=task_id, flags=TaskCancel.TaskCancelFlags(force=force))
+
+
+RESOLVE_TIMEOUT_SECONDS = 1.0
+
+
+async def _start_task(tm: TaskManager, backend: MagicMock, task: Task) -> asyncio.Future:
+    future: asyncio.Future = asyncio.get_running_loop().create_future()
+    backend.execute = AsyncMock(return_value=future)
+    await tm.on_task_new(task)
+    await tm.process_task()
+    return future
 
 
 def _make_backend() -> MagicMock:
@@ -505,3 +517,121 @@ class TestTaskManagerOnTaskResult(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(task.taskId, self.tm._processing_task_ids)
         self.assertNotIn(task.taskId, self.tm._task_id_to_task)
         self.backend.on_cleanup.assert_not_called()
+
+
+class TestTaskManagerForceCancelInFlight(unittest.IsolatedAsyncioTestCase):
+    """Pins that a force cancel of a task in flight is confirmed, reaches the backend, and gives back its permit."""
+
+    def setUp(self) -> None:
+        setup_logger()
+        logging_test_name(self)
+        self.backend = _make_backend()
+        self.connector_external = AsyncMock(spec=AsyncConnector)
+        self.connector_storage = AsyncMock(spec=AsyncObjectStorageConnector)
+        self.heartbeat_manager = MagicMock(spec=HeartbeatManager)
+        self.tm = TaskManager(1, self.backend)
+        self.tm.register(self.connector_external, self.connector_storage, self.heartbeat_manager)
+
+    def _sent(self) -> List[Any]:
+        return [call.args[0] for call in self.connector_external.send.call_args_list]
+
+    def _cancel_confirm_types(self) -> List[TaskCancelConfirmType]:
+        return [msg.cancelConfirmType for msg in self._sent() if isinstance(msg, TaskCancelConfirm)]
+
+    async def _start_task_with_slow_execute(self, task: Task) -> Tuple[asyncio.Task, asyncio.Event, asyncio.Future]:
+        started = asyncio.Event()
+        release = asyncio.Event()
+        future: asyncio.Future = asyncio.get_running_loop().create_future()
+
+        async def slow_execute(_: Task) -> asyncio.Future:
+            started.set()
+            await release.wait()
+            return future
+
+        self.backend.execute = AsyncMock(side_effect=slow_execute)
+        await self.tm.on_task_new(task)
+        processing = asyncio.get_running_loop().create_task(self.tm.process_task())
+        await started.wait()
+        return processing, release, future
+
+    async def test_a_force_cancelled_task_gives_back_its_permit(self) -> None:
+        task = _make_task()
+        await _start_task(self.tm, self.backend, task)
+
+        await self.tm.on_cancel_task(_make_task_cancel(task.taskId, force=True))
+        await self.tm.resolve_tasks()
+
+        self.assertEqual(self._cancel_confirm_types(), [TaskCancelConfirmType.canceled])
+        self.assertTrue(self.tm.can_accept_task())
+        self.assertEqual(self.tm.processing_task_count, 0)
+
+    async def test_the_next_task_runs_after_a_force_cancel(self) -> None:
+        cancelled = _make_task()
+        await _start_task(self.tm, self.backend, cancelled)
+        await self.tm.on_cancel_task(_make_task_cancel(cancelled.taskId, force=True))
+        await self.tm.resolve_tasks()
+
+        task = _make_task()
+        await asyncio.wait_for(_start_task(self.tm, self.backend, task), timeout=RESOLVE_TIMEOUT_SECONDS)
+
+        self.backend.execute.assert_called_once_with(task)
+
+    async def test_a_force_cancel_survives_resolution_while_the_backend_cancels(self) -> None:
+        """resolve_tasks runs alongside on_cancel_task while backend.on_cancel awaits a remote call."""
+        task = _make_task()
+        await _start_task(self.tm, self.backend, task)
+        backend_cancelling = asyncio.Event()
+        backend_release = asyncio.Event()
+
+        async def slow_on_cancel(_: TaskCancel) -> None:
+            backend_cancelling.set()
+            await backend_release.wait()
+
+        async def resolve_forever() -> None:
+            while True:
+                await self.tm.resolve_tasks()
+
+        self.backend.on_cancel = AsyncMock(side_effect=slow_on_cancel)
+        resolving = asyncio.get_running_loop().create_task(resolve_forever())
+        self.addCleanup(resolving.cancel)
+        cancelling = asyncio.get_running_loop().create_task(
+            self.tm.on_cancel_task(_make_task_cancel(task.taskId, force=True))
+        )
+        await backend_cancelling.wait()
+        await asyncio.sleep(0)
+        backend_release.set()
+        await cancelling
+        await asyncio.sleep(0)
+
+        self.assertFalse(resolving.done())
+        self.assertEqual(self._cancel_confirm_types(), [TaskCancelConfirmType.canceled])
+        self.assertFalse(any(isinstance(msg, TaskResult) for msg in self._sent()))
+        self.assertTrue(self.tm.can_accept_task())
+
+    async def test_a_cancel_before_execute_returns_is_confirmed_and_reaches_the_backend(self) -> None:
+        task = _make_task()
+        processing, release, future = await self._start_task_with_slow_execute(task)
+
+        await self.tm.on_cancel_task(_make_task_cancel(task.taskId, force=True))
+        release.set()
+        await processing
+        await asyncio.wait_for(self.tm.resolve_tasks(), timeout=RESOLVE_TIMEOUT_SECONDS)
+
+        self.assertEqual(self._cancel_confirm_types(), [TaskCancelConfirmType.canceled])
+        self.backend.on_cancel.assert_called_once()
+        self.assertEqual(self.backend.on_cancel.call_args.args[0].taskId, task.taskId)
+        self.assertTrue(future.cancelled())
+        self.assertFalse(any(isinstance(msg, TaskResult) for msg in self._sent()))
+        self.assertTrue(self.tm.can_accept_task())
+
+    async def test_a_non_force_cancel_before_execute_returns_fails(self) -> None:
+        task = _make_task()
+        processing, release, _ = await self._start_task_with_slow_execute(task)
+
+        await self.tm.on_cancel_task(_make_task_cancel(task.taskId, force=False))
+        release.set()
+        await processing
+
+        self.assertEqual(self._cancel_confirm_types(), [TaskCancelConfirmType.cancelFailed])
+        self.backend.on_cancel.assert_not_called()
+        self.assertEqual(self.tm.processing_task_count, 1)
