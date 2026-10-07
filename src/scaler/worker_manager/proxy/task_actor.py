@@ -53,7 +53,13 @@ class _Finished:
     future: asyncio.Future
 
 
-_Event = Union[_TaskNew, _CancelRequested, _Started, _Finished]
+@dataclasses.dataclass(frozen=True)
+class _CancelDone:
+    task_id: TaskID
+    succeeded: bool
+
+
+_Event = Union[_TaskNew, _CancelRequested, _Started, _Finished, _CancelDone]
 
 
 class TaskActor:
@@ -111,6 +117,8 @@ class TaskActor:
                 self._handle_started(task_id, future)
             case _Finished(task_id, future):
                 self._handle_finished(task_id, future)
+            case _CancelDone(task_id, succeeded):
+                await self._handle_cancel_done(task_id, succeeded)
 
     def _handle_task_new(self, task: Task) -> None:
         task_priority = self._get_task_priority(task)
@@ -148,11 +156,11 @@ class TaskActor:
             return
 
         # A STARTING task has nothing to cancel in the backend yet: _handle_started cancels it once it does.
+        # Either way the confirm waits for _CancelDone, so it reports what the backend did.
         if entry.state == _TaskState.RUNNING:
             self._spawn(self._cancel_in_backend(task_id, cast(asyncio.Future, entry.future)))
 
         entry.state = _TaskState.CANCELING
-        await self._send_cancel_confirm(task_id, TaskCancelConfirmType.canceled)
 
     def _handle_started(self, task_id: TaskID, future: asyncio.Future) -> None:
         entry = self._task_id_to_entry[task_id]
@@ -174,6 +182,18 @@ class TaskActor:
 
         if entry.state == _TaskState.RUNNING:
             self._report_result(entry.task, future)
+
+    async def _handle_cancel_done(self, task_id: TaskID, succeeded: bool) -> None:
+        entry = self._task_id_to_entry.get(task_id)
+
+        # A task that ended while its cancel was in flight was dropped unreported, so it reads as cancelled.
+        if succeeded or entry is None:
+            await self._send_cancel_confirm(task_id, TaskCancelConfirmType.canceled)
+            return
+
+        # The remote work may still be running: report its result when it comes, as if the cancel never happened.
+        entry.state = _TaskState.RUNNING
+        await self._send_cancel_confirm(task_id, TaskCancelConfirmType.cancelFailed)
 
     def _start_queued_tasks(self) -> None:
         while self._permits_held < self._base_concurrency and self._queued_task_id_queue.qsize() > 0:
@@ -209,8 +229,11 @@ class TaskActor:
             )
         except Exception:
             logger.exception(f"Failed to cancel task in the backend: task_id={task_id.hex()}")
+            self._events.put_nowait(_CancelDone(task_id, succeeded=False))
+            return
 
         future.cancel()
+        self._events.put_nowait(_CancelDone(task_id, succeeded=True))
 
     @staticmethod
     def _get_task_priority(task: Task) -> int:
