@@ -279,7 +279,8 @@ def _register_application(arguments: argparse.Namespace, installation: Installat
         profile_path = Path(working_directory) / f"{arguments.application}.xml"
         profile_path.write_text(profile)
 
-        _run_symphony_command(installation, ["soamreg", str(profile_path)])
+        # Without -f, soamreg asks to replace an existing application and re-asks forever at end of input.
+        _run_symphony_command(installation, ["soamreg", str(profile_path), "-f"])
 
     _report("registered", f"application {arguments.application}")
 

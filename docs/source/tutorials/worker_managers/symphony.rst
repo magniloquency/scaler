@@ -59,8 +59,9 @@ the service:
    python3 scripts/symphony/setup_application.py --python /path/to/python
 
 It packages and deploys the service, generates an application profile with the paths resolved, registers it,
-and prints the registered applications. Add ``--dry-run`` to see the profile without changing the cluster, and
-``--application``/``--service`` to use names other than ``Scaler``/``ScalerService``.
+and prints the registered applications. Running it again replaces the service and the application, which ends
+any workload the application is running. Add ``--dry-run`` to see the profile without changing the cluster,
+and ``--application``/``--service`` to use names other than ``Scaler``/``ScalerService``.
 
 The interpreter you name needs ``cloudpickle``, ``tblib`` and a matching ``soamapi``; the utility checks all
 three by running it, and refuses rather than leaving the failure to appear later as unexplained task
