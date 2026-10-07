@@ -17,10 +17,10 @@ ResultReporter = Callable[[Task, asyncio.Future], None]
 
 
 class _TaskState(enum.Enum):
-    QUEUED = enum.auto()
-    STARTING = enum.auto()  # execute() is awaited, so the task has no future yet
-    RUNNING = enum.auto()
-    CANCELING = enum.auto()  # force-cancelled: its future, once it has one, is dropped rather than reported
+    QUEUED = enum.auto()  # waiting in the priority queue for a permit
+    STARTING = enum.auto()  # execute() is in flight, so the task has no future yet
+    RUNNING = enum.auto()  # execute() returned its future; the result is reported when the future resolves
+    CANCELING = enum.auto()  # force-cancelled: its future, once it has one, is cancelled and dropped unreported
 
 
 @dataclasses.dataclass
