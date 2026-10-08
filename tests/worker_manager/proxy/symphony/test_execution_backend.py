@@ -1,4 +1,4 @@
-"""Covers how the Symphony backend gives IBM Spectrum Symphony back when the worker exits.
+"""Covers how the Symphony backend refuses cancels and gives IBM Spectrum Symphony back when the worker exits.
 
 A worker that exits with its SOAM session still open dies of SIGABRT with
 ``malloc_consolidate(): invalid chunk size``: the ``soamapi`` shared libraries tear themselves down at
@@ -6,13 +6,16 @@ process exit in an order that corrupts the heap. Closing in order is what avoids
 the resilience of each step are worth pinning.
 
 ``SymphonyExecutionBackend.__init__`` connects to a real cluster, so these build the object without it
-and fill in the three handles ``close`` uses.
+and fill in the handles each test uses.
 """
 
 import unittest
 from typing import Any, List
 from unittest.mock import MagicMock
 
+from scaler.protocol.capnp import TaskCancel
+from scaler.utility.exceptions import TaskCancelUnsupportedError
+from scaler.utility.identifiers import TaskID
 from scaler.worker_manager.proxy.symphony.execution_backend import SymphonyExecutionBackend
 
 DESTROY_ON_CLOSE = "destroy-on-close"
@@ -65,6 +68,16 @@ class CloseTest(unittest.TestCase):
             backend.close()
 
         self.assertTrue(any("connection is gone" in message for message in captured.output))
+
+
+class CancelTest(unittest.IsolatedAsyncioTestCase):
+    async def test_a_force_cancel_raises_so_the_task_keeps_running_and_reports_its_result(self) -> None:
+        """soamapi cannot stop a task, so a cancel that returned would confirm a task Symphony still runs."""
+        backend = object.__new__(SymphonyExecutionBackend)
+        task_cancel = TaskCancel(taskId=TaskID.generate_task_id(), flags=TaskCancel.TaskCancelFlags(force=True))
+
+        with self.assertRaises(TaskCancelUnsupportedError):
+            await backend.on_cancel(task_cancel)
 
 
 if __name__ == "__main__":

@@ -6,6 +6,7 @@ from typing import Any, Callable, List, Tuple
 import cloudpickle
 
 from scaler.protocol.capnp import Task, TaskCancel
+from scaler.utility.exceptions import TaskCancelUnsupportedError
 from scaler.utility.identifiers import TaskID
 from scaler.worker_manager.proxy.mixins import ExecutionBackend, TaskDeserializer, TaskInputLoader
 from scaler.worker_manager.proxy.symphony.callback import create_session_callback_class
@@ -81,7 +82,7 @@ class SymphonyExecutionBackend(TaskInputLoader, ExecutionBackend):
             logger.warning(f"failed to close the IBM Spectrum Symphony {what}: {error}")
 
     async def on_cancel(self, task_cancel: TaskCancel) -> None:
-        pass
+        raise TaskCancelUnsupportedError("IBM Spectrum Symphony cannot stop a running task: soamapi has no task abort")
 
     def on_cleanup(self, task_id: TaskID) -> None:
         pass
