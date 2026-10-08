@@ -149,6 +149,10 @@ How It Works
 
 The worker manager keeps at most ``max_task_concurrency`` tasks in flight.
 
+The Symphony Python API cannot stop a running task, so cancelling a task the worker manager has already submitted to Symphony fails.
+``Future.cancel()`` returns ``False`` once the task's result arrives, and the result is delivered as usual.
+A task still queued in the worker manager is cancelled.
+
 Configuration Reference
 ------------------------
 
