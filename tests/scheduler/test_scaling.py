@@ -170,7 +170,7 @@ class TestAtCapacityEmission(unittest.TestCase):
 
     def test_vanilla_at_cap_emits_current(self):
         """Vanilla: ratio asks for current+1, cap clamps to current -> emits setDesired(current)."""
-        policy = VanillaScalingPolicy()
+        policy = VanillaScalingPolicy({})
         tasks = {TaskID.generate_task_id(): _create_mock_task(TaskID.generate_task_id(), {}) for _ in range(100)}
         managed = [WorkerID(f"w{i}".encode()) for i in range(10)]
         workers = {wid: _create_mock_worker_heartbeat({}, queued_tasks=10) for wid in managed}
@@ -185,7 +185,7 @@ class TestAtCapacityEmission(unittest.TestCase):
 
     def test_vanilla_changes_emit(self):
         """Vanilla: when ratio's desired differs from current connected, emit."""
-        policy = VanillaScalingPolicy()
+        policy = VanillaScalingPolicy({})
         tasks = {TaskID.generate_task_id(): _create_mock_task(TaskID.generate_task_id(), {}) for _ in range(100)}
         managed = [WorkerID(b"w0")]
         workers = {wid: _create_mock_worker_heartbeat({}, queued_tasks=10) for wid in managed}
