@@ -10,7 +10,17 @@ from scaler.scheduler.controllers.policies.simple_policy.scaling.vanilla import 
 def create_scaling_policy(scaling: str) -> ScalingPolicy:
     """Build a scaling policy from its `name[:argument]` string, or `name[entries]`.
 
-    Only `static` takes an argument, and only `static` and `vanilla` take entries."""
+    Only `static` takes an argument, and only `static` and `vanilla` take entries:
+
+        static                          every worker manager runs its advertised maximum
+        static:4                        every worker manager runs 4, capped at its advertised maximum
+        static[native:4, ecs:0]         native runs 4, ecs runs 0, any other runs its advertised maximum
+        vanilla                         every worker manager scales between 0 and its advertised maximum
+        vanilla[native:8:8, ecs:100]    native holds 8, ecs scales between 0 and 100
+        capability                      scales per capability group
+
+    An argument and entries cannot be combined: `static:2[native:4]` is refused."""
+    # `name[entries]`: the entries are everything between the first `[` and the closing `]`.
     name, bracket, entries = scaling.partition("[")
     if bracket:
         scaling_policy_strategy = ScalingPolicyStrategy(name)
@@ -22,12 +32,14 @@ def create_scaling_policy(scaling: str) -> ScalingPolicy:
             return VanillaScalingPolicy(_parse_vanilla_bounds(entries[:-1]))
         raise ValueError(f"only the static and vanilla scaling policies take entries, got {scaling!r}")
 
+    # `name[:argument]`: an empty argument means none was given.
     name, _, argument = scaling.partition(":")
     scaling_policy_strategy = ScalingPolicyStrategy(name)
 
     if scaling_policy_strategy == ScalingPolicyStrategy.STATIC:
         return StaticScalingPolicy(_parse_static_task_concurrency(argument), {})
 
+    # Every other policy is a bare name.
     if argument:
         raise ValueError(f"scaling policy {name!r} takes no argument, got {scaling!r}")
 
