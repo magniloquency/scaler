@@ -1,4 +1,4 @@
-from typing import Dict, Optional
+from typing import Dict, List, Optional, Tuple
 
 from scaler.scheduler.controllers.policies.simple_policy.scaling.capability_scaling import CapabilityScalingPolicy
 from scaler.scheduler.controllers.policies.simple_policy.scaling.mixins import ScalingPolicy
@@ -20,93 +20,96 @@ def create_scaling_policy(scaling: str) -> ScalingPolicy:
         capability                      scales per capability group
 
     An argument and entries cannot be combined: `static:2[native:4]` is refused."""
-    # `name[entries]`: the entries are everything between the first `[` and the closing `]`.
-    name, bracket, entries = scaling.partition("[")
+    name, argument, entries = _split_scaling(scaling)
+    match (_parse_strategy(name), argument, entries):
+        case (ScalingPolicyStrategy.STATIC, None, None):
+            return StaticScalingPolicy(None, {})
+        case (ScalingPolicyStrategy.STATIC, str() as argument, None):
+            return StaticScalingPolicy(_parse_count(argument.strip(), f"scaling {scaling!r}"), {})
+        case (ScalingPolicyStrategy.STATIC, None, str() as entries):
+            return StaticScalingPolicy(None, _parse_static_task_concurrencies(entries))
+        case (ScalingPolicyStrategy.VANILLA, None, None):
+            return VanillaScalingPolicy({})
+        case (ScalingPolicyStrategy.VANILLA, None, str() as entries):
+            return VanillaScalingPolicy(_parse_vanilla_bounds(entries))
+        case (ScalingPolicyStrategy.CAPABILITY, None, None):
+            return CapabilityScalingPolicy()
+        case (_, str(), str()):
+            raise ValueError(f"scaling takes an argument or entries, not both, got {scaling!r}")
+        case _:
+            refused_part = "argument" if argument is not None else "entries"
+            raise ValueError(f"scaling policy {name!r} takes no {refused_part}, got {scaling!r}")
+
+
+def _split_scaling(scaling: str) -> Tuple[str, Optional[str], Optional[str]]:
+    """Split `name`, `name:argument`, or `name[entries]` into the name, the argument, and the entries.
+
+    A part the string leaves out is None, so `static:` has an empty argument rather than none."""
+    head, bracket, tail = scaling.strip().partition("[")
+    entries = None
     if bracket:
-        scaling_policy_strategy = ScalingPolicyStrategy(name)
-        if not entries.endswith("]"):
-            raise ValueError(f"{name} entries must end with ']', got {scaling!r}")
-        if scaling_policy_strategy == ScalingPolicyStrategy.STATIC:
-            return StaticScalingPolicy(None, _parse_static_task_concurrencies(entries[:-1]))
-        if scaling_policy_strategy == ScalingPolicyStrategy.VANILLA:
-            return VanillaScalingPolicy(_parse_vanilla_bounds(entries[:-1]))
-        raise ValueError(f"only the static and vanilla scaling policies take entries, got {scaling!r}")
+        if not tail.endswith("]"):
+            raise ValueError(f"scaling must be 'name', 'name:argument', or 'name[entries]', got {scaling!r}")
+        entries = tail[:-1]
 
-    # `name[:argument]`: an empty argument means none was given.
-    name, _, argument = scaling.partition(":")
-    scaling_policy_strategy = ScalingPolicyStrategy(name)
-
-    if scaling_policy_strategy == ScalingPolicyStrategy.STATIC:
-        return StaticScalingPolicy(_parse_static_task_concurrency(argument), {})
-
-    # Every other policy is a bare name.
-    if argument:
-        raise ValueError(f"scaling policy {name!r} takes no argument, got {scaling!r}")
-
-    if scaling_policy_strategy == ScalingPolicyStrategy.VANILLA:
-        return VanillaScalingPolicy({})
-    elif scaling_policy_strategy == ScalingPolicyStrategy.CAPABILITY:
-        return CapabilityScalingPolicy()
-
-    raise ValueError(f"unsupported scaling policy strategy: {scaling_policy_strategy}")
+    name, colon, argument = head.partition(":")
+    return name.strip(), argument if colon else None, entries
 
 
-def _parse_static_task_concurrency(argument: str) -> Optional[int]:
-    if not argument:
-        return None
-
-    if not argument.isdigit():
-        raise ValueError(f"static scaling takes a non-negative task concurrency, got {argument!r}")
-
-    return int(argument)
+def _parse_strategy(name: str) -> ScalingPolicyStrategy:
+    try:
+        return ScalingPolicyStrategy(name)
+    except ValueError:
+        known_names = ", ".join(strategy.value for strategy in ScalingPolicyStrategy)
+        raise ValueError(f"unknown scaling policy {name!r}, expected one of {known_names}") from None
 
 
-def _parse_static_task_concurrencies(text: str) -> Dict[bytes, int]:
+def _parse_static_task_concurrencies(entries: str) -> Dict[bytes, int]:
     """Parse `worker_manager_id:task_concurrency` entries separated by `,`."""
-    task_concurrency_by_manager: Dict[bytes, int] = {}
-    for entry in text.split(","):
-        fields = [field.strip() for field in entry.split(":")]
-        if len(fields) != 2 or not fields[0]:
-            raise ValueError(f"static entry must be 'worker_manager_id:task_concurrency', got {entry.strip()!r}")
-
-        worker_manager_id = fields[0].encode()
-        if worker_manager_id in task_concurrency_by_manager:
-            raise ValueError(f"static entries name worker manager {fields[0]!r} twice")
-
-        task_concurrency_by_manager[worker_manager_id] = _parse_count(fields[1], entry)
-
-    return task_concurrency_by_manager
+    fields_by_manager = _split_entries(entries, "worker_manager_id:task_concurrency", (1,))
+    return {
+        worker_manager_id.encode(): _parse_count(task_concurrency, f"static entry {worker_manager_id!r}")
+        for worker_manager_id, (task_concurrency,) in fields_by_manager.items()
+    }
 
 
-def _parse_vanilla_bounds(text: str) -> Dict[bytes, WorkerManagerBounds]:
+def _parse_vanilla_bounds(entries: str) -> Dict[bytes, WorkerManagerBounds]:
     """Parse `worker_manager_id:max_task_concurrency[:min_task_concurrency]` entries separated by `,`.
 
     An empty max_task_concurrency leaves the cap to the manager's advertised maximum."""
+    fields_by_manager = _split_entries(entries, "worker_manager_id:max_task_concurrency[:min_task_concurrency]", (1, 2))
     bounds: Dict[bytes, WorkerManagerBounds] = {}
-    for entry in text.split(","):
-        fields = [field.strip() for field in entry.split(":")]
-        if len(fields) not in (2, 3) or not fields[0]:
-            raise ValueError(
-                f"vanilla bounds entry must be 'worker_manager_id:max_task_concurrency[:min_task_concurrency]', "
-                f"got {entry.strip()!r}"
-            )
-
-        worker_manager_id = fields[0].encode()
-        if worker_manager_id in bounds:
-            raise ValueError(f"vanilla bounds name worker manager {fields[0]!r} twice")
-
-        max_task_concurrency = _parse_count(fields[1], entry) if fields[1] else None
-        min_task_concurrency = _parse_count(fields[2], entry) if len(fields) == 3 else 0
+    for worker_manager_id, fields in fields_by_manager.items():
+        context = f"vanilla bounds entry {worker_manager_id!r}"
+        max_task_concurrency = _parse_count(fields[0], context) if fields[0] else None
+        min_task_concurrency = _parse_count(fields[1], context) if len(fields) == 2 else 0
         if max_task_concurrency is not None and min_task_concurrency > max_task_concurrency:
-            raise ValueError(f"vanilla bounds entry {entry.strip()!r}: the minimum exceeds the maximum")
+            raise ValueError(f"{context}: the minimum exceeds the maximum")
 
-        bounds[worker_manager_id] = WorkerManagerBounds(max_task_concurrency, min_task_concurrency)
+        bounds[worker_manager_id.encode()] = WorkerManagerBounds(max_task_concurrency, min_task_concurrency)
 
     return bounds
 
 
-def _parse_count(field: str, entry: str) -> int:
-    if not field.isdigit():
-        raise ValueError(f"scaling entry {entry.strip()!r}: {field!r} is not a non-negative task concurrency")
+def _split_entries(entries: str, entry_format: str, field_counts: Tuple[int, ...]) -> Dict[str, List[str]]:
+    """Split `,`-separated `worker_manager_id:field...` entries into the fields after the id, keyed by the id."""
+    fields_by_manager: Dict[str, List[str]] = {}
+    for entry in entries.split(","):
+        worker_manager_id, *fields = [field.strip() for field in entry.split(":")]
+        has_bracket = "[" in worker_manager_id or "]" in worker_manager_id
+        if len(fields) not in field_counts or not worker_manager_id or has_bracket:
+            raise ValueError(f"scaling entry must be '{entry_format}', got {entry.strip()!r}")
+        if worker_manager_id in fields_by_manager:
+            raise ValueError(f"scaling entries name worker manager {worker_manager_id!r} twice")
+
+        fields_by_manager[worker_manager_id] = fields
+
+    return fields_by_manager
+
+
+def _parse_count(field: str, context: str) -> int:
+    # isdigit() alone accepts non-ASCII digits such as '\u00b2', which int() then refuses.
+    if not (field.isascii() and field.isdigit()):
+        raise ValueError(f"{context}: {field!r} is not a non-negative task concurrency")
 
     return int(field)

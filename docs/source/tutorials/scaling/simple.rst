@@ -141,7 +141,7 @@ Static counts
 * Each count is capped at the worker manager's heartbeat ``max_task_concurrency``.
 * A worker manager without an entry gets its heartbeat's ``max_task_concurrency``, as with plain ``static``.
 * ``static:N`` and a list of counts cannot be combined.
-* A ``worker_manager_id`` in the counts cannot contain ``:``, ``,``, ``]``, or ``;``.
+* A ``worker_manager_id`` in the counts cannot contain ``:``, ``,``, ``[``, ``]``, or ``;``.
 * A negative count or a repeated ``worker_manager_id`` is refused at startup.
 
 Vanilla bounds
@@ -157,7 +157,7 @@ Vanilla bounds
 * The effective cap is ``min(max_task_concurrency, heartbeat.max_task_concurrency)``; leave it empty to keep only the heartbeat's: ``warm::2``.
 * The worker manager never gets fewer than its floor, clamped to the effective cap, even with no tasks.
 * A worker manager without an entry ranges from ``0`` to its heartbeat's ``max_task_concurrency``.
-* A ``worker_manager_id`` in the bounds cannot contain ``:``, ``,``, ``]``, or ``;``.
+* A ``worker_manager_id`` in the bounds cannot contain ``:``, ``,``, ``[``, ``]``, or ``;``.
 * A floor above its cap, a negative count, or a repeated ``worker_manager_id`` is refused at startup.
 
 An entry whose floor equals its cap holds a fixed pool next to worker managers that scale.
