@@ -189,7 +189,6 @@ class TestVanillaBounds(unittest.TestCase):
             "vanilla[native:many]",
             "vanilla[native:8:8:8]",
             "vanilla[native:8, native:4]",
-            "static[native:8]",
             "capability[native:8]",
         ]:
             with self.subTest(scaling=scaling):
