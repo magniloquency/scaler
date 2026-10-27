@@ -67,9 +67,6 @@ class VanillaWorkerController(WorkerController, Looper, Reporter):
         return worker
 
     async def on_heartbeat(self, worker_id: WorkerID, info: WorkerHeartbeat) -> None:
-        previous = self._worker_alive_since.get(worker_id)
-        started_draining = info.draining and (previous is None or not previous[1].draining)
-
         info.capabilities = capabilities_to_dict(info.capabilities)
         if self._allocation_policy.add_worker(worker_id, info.capabilities, info.queueSize):
             logger.info(f"worker {worker_id!r} connected")
@@ -88,7 +85,7 @@ class VanillaWorkerController(WorkerController, Looper, Reporter):
 
         self._worker_alive_since[worker_id] = (time.time(), info)
 
-        if started_draining:
+        if info.draining:
             await self.__drain_worker(worker_id)
 
         object_storage_address = self._config_controller.get_config("advertised_object_storage_address")
@@ -230,7 +227,11 @@ class VanillaWorkerController(WorkerController, Looper, Reporter):
 
     async def __drain_worker(self, worker_id: WorkerID) -> None:
         # The worker refuses to give up the task it runs, so only its queued tasks move.
+        # The policy returns the tasks on the first draining heartbeat only, so later heartbeats take back nothing.
         task_ids = self._allocation_policy.drain_worker(worker_id)
+        if not task_ids:
+            return
+
         logger.info(f"{worker_id!r} is draining: taking back {len(task_ids)} task(s)")
         for task_id in task_ids:
             await self._task_controller.on_task_balance_cancel(task_id)

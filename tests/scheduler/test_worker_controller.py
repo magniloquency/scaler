@@ -33,27 +33,39 @@ class TestVanillaWorkerControllerOnDrainingHeartbeat(unittest.IsolatedAsyncioTes
         logging_test_name(self)
 
         config_controller = MagicMock(spec=ConfigController)
-        self.allocation_policy = MagicMock(spec=TaskAllocatePolicy)
-        self.allocation_policy.add_worker.return_value = False
-        self.allocation_policy.drain_worker.return_value = [_TASK_ID]
+        self.allocation_policy, _ = create_policies("simple", "allocate=capability; scaling=vanilla")
 
         self.controller = VanillaWorkerController(config_controller, self.allocation_policy)
         self.task_controller = MagicMock(spec=TaskController)
         self.controller.register(AsyncMock(), AsyncMock(), self.task_controller)
 
+    async def _connect_worker_holding_a_task(self) -> None:
+        await self.controller.on_heartbeat(_WORKER_ID, _received_heartbeat(draining=False))
+        task = Task(
+            taskId=_TASK_ID,
+            source=ClientID(b"client"),
+            metadata=b"",
+            funcObjectId=b"",
+            functionArgs=[],
+            capabilities={},
+        )
+        self.assertEqual(self.allocation_policy.assign_task(task), _WORKER_ID)
+
     async def test_first_draining_heartbeat_takes_back_the_worker_tasks(self) -> None:
         """The scheduler drains a worker, and takes back its tasks, once the worker reports draining."""
-        await self.controller.on_heartbeat(_WORKER_ID, _received_heartbeat(draining=False))
-        self.allocation_policy.drain_worker.assert_not_called()
+        await self._connect_worker_holding_a_task()
+        self.task_controller.on_task_balance_cancel.assert_not_called()
 
         await self.controller.on_heartbeat(_WORKER_ID, _received_heartbeat(draining=True))
-        self.allocation_policy.drain_worker.assert_called_once_with(_WORKER_ID)
         self.task_controller.on_task_balance_cancel.assert_called_once_with(_TASK_ID)
 
-    async def test_later_draining_heartbeats_do_not_drain_again(self) -> None:
+    async def test_later_draining_heartbeats_do_not_take_back_tasks_again(self) -> None:
+        """A task the worker refused to give up stays with it: later draining heartbeats send no new cancel."""
+        await self._connect_worker_holding_a_task()
+
         await self.controller.on_heartbeat(_WORKER_ID, _received_heartbeat(draining=True))
         await self.controller.on_heartbeat(_WORKER_ID, _received_heartbeat(draining=True))
-        self.allocation_policy.drain_worker.assert_called_once_with(_WORKER_ID)
+        self.task_controller.on_task_balance_cancel.assert_called_once_with(_TASK_ID)
 
 
 class TestVanillaWorkerControllerOnDisconnectNotification(unittest.IsolatedAsyncioTestCase):
