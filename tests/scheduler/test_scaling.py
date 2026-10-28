@@ -5,6 +5,7 @@ import sys
 import time
 import unittest
 from typing import Dict, Optional
+from unittest.mock import AsyncMock, MagicMock
 
 from scaler import Client
 from scaler.cluster.object_storage_server import ObjectStorageServerProcess
@@ -32,10 +33,13 @@ from scaler.config.section.scheduler import PolicyConfig
 from scaler.config.types.address import AddressConfig
 from scaler.config.types.worker import WorkerCapabilities
 from scaler.protocol.capnp import Resource, Task, WorkerHeartbeat, WorkerManagerCommand, WorkerManagerHeartbeat
+from scaler.scheduler.controllers.worker_manager_controller import WorkerManagerController
 from scaler.scheduler.policies.scaling.capability import CapabilityScalingPolicy
 from scaler.scheduler.policies.scaling.static import StaticScalingPolicy
-from scaler.scheduler.policies.scaling.types import WorkerManagerBounds
+from scaler.scheduler.policies.scaling.types import WorkerManagerBounds, WorkerManagerSnapshot
+from scaler.scheduler.policies.scaling.utility import build_set_desired_command
 from scaler.scheduler.policies.scaling.vanilla import VanillaScalingPolicy
+from scaler.scheduler.policies.scaling.waterfall import WaterfallRule, WaterfallScalingPolicy
 from scaler.scheduler.policies.utility import create_scaling_policy
 from scaler.utility.identifiers import ClientID, ObjectID, TaskID, WorkerID
 from scaler.utility.logging.utility import setup_logger
@@ -290,9 +294,6 @@ class TestAtCapacityEmission(unittest.TestCase):
 
     def test_waterfall_at_cap_emits_current(self):
         """Waterfall: when the manager is full per the priority chain, it still emits setDesired(current)."""
-        from scaler.scheduler.policies.scaling.types import WorkerManagerSnapshot
-        from scaler.scheduler.policies.scaling.waterfall import WaterfallRule, WaterfallScalingPolicy
-
         rules = [WaterfallRule(priority=1, worker_manager_id=b"mgr", max_task_concurrency=10)]
         policy = WaterfallScalingPolicy(rules)
         # ceil(100/10) = 10; cap=10; desired=10 -> emits setDesired(10).
@@ -317,10 +318,6 @@ class TestPendingWorkersStatus(unittest.IsolatedAsyncioTestCase):
     """Pending-worker reporting in WorkerManagerController.get_status."""
 
     def setUp(self):
-        from unittest.mock import AsyncMock, MagicMock
-
-        from scaler.scheduler.controllers.worker_manager_controller import WorkerManagerController
-
         setup_logger()
         config_controller = MagicMock()
         scaling_policy = MagicMock()
@@ -341,8 +338,6 @@ class TestPendingWorkersStatus(unittest.IsolatedAsyncioTestCase):
 
     async def test_pending_equals_desired_minus_connected(self):
         """pendingWorkers = max(0, last_desired_total - connected_count)."""
-        from scaler.scheduler.policies.scaling.utility import build_set_desired_command
-
         source = b"mgr-src"
         manager_id = b"mgr-id"
         heartbeat = _create_worker_manager_heartbeat(manager_id)
@@ -360,8 +355,6 @@ class TestPendingWorkersStatus(unittest.IsolatedAsyncioTestCase):
 
     async def test_pending_clamped_at_zero(self):
         """If more workers are connected than desired, pendingWorkers is 0 (never negative)."""
-        from scaler.scheduler.policies.scaling.utility import build_set_desired_command
-
         source = b"mgr-src"
         manager_id = b"mgr-id"
         heartbeat = _create_worker_manager_heartbeat(manager_id)
@@ -377,8 +370,6 @@ class TestPendingWorkersStatus(unittest.IsolatedAsyncioTestCase):
 
     async def test_pending_only_counts_capsets_this_manager_can_serve(self):
         """A capset whose capabilities are not a subset of the manager's capabilities is excluded."""
-        from scaler.scheduler.policies.scaling.utility import build_set_desired_command
-
         source = b"mgr-src"
         manager_id = b"mgr-id"
         # Manager advertises only "cpu" capability.
@@ -401,11 +392,6 @@ class TestPendingWorkersStatus(unittest.IsolatedAsyncioTestCase):
 class TestManagerSnapshotsCountServingWorkers(unittest.IsolatedAsyncioTestCase):
     async def test_an_idle_waterfall_tier_does_not_replace_its_draining_workers(self):
         """A draining worker is not in a manager's worker count, so a holding tier keeps only its serving workers."""
-        from unittest.mock import AsyncMock, MagicMock
-
-        from scaler.scheduler.controllers.worker_manager_controller import WorkerManagerController
-        from scaler.scheduler.policies.scaling.waterfall import WaterfallRule, WaterfallScalingPolicy
-
         setup_logger()
         scaling_policy = WaterfallScalingPolicy(
             [
