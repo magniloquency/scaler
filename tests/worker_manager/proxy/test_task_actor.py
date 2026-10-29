@@ -209,6 +209,21 @@ class TestTaskActorConcurrency(_TaskActorTestCase):
         self.assertIsInstance(future.exception(), RuntimeError)
         self.assertTrue(self.actor.has_free_permit)
 
+    async def test_a_duplicate_task_new_is_ignored(self) -> None:
+        task = _make_task()
+        future = await self._start_task(task)
+
+        with self.assertLogs("scaler", level="WARNING"):
+            self.actor.post_task_new(task)
+            await self._settle()
+        future.set_result(None)
+        await self._settle()
+
+        self.backend.execute.assert_called_once_with(task)
+        self.assertEqual(self.reported, [(task, future)])
+        self.assertEqual(self.actor.queued_task_count, 0)
+        self.assertTrue(self.actor.has_free_permit)
+
 
 class TestTaskActorCancel(_TaskActorTestCase):
     async def test_cancel_nonexistent_sends_cancel_not_found(self) -> None:

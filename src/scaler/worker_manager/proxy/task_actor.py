@@ -116,6 +116,10 @@ class TaskActor:
                 self._handle_finished(task_id, future)
 
     def _handle_task_new(self, task: Task) -> None:
+        if task.taskId in self._task_id_to_entry:
+            logger.warning(f"Ignoring a task already on this worker: task_id={task.taskId.hex()}")
+            return
+
         task_priority = self._get_task_priority(task)
         entry = _TaskEntry(task=task, state=_TaskState.QUEUED)
         self._task_id_to_entry[task.taskId] = entry
