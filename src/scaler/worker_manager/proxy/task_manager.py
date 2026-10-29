@@ -29,10 +29,7 @@ logger = logging.getLogger(__name__)
 
 
 class TaskManager(Looper, TaskManagerMixin):
-    """The worker's side of the TaskActor: registration, serializers, result uploads, and the mixin entry points.
-
-    upload_results() sends the results of finished tasks, so a slow upload does not hold up the actor.
-    """
+    """The worker's side of the TaskActor: registration, serializers, result uploads, and the mixin entry points."""
 
     def __init__(self, base_concurrency: int, execution_backend: ExecutionBackend) -> None:
         self._execution_backend = execution_backend
@@ -91,6 +88,7 @@ class TaskManager(Looper, TaskManagerMixin):
     async def routine(self) -> None:
         await self._actor.routine()
 
+    # runs apart from the actor's routine, so a slow upload does not hold up task events
     async def upload_results(self) -> None:
         task, future, profile_result = await self._results.get()
         await self._send_task_result(task, future, profile_result)
