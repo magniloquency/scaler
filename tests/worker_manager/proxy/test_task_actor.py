@@ -294,6 +294,22 @@ class TestTaskActorCancel(_TaskActorTestCase):
         self.assertEqual(self.reported, [])
         self.assertTrue(self.actor.has_free_permit)
 
+    async def test_a_task_counts_as_processing_until_its_backend_cancel_returns(self) -> None:
+        task = _make_task()
+        await self._start_task(task)
+        backend_release = asyncio.Event()
+
+        async def slow_on_cancel(_: TaskCancel) -> None:
+            await backend_release.wait()
+
+        self.backend.on_cancel = AsyncMock(side_effect=slow_on_cancel)
+        await self._cancel(task.taskId, force=True)
+        self.assertEqual(self.actor.processing_task_count, 1)
+
+        backend_release.set()
+        await self._settle()
+        self.assertEqual(self.actor.processing_task_count, 0)
+
     async def test_a_task_that_finishes_during_the_backend_cancel_reports_nothing(self) -> None:
         task = _make_task()
         future = await self._start_task(task)

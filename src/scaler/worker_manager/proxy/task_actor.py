@@ -100,9 +100,7 @@ class TaskActor:
 
     @property
     def processing_task_count(self) -> int:
-        return sum(
-            entry.state in (_TaskState.STARTING, _TaskState.RUNNING) for entry in self._task_id_to_entry.values()
-        )
+        return sum(entry.state != _TaskState.QUEUED for entry in self._task_id_to_entry.values())
 
     async def routine(self) -> None:
         match await self._events.get():
