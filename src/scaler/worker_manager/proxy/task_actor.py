@@ -9,7 +9,7 @@ from scaler.protocol.capnp import Task, TaskCancel, TaskCancelConfirmType
 from scaler.utility.identifiers import TaskID
 from scaler.utility.metadata.profile_result import ProfileResult
 from scaler.utility.metadata.task_flags import retrieve_task_flags_from_task
-from scaler.utility.queues.async_priority_queue import AsyncPriorityQueue
+from scaler.utility.queues.stable_priority_queue import StablePriorityQueue
 from scaler.worker_manager.proxy.mixins import ExecutionBackend
 
 logger = logging.getLogger(__name__)
@@ -81,7 +81,7 @@ class TaskActor:
         self._background_tasks: Set[asyncio.Task] = set()
 
         self._task_id_to_entry: Dict[TaskID, _TaskEntry] = dict()
-        self._queued_task_id_queue = AsyncPriorityQueue()
+        self._queued_task_id_queue: StablePriorityQueue[int, TaskID] = StablePriorityQueue()
         self._permits_held = 0
 
     def post_task_new(self, task: Task) -> None:
@@ -92,7 +92,7 @@ class TaskActor:
 
     @property
     def queued_task_count(self) -> int:
-        return self._queued_task_id_queue.qsize()
+        return len(self._queued_task_id_queue)
 
     @property
     def has_free_permit(self) -> bool:
@@ -131,7 +131,7 @@ class TaskActor:
             self._start_task(entry, holds_permit=False)
             return
 
-        self._queued_task_id_queue.put_nowait((-task_priority, task.taskId))
+        self._queued_task_id_queue.put(-task_priority, task.taskId)
         self._start_queued_tasks()
 
     async def _handle_cancel(self, task_cancel: TaskCancel) -> None:
@@ -183,8 +183,8 @@ class TaskActor:
             self._report_result(entry.task, future, profile_result)
 
     def _start_queued_tasks(self) -> None:
-        while self._permits_held < self._base_concurrency and self._queued_task_id_queue.qsize() > 0:
-            _, task_id = self._queued_task_id_queue.get_nowait()
+        while self._permits_held < self._base_concurrency and len(self._queued_task_id_queue) > 0:
+            _, task_id = self._queued_task_id_queue.get()
             self._start_task(self._task_id_to_entry[task_id], holds_permit=True)
 
     def _start_task(self, entry: _TaskEntry, holds_permit: bool) -> None:
