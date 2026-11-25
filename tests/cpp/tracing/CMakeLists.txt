@@ -1,0 +1,2 @@
+add_test_executable(test_telemetry_policy test_telemetry_policy.cpp)
+target_link_libraries(test_telemetry_policy PRIVATE scaler_tracing)

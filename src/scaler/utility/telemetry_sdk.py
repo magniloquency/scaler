@@ -30,6 +30,7 @@ from opentelemetry.sdk.trace import ReadableSpan, Span, SpanProcessor, TracerPro
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter, SpanExportResult
 
 from scaler.about import __version__
+from scaler.config.constants import NATIVE_EXPORT_ENV
 from scaler.protocol.capnp import TelemetryBatch
 from scaler.utility.semantic_conventions import SERVICE_NAMESPACE
 from scaler.utility.telemetry_relay import TelemetryRelayBuffer
@@ -87,9 +88,10 @@ class RelayLogExporter(LogRecordExporter):
 
 @dataclasses.dataclass(frozen=True)
 class InstalledSDK:
-    tracer_provider: TracerProvider
+    # the SDK's providers, or the native ones that export through opentelemetry-cpp
+    tracer_provider: Any
     meter_provider: MeterProvider
-    logger_provider: LoggerProvider
+    logger_provider: Any
 
     def flush(self) -> None:
         """Hand every finished span, metric, and log record to the exporters now."""
@@ -117,30 +119,42 @@ def install_sdk(
         }
     )
 
-    span_exporter: SpanExporter = OTLPSpanExporter() if relay_buffer is None else RelaySpanExporter(relay_buffer)
     metric_exporter: MetricExporter = (
         OTLPMetricExporter() if relay_buffer is None else RelayMetricExporter(relay_buffer)
     )
-    log_exporter: LogRecordExporter = OTLPLogExporter() if relay_buffer is None else RelayLogExporter(relay_buffer)
-
-    tracer_provider = TracerProvider(resource=resource)
-    tracer_provider.add_span_processor(BaggageSpanProcessor())
-    tracer_provider.add_span_processor(BatchSpanProcessor(span_exporter))
-    trace.set_tracer_provider(tracer_provider)
-
     meter_provider = MeterProvider(resource=resource, metric_readers=[PeriodicExportingMetricReader(metric_exporter)])
     metrics.set_meter_provider(meter_provider)
 
-    logger_provider = LoggerProvider(resource=resource)
-    logger_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
-    set_logger_provider(logger_provider)
+    # a relaying process exports into the relay buffer, which only the Python SDK's exporters write to
+    tracer_provider: Any
+    logger_provider: Any
+    if relay_buffer is None and os.environ.get(NATIVE_EXPORT_ENV, "").lower() != "false":
+        from scaler.utility.native_telemetry import install
+
+        tracer_provider, logger_provider = install(dict(resource.attributes))
+    else:
+        span_exporter: SpanExporter = OTLPSpanExporter() if relay_buffer is None else RelaySpanExporter(relay_buffer)
+        tracer_provider = TracerProvider(resource=resource)
+        tracer_provider.add_span_processor(BaggageSpanProcessor())
+        tracer_provider.add_span_processor(BatchSpanProcessor(span_exporter))
+
+        log_exporter: LogRecordExporter = OTLPLogExporter() if relay_buffer is None else RelayLogExporter(relay_buffer)
+        logger_provider = LoggerProvider(resource=resource)
+        logger_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
+        set_logger_provider(logger_provider)
+    trace.set_tracer_provider(tracer_provider)
     return InstalledSDK(tracer_provider, meter_provider, logger_provider)
 
 
-def attach_log_handler(logger_provider: LoggerProvider, logging_level: int) -> None:
+def attach_log_handler(logger_provider: Any, logging_level: int) -> None:
     """Export the `scaler` logger's records; a no-op when the handler is already attached."""
+    from scaler.utility.native_telemetry import NativeLoggerProvider, NativeLogHandler
+
     scaler_logger = logging.getLogger(SCALER_LOGGER_NAME)
-    if any(isinstance(handler, LoggingHandler) for handler in scaler_logger.handlers):
+    if any(isinstance(handler, (LoggingHandler, NativeLogHandler)) for handler in scaler_logger.handlers):
         return
 
-    scaler_logger.addHandler(LoggingHandler(level=logging_level, logger_provider=logger_provider))
+    if isinstance(logger_provider, NativeLoggerProvider):
+        scaler_logger.addHandler(logger_provider.make_handler(logging_level))
+    else:
+        scaler_logger.addHandler(LoggingHandler(level=logging_level, logger_provider=logger_provider))
