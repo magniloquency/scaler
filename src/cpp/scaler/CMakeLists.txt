@@ -20,3 +20,8 @@ endif()
 if(NOT EMSCRIPTEN)
   add_subdirectory(object_storage)
 endif()
+
+if(NOT EMSCRIPTEN)
+  # opentelemetry-cpp and the libraries it needs are built natively only
+  add_subdirectory(tracing)
+endif()

@@ -25,6 +25,8 @@ OTEL_ENVIRONMENT_PREFIX = "OTEL_"
 OTLP_ENDPOINT_ENV = "OTEL_EXPORTER_OTLP_ENDPOINT"
 OTLP_HEADERS_ENV = "OTEL_EXPORTER_OTLP_HEADERS"
 SDK_DISABLED_ENV = "OTEL_SDK_DISABLED"
+# "false" exports spans and logs with the Python SDK instead of opentelemetry-cpp, which exports them without the GIL
+NATIVE_EXPORT_ENV = "SCALER_NATIVE_EXPORT"
 
 # W3C trace context headers, and the environment variables that carry them into a process started inside a trace
 TRACEPARENT_HEADER = "traceparent"

@@ -137,6 +137,7 @@ build.targets = [
     "py_indexed_queue",
     "py_pending_call",
     "py_capnp",
+    "py_native_export",
 ]
 
 [tool.scikit-build.cmake.define]

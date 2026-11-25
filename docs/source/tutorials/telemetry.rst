@@ -26,6 +26,18 @@ Enable export
 - A cloud worker manager whose units install from ``requirements_txt`` refuses to start when its units would export (an endpoint, an advertised endpoint, or ``--telemetry-relay``) but the requirements install ``opengris-scaler`` without the ``otel`` or ``all`` extra.
 - The SDK reads every other setting from the standard `OTEL_* variables <https://opentelemetry.io/docs/specs/otel/configuration/sdk-environment-variables/>`_, for example ``OTEL_EXPORTER_OTLP_HEADERS`` and ``OTEL_METRIC_EXPORT_INTERVAL``.
 
+Native export
+-------------
+
+- Scaler's processes export spans and logs with opentelemetry-cpp's OTLP/HTTP exporters, which encode and send them from their own threads without holding the GIL; metrics use the Python SDK.
+- A span's data lives in C++ from the start, and a log record is copied into C++ as it is emitted; the export threads build, batch, and send them.
+- The exporters read the ``OTEL_EXPORTER_OTLP_*`` variables opentelemetry-cpp supports, such as the endpoint, headers, timeout, compression, and certificates, and the ``OTEL_BSP_*`` and ``OTEL_BLRP_*`` batch settings.
+- Spans are sampled by ``OTEL_TRACES_SAMPLER`` (``always_on``, ``always_off``, ``traceidratio``, and their ``parentbased_`` forms) and ``OTEL_TRACES_SAMPLER_ARG``; spans and log records are limited by ``OTEL_SPAN_ATTRIBUTE_COUNT_LIMIT``, ``OTEL_ATTRIBUTE_VALUE_LENGTH_LIMIT``, and the other ``OTEL_*_LIMIT`` variables, as with the Python SDK.
+- A log record carries what the Python SDK's handler gives it: the message, the record's extra fields, ``code.*`` and ``exception.*`` attributes, and the span it was logged in.
+- Spans the task function starts take the same path, since the exporter's tracer provider is the process's global one; it accepts no span processors of its own.
+- ``SCALER_NATIVE_EXPORT=false`` exports spans and logs with the Python SDK instead, for example to add a span processor; a relaying process always does.
+- Export problems, such as an unreachable collector or a full queue, are logged by the ``scaler.utility.native_telemetry`` logger, whose records are never exported.
+
 Relay through the scheduler
 ---------------------------
 
