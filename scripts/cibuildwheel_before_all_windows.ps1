@@ -23,6 +23,30 @@ try {
     & (Join-Path $PSScriptRoot "library_tool.ps1") openssl compile --prefix=$prefix
     & (Join-Path $PSScriptRoot "library_tool.ps1") openssl install --prefix=$prefix
 
+    & (Join-Path $PSScriptRoot "library_tool.ps1") zlib download --prefix=$prefix
+    & (Join-Path $PSScriptRoot "library_tool.ps1") zlib compile --prefix=$prefix
+    & (Join-Path $PSScriptRoot "library_tool.ps1") zlib install --prefix=$prefix
+
+    & (Join-Path $PSScriptRoot "library_tool.ps1") abseil download --prefix=$prefix
+    & (Join-Path $PSScriptRoot "library_tool.ps1") abseil compile --prefix=$prefix
+    & (Join-Path $PSScriptRoot "library_tool.ps1") abseil install --prefix=$prefix
+
+    & (Join-Path $PSScriptRoot "library_tool.ps1") protobuf download --prefix=$prefix
+    & (Join-Path $PSScriptRoot "library_tool.ps1") protobuf compile --prefix=$prefix
+    & (Join-Path $PSScriptRoot "library_tool.ps1") protobuf install --prefix=$prefix
+
+    & (Join-Path $PSScriptRoot "library_tool.ps1") curl download --prefix=$prefix
+    & (Join-Path $PSScriptRoot "library_tool.ps1") curl compile --prefix=$prefix
+    & (Join-Path $PSScriptRoot "library_tool.ps1") curl install --prefix=$prefix
+
+    & (Join-Path $PSScriptRoot "library_tool.ps1") nlohmann_json download --prefix=$prefix
+    & (Join-Path $PSScriptRoot "library_tool.ps1") nlohmann_json compile --prefix=$prefix
+    & (Join-Path $PSScriptRoot "library_tool.ps1") nlohmann_json install --prefix=$prefix
+
+    & (Join-Path $PSScriptRoot "library_tool.ps1") opentelemetry_cpp download --prefix=$prefix
+    & (Join-Path $PSScriptRoot "library_tool.ps1") opentelemetry_cpp compile --prefix=$prefix
+    & (Join-Path $PSScriptRoot "library_tool.ps1") opentelemetry_cpp install --prefix=$prefix
+
     if (-not (Test-Path $capnpConfigPath)) {
         Get-ChildItem $prefix -Recurse
         throw "CapnProtoConfig.cmake not installed at $capnpConfigPath"

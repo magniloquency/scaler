@@ -26,7 +26,7 @@ examples/                runnable examples, executed by CI
 The devcontainer (`REMOTE_CONTAINERS=true`) ships the third-party C++ libraries. Elsewhere, build them once:
 
 ```bash
-for library in capnp libuv openssl; do
+for library in capnp libuv openssl zlib abseil protobuf curl nlohmann_json opentelemetry_cpp; do
     ./scripts/library_tool.sh $library download
     ./scripts/library_tool.sh $library compile
     ./scripts/library_tool.sh $library install
