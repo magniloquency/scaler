@@ -19,6 +19,24 @@ RUN /tmp/scaler-scripts/library_tool.sh capnp download \
     && /tmp/scaler-scripts/library_tool.sh openssl download \
     && /tmp/scaler-scripts/library_tool.sh openssl compile \
     && /tmp/scaler-scripts/library_tool.sh openssl install \
+    && /tmp/scaler-scripts/library_tool.sh zlib download \
+    && /tmp/scaler-scripts/library_tool.sh zlib compile \
+    && /tmp/scaler-scripts/library_tool.sh zlib install \
+    && /tmp/scaler-scripts/library_tool.sh abseil download \
+    && /tmp/scaler-scripts/library_tool.sh abseil compile \
+    && /tmp/scaler-scripts/library_tool.sh abseil install \
+    && /tmp/scaler-scripts/library_tool.sh protobuf download \
+    && /tmp/scaler-scripts/library_tool.sh protobuf compile \
+    && /tmp/scaler-scripts/library_tool.sh protobuf install \
+    && /tmp/scaler-scripts/library_tool.sh curl download \
+    && /tmp/scaler-scripts/library_tool.sh curl compile \
+    && /tmp/scaler-scripts/library_tool.sh curl install \
+    && /tmp/scaler-scripts/library_tool.sh nlohmann_json download \
+    && /tmp/scaler-scripts/library_tool.sh nlohmann_json compile \
+    && /tmp/scaler-scripts/library_tool.sh nlohmann_json install \
+    && /tmp/scaler-scripts/library_tool.sh opentelemetry_cpp download \
+    && /tmp/scaler-scripts/library_tool.sh opentelemetry_cpp compile \
+    && /tmp/scaler-scripts/library_tool.sh opentelemetry_cpp install \
     && /tmp/scaler-scripts/library_tool.sh emsdk download \
     && /tmp/scaler-scripts/library_tool.sh emsdk compile \
     && /tmp/scaler-scripts/library_tool.sh emsdk install \

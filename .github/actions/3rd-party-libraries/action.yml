@@ -36,6 +36,24 @@ runs:
         ./scripts/library_tool.sh capnp install --prefix="$SCALER_THIRDPARTY_PREFIX"
         ./scripts/library_tool.sh libuv install --prefix="$SCALER_THIRDPARTY_PREFIX"
         ./scripts/library_tool.sh openssl install --prefix="$SCALER_THIRDPARTY_PREFIX"
+        ./scripts/library_tool.sh zlib download
+        ./scripts/library_tool.sh zlib compile --prefix="$SCALER_THIRDPARTY_PREFIX"
+        ./scripts/library_tool.sh zlib install --prefix="$SCALER_THIRDPARTY_PREFIX"
+        ./scripts/library_tool.sh abseil download
+        ./scripts/library_tool.sh abseil compile --prefix="$SCALER_THIRDPARTY_PREFIX"
+        ./scripts/library_tool.sh abseil install --prefix="$SCALER_THIRDPARTY_PREFIX"
+        ./scripts/library_tool.sh protobuf download
+        ./scripts/library_tool.sh protobuf compile --prefix="$SCALER_THIRDPARTY_PREFIX"
+        ./scripts/library_tool.sh protobuf install --prefix="$SCALER_THIRDPARTY_PREFIX"
+        ./scripts/library_tool.sh curl download
+        ./scripts/library_tool.sh curl compile --prefix="$SCALER_THIRDPARTY_PREFIX"
+        ./scripts/library_tool.sh curl install --prefix="$SCALER_THIRDPARTY_PREFIX"
+        ./scripts/library_tool.sh nlohmann_json download
+        ./scripts/library_tool.sh nlohmann_json compile --prefix="$SCALER_THIRDPARTY_PREFIX"
+        ./scripts/library_tool.sh nlohmann_json install --prefix="$SCALER_THIRDPARTY_PREFIX"
+        ./scripts/library_tool.sh opentelemetry_cpp download
+        ./scripts/library_tool.sh opentelemetry_cpp compile --prefix="$SCALER_THIRDPARTY_PREFIX"
+        ./scripts/library_tool.sh opentelemetry_cpp install --prefix="$SCALER_THIRDPARTY_PREFIX"
 
     - name: Download, Compile, And Install Libraries (Windows)
       shell: pwsh
@@ -50,3 +68,21 @@ runs:
         ./scripts/library_tool.ps1 capnp install --prefix="$env:SCALER_THIRDPARTY_PREFIX"
         ./scripts/library_tool.ps1 libuv install --prefix="$env:SCALER_THIRDPARTY_PREFIX"
         ./scripts/library_tool.ps1 openssl install --prefix="$env:SCALER_THIRDPARTY_PREFIX"
+        ./scripts/library_tool.ps1 zlib download
+        ./scripts/library_tool.ps1 zlib compile --prefix="$env:SCALER_THIRDPARTY_PREFIX"
+        ./scripts/library_tool.ps1 zlib install --prefix="$env:SCALER_THIRDPARTY_PREFIX"
+        ./scripts/library_tool.ps1 abseil download
+        ./scripts/library_tool.ps1 abseil compile --prefix="$env:SCALER_THIRDPARTY_PREFIX"
+        ./scripts/library_tool.ps1 abseil install --prefix="$env:SCALER_THIRDPARTY_PREFIX"
+        ./scripts/library_tool.ps1 protobuf download
+        ./scripts/library_tool.ps1 protobuf compile --prefix="$env:SCALER_THIRDPARTY_PREFIX"
+        ./scripts/library_tool.ps1 protobuf install --prefix="$env:SCALER_THIRDPARTY_PREFIX"
+        ./scripts/library_tool.ps1 curl download
+        ./scripts/library_tool.ps1 curl compile --prefix="$env:SCALER_THIRDPARTY_PREFIX"
+        ./scripts/library_tool.ps1 curl install --prefix="$env:SCALER_THIRDPARTY_PREFIX"
+        ./scripts/library_tool.ps1 nlohmann_json download
+        ./scripts/library_tool.ps1 nlohmann_json compile --prefix="$env:SCALER_THIRDPARTY_PREFIX"
+        ./scripts/library_tool.ps1 nlohmann_json install --prefix="$env:SCALER_THIRDPARTY_PREFIX"
+        ./scripts/library_tool.ps1 opentelemetry_cpp download
+        ./scripts/library_tool.ps1 opentelemetry_cpp compile --prefix="$env:SCALER_THIRDPARTY_PREFIX"
+        ./scripts/library_tool.ps1 opentelemetry_cpp install --prefix="$env:SCALER_THIRDPARTY_PREFIX"

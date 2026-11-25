@@ -2,7 +2,7 @@
 # This script builds and installs the required 3rd party C++ libraries.
 #
 # Usage:
-#       ./scripts/library_tool.sh [capnp|libuv|openssl|emsdk] [download|compile|install] [--prefix=PREFIX] [--target=native|wasm]
+#       ./scripts/library_tool.sh [capnp|libuv|openssl|emsdk|zlib|abseil|protobuf|curl|nlohmann_json|opentelemetry_cpp] [download|compile|install] [--prefix=PREFIX] [--target=native|wasm]
 #
 # --target=wasm cross-compiles capnp/libuv against the Emscripten toolchain.
 # It expects emcc/emcmake on PATH (source thirdparties/emsdk/emsdk_env.sh first)
@@ -25,6 +25,15 @@
 CAPNP_VERSION="1.1.0"
 UV_VERSION="1.51.0"
 OPENSSL_VERSION="4.0.0"
+# the native span exporter (opentelemetry-cpp's OTLP/HTTP exporter); these are the versions opentelemetry-cpp's
+# third_party_release file pins for OPENTELEMETRY_CPP_VERSION
+ZLIB_VERSION="1.3.2"
+ABSEIL_VERSION="20250512.1"
+PROTOBUF_VERSION="35.1"
+CURL_VERSION="8.21.0"
+NLOHMANN_JSON_VERSION="3.12.0"
+OPENTELEMETRY_PROTO_VERSION="1.11.0"
+OPENTELEMETRY_CPP_VERSION="1.30.0"
 # emsdk version must match the Pyodide xbuildenv/kernel used for the wasm wheel build
 # (currently 5.0.3 -> Pyodide 314.0.0 -> CPython 3.14).
 EMSDK_VERSION="5.0.3"
@@ -75,7 +84,7 @@ fi
 PREFIX=$(mkdir -p "${PREFIX}" && cd "${PREFIX}" && pwd)
 
 show_help() {
-    echo "Usage: ./library_tool.sh [capnp|libuv|openssl|emsdk] [download|compile|install] [--prefix=DIR] [--target=native|wasm]"
+    echo "Usage: ./library_tool.sh [capnp|libuv|openssl|emsdk|zlib|abseil|protobuf|curl|nlohmann_json|opentelemetry_cpp] [download|compile|install] [--prefix=DIR] [--target=native|wasm]"
     exit 1
 }
 
@@ -115,6 +124,39 @@ require_emscripten() {
         echo "emcmake not found; install emsdk first ('./scripts/library_tool.sh emsdk download/compile/install') or source ${emsdk_env}."
         exit 1
     fi
+}
+
+# Usage: native_only <library>; the span exporter's libraries have no wasm build, like the module that uses them
+native_only() {
+    if [[ "$TARGET" == "wasm" ]]; then
+        echo "$1 --target=wasm is not supported; it is built natively only."
+        exit 1
+    fi
+}
+
+# Usage: cmake_compile <folder_name> <cmake arguments...>; a static, position-independent Release build
+cmake_compile() {
+    local folder_name="$1"
+    shift
+    cd "${THIRD_PARTY_COMPILED}/${folder_name}"
+    cmake -B build \
+        -DCMAKE_INSTALL_PREFIX="${PREFIX}" \
+        -DCMAKE_PREFIX_PATH="${PREFIX}" \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_CXX_STANDARD=17 \
+        -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+        -DBUILD_SHARED_LIBS=OFF \
+        -DBUILD_TESTING=OFF \
+        "$@" >/dev/null
+    cmake --build build --config Release -j "${NUM_CORES}" >/dev/null
+    echo "Compiled ${folder_name} to ${THIRD_PARTY_COMPILED}/${folder_name}"
+}
+
+# Usage: cmake_install <folder_name>
+cmake_install() {
+    cd "${THIRD_PARTY_COMPILED}/$1"
+    cmake --install build --config Release >/dev/null
+    echo "Installed $1 into ${PREFIX}"
 }
 
 apply_patch_if_present() {
@@ -267,6 +309,131 @@ elif [ "$1" == "openssl" ]; then
         make install_sw >/dev/null
         echo "Installed OpenSSL into ${PREFIX}"
 
+    else
+        show_help
+    fi
+elif [ "$1" == "zlib" ]; then
+    native_only zlib
+    ZLIB_FOLDER_NAME="zlib-${ZLIB_VERSION}"
+
+    if [ "$2" == "download" ]; then
+        download_tar_gz "https://github.com/madler/zlib/archive/refs/tags/v${ZLIB_VERSION}.tar.gz" "${ZLIB_FOLDER_NAME}"
+    elif [ "$2" == "compile" ]; then
+        extract_tar_gz "${ZLIB_FOLDER_NAME}"
+        cmake_compile "${ZLIB_FOLDER_NAME}" -DZLIB_BUILD_EXAMPLES=OFF -DZLIB_BUILD_SHARED=OFF
+    elif [ "$2" == "install" ]; then
+        cmake_install "${ZLIB_FOLDER_NAME}"
+    else
+        show_help
+    fi
+elif [ "$1" == "abseil" ]; then
+    native_only abseil
+    ABSEIL_FOLDER_NAME="abseil-cpp-${ABSEIL_VERSION}"
+
+    if [ "$2" == "download" ]; then
+        download_tar_gz \
+            "https://github.com/abseil/abseil-cpp/archive/refs/tags/${ABSEIL_VERSION}.tar.gz" "${ABSEIL_FOLDER_NAME}"
+    elif [ "$2" == "compile" ]; then
+        extract_tar_gz "${ABSEIL_FOLDER_NAME}"
+        cmake_compile "${ABSEIL_FOLDER_NAME}" -DABSL_PROPAGATE_CXX_STD=ON -DABSL_BUILD_TESTING=OFF
+    elif [ "$2" == "install" ]; then
+        cmake_install "${ABSEIL_FOLDER_NAME}"
+    else
+        show_help
+    fi
+elif [ "$1" == "protobuf" ]; then
+    native_only protobuf
+    PROTOBUF_FOLDER_NAME="protobuf-${PROTOBUF_VERSION}"
+
+    if [ "$2" == "download" ]; then
+        download_tar_gz \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOBUF_VERSION}/${PROTOBUF_FOLDER_NAME}.tar.gz" \
+            "${PROTOBUF_FOLDER_NAME}"
+    elif [ "$2" == "compile" ]; then
+        extract_tar_gz "${PROTOBUF_FOLDER_NAME}"
+        cmake_compile "${PROTOBUF_FOLDER_NAME}" \
+            -Dprotobuf_BUILD_TESTS=OFF \
+            -Dprotobuf_ABSL_PROVIDER=package \
+            -Dprotobuf_ZLIB_PROVIDER=package \
+            -Dprotobuf_INSTALL=ON
+    elif [ "$2" == "install" ]; then
+        cmake_install "${PROTOBUF_FOLDER_NAME}"
+    else
+        show_help
+    fi
+elif [ "$1" == "curl" ]; then
+    native_only curl
+    CURL_FOLDER_NAME="curl-${CURL_VERSION}"
+
+    if [ "$2" == "download" ]; then
+        download_tar_gz "https://curl.se/download/${CURL_FOLDER_NAME}.tar.gz" "${CURL_FOLDER_NAME}"
+    elif [ "$2" == "compile" ]; then
+        extract_tar_gz "${CURL_FOLDER_NAME}"
+        # HTTP(S) only, with the OpenSSL and zlib built above: the OTLP/HTTP exporter needs nothing else
+        cmake_compile "${CURL_FOLDER_NAME}" \
+            -DBUILD_CURL_EXE=OFF \
+            -DBUILD_LIBCURL_DOCS=OFF \
+            -DBUILD_MISC_DOCS=OFF \
+            -DENABLE_CURL_MANUAL=OFF \
+            -DHTTP_ONLY=ON \
+            -DCURL_USE_OPENSSL=ON \
+            -DOPENSSL_ROOT_DIR="${PREFIX}" \
+            -DCURL_ZLIB=ON \
+            -DCURL_BROTLI=OFF \
+            -DCURL_ZSTD=OFF \
+            -DCURL_USE_LIBPSL=OFF \
+            -DCURL_USE_LIBSSH2=OFF \
+            -DUSE_NGHTTP2=OFF \
+            -DUSE_LIBIDN2=OFF
+    elif [ "$2" == "install" ]; then
+        cmake_install "${CURL_FOLDER_NAME}"
+    else
+        show_help
+    fi
+elif [ "$1" == "nlohmann_json" ]; then
+    native_only nlohmann_json
+    NLOHMANN_JSON_FOLDER_NAME="json-${NLOHMANN_JSON_VERSION}"
+
+    if [ "$2" == "download" ]; then
+        download_tar_gz \
+            "https://github.com/nlohmann/json/archive/refs/tags/v${NLOHMANN_JSON_VERSION}.tar.gz" \
+            "${NLOHMANN_JSON_FOLDER_NAME}"
+    elif [ "$2" == "compile" ]; then
+        extract_tar_gz "${NLOHMANN_JSON_FOLDER_NAME}"
+        cmake_compile "${NLOHMANN_JSON_FOLDER_NAME}" -DJSON_BuildTests=OFF -DJSON_Install=ON
+    elif [ "$2" == "install" ]; then
+        cmake_install "${NLOHMANN_JSON_FOLDER_NAME}"
+    else
+        show_help
+    fi
+elif [ "$1" == "opentelemetry_cpp" ]; then
+    native_only opentelemetry_cpp
+    OPENTELEMETRY_CPP_FOLDER_NAME="opentelemetry-cpp-${OPENTELEMETRY_CPP_VERSION}"
+    OPENTELEMETRY_PROTO_FOLDER_NAME="opentelemetry-proto-${OPENTELEMETRY_PROTO_VERSION}"
+
+    if [ "$2" == "download" ]; then
+        download_tar_gz \
+            "https://github.com/open-telemetry/opentelemetry-cpp/archive/refs/tags/v${OPENTELEMETRY_CPP_VERSION}.tar.gz" \
+            "${OPENTELEMETRY_CPP_FOLDER_NAME}"
+        download_tar_gz \
+            "https://github.com/open-telemetry/opentelemetry-proto/archive/refs/tags/v${OPENTELEMETRY_PROTO_VERSION}.tar.gz" \
+            "${OPENTELEMETRY_PROTO_FOLDER_NAME}"
+    elif [ "$2" == "compile" ]; then
+        extract_tar_gz "${OPENTELEMETRY_CPP_FOLDER_NAME}"
+        extract_tar_gz "${OPENTELEMETRY_PROTO_FOLDER_NAME}"
+        # only the SDK and the OTLP/HTTP exporter; the proto sources come from the tarball, not a git clone
+        cmake_compile "${OPENTELEMETRY_CPP_FOLDER_NAME}" \
+            -DOTELCPP_PROTO_PATH="$(cd "${THIRD_PARTY_COMPILED}/${OPENTELEMETRY_PROTO_FOLDER_NAME}" && pwd)" \
+            -DWITH_OTLP_HTTP=ON \
+            -DWITH_OTLP_GRPC=OFF \
+            -DWITH_OTLP_FILE=OFF \
+            -DWITH_OTLP_HTTP_COMPRESSION=ON \
+            -DWITH_EXAMPLES=OFF \
+            -DWITH_BENCHMARK=OFF \
+            -DWITH_FUNC_TESTS=OFF \
+            -DOPENTELEMETRY_INSTALL=ON
+    elif [ "$2" == "install" ]; then
+        cmake_install "${OPENTELEMETRY_CPP_FOLDER_NAME}"
     else
         show_help
     fi

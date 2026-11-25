@@ -223,6 +223,24 @@ source /opt/rh/gcc-toolset-14/enable; \
 ./scripts/library_tool.sh openssl download; \
 ./scripts/library_tool.sh openssl compile; \
 ./scripts/library_tool.sh openssl install; \
+./scripts/library_tool.sh zlib download; \
+./scripts/library_tool.sh zlib compile; \
+./scripts/library_tool.sh zlib install; \
+./scripts/library_tool.sh abseil download; \
+./scripts/library_tool.sh abseil compile; \
+./scripts/library_tool.sh abseil install; \
+./scripts/library_tool.sh protobuf download; \
+./scripts/library_tool.sh protobuf compile; \
+./scripts/library_tool.sh protobuf install; \
+./scripts/library_tool.sh curl download; \
+./scripts/library_tool.sh curl compile; \
+./scripts/library_tool.sh curl install; \
+./scripts/library_tool.sh nlohmann_json download; \
+./scripts/library_tool.sh nlohmann_json compile; \
+./scripts/library_tool.sh nlohmann_json install; \
+./scripts/library_tool.sh opentelemetry_cpp download; \
+./scripts/library_tool.sh opentelemetry_cpp compile; \
+./scripts/library_tool.sh opentelemetry_cpp install; \
 echo "/usr/local/lib" > /etc/ld.so.conf.d/local.conf; \
 ldconfig;
 """
@@ -241,6 +259,24 @@ apk add cmake g++ make perl; \
 ./scripts/library_tool.sh openssl download; \
 ./scripts/library_tool.sh openssl compile; \
 ./scripts/library_tool.sh openssl install; \
+./scripts/library_tool.sh zlib download; \
+./scripts/library_tool.sh zlib compile; \
+./scripts/library_tool.sh zlib install; \
+./scripts/library_tool.sh abseil download; \
+./scripts/library_tool.sh abseil compile; \
+./scripts/library_tool.sh abseil install; \
+./scripts/library_tool.sh protobuf download; \
+./scripts/library_tool.sh protobuf compile; \
+./scripts/library_tool.sh protobuf install; \
+./scripts/library_tool.sh curl download; \
+./scripts/library_tool.sh curl compile; \
+./scripts/library_tool.sh curl install; \
+./scripts/library_tool.sh nlohmann_json download; \
+./scripts/library_tool.sh nlohmann_json compile; \
+./scripts/library_tool.sh nlohmann_json install; \
+./scripts/library_tool.sh opentelemetry_cpp download; \
+./scripts/library_tool.sh opentelemetry_cpp compile; \
+./scripts/library_tool.sh opentelemetry_cpp install; \
 ldconfig /usr/local/lib;
 """
 
@@ -258,6 +294,24 @@ set -ex && \
 ./scripts/library_tool.sh openssl download; \
 ./scripts/library_tool.sh openssl compile --prefix="$CMAKE_PREFIX_PATH"; \
 ./scripts/library_tool.sh openssl install --prefix="$CMAKE_PREFIX_PATH"; \
+./scripts/library_tool.sh zlib download; \
+./scripts/library_tool.sh zlib compile --prefix="$CMAKE_PREFIX_PATH"; \
+./scripts/library_tool.sh zlib install --prefix="$CMAKE_PREFIX_PATH"; \
+./scripts/library_tool.sh abseil download; \
+./scripts/library_tool.sh abseil compile --prefix="$CMAKE_PREFIX_PATH"; \
+./scripts/library_tool.sh abseil install --prefix="$CMAKE_PREFIX_PATH"; \
+./scripts/library_tool.sh protobuf download; \
+./scripts/library_tool.sh protobuf compile --prefix="$CMAKE_PREFIX_PATH"; \
+./scripts/library_tool.sh protobuf install --prefix="$CMAKE_PREFIX_PATH"; \
+./scripts/library_tool.sh curl download; \
+./scripts/library_tool.sh curl compile --prefix="$CMAKE_PREFIX_PATH"; \
+./scripts/library_tool.sh curl install --prefix="$CMAKE_PREFIX_PATH"; \
+./scripts/library_tool.sh nlohmann_json download; \
+./scripts/library_tool.sh nlohmann_json compile --prefix="$CMAKE_PREFIX_PATH"; \
+./scripts/library_tool.sh nlohmann_json install --prefix="$CMAKE_PREFIX_PATH"; \
+./scripts/library_tool.sh opentelemetry_cpp download; \
+./scripts/library_tool.sh opentelemetry_cpp compile --prefix="$CMAKE_PREFIX_PATH"; \
+./scripts/library_tool.sh opentelemetry_cpp install --prefix="$CMAKE_PREFIX_PATH"; \
 """
 
 [tool.cibuildwheel.windows]
